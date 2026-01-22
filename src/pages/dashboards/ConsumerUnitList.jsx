@@ -136,10 +136,12 @@ export default function ConsumerUnitList() {
                                                     </td>
                                                     <td>
                                                         <span className="badge" style={{
-                                                            background: uc.status === 'ativo' ? 'var(--color-success-light)' : 'var(--color-bg-light)',
-                                                            color: uc.status === 'ativo' ? 'var(--color-success)' : 'var(--color-text-light)'
+                                                            background: uc.status === 'ativo' ? 'var(--color-success-light)' :
+                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#fee2e2' : 'var(--color-bg-light)',
+                                                            color: uc.status === 'ativo' ? 'var(--color-success)' :
+                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#dc2626' : 'var(--color-text-light)'
                                                         }}>
-                                                            {uc.status?.toUpperCase()}
+                                                            {uc.status?.replace('_', ' ').toUpperCase()}
                                                         </span>
                                                     </td>
                                                     <td>
@@ -163,14 +165,16 @@ export default function ConsumerUnitList() {
                         </div>
                     ) : (
                         <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['analise', 'ativo', 'inativo'].map(status => {
-                                const unitsInStatus = filteredUnits.filter(u => (u.status || 'analise') === status);
-                                const statusColors = {
-                                    analise: '#eab308',
-                                    ativo: '#22c55e',
-                                    inativo: '#94a3b8'
-                                };
-                                const color = statusColors[status] || '#64748b';
+                            {[
+                                { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' }, // Blue
+                                { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' }, // Yellow
+                                { status: 'ativo', label: 'Ativo', color: '#22c55e' }, // Green
+                                { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' }, // Slate
+                                { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' }, // Orange
+                                { status: 'cancelado', label: 'Cancelado', color: '#ef4444' }, // Red
+                                { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' } // Dark Red
+                            ].map(({ status, label, color }) => {
+                                const unitsInStatus = filteredUnits.filter(u => (u.status || 'em_ativacao') === status);
 
                                 return (
                                     <div key={status} style={{ minWidth: '300px', flex: 1, background: 'var(--color-bg-light)', borderRadius: 'var(--radius-md)', padding: '0.5rem', borderTop: `4px solid ${color}`, boxShadow: 'var(--shadow-sm)' }}>
@@ -180,7 +184,7 @@ export default function ConsumerUnitList() {
                                             color: color
                                         }}>
                                             <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                                                {status === 'analise' ? 'Em Análise' : status}
+                                                {label}
                                             </span>
                                             <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
                                                 {unitsInStatus.length}

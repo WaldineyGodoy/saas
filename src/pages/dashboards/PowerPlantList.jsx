@@ -179,7 +179,7 @@ export default function PowerPlantList() {
                         </div>
                     ) : (
                         <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['em_planejamento', 'em_construcao', 'em_conexao', 'gerando', 'manutencao', 'inativa'].map(status => {
+                            {['em_conexao', 'gerando', 'manutencao', 'inativa', 'cancelada'].map(status => {
                                 const usinasInStatus = filteredUsinas.filter(u => u.status === status);
                                 const statusStyle = getStatusStyle(status);
 
@@ -204,27 +204,41 @@ export default function PowerPlantList() {
                                                     onClick={() => { setEditingUsina(u); setIsModalOpen(true); }}
                                                     style={{
                                                         background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)',
-                                                        cursor: 'pointer', border: '1px solid transparent', transition: '0.2s'
+                                                        cursor: 'pointer', border: '1px solid transparent', transition: '0.2s',
+                                                        position: 'relative', overflow: 'hidden'
                                                     }}
                                                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-blue)'}
                                                     onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
                                                 >
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                        <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{u.name}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                            {u.concessionaria}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.9rem', color: 'var(--color-text-medium)', marginBottom: '0.2rem' }}>
-                                                        {u.supplier?.name || 'Sem Fornecedor'}
+                                                    {/* Status Badge at Top */}
+                                                    <div style={{
+                                                        display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px',
+                                                        fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase',
+                                                        background: statusStyle.bg, color: statusStyle.color,
+                                                        marginBottom: '0.5rem'
+                                                    }}>
+                                                        {status.replace('_', ' ')}
                                                     </div>
 
-                                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                                                        <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)', lineHeight: '1.2' }}>{u.name}</span>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                                            {u.concessionaria || 'Sem conc.'}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#666', background: '#f3f4f6', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                                            {u.supplier?.name || 'Sem Fornecedor'}
+                                                        </span>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem', marginBottom: '0.5rem' }}>
+                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
                                                             <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Potência</div>
                                                             <div style={{ fontWeight: 'bold' }}>{u.potencia_kwp} kWp</div>
                                                         </div>
-                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
+                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
                                                             <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Geração Est.</div>
                                                             <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{u.geracao_estimada_kwh} kWh</div>
                                                         </div>

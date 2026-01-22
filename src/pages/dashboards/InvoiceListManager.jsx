@@ -4,7 +4,10 @@ import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2 } from 'lucide-react';
 
+import { useUI } from '../../contexts/UIContext';
+
 export default function InvoiceListManager() {
+    const { showAlert, showConfirm } = useUI();
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]); // List of UCs for the modal
     const [loading, setLoading] = useState(true);
@@ -12,7 +15,27 @@ export default function InvoiceListManager() {
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
+    const [statusFilter, setStatusFilter] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState(null);
+
+    const filteredInvoices = invoices.filter(inv => {
+        // Status Filter
+        if (statusFilter && inv.status !== statusFilter) return false;
+
+        // Search Filter
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
+            const assinante = inv.consumer_units?.subscribers?.name?.toLowerCase() || '';
+            const uc = inv.consumer_units?.numero_uc?.toLowerCase() || '';
+
+            if (!titular.includes(lower) && !assinante.includes(lower) && !uc.includes(lower)) {
+                return false;
+            }
+        }
+        return true;
+    });
 
     useEffect(() => {
         fetchInvoices();
@@ -47,7 +70,7 @@ export default function InvoiceListManager() {
             setInvoices(data || []);
         } catch (error) {
             console.error('Error fetching invoices:', error);
-            alert('Erro ao carregar faturas.');
+            showAlert('Erro ao carregar faturas.', 'error');
         } finally {
             setLoading(false);
         }
@@ -79,26 +102,28 @@ export default function InvoiceListManager() {
     };
 
     const handleEmission = async (inv) => {
-        if (!confirm(`Gerar boleto Asaas para a fatura de ${inv.consumer_units?.titular_conta}?`)) return;
+        const confirm = await showConfirm(`Gerar boleto Asaas para a fatura de ${inv.consumer_units?.titular_conta}?`);
+        if (!confirm) return;
 
         setGeneratingId(inv.id);
         try {
             const result = await createAsaasCharge(inv.id);
             if (result.url) {
-                alert('Boleto gerado com sucesso!');
+                showAlert('Boleto gerado com sucesso!', 'success');
                 window.open(result.url, '_blank');
                 fetchInvoices();
             }
         } catch (error) {
             console.error(error);
-            alert('Erro ao gerar boleto: ' + error.message);
+            showAlert('Erro ao gerar boleto: ' + error.message, 'error');
         } finally {
             setGeneratingId(null);
         }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Tem certeza que deseja excluir esta fatura?')) return;
+        const confirm = await showConfirm('Tem certeza que deseja excluir esta fatura?');
+        if (!confirm) return;
 
         try {
             const { error } = await supabase
@@ -110,7 +135,7 @@ export default function InvoiceListManager() {
             fetchInvoices();
         } catch (error) {
             console.error('Erro ao excluir fatura:', error);
-            alert('Erro ao excluir fatura: ' + error.message);
+            showAlert('Erro ao excluir fatura: ' + error.message, 'error');
         }
     };
 
@@ -151,13 +176,41 @@ export default function InvoiceListManager() {
                 <div style={{ background: 'white', padding: '0.5rem 1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
                         <Filter size={18} />
-                        <span style={{ fontWeight: 'bold' }}>Filtrar por Mês:</span>
+                        <span style={{ fontWeight: 'bold' }}>Mês:</span>
                     </div>
                     <input
                         type="month"
                         value={monthFilter}
                         onChange={e => setMonthFilter(e.target.value)}
                         style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                    />
+
+                    <div style={{ width: '1px', height: '20px', background: '#e2e8f0' }}></div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
+                        <span style={{ fontWeight: 'bold' }}>Status:</span>
+                    </div>
+                    <select
+                        value={statusFilter}
+                        onChange={e => setStatusFilter(e.target.value)}
+                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                    >
+                        <option value="">Todos</option>
+                        <option value="a_vencer">A Vencer</option>
+                        <option value="atrasado">Atrasado</option>
+                        <option value="pago">Pago</option>
+                    </select>
+
+                    <div style={{ width: '1px', height: '20px', background: '#e2e8f0' }}></div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
+                        <Search size={18} />
+                    </div>
+                    <input
+                        placeholder="Buscar por Nome..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', minWidth: '200px' }}
                     />
                 </div>
 
@@ -195,13 +248,13 @@ export default function InvoiceListManager() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.length === 0 ? (
+                                    {filteredInvoices.length === 0 ? (
                                         <tr>
                                             <td colSpan="6" style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
                                                 Nenhuma fatura encontrada para este mês.
                                             </td>
                                         </tr>
-                                    ) : invoices.map(inv => (
+                                    ) : filteredInvoices.map(inv => (
                                         <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '1rem' }}>{getStatusBadge(inv.status)}</td>
                                             <td style={{ padding: '1rem', color: '#334155' }}>
@@ -274,7 +327,7 @@ export default function InvoiceListManager() {
                     ) : (
                         <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
                             {['a_vencer', 'atrasado', 'pago'].map(status => {
-                                const invoicesInStatus = invoices.filter(inv => inv.status === status);
+                                const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
                                 const statusMap = {
                                     'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' },
                                     'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' },

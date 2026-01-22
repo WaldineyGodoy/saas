@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useUI } from '../contexts/UIContext';
 import { fetchCpfCnpjData } from '../lib/api';
+import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
+    const { showAlert, showConfirm } = useUI();
     const [loading, setLoading] = useState(false);
     const [usinas, setUsinas] = useState([]); // To display linked usinas
 
@@ -83,24 +86,57 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 }
             } catch (e) {
                 console.error('Erro CNPJ', e);
-                alert('Erro ao buscar CNPJ. Verifique se o número está correto.');
+                showAlert('Erro ao buscar CNPJ. Verifique se o número está correto.', 'error');
             } finally {
                 setLoading(false);
             }
         }
     };
 
+    const handlePixTypeChange = (e) => {
+        const type = e.target.value;
+        let autoValue = formData.pix_key;
+
+        switch (type) {
+            case 'telefone':
+                autoValue = formData.phone;
+                break;
+            case 'email':
+                autoValue = formData.email;
+                break;
+            case 'cnpj':
+                autoValue = formData.cnpj;
+                break;
+            case 'cpf':
+                // If we had a specific CPF field for the company (usually CNPJ), or use partner CPF?
+                // Assuming maybe legal_partner_cpf if it's a person? 
+                // Let's stick to what we have.
+                if (formData.legal_partner_cpf) autoValue = formData.legal_partner_cpf;
+                break;
+            default:
+                break;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            pix_key_type: type,
+            pix_key: autoValue
+        }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (formData.cpf_cnpj && !validateDocument(formData.cpf_cnpj)) {
-            alert('CPF/CNPJ inválido!');
+        // Validate using correct field names
+        if (formData.cnpj && !validateDocument(formData.cnpj)) {
+            showAlert('CNPJ inválido!', 'warning');
             return;
         }
         if (formData.phone && !validatePhone(formData.phone)) {
-            alert('Telefone inválido!');
+            showAlert('Telefone inválido!', 'warning');
             return;
         }
+
 
         setLoading(true);
 
@@ -146,13 +182,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         } catch (error) {
             console.error('Save error details:', error);
             const msg = error.message || JSON.stringify(error);
-            // alert('Erro detalhado: ' + msg); // Uncomment to debug if needed
             if (msg.includes('JWT expired')) {
-                alert('Sua sessão expirou. Por favor, faça login novamente.');
+                showAlert('Sua sessão expirou. Por favor, faça login novamente.', 'error');
                 await supabase.auth.signOut();
                 window.location.href = '/login';
             } else {
-                alert('Erro ao salvar fornecedor: ' + msg);
+                showAlert('Erro ao salvar fornecedor: ' + msg, 'error');
             }
         } finally {
             setLoading(false);
@@ -161,10 +196,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const handleDelete = async () => {
         if (usinas.length > 0) {
-            alert('Não é possível excluir fornecedor com usinas vinculadas.');
+            showAlert('Não é possível excluir fornecedor com usinas vinculadas.', 'warning');
             return;
         }
-        if (!confirm('Excluir este fornecedor?')) return;
+        const confirm = await showConfirm('Excluir este fornecedor?');
+        if (!confirm) return;
+
         setLoading(true);
         try {
             const { error } = await supabase.from('suppliers').delete().eq('id', supplier.id);
@@ -172,7 +209,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             if (onDelete) onDelete(supplier.id);
             onClose();
         } catch (error) {
-            alert('Erro ao excluir: ' + error.message);
+            showAlert('Erro ao excluir: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -266,7 +303,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Tipo Chave Pix</label>
                         <select
                             value={formData.pix_key_type}
-                            onChange={e => setFormData({ ...formData, pix_key_type: e.target.value })}
+                            onChange={handlePixTypeChange}
                             style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
                         >
                             <option value="cpf">CPF</option>

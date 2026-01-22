@@ -15,23 +15,27 @@ const ProtectedRoute = () => {
   return <Outlet />;
 };
 
+import { UIProvider } from './contexts/UIContext';
+
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/simulacao" element={<LeadSimulation />} />
-          <Route path="/assine" element={<LeadSignup />} />
-          <Route path="/originador" element={<ReferralLanding />} />
+      <UIProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/simulacao" element={<LeadSimulation />} />
+            <Route path="/assine" element={<LeadSignup />} />
+            <Route path="/originador" element={<ReferralLanding />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-          </Route>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
 
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AuthProvider>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </AuthProvider>
+      </UIProvider>
     </BrowserRouter>
   );
 }

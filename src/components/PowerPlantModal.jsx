@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
+import { useUI } from '../contexts/UIContext';
 
 export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
-    // ... existing code ...
-    // ... existing code ...
+    const { showAlert, showConfirm } = useUI();
     const [suppliers, setSuppliers] = useState([]);
     const [inverterBrands, setInverterBrands] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -58,7 +58,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         potencia_inversor_w: '',
         geracao_estimada_kwh: '',
         servicos_contratados: [],
-        service_values: {}, // New JSONB for values
+        service_values: {}, // JSONB for values
         gestao_percentual: '',
         cep: '',
         rua: '',
@@ -118,16 +118,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             });
             fetchLinkedUCs(usina.id);
         }
-    }, [usina]);
+    }, [usina]); // Removed fetchAvailableUCs from here to avoid race condition or infinite loops if dependency added
 
-    // Fetch UCs available for this concessionaria + UCs already linked to this Usina
+    // Fetch UCs available. Relaxed dependency to concessionaria change
     useEffect(() => {
-        if (formData.concessionaria) {
-            fetchAvailableUCs();
-        } else {
-            setAvailableUCs([]);
-        }
-    }, [formData.concessionaria, usina?.id]);
+        fetchAvailableUCs();
+    }, [usina?.id]);
 
     const fetchLinkedUCs = async (usinaId) => {
         const { data } = await supabase.from('consumer_units').select('*').eq('usina_id', usinaId);
@@ -137,20 +133,27 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const fetchAvailableUCs = async () => {
-        // Fetch UCs that share concessionaria AND (usina_id is null OR usina_id is this usina)
-        // AND status is 'em_ativacao' (or 'em ativacao' - checking db usually safer, assume normalized)
         let query = supabase
             .from('consumer_units')
-            .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh') // fetch relevant fields
-            .eq('concessionaria', formData.concessionaria);
+            .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh');
 
         const { data, error } = await query;
 
         if (data) {
-            const filtered = data.filter(uc =>
-                (uc.usina_id === null || (usina && uc.usina_id === usina.id)) &&
-                (uc.status === 'em_ativacao' || uc.status === 'Em Ativação' || uc.usina_id === usina?.id) // Keep currently linked even if status changed temporarily? User said "Certificar que apenas UCs Em ativação possam ser vinculadas". But if already linked, show it.
-            );
+            console.log('All UCs fetched:', data);
+
+            // Broadened filter: show ALL UCs that are either linked to this usina OR available (usina_id is null).
+            // Removed strict status check to ensure user can see everything.
+            // Added status to the display label so user can distinguish.
+
+            const filtered = data.filter(uc => {
+                const isLinkedToThis = usina && uc.usina_id === usina.id;
+                const isAvailable = uc.usina_id === null;
+
+                return isLinkedToThis || isAvailable;
+            });
+
+            console.log('Filtered UCs:', filtered);
             setAvailableUCs(filtered);
         }
     };
@@ -167,7 +170,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const formatCurrency = (value) => {
-        if (!value) return '';
+        if (value === '' || value === undefined || value === null) return '';
+        // If it comes as a number (from DB or state), format it
+        if (typeof value === 'number') {
+            return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        // If string (from masked input logic where integers = cents)
         const number = Number(value.toString().replace(/\D/g, '')) / 100;
         return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
@@ -189,11 +197,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         return Number(formData.valor_investido.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
     };
 
-    // Better parser for "R$ 1.000,00" -> 1000.00
+    // Parse currency string to number
     const parseCurrency = (str) => {
         if (!str) return 0;
-        const start = str.replace(/[^\d,]/g, ''); // 1000,00
-        return Number(start.replace(',', '.')) || 0;
+        const clean = str.replace(/[^\d,]/g, '').replace(',', '.');
+        return Number(clean) || 0;
     };
 
     const handleServiceChange = (service) => {
@@ -205,6 +213,17 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 return { ...prev, servicos_contratados: [...current, service] };
             }
         });
+    };
+
+    // Handler for Service Value Inputs (Money Mask)
+    const handleServiceValueChange = (service, rawValue) => {
+        const numericValue = rawValue.replace(/\D/g, '');
+        const number = Number(numericValue) / 100;
+
+        setFormData(prev => ({
+            ...prev,
+            service_values: { ...prev.service_values, [service]: number }
+        }));
     };
 
     const handleCepBlur = async () => {
@@ -250,7 +269,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     }, []);
 
     const handleDelete = async () => {
-        if (!confirm('Excluir esta usina?')) return;
+        const confirmed = await showConfirm('Excluir esta usina?', 'Esta ação não pode ser desfeita.');
+        if (!confirmed) return;
+
         setLoading(true);
         try {
             const { error } = await supabase.from('usinas').delete().eq('id', usina.id);
@@ -258,7 +279,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (onDelete) onDelete(usina.id);
             onClose();
         } catch (error) {
-            alert('Erro ao excluir: ' + error.message);
+            showAlert('Erro ao excluir: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -286,7 +307,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 potencia_inversor_w: Number(formData.potencia_inversor_w),
                 geracao_estimada_kwh: Number(formData.geracao_estimada_kwh),
                 servicos_contratados: formData.servicos_contratados,
-                service_values: formData.service_values, // New field
+                service_values: formData.service_values, // New field populated correctly now
                 gestao_percentual: Number(formData.gestao_percentual),
                 ibge_code: formData.ibge_code,
                 address: {
@@ -331,9 +352,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             onSave({ id: usinaId });
             onClose();
+            showAlert('Usina salva com sucesso!', 'success');
         } catch (error) {
             console.error('Save error:', error);
-            alert('Erro ao salvar usina: ' + (error.message || JSON.stringify(error)));
+            showAlert('Erro ao salvar usina: ' + (error.message || JSON.stringify(error)), 'error');
         } finally {
             setLoading(false);
         }
@@ -386,12 +408,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
 
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Concessionária (Auto)</label>
+                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Concessionária (Auto ou Manual)</label>
                         <input
                             value={formData.concessionaria}
-                            readOnly
-                            placeholder="Preenchido via CEP"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: '#f1f5f9' }}
+                            onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
+                            placeholder="Preenchido via CEP ou digite..."
+                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
                         />
                     </div>
 
@@ -517,20 +539,21 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
 
                     <div style={{ gridColumn: '1 / -1', background: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #eee' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.5rem', fontWeight: 'bold', color: 'var(--color-blue)' }}>
-                            Vincular Unidades Consumidoras
-                        </label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--color-blue)' }}>
+                                Vincular Unidades Consumidoras - Todas
+                            </label>
+                        </div>
+
                         <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: '0.5rem', background: '#e0f2fe', padding: '0.5rem', borderRadius: '4px' }}>
                             Total <strong>{selectedUCs.length}</strong> UCs conectadas | Total <strong>{totalFranquiaVinculada.toFixed(2)}</strong> kWh/mês
                         </div>
 
-                        {!formData.concessionaria && <p style={{ fontSize: '0.8rem', color: '#666' }}>Defina o CEP/Concessionária para ver UCs disponíveis.</p>}
-
-                        {formData.concessionaria && availableUCs.length === 0 && (
-                            <p style={{ fontSize: '0.8rem', color: '#666' }}>Nenhuma UC disponível (Em Ativação) para esta concessionária.</p>
-                        )}
-
-                        {availableUCs.length > 0 && (
+                        {availableUCs.length === 0 ? (
+                            <p style={{ fontSize: '0.8rem', color: '#666' }}>
+                                Nenhuma UC disponível (Em Ativação) encontrada.
+                            </p>
+                        ) : (
                             <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
                                 {availableUCs.map(uc => {
                                     const isSelected = selectedUCs.some(u => u.id === uc.id);
@@ -549,7 +572,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             />
                                             <div>
                                                 <div style={{ fontWeight: 'bold' }}>{uc.numero_uc}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#555' }}>{uc.titular_conta?.substring(0, 15)}...</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#555' }}>
+                                                    {uc.titular_conta?.substring(0, 15)}...
+                                                    <br /><span style={{ fontSize: '0.65rem', color: '#888' }}>({uc.concessionaria})</span>
+                                                </div>
                                                 {uc.consumo_medio_kwh && <div style={{ fontSize: '0.7rem', color: 'green' }}>Cap: {uc.consumo_medio_kwh} kWh</div>}
                                             </div>
                                         </label>
@@ -558,6 +584,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             </div>
                         )}
                     </div>
+
 
                     <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '0.5rem', color: 'var(--color-blue)' }}>Gestão e Serviços</div>
 
@@ -582,14 +609,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <input
                                                     placeholder="Valor (R$)"
-                                                    value={formatCurrency(formData.service_values?.[s] || '')}
-                                                    onChange={(e) => {
-                                                        const raw = parseCurrency(e.target.value); // Convert to number
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            service_values: { ...prev.service_values, [s]: raw }
-                                                        }));
-                                                    }}
+                                                    value={formatCurrency(formData.service_values?.[s])} // Use new formatCurrency logic
+                                                    onChange={(e) => handleServiceValueChange(s, e.target.value)} // Use new handler
                                                     style={{ padding: '0.3rem', border: '1px solid #ddd', borderRadius: '4px', width: '100px' }}
                                                 />
                                                 {s === 'Gestão' && (

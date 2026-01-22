@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 
+import { useUI } from '../contexts/UIContext';
+
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete }) {
+    const { showAlert, showConfirm } = useUI();
     const [subscribers, setSubscribers] = useState([]);
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -36,10 +39,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     // Status Options
     const statusOptions = [
-        { value: 'ativacao', label: 'Em Ativação' },
+        { value: 'em_ativacao', label: 'Em Ativação' },
+        { value: 'aguardando_conexao', label: 'Aguardando Conexão' },
         { value: 'ativo', label: 'Ativo' },
+        { value: 'sem_geracao', label: 'Sem Geração' },
         { value: 'em_atraso', label: 'Em Atraso' },
-        { value: 'cancelado', label: 'Cancelado' }
+        { value: 'cancelado', label: 'Cancelado' },
+        { value: 'cancelado_inadimplente', label: 'Cancelado (Inadimplente)' }
     ];
 
     const modalidadeOptions = [
@@ -58,7 +64,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [formData, setFormData] = useState({
         subscriber_id: '',
         usina_id: '',
-        status: 'ativacao',
+        status: 'em_ativacao',
         numero_uc: '',
         titular_conta: '',
         modalidade: 'geracao_compartilhada',
@@ -88,7 +94,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             setFormData({
                 subscriber_id: consumerUnit.subscriber_id || '',
                 usina_id: consumerUnit.usina_id || '',
-                status: consumerUnit.status || 'ativacao',
+                status: consumerUnit.status || 'em_ativacao',
                 numero_uc: consumerUnit.numero_uc || '',
                 titular_conta: consumerUnit.titular_conta || '',
                 modalidade: consumerUnit.modalidade || 'geracao_compartilhada',
@@ -191,7 +197,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
             } catch (error) {
                 console.error('Erro CEP', error);
-                alert('Erro ao buscar CEP/Ofertas: ' + (error.message || 'Não encontrado'));
+                showAlert('Erro ao buscar CEP/Ofertas: ' + (error.message || 'Não encontrado'), 'error');
             } finally {
                 setSearchingCep(false);
             }
@@ -243,14 +249,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             onSave(result.data);
             onClose();
         } catch (error) {
-            alert('Erro ao salvar UC: ' + error.message);
+            showAlert('Erro ao salvar UC: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!confirm('Excluir esta Unidade Consumidora?')) return;
+        const confirm = await showConfirm('Excluir esta Unidade Consumidora?');
+        if (!confirm) return;
         setLoading(true);
         try {
             const { error } = await supabase.from('consumer_units').delete().eq('id', consumerUnit.id);
@@ -258,7 +265,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             if (onDelete) onDelete(consumerUnit.id);
             onClose();
         } catch (error) {
-            alert('Erro ao excluir: ' + error.message);
+            showAlert('Erro ao excluir: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }

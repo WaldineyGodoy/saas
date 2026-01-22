@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import ConsumerUnitModal from './ConsumerUnitModal';
 
 export default function SubscriberModal({ subscriber, onClose, onSave, onDelete }) {
+    const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
     const [originators, setOriginators] = useState([]);
     const [consumerUnits, setConsumerUnits] = useState([]);
     const [generating, setGenerating] = useState(false);
+    const [showUcModal, setShowUcModal] = useState(false);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -65,9 +69,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
     const fetchOriginators = async () => {
         const { data } = await supabase
-            .from('profiles')
+            .from('originators_v2')
             .select('id, name')
-            .in('role', ['originator', 'coordinator', 'admin', 'super_admin'])
             .order('name');
         setOriginators(data || []);
     };
@@ -121,22 +124,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
     const handleEmission = async () => {
         if (!subscriber?.id) {
-            alert('Salve o assinante antes de gerar boletos.');
+            showAlert('Salve o assinante antes de gerar boletos.', 'warning');
             return;
         }
 
-        if (!confirm(`Gerar boleto CONSOLIDADO (todas as faturas pendentes) para ${formData.name}?`)) return;
+        const confirm = await showConfirm(`Gerar boleto CONSOLIDADO (todas as faturas pendentes) para ${formData.name}?`);
+        if (!confirm) return;
 
         setGenerating(true);
         try {
             const result = await createAsaasCharge(subscriber.id, 'subscriber');
             if (result.url) {
-                alert('Boleto consolidado gerado com sucesso!');
+                showAlert('Boleto consolidado gerado com sucesso!', 'success');
                 window.open(result.url, '_blank');
             }
         } catch (error) {
             console.error(error);
-            alert('Erro: ' + (error.message || 'Falha ao gerar boleto. Verifique se há faturas pendentes.'));
+            showAlert('Erro: ' + (error.message || 'Falha ao gerar boleto. Verifique se há faturas pendentes.'), 'error');
         } finally {
             setGenerating(false);
         }
@@ -146,11 +150,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         e.preventDefault();
 
         if (!validateDocument(formData.cpf_cnpj)) {
-            alert('CPF/CNPJ inválido!');
+            showAlert('CPF/CNPJ inválido!', 'warning');
             return;
         }
         if (formData.phone && !validatePhone(formData.phone)) {
-            alert('Telefone inválido!');
+            showAlert('Telefone inválido!', 'warning');
             return;
         }
 
@@ -182,28 +186,50 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // 2. Sync with Asaas
             console.log("Syncing with Asaas...");
-            const asaasResult = await manageAsaasCustomer({
-                name: formData.name,
-                cpfCnpj: formData.cpf_cnpj,
-                email: formData.email,
-                phone: formData.phone,
-                postalCode: formData.cep,
-                addressNumber: formData.numero,
-                address: formData.rua,
-                province: formData.bairro
-            });
+            let asaasId = null;
+            let asaasSyncSuccess = false;
 
-            if (!asaasResult || !asaasResult.success) {
-                throw new Error('Falha ao sincronizar cliente com Asaas: ' + (asaasResult?.error || 'Erro desconhecido'));
+            try {
+                const asaasResult = await manageAsaasCustomer({
+                    id: subscriber?.asaas_customer_id, // Pass existing ID to force update
+                    name: formData.name,
+                    cpfCnpj: formData.cpf_cnpj,
+                    email: formData.email,
+                    phone: formData.phone,
+                    postalCode: formData.cep,
+                    addressNumber: formData.numero,
+                    address: formData.rua,
+                    province: formData.bairro
+                });
+
+                if (!asaasResult || !asaasResult.success) {
+                    throw new Error(asaasResult?.error || 'Erro desconhecido');
+                }
+
+                asaasId = asaasResult.asaas_id;
+                asaasSyncSuccess = true;
+
+            } catch (asaasError) {
+                console.error("Asaas Sync Error:", asaasError);
+                const proceed = await showConfirm(`Falha ao sincronizar com Asaas: ${asaasError.message}.\n\nDeseja salvar apenas no CRM (Localmente)?`, 'Erro de Sincronização');
+                if (!proceed) {
+                    setLoading(false);
+                    return; // Abort save
+                }
+                // Continue to save locally without asaas_id (or keep existing if update?)
+                // If updating, we might want to keep existing ID if not provided here. 
+                // But for now, we just proceed.
             }
-
-            const asaasId = asaasResult.asaas_id;
 
             // 3. Save to Supabase
             const dataToSave = {
-                ...formData,
-                asaas_customer_id: asaasId
+                ...formData
             };
+
+            if (asaasId) {
+                dataToSave.asaas_customer_id = asaasId;
+            }
+
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
 
             let result;
@@ -224,17 +250,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             if (result.error) throw result.error;
 
-            if (asaasResult.is_new) {
-                alert('Cliente cadastrado com sucesso no CRM e criado no Asaas!');
+            if (asaasSyncSuccess) {
+                showAlert('Cliente salvo e sincronizado com Asaas!', 'success');
             } else {
-                alert('Cliente salvo no CRM e sincronizado com Asaas!');
+                showAlert('Cliente salvo APENAS LOCALMENTE (Erro Asaas ignorado).', 'warning');
             }
 
             onSave(result.data);
             onClose();
         } catch (error) {
             console.error(error);
-            alert('Erro ao salvar assinante: ' + error.message);
+            showAlert('Erro ao salvar assinante: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -242,7 +268,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
     const handleDelete = async () => {
         if (!subscriber?.id) return;
-        if (!confirm('Tem certeza que deseja excluir este assinante?')) return;
+        const confirm = await showConfirm('Tem certeza que deseja excluir este assinante?', 'Excluir Assinante', 'Excluir', 'Cancelar');
+        if (!confirm) return;
 
         setLoading(true);
         try {
@@ -256,9 +283,30 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (onDelete) onDelete(subscriber.id);
             onClose();
         } catch (error) {
-            alert('Erro ao excluir: ' + error.message);
+            showAlert('Erro ao excluir: ' + error.message, 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUnlinkUC = async (ucId) => {
+        const confirm = await showConfirm('Deseja desvincular esta UC do assinante? A UC não será excluída, apenas removida deste cliente.', 'Desvincular UC');
+        if (!confirm) return;
+
+        try {
+            const { error } = await supabase
+                .from('consumer_units')
+                .update({ subscriber_id: null })
+                .eq('id', ucId);
+
+            if (error) throw error;
+
+            // Refresh
+            fetchConsumerUnits(subscriber.id);
+            showAlert('UC desvinculada com sucesso!', 'success');
+        } catch (error) {
+            console.error(error);
+            showAlert('Erro ao desvincular UC: ' + error.message, 'error');
         }
     };
 
@@ -408,14 +456,41 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     </div>
 
                     {/* --- UCs --- */}
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem', color: 'var(--color-blue)' }}>Unidades Consumidoras (UCs)</div>
+                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem', color: 'var(--color-blue)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Unidades Consumidoras (UCs)</span>
+                        {subscriber?.id && (
+                            <button
+                                type="button"
+                                onClick={() => setShowUcModal(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.3rem',
+                                    background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5',
+                                    padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem'
+                                }}
+                            >
+                                <Plus size={16} /> Cadastrar UCs
+                            </button>
+                        )}
+                    </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                         {consumerUnits.length > 0 ? (
                             <ul style={{ listStyle: 'none', padding: 0 }}>
                                 {consumerUnits.map(uc => (
-                                    <li key={uc.id} style={{ background: '#f8fafc', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span>UC: {uc.numero_uc} - {uc.concessionaria}</span>
-                                        <span style={{ fontSize: '0.8rem', color: '#666' }}>{uc.status}</span>
+                                    <li key={uc.id} style={{ background: '#f8fafc', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <span>UC: {uc.numero_uc} - {uc.concessionaria}</span>
+                                            <span style={{ display: 'block', fontSize: '0.8rem', color: '#666' }}>{uc.status?.replace('_', ' ').toUpperCase()}</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleUnlinkUC(uc.id)}
+                                            style={{
+                                                padding: '0.3rem', background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer'
+                                            }}
+                                            title="Desvincular UC"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </li>
                                 ))}
                             </ul>
@@ -456,6 +531,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     </div>
                 </form>
             </div>
+
+            {showUcModal && subscriber && (
+                <ConsumerUnitModal
+                    consumerUnit={{ subscriber_id: subscriber.id }} // Pre-fill subscriber
+                    onClose={() => setShowUcModal(false)}
+                    onSave={() => {
+                        fetchConsumerUnits(subscriber.id); // Refresh List
+                        setShowUcModal(false);
+                    }}
+                />
+            )}
         </div>
     );
 }
