@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Login from './pages/Login';
-import LeadSimulation from './pages/LeadSimulation';
+import LeadLanding from './pages/public/LeadLanding';
 import LeadSignup from './pages/LeadSignup';
 import Dashboard from './pages/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import ReferralLanding from './pages/ReferralLanding';
+import { UIProvider } from './contexts/UIContext';
 
 const ProtectedRoute = () => {
   const { user } = useAuth();
@@ -15,8 +16,6 @@ const ProtectedRoute = () => {
   return <Outlet />;
 };
 
-import { UIProvider } from './contexts/UIContext';
-
 function App() {
   return (
     <BrowserRouter>
@@ -24,7 +23,7 @@ function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/simulacao" element={<LeadSimulation />} />
+            <Route path="/simulacao" element={<LeadLanding />} />
             <Route path="/assine" element={<LeadSignup />} />
             <Route path="/originador" element={<ReferralLanding />} />
 
