@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
 // import InputMask from 'react-input-mask';
 
 export default function LeadCaptureForm() {
+    const [searchParams] = useSearchParams();
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
     const [showResult, setShowResult] = useState(false);
     const [savedLeader, setSavedLead] = useState(null);
+
+    // URL Params
+    const originatorId = searchParams.get('id');
+    const originatorName = searchParams.get('originador');
 
     const [form, setForm] = useState({
         name: '',
@@ -108,7 +114,8 @@ export default function LeadCaptureForm() {
                 // Flattening offer data for record if needed? 
                 tarifa_concessionaria: Number(offerData?.['Tarifa Concessionaria']) || 0,
                 desconto_assinante: Number(offerData?.['Desconto Assinante']) || 0,
-                status: 'simulacao' // Default status
+                status: 'simulacao', // Default status
+                originator_id: originatorId ? originatorId : null // Capture ID from URL
             };
 
             const { data, error } = await supabase.from('leads').insert(payload).select().single();
@@ -368,9 +375,9 @@ export default function LeadCaptureForm() {
                         {/* Close Button */}
                         <button
                             onClick={() => setShowResult(false)}
-                            style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', fontSize: '1.5rem', color: '#9ca3af', cursor: 'pointer' }}
+                            style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '0.25rem' }}
                         >
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg style={{ width: '24px', height: '24px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
