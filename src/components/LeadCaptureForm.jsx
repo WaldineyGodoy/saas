@@ -122,11 +122,11 @@ export default function LeadCaptureForm() {
                 originator_id: validOriginatorId // Only send if valid UUID
             };
 
-            const { data, error } = await supabase.from('leads').insert(payload).select().single();
+            const { error } = await supabase.from('leads').insert(payload);
 
             if (error) throw error;
 
-            setSavedLead(data);
+            // setSavedLead(data); // Removed to avoid RLS Select error (public can insert but not view)
             setShowResult(true);
 
         } catch (error) {
