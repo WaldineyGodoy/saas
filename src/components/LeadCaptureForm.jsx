@@ -97,6 +97,10 @@ export default function LeadCaptureForm() {
         try {
             const calculatedDiscount = calculateDiscount();
 
+            // Validate UUID for originator_id to prevent database errors (invalid input syntax for type uuid)
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const validOriginatorId = (originatorId && uuidRegex.test(originatorId)) ? originatorId : null;
+
             const payload = {
                 name: form.name,
                 email: form.email,
@@ -115,7 +119,7 @@ export default function LeadCaptureForm() {
                 tarifa_concessionaria: Number(offerData?.['Tarifa Concessionaria']) || 0,
                 desconto_assinante: Number(offerData?.['Desconto Assinante']) || 0,
                 status: 'simulacao', // Default status
-                originator_id: originatorId ? originatorId : null // Capture ID from URL
+                originator_id: validOriginatorId // Only send if valid UUID
             };
 
             const { data, error } = await supabase.from('leads').insert(payload).select().single();
@@ -127,7 +131,9 @@ export default function LeadCaptureForm() {
 
         } catch (error) {
             console.error('Error saving lead:', error);
-            showAlert('Erro ao processar simulação. Tente novamente.', 'error');
+            // Show more specific error if available
+            const msg = error.message || 'Erro ao processar simulação. Tente novamente.';
+            showAlert(msg, 'error');
         } finally {
             setLoading(false);
         }
