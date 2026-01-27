@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Login from './pages/Login';
 import LeadLanding from './pages/public/LeadLanding';
+import OriginatorLanding from './pages/public/OriginatorLanding';
 import LeadSignup from './pages/LeadSignup';
 import Dashboard from './pages/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -24,6 +25,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/simulacao" element={<LeadLanding />} />
+            <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
             <Route path="/assine" element={<LeadSignup />} />
             <Route path="/originador" element={<ReferralLanding />} />
 
