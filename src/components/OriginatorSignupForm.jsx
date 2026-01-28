@@ -20,17 +20,16 @@ export default function OriginatorSignupForm() {
         neighborhood: '',
         street: '',
         number: '',
+        complement: '', // Added complement
         profession: '',
         cpf: '',
         pix_key: '',
-        pix_key_type: 'cpf' // Default
+        pix_key_type: 'cpf'
     });
 
-    const [showPassword, setShowPassword] = useState(false); // Add toggle state
+    const [showPassword, setShowPassword] = useState(false);
 
-    // ... (keep existing handlers)
-
-    // Helper for icons
+    // ... (Icons)
     const EyeIcon = () => (
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
     );
@@ -39,8 +38,6 @@ export default function OriginatorSignupForm() {
     );
 
     const handleCepBlur = async () => {
-        // ... (keep existing handleCepBlur)
-
         const rawCep = form.cep.replace(/\D/g, '');
         if (rawCep.length === 8) {
             setLoading(true);
@@ -66,7 +63,6 @@ export default function OriginatorSignupForm() {
         setLoading(true);
 
         try {
-            // 1. Sign Up with Supabase Auth
             const { data, error } = await supabase.auth.signUp({
                 email: form.email,
                 password: form.password,
@@ -82,7 +78,7 @@ export default function OriginatorSignupForm() {
 
             if (data?.user) {
                 setUserId(data.user.id);
-                setStep(2); // Move to Profile Modal
+                setStep(2);
             }
 
         } catch (error) {
@@ -98,9 +94,8 @@ export default function OriginatorSignupForm() {
         setLoading(true);
 
         try {
-            // 2. Insert into originators_v2
             const payload = {
-                id: userId, // Link to Auth User
+                id: userId,
                 name: form.name,
                 email: form.email,
                 phone: form.phone,
@@ -114,7 +109,8 @@ export default function OriginatorSignupForm() {
                     number: form.number,
                     neighborhood: form.neighborhood,
                     city: form.city,
-                    uf: form.uf
+                    uf: form.uf,
+                    complement: form.complement // Include complement
                 }
             };
 
@@ -122,7 +118,7 @@ export default function OriginatorSignupForm() {
 
             if (error) throw error;
 
-            setStep(3); // Move to Success
+            setStep(3);
 
         } catch (error) {
             console.error('Error saving profile:', error);
@@ -131,6 +127,8 @@ export default function OriginatorSignupForm() {
             setLoading(false);
         }
     };
+
+
 
     // Styling (Copied and adapted from LeadCaptureForm for consistency)
     const colors = {
@@ -299,10 +297,24 @@ export default function OriginatorSignupForm() {
 
                         <div style={styles.grid}>
                             {/* Address Fields (Auto-filled) */}
-                            <div>
+                            <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={styles.label}>Rua</label>
                                 <input value={form.street} style={styles.input} readOnly />
                             </div>
+
+                            <div>
+                                <label style={styles.label}>Bairro</label>
+                                <input value={form.neighborhood} style={styles.input} readOnly />
+                            </div>
+
+                            <div>
+                                <label style={styles.label}>Cidade / UF</label>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <input value={form.city} style={{ ...styles.input, flex: 2 }} readOnly />
+                                    <input value={form.uf} style={{ ...styles.input, flex: 1 }} readOnly />
+                                </div>
+                            </div>
+
                             <div>
                                 <label style={styles.label}>Número</label>
                                 <input
@@ -310,6 +322,15 @@ export default function OriginatorSignupForm() {
                                     onChange={e => setForm({ ...form, number: e.target.value })}
                                     style={styles.input}
                                     required
+                                />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Complemento</label>
+                                <input
+                                    value={form.complement}
+                                    onChange={e => setForm({ ...form, complement: e.target.value })}
+                                    style={styles.input}
+                                    placeholder="Ap 101, Bloco B"
                                 />
                             </div>
                         </div>
@@ -322,7 +343,7 @@ export default function OriginatorSignupForm() {
                                 onChange={e => setForm({ ...form, profession: e.target.value })}
                                 style={styles.input}
                                 required
-                                placeholder="Ex: Eletricista, Integrador Solar"
+                                placeholder="Corretor de Seguros, Consorcios e Contador"
                             />
                         </div>
 
@@ -339,7 +360,13 @@ export default function OriginatorSignupForm() {
                                         v = v.replace(/(\d{3})(\d)/, '$1.$2');
                                         v = v.replace(/(\d{3})(\d)/, '$1.$2');
                                         v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-                                        setForm({ ...form, cpf: v, pix_key: v }); // Auto-set PIX as CPF
+
+                                        // Update PIX only if type is CPF
+                                        setForm(prev => ({
+                                            ...prev,
+                                            cpf: v,
+                                            pix_key: prev.pix_key_type === 'cpf' ? v : prev.pix_key
+                                        }));
                                     }}
                                     style={styles.input}
                                     required
@@ -350,7 +377,14 @@ export default function OriginatorSignupForm() {
                                 <label style={styles.label}>Tipo Chave PIX</label>
                                 <select
                                     value={form.pix_key_type}
-                                    onChange={e => setForm({ ...form, pix_key_type: e.target.value })}
+                                    onChange={e => {
+                                        const newType = e.target.value;
+                                        setForm(prev => ({
+                                            ...prev,
+                                            pix_key_type: newType,
+                                            pix_key: newType === 'cpf' ? prev.cpf : '' // Clear if not CPF
+                                        }));
+                                    }}
                                     style={styles.input}
                                 >
                                     <option value="cpf">CPF</option>
@@ -389,10 +423,10 @@ export default function OriginatorSignupForm() {
                             Verifique seu e-mail para confirmar sua conta.
                         </p>
                         <button
-                            onClick={() => window.location.reload()}
-                            style={{ ...styles.button, backgroundColor: '#f3f4f6', color: '#374151', padding: '0.75rem' }}
+                            onClick={() => window.location.href = 'https://app.b2wenergia.com.br/login'}
+                            style={styles.button}
                         >
-                            Voltar
+                            Ir para Login
                         </button>
                     </div>
                 )}
