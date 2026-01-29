@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
+import SubscriberModal from './SubscriberModal';
 // import InputMask from 'react-input-mask';
 
 export default function LeadCaptureForm() {
@@ -10,7 +11,8 @@ export default function LeadCaptureForm() {
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
     const [showResult, setShowResult] = useState(false);
-    const [savedLeader, setSavedLead] = useState(null);
+    const [showSubscriberModal, setShowSubscriberModal] = useState(false);
+    const [savedLead, setSavedLead] = useState(null);
 
     // URL Params
     const originatorId = searchParams.get('id');
@@ -122,11 +124,17 @@ export default function LeadCaptureForm() {
                 originator_id: validOriginatorId // Only send if valid UUID
             };
 
-            const { error } = await supabase.from('leads').insert(payload);
+            const { data, error } = await supabase
+                .from('leads')
+                .insert(payload)
+                .select()
+                .single();
 
             if (error) throw error;
 
-            // setSavedLead(data); // Removed to avoid RLS Select error (public can insert but not view)
+            if (data) {
+                setSavedLead(data);
+            }
             setShowResult(true);
 
         } catch (error) {
@@ -137,6 +145,27 @@ export default function LeadCaptureForm() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSubscriberSave = async (subscriber) => {
+        // Upon successful subscriber creation, update lead status
+        if (savedLead?.id) {
+            try {
+                const { error } = await supabase
+                    .from('leads')
+                    .update({ status: 'ativacao' }) // Update status to 'Em Ativação'
+                    .eq('id', savedLead.id);
+
+                if (error) {
+                    console.error("Failed to update lead status:", error);
+                } else {
+                    console.log("Lead status updated to 'ativacao'");
+                }
+            } catch (err) {
+                console.error("Error updating lead status:", err);
+            }
+        }
+        setShowSubscriberModal(false);
     };
 
     const currencySubtle = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -419,7 +448,7 @@ export default function LeadCaptureForm() {
                                 <div>
                                     <p style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#FF6600' }}>Valor do Desconto</p>
                                     <p style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#FF6600' }}>
-                                        {currencySubtle(savedLeader?.calculated_discount || discountValue)}
+                                        {currencySubtle(savedLead?.calculated_discount || discountValue)}
                                         <span style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: 'normal', marginLeft: '0.25rem' }}>/mês</span>
                                     </p>
                                 </div>
@@ -427,7 +456,10 @@ export default function LeadCaptureForm() {
                         </div>
 
                         <button
-                            onClick={() => window.location.href = 'https://crm.b2wenergia.com.br/cadastro'}
+                            onClick={() => {
+                                setShowResult(false);
+                                setShowSubscriberModal(true);
+                            }}
                             style={{
                                 width: '100%', padding: '0.75rem', marginTop: '1.5rem',
                                 borderRadius: '0.75rem', fontWeight: 'bold', color: 'white',
@@ -441,6 +473,30 @@ export default function LeadCaptureForm() {
 
                     </div>
                 </div>
+            )}
+
+            {/* Subscriber Modal */}
+            {showSubscriberModal && (
+                <SubscriberModal
+                    subscriber={{
+                        name: form.name,
+                        email: form.email,
+                        phone: form.phone,
+                        cep: form.cep,
+                        rua: form.street,
+                        numero: form.number,
+                        bairro: form.neighborhood,
+                        cidade: form.city,
+                        uf: form.uf,
+                        status: 'ativacao',
+                        // If originator is in URL, we could attempt to pass it, but SubscriberModal uses ID.
+                        // We need the originator ID from somewhere if we want to pre-fill it.
+                        // originId from URL might be useful
+                        originator_id: originatorId || ''
+                    }}
+                    onClose={() => setShowSubscriberModal(false)}
+                    onSave={handleSubscriberSave}
+                />
             )}
         </>
     );
