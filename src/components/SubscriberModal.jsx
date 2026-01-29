@@ -256,6 +256,46 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 showAlert('Cliente salvo APENAS LOCALMENTE (Erro Asaas ignorado).', 'warning');
             }
 
+            // 4. Sync Lead Status (Try to find a lead with this email and update its status)
+            try {
+                // Determine new status for Lead
+                let newLeadStatus = null;
+                if (dataToSave.status === 'ativacao') {
+                    newLeadStatus = 'ativacao';
+                } else if (dataToSave.status === 'ativo') {
+                    newLeadStatus = 'ativo'; // OR 'active', depending on your DB enum
+                }
+
+                if (newLeadStatus && dataToSave.email) {
+                    // Find the most recent lead with this email
+                    const { data: leadsComp, error: leadFetchError } = await supabase
+                        .from('leads')
+                        .select('id, status')
+                        .eq('email', dataToSave.email)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+
+                    if (!leadFetchError && leadsComp && leadsComp.length > 0) {
+                        const targetLead = leadsComp[0];
+                        // Only update if status is different
+                        if (targetLead.status !== newLeadStatus) {
+                            const { error: leadUpdateError } = await supabase
+                                .from('leads')
+                                .update({ status: newLeadStatus })
+                                .eq('id', targetLead.id);
+
+                            if (leadUpdateError) {
+                                console.error('Error auto-updating lead status:', leadUpdateError);
+                            } else {
+                                console.log(`Lead ${targetLead.id} auto-updated to ${newLeadStatus}`);
+                            }
+                        }
+                    }
+                }
+            } catch (syncErr) {
+                console.error('Lead sync error:', syncErr);
+            }
+
             onSave(result.data);
             onClose();
         } catch (error) {
