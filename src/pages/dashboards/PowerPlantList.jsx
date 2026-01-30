@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import PowerPlantModal from '../../components/PowerPlantModal';
+import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
+import { FileText } from 'lucide-react';
 
 export default function PowerPlantList() {
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUsina, setEditingUsina] = useState(null);
+    const [isClosingsModalOpen, setIsClosingsModalOpen] = useState(false);
+    const [selectedUsinaForClosings, setSelectedUsinaForClosings] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('kanban');
 
@@ -164,9 +168,17 @@ export default function PowerPlantList() {
                                                             <button
                                                                 onClick={() => { setEditingUsina(u); setIsModalOpen(true); }}
                                                                 className="btn btn-secondary"
-                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', marginRight: '0.5rem' }}
                                                             >
                                                                 Editar
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
+                                                                className="btn btn-secondary"
+                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}
+                                                                title="Fechamentos Financeiros"
+                                                            >
+                                                                <FileText size={14} />
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -246,6 +258,15 @@ export default function PowerPlantList() {
 
                                                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
                                                         <span>{u.address?.cidade}/{u.address?.uf}</span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
+                                                            style={{
+                                                                background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.8rem',
+                                                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem'
+                                                            }}
+                                                        >
+                                                            <FileText size={14} /> Fechamentos
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -264,6 +285,13 @@ export default function PowerPlantList() {
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
                     onDelete={handleDelete}
+                />
+            )}
+
+            {isClosingsModalOpen && (
+                <PlantClosingsHistoryModal
+                    usina={selectedUsinaForClosings}
+                    onClose={() => setIsClosingsModalOpen(false)}
                 />
             )}
         </div>
