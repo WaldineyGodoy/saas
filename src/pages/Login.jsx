@@ -55,7 +55,31 @@ export default function Login() {
                     />
                 </div>
                 <div className="form-group">
-                    <label htmlFor="password" className="label">Senha</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label htmlFor="password" className="label">Senha</label>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!email) {
+                                    alert('Digite seu email para recuperar a senha.');
+                                    return;
+                                }
+                                setLoading(true);
+                                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                                    redirectTo: window.location.origin + '/dashboard?reset=true',
+                                });
+                                setLoading(false);
+                                if (error) {
+                                    alert('Erro ao enviar email: ' + error.message);
+                                } else {
+                                    alert('Email de recuperação enviado! Verifique sua caixa de entrada.');
+                                }
+                            }}
+                            style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '0.8rem', cursor: 'pointer', padding: 0 }}
+                        >
+                            Esqueci minha senha
+                        </button>
+                    </div>
                     <input
                         id="password"
                         type="password"
@@ -74,6 +98,17 @@ export default function Login() {
                 >
                     {loading ? 'Carregando...' : 'Entrar'}
                 </button>
+
+                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                    <span style={{ color: 'var(--color-text-medium)', fontSize: '0.9rem' }}>Não tem uma conta? </span>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/cadastro-parceiro')}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer', padding: 0 }}
+                    >
+                        Criar conta
+                    </button>
+                </div>
             </form>
         </div>
     );
