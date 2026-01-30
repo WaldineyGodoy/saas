@@ -9,6 +9,10 @@ export default function OriginatorSignupForm() {
     const [step, setStep] = useState(1); // 1: SignUp, 2: Profile, 3: Success
     const [userId, setUserId] = useState(null);
 
+    React.useEffect(() => {
+        console.log("DEBUG: OriginatorSignupForm Mounted v1.0");
+    }, []);
+
     const [form, setForm] = useState({
         name: '',
         email: '',
