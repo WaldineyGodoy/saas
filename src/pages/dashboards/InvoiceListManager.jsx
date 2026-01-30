@@ -79,7 +79,7 @@ export default function InvoiceListManager() {
     const fetchUcs = async () => {
         const { data, error } = await supabase
             .from('consumer_units')
-            .select('id, numero_uc, concessionaria, titular_conta')
+            .select('id, numero_uc, concessionaria, titular_conta, tarifa_concessionaria, desconto_assinante, tipo_ligacao')
             .eq('status', 'ativo')
             .order('titular_conta');
 

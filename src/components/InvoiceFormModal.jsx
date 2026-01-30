@@ -2,39 +2,46 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { createAsaasCharge } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { CreditCard, FileText } from 'lucide-react';
+import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle } from 'lucide-react';
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const { profile } = useAuth();
     const canManageStatus = ['super_admin', 'admin', 'manager'].includes(profile?.role);
 
-    // Helpers for Currency
-    const formatCurrency = (val) => {
-        if (!val && val !== 0) return '';
-        const number = Number(val);
-        if (isNaN(number)) return '';
-        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    };
-
-    const parseCurrency = (str) => {
-        if (!str || typeof str !== 'string') return 0;
-        const digits = str.replace(/\D/g, '');
-        return Number(digits) / 100;
-    };
-
+    // Initial State
     const [formData, setFormData] = useState({
         uc_id: '',
         mes_referencia: new Date().toISOString().substring(0, 7), // YYYY-MM
         vencimento: '',
         consumo_kwh: '',
-        valor_a_pagar: '', // String like "R$ 100,00"
-        economia_reais: '', // String like "R$ 50,00"
-        status: 'a_vencer'
+        iluminacao_publica: '',
+        tarifa_minima: '',
+        outros_lancamentos: '',
+        status: 'a_vencer',
+
+        // Calculated/Display fields
+        valor_a_pagar: '',
+        economia_reais: '',
+        consumo_reais: '' // New Field
     });
 
+    const [selectedUc, setSelectedUc] = useState(null);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
 
+    // Helpers
+    const formatCurrency = (val) => {
+        if (!val && val !== 0) return 'R$ 0,00';
+        return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    const parseCurrency = (str) => {
+        if (!str) return 0;
+        if (typeof str === 'number') return str;
+        return Number(str.replace(/\D/g, '')) / 100;
+    };
+
+    // Load Invoice Data
     useEffect(() => {
         if (invoice) {
             setFormData({
@@ -42,17 +49,88 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento ? invoice.vencimento.split('T')[0] : '',
                 consumo_kwh: invoice.consumo_kwh,
+                iluminacao_publica: invoice.iluminacao_publica ? formatCurrency(invoice.iluminacao_publica) : '',
+                tarifa_minima: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
+                outros_lancamentos: invoice.outros_lancamentos ? formatCurrency(invoice.outros_lancamentos) : '',
                 valor_a_pagar: formatCurrency(invoice.valor_a_pagar),
                 economia_reais: formatCurrency(invoice.economia_reais),
+                consumo_reais: invoice.consumo_reais ? formatCurrency(invoice.consumo_reais) : '',
                 status: invoice.status
             });
+            // Find UC to set tariff info
+            if (ucs) {
+                const uc = ucs.find(u => u.id === invoice.uc_id);
+                setSelectedUc(uc);
+            }
         } else if (ucs && ucs.length > 0) {
-            // Default to first UC only if creating new
             setFormData(prev => ({ ...prev, uc_id: ucs[0].id }));
+            setSelectedUc(ucs[0]);
         }
     }, [invoice, ucs]);
 
-    // Handle Masked Input Change
+    // Update Selected UC when changed
+    useEffect(() => {
+        if (formData.uc_id && ucs) {
+            const uc = ucs.find(u => u.id === formData.uc_id);
+            setSelectedUc(uc);
+        }
+    }, [formData.uc_id, ucs]);
+
+    // Calculations
+    useEffect(() => {
+        // Only calculate if we have Consumption and a selected UC with tariff
+        if (formData.consumo_kwh && selectedUc) {
+            const consumo = Number(formData.consumo_kwh);
+            const tarifa = parseCurrency(String(selectedUc.tarifa_concessionaria || '0'));
+            // Note: tarifa_concessionaria from DB might be float or big string. 
+            // If it came from DB as number, '0.98', parseCurrency might mess it up if it expects 'R$ 0,98'.
+            // Let's assume fetchUcs returns it as number.
+
+            // Wait, fetchUcs returns raw DB value. If it is numeric(10,4), it's a number.
+            // If parseCurrency divides by 100, we need to be careful.
+            // Let's safe check:
+            const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
+
+            const descontoPercent = Number(selectedUc.desconto_assinante) || 0;
+
+            const consumoBrutoReais = consumo * rawTarifa;
+            let economia = 0;
+
+            // Logic: Desconto is applied on the energy value?
+            // "Economia Gerada R$ = (Consumo Kwh * Tarifa da Concessionaria) * Desconto assinante%"
+            // If discount is 20 (meaning 20%), then 0.20
+
+            // Adjust percent: If > 1, treat as e.g. 20. If <= 1, treat as 0.20? 
+            // Convention in other files seems to be storing as whole number or decimal.
+            // Let's assume it is stored as percentage (e.g. 10, 15, 20).
+            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+
+            economia = consumoBrutoReais * multiplier;
+
+            const consumoLiquido = consumoBrutoReais - economia;
+
+            const ip = parseCurrency(formData.iluminacao_publica);
+            const min = parseCurrency(formData.tarifa_minima);
+            const outros = parseCurrency(formData.outros_lancamentos);
+
+            const total = consumoLiquido + ip + min + outros;
+
+            setFormData(prev => ({
+                ...prev,
+                economia_reais: formatCurrency(economia),
+                consumo_reais: formatCurrency(consumoLiquido), // "Consumo R$"
+                valor_a_pagar: formatCurrency(total)
+            }));
+        }
+    }, [
+        formData.consumo_kwh,
+        formData.iluminacao_publica,
+        formData.tarifa_minima,
+        formData.outros_lancamentos,
+        selectedUc
+    ]);
+
+
     const handleCurrencyChange = (field, value) => {
         const digits = value.replace(/\D/g, '');
         const number = Number(digits) / 100;
@@ -60,33 +138,26 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         setFormData(prev => ({ ...prev, [field]: formatted }));
     };
 
-    // Handle Month/Year Change
     const handleMonthChange = (part, value) => {
         const currentParts = formData.mes_referencia.split('-');
         let year = currentParts[0] || new Date().getFullYear();
         let month = currentParts[1] || '01';
-
         if (part === 'month') month = value;
         if (part === 'year') year = value;
-
         setFormData(prev => ({ ...prev, mes_referencia: `${year}-${month}` }));
     };
 
     const handleEmission = async () => {
-        if (!invoice?.id) {
-            alert('Salve a fatura antes de emitir o boleto.');
-            return;
-        }
+        if (!invoice?.id) { alert('Salve a fatura antes de emitir o boleto.'); return; }
         if (!confirm('Gerar boleto Asaas agora?')) return;
-
         setGenerating(true);
         try {
             const result = await createAsaasCharge(invoice.id);
             if (result.url) {
                 alert('Boleto gerado com sucesso!');
                 window.open(result.url, '_blank');
-                onSave(); // Refetch parent
-                onClose(); // Close modal? Or stay? Let's close for now or just update UI if we had state
+                onSave();
+                onClose();
             }
         } catch (error) {
             console.error(error);
@@ -101,23 +172,27 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         setLoading(true);
 
         try {
-            const dataToSave = {
+            const payload = {
                 uc_id: formData.uc_id,
-                mes_referencia: `${formData.mes_referencia}-01`, // Save as first day
-                vencimento: formData.vencimento, // YYYY-MM-DD
+                mes_referencia: `${formData.mes_referencia}-01`,
+                vencimento: formData.vencimento,
                 consumo_kwh: Number(formData.consumo_kwh),
+                consumo_reais: parseCurrency(formData.consumo_reais),
+                iluminacao_publica: parseCurrency(formData.iluminacao_publica),
+                tarifa_minima: parseCurrency(formData.tarifa_minima),
+                outros_lancamentos: parseCurrency(formData.outros_lancamentos),
                 valor_a_pagar: parseCurrency(formData.valor_a_pagar),
                 economia_reais: parseCurrency(formData.economia_reais),
                 status: formData.status
             };
 
-            if (!dataToSave.uc_id) throw new Error('Selecione uma Unidade Consumidora (UC).');
+            if (!payload.uc_id) throw new Error('Selecione uma Unidade Consumidora.');
 
             let result;
             if (invoice?.id) {
-                result = await supabase.from('invoices').update(dataToSave).eq('id', invoice.id).select().single();
+                result = await supabase.from('invoices').update(payload).eq('id', invoice.id).select().single();
             } else {
-                result = await supabase.from('invoices').insert(dataToSave).select().single();
+                result = await supabase.from('invoices').insert(payload).select().single();
             }
 
             if (result.error) throw result.error;
@@ -131,163 +206,171 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-        }}>
-            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-                <h3 style={{ marginBottom: '1.5rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                    {invoice ? 'Editar Fatura' : 'Nova Fatura'}
-                </h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+            <div style={{ background: '#f8fafc', borderRadius: '12px', width: '95%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
 
-                <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
-                    {/* ... fields ... */}
+                {/* Header */}
+                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
                     <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Unidade Consumidora</label>
+                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{invoice ? 'Editar Fatura' : 'Nova Fatura'}</h3>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+
+                    {/* UC Selection */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
                         <select
                             required
                             value={formData.uc_id}
                             onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
                             disabled={!!invoice}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.95rem', background: 'white' }}
                         >
                             <option value="">Selecione a UC...</option>
                             {ucs && ucs.map(uc => (
-                                <option key={uc.id} value={uc.id}>
-                                    {uc.numero_uc} - {uc.titular_conta} ({uc.concessionaria})
-                                </option>
+                                <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
                             ))}
                         </select>
-                        {(!ucs || ucs.length === 0) && <p style={{ color: 'red', fontSize: '0.8rem' }}>Nenhuma UC ativa encontrada. Cadastre uma UC primeiro.</p>}
+                        {selectedUc && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', background: '#eff6ff', padding: '0.5rem', borderRadius: '4px', display: 'inline-flex', gap: '1rem' }}>
+                                <span><strong>Tarifa:</strong> R$ {Number(selectedUc.tarifa_concessionaria || 0).toFixed(4)}</span>
+                                <span><strong>Desconto:</strong> {selectedUc.desconto_assinante || 0}%</span>
+                            </div>
+                        )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                        {/* Month/Year */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Mês Referência (Mês/Ano)</label>
+                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Mês Referência</label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <select
-                                    value={formData.mes_referencia.split('-')[1]}
-                                    onChange={e => handleMonthChange('month', e.target.value)}
-                                    style={{ flex: 1, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                                >
-                                    {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => (
-                                        <option key={m} value={m}>{['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][i]}</option>
-                                    ))}
+                                <select value={formData.mes_referencia.split('-')[1]} onChange={e => handleMonthChange('month', e.target.value)} style={{ flex: 1, padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                                    {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => <option key={m} value={m}>{['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i]}</option>)}
                                 </select>
-                                <select
-                                    value={formData.mes_referencia.split('-')[0]}
-                                    onChange={e => handleMonthChange('year', e.target.value)}
-                                    style={{ width: '80px', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                                >
-                                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
-                                        <option key={y} value={y}>{y}</option>
-                                    ))}
+                                <select value={formData.mes_referencia.split('-')[0]} onChange={e => handleMonthChange('year', e.target.value)} style={{ width: '80px', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                             </div>
                         </div>
+                        {/* Due Date */}
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Vencimento</label>
-                            <input
-                                type="date"
-                                required
-                                value={formData.vencimento}
-                                onChange={e => setFormData({ ...formData, vencimento: e.target.value })}
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            />
+                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Vencimento</label>
+                            <input type="date" required value={formData.vencimento} onChange={e => setFormData({ ...formData, vencimento: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                        </div>
+                        {/* Status */}
+                        {canManageStatus && (
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Status</label>
+                                <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                                    <option value="a_vencer">A Vencer</option>
+                                    <option value="pago">Pago</option>
+                                    <option value="atrasado">Atrasado</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ height: '1px', background: '#e2e8f0', margin: '1rem 0' }}></div>
+
+                    {/* Data Entry Section */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+
+                        {/* Left Column: Inputs */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <h4 style={{ color: '#334155', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Zap size={18} /> Dados de Consumo</h4>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Consumo (kWh)</label>
+                                <input type="number" step="any" required value={formData.consumo_kwh} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="0" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                            </div>
+
+                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><DollarSign size={18} /> Valores Adicionais</h4>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Iluminação Pública (R$)</label>
+                                <input type="text" value={formData.iluminacao_publica} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Tarifa Mínima (R$)</label>
+                                <input type="text" value={formData.tarifa_minima} onChange={e => handleCurrencyChange('tarifa_minima', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Outros Lançamentos (R$)</label>
+                                <input type="text" value={formData.outros_lancamentos} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                            </div>
+                        </div>
+
+                        {/* Right Column: Calculated Results */}
+                        <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Resumo do Cálculo</h4>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                                    <span style={{ color: '#64748b' }}>Consumo Bruto:</span>
+                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_kwh) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534', background: '#dcfce7', padding: '0.5rem', borderRadius: '4px' }}>
+                                    <span>Economia Gerada:</span>
+                                    <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                                    <span style={{ color: '#64748b' }}>Consumo Líquido (R$):</span>
+                                    <span style={{ fontWeight: 600 }}>{formData.consumo_reais || 'R$ 0,00'}</span>
+                                </div>
+
+                                <div style={{ height: '1px', background: '#cbd5e1', margin: '0.5rem 0' }}></div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                                    <span style={{ color: '#64748b' }}>+ Ilum. Pública:</span>
+                                    <span>{formData.iluminacao_publica || 'R$ 0,00'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                                    <span style={{ color: '#64748b' }}>+ Tarifa Mínima:</span>
+                                    <span>{formData.tarifa_minima || 'R$ 0,00'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                                    <span style={{ color: '#64748b' }}>+ Outros:</span>
+                                    <span>{formData.outros_lancamentos || 'R$ 0,00'}</span>
+                                </div>
+
+                                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px dashed #cbd5e1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', marginBottom: '0.2rem' }}>Total a Pagar</label>
+                                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--color-blue)' }}>
+                                        {formData.valor_a_pagar || 'R$ 0,00'}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    {/* Footer Actions */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Consumo (kWh)</label>
-                            <input
-                                type="number"
-                                step="any"
-                                required
-                                value={formData.consumo_kwh}
-                                onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })}
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Valor a Pagar (R$)</label>
-                            <input
-                                type="text"
-                                required
-                                value={formData.valor_a_pagar}
-                                onChange={e => handleCurrencyChange('valor_a_pagar', e.target.value)}
-                                placeholder="R$ 0,00"
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Economia Gerada (R$) <span style={{ color: '#888', fontWeight: 'normal' }}>(Opcional)</span></label>
-                        <input
-                            type="text"
-                            value={formData.economia_reais}
-                            onChange={e => handleCurrencyChange('economia_reais', e.target.value)}
-                            placeholder="R$ 0,00"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    {canManageStatus && (
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Status</label>
-                            <select
-                                value={formData.status}
-                                onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            >
-                                <option value="a_vencer">A Vencer</option>
-                                <option value="pago">Pago</option>
-                                <option value="atrasado">Atrasado</option>
-                            </select>
-                        </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
-                        <div>
-                            {invoice?.id && (
-                                <>
-                                    {invoice.asaas_boleto_url ? (
-                                        <a
-                                            href={invoice.asaas_boleto_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                textDecoration: 'none', color: '#166534', fontWeight: 'bold'
-                                            }}
-                                        >
-                                            <FileText size={18} /> Ver Boleto
-                                        </a>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={handleEmission}
-                                            disabled={generating}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
-                                                padding: '0.6rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
-                                            }}
-                                        >
-                                            {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto</>}
-                                        </button>
-                                    )}
-                                </>
+                            {invoice?.id && !invoice.asaas_boleto_url && (
+                                <button type="button" onClick={handleEmission} disabled={generating} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5', padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                    {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto Agora</>}
+                                </button>
+                            )}
+                            {invoice?.asaas_boleto_url && (
+                                <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 'bold', textDecoration: 'none' }}><FileText size={18} /> Ver Boleto Emitido</a>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.8rem 1.5rem', background: '#ccc', borderRadius: '4px', border: 'none', cursor: 'pointer' }}>Cancelar</button>
-                            <button type="submit" disabled={loading} style={{ padding: '0.8rem 1.5rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                            <button type="button" onClick={onClose} style={{ padding: '0.8rem 1.5rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>Cancelar</button>
+                            <button type="submit" disabled={loading} style={{ padding: '0.8rem 2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
                                 {loading ? 'Salvando...' : 'Salvar Fatura'}
                             </button>
                         </div>
                     </div>
+
                 </form>
             </div>
         </div>
