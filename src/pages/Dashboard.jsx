@@ -22,6 +22,7 @@ import PowerPlantList from './dashboards/PowerPlantList';
 import InvoiceListManager from './dashboards/InvoiceListManager';
 import ConsumerUnitList from './dashboards/ConsumerUnitList';
 import BillingList from './dashboards/BillingList';
+import SettingsLayout from './dashboards/SettingsLayout';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
@@ -109,7 +110,7 @@ export default function Dashboard() {
 
         // 9. Gestão de Usuários
         if (['admin', 'super_admin'].includes(role)) {
-            items.push({ id: 'admin', label: 'Gestão de Usuários', icon: Settings });
+            items.push({ id: 'settings', label: 'Configurações', icon: Settings });
         }
 
         return items;
@@ -133,6 +134,7 @@ export default function Dashboard() {
             case 'consumer_units': return <ConsumerUnitList />;
             case 'invoices': return <InvoiceListManager />;
             case 'billing': return <BillingList />;
+            case 'settings': return <SettingsLayout />;
             default:
                 return <div style={{ padding: '2rem' }}><h2>Bem-vindo, {profile?.name}</h2><p>Selecione uma opção no menu.</p></div>;
         }
