@@ -35,14 +35,15 @@ export default function Dashboard() {
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
 
     // Reset view when profile loads
+    // Reset view when profile loads (only if checking for the first time)
     useEffect(() => {
-        if (profile) {
+        if (profile && activeView === 'default') {
             if (profile.role === 'subscriber') setActiveView('subscriber_dashboard');
             else if (profile.role === 'supplier') setActiveView('supplier_dashboard');
             // For all other roles (admin, super_admin, originator, broker, coordinator, manager), default to LEADS
             else setActiveView('leads');
         }
-    }, [profile]);
+    }, [profile, activeView]);
 
     const handleLogout = async () => {
         await signOut();
