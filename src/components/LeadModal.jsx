@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchAddressByCep, fetchOfferData } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
 import { maskPhone, validatePhone } from '../lib/validators';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
@@ -150,6 +150,50 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
             }
 
             if (result.error) throw result.error;
+
+            // [NEW] Notification Logic (On Activation)
+            if (dataToSave.status === 'ativo' && (!lead || lead.status !== 'ativo')) {
+                const originatorId = dataToSave.originator_id;
+                if (originatorId) {
+                    try {
+                        const { data: originator } = await supabase
+                            .from('originators_v2')
+                            .select('phone, split_commission, name')
+                            .eq('id', originatorId)
+                            .maybeSingle();
+
+                        if (originator && originator.phone) {
+                            // Calculate values
+                            const kwh = Number(dataToSave.consumo_kwh) || 0;
+                            const tarifa = Number(dataToSave.tarifa_concessionaria) || 0.85;
+                            let discountRate = Number(dataToSave.desconto_assinante) || 15;
+
+                            // Handle decimal inputs (e.g. 0.15 vs 15)
+                            if (discountRate < 1 && discountRate > 0) {
+                                discountRate = discountRate * 100;
+                            }
+
+                            const totalSemDesconto = kwh * tarifa;
+                            const economia = totalSemDesconto * (discountRate / 100);
+                            const baseCalculo = totalSemDesconto - economia;
+
+                            const comissaoPercent = Number(originator.split_commission) || 0;
+                            const comissaoValor = baseCalculo * (comissaoPercent / 100);
+
+                            const formattedValue = comissaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                            const leadName = dataToSave.name || 'O Lead';
+
+                            const msg = `${leadName}, aceitou o convite e está proximo de concluir o cadastro, em breve vc receberá o seu cashback ${formattedValue}`;
+
+                            await sendWhatsapp(originator.phone, msg);
+                            console.log("Notificação de ativação enviada para:", originator.name);
+                        }
+                    } catch (notificationError) {
+                        console.error("Erro ao enviar notificação de ativação:", notificationError);
+                        // Do not fail the save if notification fails
+                    }
+                }
+            }
 
             onSave(result.data);
             onClose();

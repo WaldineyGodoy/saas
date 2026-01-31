@@ -166,3 +166,24 @@ export const createAsaasCharge = async (id, type = 'invoice') => {
     if (error) throw error;
     return data; // Esperado: { success: true, url: '...', paymentId: '...' }
 };
+
+export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
+    try {
+        const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+            body: {
+                phone: phone ? phone.replace(/\D/g, '') : '',
+                text,
+                mediaUrl,
+                instanceName
+            }
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+
+        return data;
+    } catch (error) {
+        console.error('Erro ao enviar WhatsApp:', error);
+        throw error;
+    }
+};
