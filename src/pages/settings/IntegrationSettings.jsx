@@ -102,6 +102,7 @@ export default function IntegrationSettings({ serviceName, title, description })
     // Test Area State
     const [testPhone, setTestPhone] = useState('');
     const [testMessage, setTestMessage] = useState('Teste de conexão Evolution API');
+    const [testMediaUrl, setTestMediaUrl] = useState('');
     const [sendingTest, setSendingTest] = useState(false);
 
     const handleSendTest = async () => {
@@ -116,6 +117,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                 body: {
                     text: testMessage,
                     phone: testPhone,
+                    mediaUrl: testMediaUrl, // Pass mediaUrl if present
                     // We don't verify Instance Name here, the Function does it by reading DB config
                 }
             });
@@ -280,7 +282,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                 {serviceName === 'evolution_api' && (
                     <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
                         <h4 style={{ margin: '0 0 1rem 0', color: '#334155' }}>Teste de Conexão</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: '1rem', alignItems: 'end' }}>
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Número (com DDI)</label>
                                 <input
@@ -291,7 +293,16 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 />
                             </div>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Mensagem</label>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>URL da Mídia (Opcional)</label>
+                                <input
+                                    placeholder="https://..."
+                                    value={testMediaUrl}
+                                    onChange={e => setTestMediaUrl(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Mensagem / Legenda</label>
                                 <input
                                     value={testMessage}
                                     onChange={e => setTestMessage(e.target.value)}
