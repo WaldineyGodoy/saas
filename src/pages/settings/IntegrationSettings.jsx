@@ -99,6 +99,39 @@ export default function IntegrationSettings({ serviceName, title, description })
         setFormData(prev => ({ ...prev, variables: newVars }));
     };
 
+    // Test Area State
+    const [testPhone, setTestPhone] = useState('');
+    const [testMessage, setTestMessage] = useState('Teste de conexão Evolution API');
+    const [sendingTest, setSendingTest] = useState(false);
+
+    const handleSendTest = async () => {
+        if (!testPhone) {
+            showAlert('Informe um número de telefone para teste.', 'error');
+            return;
+        }
+
+        setSendingTest(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+                body: {
+                    text: testMessage,
+                    phone: testPhone,
+                    // We don't verify Instance Name here, the Function does it by reading DB config
+                }
+            });
+
+            if (error) throw new Error(error.message);
+            if (data?.error) throw new Error(data.error);
+
+            showAlert('Mensagem de teste enviada com sucesso!', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert('Falha no teste: ' + err.message, 'error');
+        } finally {
+            setSendingTest(false);
+        }
+    };
+
     return (
         <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
@@ -114,6 +147,7 @@ export default function IntegrationSettings({ serviceName, title, description })
             </div>
 
             <form onSubmit={handleSave} style={{ padding: '2rem' }}>
+                {/* ... fields ... */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
                     <input
@@ -155,6 +189,13 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 </div>
 
+                {/* Specific Warning for Evolution API */}
+                {serviceName === 'evolution_api' && (
+                    <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', color: '#c2410c', fontSize: '0.9rem' }}>
+                        <strong>Atenção:</strong> Lembre-se de adicionar a variável <code>instance_name</code> com o nome da sua instância Evolution.
+                    </div>
+                )}
+
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem', marginBottom: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <label style={{ fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Variáveis de Ambiente / Parâmetros Extras</label>
@@ -177,7 +218,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                         {formData.variables.map((v, index) => (
                             <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
                                 <input
-                                    placeholder="Nome da Variável (ex: INSTANCE_NAME)"
+                                    placeholder="Nome da Variável (ex: instance_name)"
                                     value={v.key}
                                     onChange={e => updateVariable(index, 'key', e.target.value)}
                                     style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
@@ -201,7 +242,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
                     <button
                         type="submit"
                         disabled={loading}
@@ -210,6 +251,40 @@ export default function IntegrationSettings({ serviceName, title, description })
                         {loading ? 'Salvando...' : <><Save size={18} /> Salvar Configurações</>}
                     </button>
                 </div>
+
+                {/* TEST AREA - Only for Evolution API */}
+                {serviceName === 'evolution_api' && (
+                    <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155' }}>Teste de Conexão</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'end' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Número (com DDI)</label>
+                                <input
+                                    placeholder="5511999999999"
+                                    value={testPhone}
+                                    onChange={e => setTestPhone(e.target.value.replace(/\D/g, ''))}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Mensagem</label>
+                                <input
+                                    value={testMessage}
+                                    onChange={e => setTestMessage(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleSendTest}
+                                disabled={sendingTest || !testPhone}
+                                style={{ padding: '0.7rem 1.5rem', background: sendingTest ? '#94a3b8' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingTest ? 'default' : 'pointer', fontWeight: 600 }}
+                            >
+                                {sendingTest ? 'Enviando...' : 'Enviar Teste'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </form>
         </div>
     );
