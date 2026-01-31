@@ -189,10 +189,29 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 </div>
 
-                {/* Specific Warning for Evolution API */}
+                {/* Specific Fields for Evolution API */}
                 {serviceName === 'evolution_api' && (
-                    <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', color: '#c2410c', fontSize: '0.9rem' }}>
-                        <strong>Atenção:</strong> Lembre-se de adicionar a variável <code>instance_name</code> com o nome da sua instância Evolution.
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Nome da Instância</label>
+                        <input
+                            placeholder="Nome da Instância (ex: minha-instancia)"
+                            value={formData.variables.find(v => v.key === 'instance_name')?.value || ''}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setFormData(prev => {
+                                    const exists = prev.variables.some(v => v.key === 'instance_name');
+                                    let newVars;
+                                    if (exists) {
+                                        newVars = prev.variables.map(v => v.key === 'instance_name' ? { ...v, value: val } : v);
+                                    } else {
+                                        newVars = [...prev.variables, { key: 'instance_name', value: val }];
+                                    }
+                                    return { ...prev, variables: newVars };
+                                });
+                            }}
+                            style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                        />
+                        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Nome da instância criada na Evolution API.</p>
                     </div>
                 )}
 
@@ -215,30 +234,35 @@ export default function IntegrationSettings({ serviceName, title, description })
                     )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        {formData.variables.map((v, index) => (
-                            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
-                                <input
-                                    placeholder="Nome da Variável (ex: instance_name)"
-                                    value={v.key}
-                                    onChange={e => updateVariable(index, 'key', e.target.value)}
-                                    style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                                <input
-                                    placeholder="Valor"
-                                    value={v.value}
-                                    onChange={e => updateVariable(index, 'value', e.target.value)}
-                                    style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => removeVariable(index)}
-                                    style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem' }}
-                                    title="Remover"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        ))}
+                        {formData.variables.map((v, index) => {
+                            // Hide explicit instance_name from generic list in Evolution API view to avoid redundancy
+                            if (serviceName === 'evolution_api' && v.key === 'instance_name') return null;
+
+                            return (
+                                <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
+                                    <input
+                                        placeholder="Nome da Variável (ex: instance_name)"
+                                        value={v.key}
+                                        onChange={e => updateVariable(index, 'key', e.target.value)}
+                                        style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                    <input
+                                        placeholder="Valor"
+                                        value={v.value}
+                                        onChange={e => updateVariable(index, 'value', e.target.value)}
+                                        style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeVariable(index)}
+                                        style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem' }}
+                                        title="Remover"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
 

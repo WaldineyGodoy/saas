@@ -12,11 +12,14 @@ serve(async (req) => {
     }
 
     try {
-        const supabaseClient = createClient(
+        // START: Service Role usage for Cross-App access
+        // This allows the App repo (unauthenticated or diff project) to call this function
+        // and this function to still read the protected config from the DB.
+        const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
+        // END: Service Role usage
 
         const { text, mediaUrl, phone, instanceName } = await req.json()
 
@@ -24,8 +27,8 @@ serve(async (req) => {
             throw new Error('Missing required fields: text or phone')
         }
 
-        // 1. Fetch Configuration
-        const { data: config, error: configError } = await supabaseClient
+        // 1. Fetch Configuration (using Admin client)
+        const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
             .select('*')
             .eq('service_name', 'evolution_api')
