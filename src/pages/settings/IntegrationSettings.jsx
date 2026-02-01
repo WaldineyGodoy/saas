@@ -193,28 +193,54 @@ export default function IntegrationSettings({ serviceName, title, description })
 
                 {/* Specific Fields for Evolution API */}
                 {serviceName === 'evolution_api' && (
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Nome da Instância</label>
-                        <input
-                            placeholder="Nome da Instância (ex: minha-instancia)"
-                            value={formData.variables.find(v => v.key === 'instance_name')?.value || ''}
-                            onChange={e => {
-                                const val = e.target.value;
-                                setFormData(prev => {
-                                    const exists = prev.variables.some(v => v.key === 'instance_name');
-                                    let newVars;
-                                    if (exists) {
-                                        newVars = prev.variables.map(v => v.key === 'instance_name' ? { ...v, value: val } : v);
-                                    } else {
-                                        newVars = [...prev.variables, { key: 'instance_name', value: val }];
-                                    }
-                                    return { ...prev, variables: newVars };
-                                });
-                            }}
-                            style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
-                        />
-                        <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Nome da instância criada na Evolution API.</p>
-                    </div>
+                    <>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Nome da Instância</label>
+                            <input
+                                placeholder="Nome da Instância (ex: minha-instancia)"
+                                value={formData.variables.find(v => v.key === 'instance_name')?.value || ''}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setFormData(prev => {
+                                        const exists = prev.variables.some(v => v.key === 'instance_name');
+                                        let newVars;
+                                        if (exists) {
+                                            newVars = prev.variables.map(v => v.key === 'instance_name' ? { ...v, value: val } : v);
+                                        } else {
+                                            newVars = [...prev.variables, { key: 'instance_name', value: val }];
+                                        }
+                                        return { ...prev, variables: newVars };
+                                    });
+                                }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                            />
+                            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Nome da instância criada na Evolution API.</p>
+                        </div>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>URL da Mídia (Convite)</label>
+                            <input
+                                type="url"
+                                placeholder="https://exemplo.com/imagem.png"
+                                value={formData.variables.find(v => v.key === 'invite_media_url')?.value || ''}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setFormData(prev => {
+                                        const exists = prev.variables.some(v => v.key === 'invite_media_url');
+                                        let newVars;
+                                        if (exists) {
+                                            newVars = prev.variables.map(v => v.key === 'invite_media_url' ? { ...v, value: val } : v);
+                                        } else {
+                                            newVars = [...prev.variables, { key: 'invite_media_url', value: val }];
+                                        }
+                                        return { ...prev, variables: newVars };
+                                    });
+                                }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                            />
+                            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Imagem enviada junto com o convite.</p>
+                        </div>
+                    </>
                 )}
 
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem', marginBottom: '1.5rem' }}>
@@ -238,7 +264,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         {formData.variables.map((v, index) => {
                             // Hide explicit instance_name from generic list in Evolution API view to avoid redundancy
-                            if (serviceName === 'evolution_api' && v.key === 'instance_name') return null;
+                            if (serviceName === 'evolution_api' && (v.key === 'instance_name' || v.key === 'invite_media_url')) return null;
 
                             return (
                                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
