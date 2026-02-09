@@ -156,7 +156,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         }
     };
 
-    const referralUrl = originator ? `${window.location.origin}/originador?id=${originator.id}` : 'Salver para gerar URL';
+    const referralUrl = originator ? `https://b2wenergia.com.br/convite?name=${encodeURIComponent(originator.name)}&id=${originator.id}` : 'Salve para gerar URL';
 
     return (
         <div className="modal-overlay">
@@ -171,7 +171,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         <label className="label" style={{ color: '#0369a1' }}>URL de Indicação</label>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <input
-                                value={`${window.location.origin}/originador?id=${originator.id}`}
+                                value={`https://b2wenergia.com.br/convite?name=${encodeURIComponent(originator.name)}&id=${originator.id}`}
                                 readOnly
                                 className="input"
                                 style={{ color: '#0284c7' }}
@@ -179,7 +179,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                             <button
                                 type="button"
                                 onClick={() => {
-                                    navigator.clipboard.writeText(`${window.location.origin}/originador?id=${originator.id}`);
+                                    navigator.clipboard.writeText(`https://b2wenergia.com.br/convite?name=${encodeURIComponent(originator.name)}&id=${originator.id}`);
                                     alert('Link copiado!');
                                 }}
                                 className="btn"
