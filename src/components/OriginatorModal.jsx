@@ -172,7 +172,6 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <input
                                 value={`https://b2wenergia.com.br/convite?name=${encodeURIComponent(originator.name)}&id=${originator.id}`}
-                                readOnly
                                 className="input"
                                 style={{ color: '#0284c7' }}
                             />
