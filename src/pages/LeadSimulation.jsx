@@ -61,7 +61,13 @@ export default function LeadSimulation() {
             name: formData.nome,
             email: formData.email,
             phone: formData.telefone,
-            address: address,
+            // Address fields flattened
+            cep: formData.cep,
+            rua: address?.rua,
+            bairro: address?.bairro,
+            cidade: address?.cidade,
+            uf: address?.uf,
+
             consumo_kwh: parseFloat(formData.consumo),
             concessionaria: offer?.Concessionaria,
             tarifa_concessionaria: offer?.['Tarifa Concessionaria'],

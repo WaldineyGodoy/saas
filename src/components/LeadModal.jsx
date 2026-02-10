@@ -104,7 +104,14 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     uf: addr.uf || '',
                     concessionaria: offer?.Concessionaria || prev.concessionaria || '',
                     tarifa_concessionaria: offer?.['Tarifa Concessionaria'] || prev.tarifa_concessionaria || '',
-                    desconto_assinante: offer?.['Desconto Assinante'] || prev.desconto_assinante || ''
+                    tarifa_concessionaria: offer?.['Tarifa Concessionaria'] || prev.tarifa_concessionaria || '',
+                    desconto_assinante: (() => {
+                        let val = offer?.['Desconto Assinante'] || prev.desconto_assinante || '';
+                        if (val && !isNaN(val) && Number(val) > 0 && Number(val) < 1) {
+                            return Number(val) * 100;
+                        }
+                        return val;
+                    })()
                 }));
             } catch (error) {
                 console.error('Erro ao buscar CEP:', error);
