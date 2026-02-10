@@ -262,9 +262,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 // Determine new status for Lead
                 let newLeadStatus = null;
                 if (dataToSave.status === 'ativacao') {
-                    newLeadStatus = 'ativacao';
+                    newLeadStatus = 'em_negociacao'; // Mapped: 'ativacao' not in Lead Enum
                 } else if (dataToSave.status === 'ativo') {
-                    newLeadStatus = 'ativo'; // OR 'active', depending on your DB enum
+                    newLeadStatus = 'ativo';
                 }
 
                 if (newLeadStatus && dataToSave.email) {
