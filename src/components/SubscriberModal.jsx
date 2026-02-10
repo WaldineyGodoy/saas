@@ -210,15 +210,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 asaasSyncSuccess = true;
 
             } catch (asaasError) {
-                console.error("Asaas Sync Error:", asaasError);
+                console.error("Asaas Sync Error (SUPPRESSED):", asaasError);
+                // SUPPRESS ERROR as requested by user. Auto-proceed to local save.
+                /*
                 const proceed = await showConfirm(`Falha ao sincronizar com Asaas: ${asaasError.message}.\n\nDeseja salvar apenas no CRM (Localmente)?`, 'Erro de Sincronização');
                 if (!proceed) {
                     setLoading(false);
                     return; // Abort save
                 }
-                // Continue to save locally without asaas_id (or keep existing if update?)
-                // If updating, we might want to keep existing ID if not provided here. 
-                // But for now, we just proceed.
+                */
+                // Just continue...
             }
 
             // 3. Save to Supabase
