@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
-import SubscriberModal from './SubscriberModal';
 // import InputMask from 'react-input-mask';
 
 export default function LeadCaptureForm() {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
     const [showResult, setShowResult] = useState(false);
-    const [showSubscriberModal, setShowSubscriberModal] = useState(false);
     const [savedLead, setSavedLead] = useState(null);
 
     // URL Params
@@ -147,25 +146,54 @@ export default function LeadCaptureForm() {
         }
     };
 
-    const handleSubscriberSave = async (subscriber) => {
-        // Upon successful subscriber creation, update lead status
-        if (savedLead?.id) {
-            try {
-                const { error } = await supabase
-                    .from('leads')
-                    .update({ status: 'ativacao' }) // Update status to 'Em Ativação'
-                    .eq('id', savedLead.id);
+    const handleNavigateToContract = () => {
+        // Prepare Params
+        const discountValue = calculateDiscount();
+        // Annual Savings = Monthly * 12
+        const annualSavings = discountValue * 12;
 
-                if (error) {
-                    console.error("Failed to update lead status:", error);
-                } else {
-                    console.log("Lead status updated to 'ativacao'");
-                }
-            } catch (err) {
-                console.error("Error updating lead status:", err);
-            }
-        }
-        setShowSubscriberModal(false);
+        let discountPercent = Number(offerData?.['Desconto Assinante']) || 0;
+        if (discountPercent < 1 && discountPercent > 0) discountPercent = discountPercent * 100;
+
+        const params = new URLSearchParams();
+        params.append('name', form.name);
+        params.append('email', form.email);
+        params.append('phone', form.phone);
+        params.append('cep', form.cep);
+        params.append('consumo', form.consumo); // Passing consumption for initial display
+        if (originatorId) params.append('originator_id', originatorId);
+
+        params.append('discount_percent', discountPercent.toFixed(0));
+        params.append('savings_annual', annualSavings.toFixed(2));
+
+        // If inside iframe, we might want to redirect the top window, or just navigate if it's the same app.
+        // The user says "LeadCaptureForm exibe o um popup modal...". 
+        // If the LeadCaptureForm is in an iframe, `navigate('/contrato')` will navigate INSIDE the iframe.
+        // If the intention is to escape the iframe or stay within it?
+        // "o SubscriberModal será incoporado em outra landpage que será aberta ao clicar no botão Garantir Desconto"
+        // "separar os iframes...". 
+        // Usually, `window.top.location.href` escapes iframe. 
+        // But if the route `/contrato` is part of the SAME React App, using `navigate` keeps it SPA.
+        // If the iframe src is creating a new history entry in the iframe, it's fine.
+        // Use `window.open`? 
+        // "outra landpage que será aberta". This might mean opening a new tab.
+        // Let's use `window.open` to be safe and ensure it loads fully, carrying the params.
+
+        // Construct URL. absolute path needed if opening new window.
+        // Assuming current origin.
+        const url = `/contrato?${params.toString()}`;
+
+        // Open in new tab or top window? 
+        // "que será aberta ao clicar..." usually implies new tab or replace current.
+        // If we stay in iframe, the size might be small? 
+        // Lead Pages are usually iframes in other sites (Wordpress etc). A "Signup" page needs full width.
+        // SAFE BET: Open in new tab (target="_blank") OR top window (target="_top").
+        // I will use `window.open(url, '_blank')`.
+
+        window.open(url, '_blank');
+
+        // Close modal or reset?
+        setShowResult(false);
     };
 
     const currencySubtle = (val) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -456,10 +484,7 @@ export default function LeadCaptureForm() {
                         </div>
 
                         <button
-                            onClick={() => {
-                                setShowResult(false);
-                                setShowSubscriberModal(true);
-                            }}
+                            onClick={handleNavigateToContract}
                             style={{
                                 width: '100%', padding: '0.75rem', marginTop: '1.5rem',
                                 borderRadius: '0.75rem', fontWeight: 'bold', color: 'white',
@@ -473,30 +498,6 @@ export default function LeadCaptureForm() {
 
                     </div>
                 </div>
-            )}
-
-            {/* Subscriber Modal */}
-            {showSubscriberModal && (
-                <SubscriberModal
-                    subscriber={{
-                        name: form.name,
-                        email: form.email,
-                        phone: form.phone,
-                        cep: form.cep,
-                        rua: form.street,
-                        numero: form.number,
-                        bairro: form.neighborhood,
-                        cidade: form.city,
-                        uf: form.uf,
-                        status: 'ativacao',
-                        // If originator is in URL, we could attempt to pass it, but SubscriberModal uses ID.
-                        // We need the originator ID from somewhere if we want to pre-fill it.
-                        // originId from URL might be useful
-                        originator_id: originatorId || ''
-                    }}
-                    onClose={() => setShowSubscriberModal(false)}
-                    onSave={handleSubscriberSave}
-                />
             )}
         </>
     );

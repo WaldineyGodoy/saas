@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import Login from './pages/Login';
 import LeadLanding from './pages/public/LeadLanding';
 import OriginatorLanding from './pages/public/OriginatorLanding';
+import SubscriberSignup from './pages/public/SubscriberSignup';
 import LeadSignup from './pages/LeadSignup';
 import Dashboard from './pages/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -28,6 +29,7 @@ function App() {
             <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
             <Route path="/assine" element={<LeadSignup />} />
             <Route path="/originador" element={<ReferralLanding />} />
+            <Route path="/contrato" element={<SubscriberSignup />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
