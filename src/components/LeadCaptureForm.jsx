@@ -179,17 +179,10 @@ export default function LeadCaptureForm() {
         // "outra landpage que será aberta". This might mean opening a new tab.
         // Let's use `window.open` to be safe and ensure it loads fully, carrying the params.
 
-        // Construct URL. absolute path needed if opening new window.
-        // Assuming current origin.
-        const url = `/contrato?${params.toString()}`;
+        // OPEN EXTERNAL LANDING PAGE (Hostinger)
+        const url = `https://www.b2wenergia.com.br/contrato?${params.toString()}`;
 
-        // Open in new tab or top window? 
-        // "que será aberta ao clicar..." usually implies new tab or replace current.
-        // If we stay in iframe, the size might be small? 
-        // Lead Pages are usually iframes in other sites (Wordpress etc). A "Signup" page needs full width.
-        // SAFE BET: Open in new tab (target="_blank") OR top window (target="_top").
-        // I will use `window.open(url, '_blank')`.
-
+        // Open in new tab (or top window if preferred)
         window.open(url, '_blank');
 
         // Close modal or reset?
