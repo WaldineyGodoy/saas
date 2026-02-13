@@ -5,6 +5,7 @@ import { fetchAddressByCep, fetchCpfCnpjData, manageAsaasCustomer, sendWhatsapp 
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../../lib/validators';
 import { useUI } from '../../contexts/UIContext';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight } from 'lucide-react';
 
 export default function SubscriberSignup() {
@@ -20,6 +21,7 @@ export default function SubscriberSignup() {
     const paramOriginatorId = searchParams.get('originator_id') || '';
     const paramDiscountPercent = searchParams.get('discount_percent') || '0';
     const paramSavingsAnnual = searchParams.get('savings_annual') || '0';
+    const paramConcessionaria = searchParams.get('concessionaria') || '';
 
     const [loading, setLoading] = useState(false);
     const [showUcModal, setShowUcModal] = useState(false);
@@ -194,7 +196,19 @@ export default function SubscriberSignup() {
                 const { data: org } = await supabase.from('originators_v2').select('phone').eq('id', paramOriginatorId).single();
                 if (org?.phone) {
                     const msgOrg = `🚀 Novo Cliente Cadastrado!\n\n${sub.name} acabou de completar o cadastro.\nVerifique no CRM.`;
-                    await sendWhatsapp(org.phone, msgOrg, null, 'default');
+
+                    // Fetch configured instance name
+                    let instanceName = 'default';
+                    try {
+                        const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+                        if (config?.variables?.instance_name) {
+                            instanceName = config.variables.instance_name;
+                        }
+                    } catch (err) {
+                        console.error('Error fetching integration config:', err);
+                    }
+
+                    await sendWhatsapp(org.phone, msgOrg, null, instanceName);
                 }
             }
 
@@ -203,7 +217,19 @@ export default function SubscriberSignup() {
                 // Remove Greeting per user request logic? Or keep generic. 
                 // "Ola do formulario" referred to the UI header. WhatsApp message is likely fine to keep "Ola".
                 const msgSub = `Olá, ${sub.name}! 👋\n\nSeu cadastro na B2W Energia foi recebido com sucesso e está em fase de ativação.\n\nPara acompanhar o processo, acesse seu email e crie seu login.`;
-                await sendWhatsapp(sub.phone, msgSub, null, 'default');
+
+                // Fetch configured instance name (redundant but safe if block above skipped)
+                let instanceName = 'default';
+                try {
+                    const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+                    if (config?.variables?.instance_name) {
+                        instanceName = config.variables.instance_name;
+                    }
+                } catch (err) {
+                    console.error('Error fetching integration config:', err);
+                }
+
+                await sendWhatsapp(sub.phone, msgSub, null, instanceName);
             }
 
             showAlert('Cadastro realizado com sucesso!', 'success');
@@ -486,8 +512,10 @@ export default function SubscriberSignup() {
 
             {/* UC Modal */}
             {showUcModal && (
-                <ConsumerUnitModal
-                    consumerUnit={{ subscriber_id: savedSubscriber?.id }}
+                <PublicConsumerUnitForm
+                    consumerUnit={null} // Always new in this flow
+                    subscriberId={savedSubscriber?.id}
+                    concessionariaDefault={paramConcessionaria}
                     onClose={() => setShowUcModal(false)}
                     onSave={() => {
                         fetchLinkedUCs();

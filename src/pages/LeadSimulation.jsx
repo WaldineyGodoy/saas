@@ -178,7 +178,24 @@ export default function LeadSimulation() {
                             </h3>
                         </div>
                         <button
-                            onClick={() => navigate('/assine')}
+                            onClick={() => {
+                                const params = new URLSearchParams();
+                                params.append('name', formData.nome);
+                                params.append('email', formData.email);
+                                params.append('phone', formData.telefone);
+                                params.append('cep', formData.cep);
+                                if (offer?.Concessionaria) params.append('concessionaria', offer.Concessionaria);
+                                if (savings?.anual) params.append('savings_annual', savings.anual);
+                                if (offer?.['Desconto Assinante']) {
+                                    const discount = offer['Desconto Assinante'] > 1
+                                        ? offer['Desconto Assinante']
+                                        : offer['Desconto Assinante'] * 100;
+                                    params.append('discount_percent', discount);
+                                }
+                                if (originatorId) params.append('originator_id', originatorId);
+
+                                navigate(`/contrato?${params.toString()}`);
+                            }}
                             style={{ width: '100%', padding: '1rem', backgroundColor: 'var(--color-blue)', color: 'white', fontWeight: 'bold' }}
                         >
                             Quero Assinar!
