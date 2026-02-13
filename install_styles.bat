@@ -1,12 +1,12 @@
 @echo off
 echo ==========================================
-echo Instalando Tailwind CSS e dependencias...
+echo Corrigindo versao do Tailwind CSS...
 echo ==========================================
 
-call npm install -D tailwindcss postcss autoprefixer
+call npm install
 
 echo ==========================================
-echo Instalacao concluida!
-echo Agora voce pode rodar o deploy novamente.
+echo Correcao aplicada!
+echo Agora rode o arquivo deploy.bat novamente.
 echo ==========================================
 pause
