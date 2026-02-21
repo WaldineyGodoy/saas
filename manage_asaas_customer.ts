@@ -15,10 +15,23 @@ serve(async (req) => {
     try {
         const { name, cpfCnpj, email, phone, address, addressNumber, province, postalCode } = await req.json()
 
-        const asaasUrl = Deno.env.get('ASAAS_API_URL') || 'https://sandbox.asaas.com/api/v3';
-        const asaasKey = Deno.env.get('ASAAS_API_KEY');
+        const supabase = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        )
 
-        if (!asaasKey) throw new Error('ASAAS_API_KEY não configurada.');
+        const { data: configData, error: configError } = await supabase
+            .from('integrations_config')
+            .select('api_key, endpoint_url')
+            .eq('service_name', 'financial_api')
+            .single()
+
+        if (configError || !configData?.api_key || !configData?.endpoint_url) {
+            throw new Error('Integração Asaas não configurada no painel. Verifique as configurações financeiras.')
+        }
+
+        const asaasKey = configData.api_key;
+        const asaasUrl = configData.endpoint_url;
 
         const cleanCpfCnpj = cpfCnpj?.replace(/\D/g, '');
         const cleanPhone = phone?.replace(/\D/g, '');

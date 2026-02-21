@@ -28,10 +28,19 @@ serve(async (req) => {
         )
 
         const { invoice_id, subscriber_id } = await req.json()
-        const asaasUrl = Deno.env.get('ASAAS_API_URL') || 'https://sandbox.asaas.com/api/v3';
-        const asaasKey = Deno.env.get('ASAAS_API_KEY');
 
-        if (!asaasKey) throw new Error('ASAAS_API_KEY não configurada.');
+        const { data: configData, error: configError } = await supabase
+            .from('integrations_config')
+            .select('api_key, endpoint_url')
+            .eq('service_name', 'financial_api')
+            .single()
+
+        if (configError || !configData?.api_key || !configData?.endpoint_url) {
+            throw new Error('Integração Asaas não configurada no painel. Verifique as configurações financeiras.')
+        }
+
+        const asaasKey = configData.api_key;
+        const asaasUrl = configData.endpoint_url;
 
         let invoicesToCharge = [];
         let subscriber = null;
