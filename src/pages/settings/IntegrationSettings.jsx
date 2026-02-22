@@ -304,7 +304,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </button>
                 </div>
 
-                {/* TEST AREA - Only for Evolution API */}
+                {/* TEST AREA - Evolution API */}
                 {serviceName === 'evolution_api' && (
                     <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
                         <h4 style={{ margin: '0 0 1rem 0', color: '#334155' }}>Teste de Conexão</h4>
@@ -342,6 +342,44 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 style={{ padding: '0.7rem 1.5rem', background: sendingTest ? '#94a3b8' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingTest ? 'default' : 'pointer', fontWeight: 600 }}
                             >
                                 {sendingTest ? 'Enviando...' : 'Enviar Teste'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* TEST AREA - Financial API (Asaas) */}
+                {serviceName === 'financial_api' && (
+                    <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', color: '#334155' }}>Teste de Conexão (Asaas)</h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Verifica se o endpoint e o token estão corretos.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setLoading(true);
+                                    try {
+                                        const { data, error } = await supabase.functions.invoke('manage-asaas-customer', {
+                                            body: { test: true }
+                                        });
+                                        if (error) throw error;
+                                        if (data?.success) {
+                                            showAlert(data.message || 'Conexão OK!', 'success');
+                                        } else {
+                                            throw new Error(data?.error || 'Erro desconhecido');
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                        showAlert('Falha na conexão: ' + err.message, 'error');
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading || !formData.api_key || !formData.endpoint_url}
+                                style={{ padding: '0.7rem 1.5rem', background: loading ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}
+                            >
+                                {loading ? 'Testando...' : 'Testar Conexão'}
                             </button>
                         </div>
                     </div>

@@ -13,7 +13,8 @@ serve(async (req) => {
     }
 
     try {
-        const { name, cpfCnpj, email, phone, address, addressNumber, province, postalCode } = await req.json()
+        const payload = await req.json()
+        const { test, name, cpfCnpj, email, phone, address, addressNumber, province, postalCode } = payload
 
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -32,6 +33,21 @@ serve(async (req) => {
 
         const asaasKey = configData.api_key;
         const asaasUrl = configData.endpoint_url;
+
+        if (test) {
+            console.log('Testando conexão Asaas...');
+            const testRes = await fetch(`${asaasUrl}/customers?limit=1`, {
+                headers: { access_token: asaasKey }
+            });
+            const testData = await testRes.json();
+            if (testRes.status !== 200 || testData.errors) {
+                throw new Error(testData.errors?.[0]?.description || `Erro na conexão Asaas (Status ${testRes.status})`);
+            }
+            return new Response(
+                JSON.stringify({ success: true, message: 'Conexão com Asaas realizada com sucesso!' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
 
         const cleanCpfCnpj = cpfCnpj?.replace(/\D/g, '');
         const cleanPhone = phone?.replace(/\D/g, '');
