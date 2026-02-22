@@ -166,19 +166,22 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const fetchAvailableUCs = async () => {
-        if (!usina?.id) return;
+        try {
+            let query = supabase
+                .from('consumer_units')
+                .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh, franquia');
 
-        const { data, error } = await supabase
-            .from('consumer_units')
-            .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh, franquia');
+            if (usina?.id) {
+                query = query.or(`usina_id.eq.${usina.id},usina_id.is.null`);
+            } else {
+                query = query.is('usina_id', null);
+            }
 
-        if (data) {
-            const currentId = String(usina.id).toLowerCase().trim();
-            const filtered = data.filter(uc => {
-                const ucUsinaId = uc.usina_id ? String(uc.usina_id).toLowerCase().trim() : null;
-                return ucUsinaId === currentId || ucUsinaId === null;
-            });
-            setAvailableUCs(filtered);
+            const { data, error } = await query;
+            if (error) throw error;
+            setAvailableUCs(data || []);
+        } catch (err) {
+            console.error('Error fetching available UCs:', err);
         }
     };
 
