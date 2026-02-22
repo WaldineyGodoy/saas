@@ -168,13 +168,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const fetchAvailableUCs = async () => {
         let query = supabase
             .from('consumer_units')
-            .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh');
+            .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh, franquia');
 
         const { data, error } = await query;
 
         if (data) {
             const filtered = data.filter(uc => {
-                const isLinkedToThis = usina && uc.usina_id === usina.id;
+                const isLinkedToThis = usina && String(uc.usina_id) === String(usina.id);
                 const isAvailable = uc.usina_id === null;
                 return isLinkedToThis || isAvailable;
             });
@@ -393,7 +393,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 }}>
                     <div>
                         <h3 style={{ fontSize: '1.5rem', color: '#1e293b', fontWeight: 'bold' }}>
-                            {usina ? 'Editar Usina' : 'Nova Usina'}
+                            {usina ? formData.name : 'Nova Usina'}
                         </h3>
                         <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.2rem' }}>Configure os dados técnicos e comerciais da usina</p>
                     </div>
@@ -689,7 +689,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
                                                     <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                                                    {uc.consumo_medio_kwh && <strong style={{ fontSize: '0.8rem', color: '#059669' }}>{Math.round(uc.consumo_medio_kwh)} kWh</strong>}
+                                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                                                        {uc.franquia ? `${Math.round(uc.franquia)} kWh (Frq)` : (uc.consumo_medio_kwh ? `${Math.round(uc.consumo_medio_kwh)} kWh (Cons)` : '0 kWh')}
+                                                    </div>
                                                 </div>
                                             </label>
                                         );
