@@ -84,19 +84,27 @@ serve(async (req) => {
             // Update existing
             customerId = searchData.data[0].id;
             console.log(`Cliente encontrado no Asaas: ${customerId}. Atualizando...`);
+            console.log("Update Payload:", JSON.stringify(customerPayload));
 
-            await fetch(`${asaasUrl}/customers/${customerId}`, {
-                method: 'POST', // PUT or POST depending on API, Asaas usually accepts POST for updates too or PUT
+            const updateRes = await fetch(`${asaasUrl}/customers/${customerId}`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     access_token: asaasKey
                 },
                 body: JSON.stringify(customerPayload)
             });
+            const updateData = await updateRes.json();
+            if (updateData.errors) {
+                console.error("Asaas Update error details:", JSON.stringify(updateData));
+                throw new Error(`Erro Asaas (Update): ${updateData.errors[0].description}`);
+            }
         } else {
             // Create new
             console.log(`Cliente não encontrado. Criando...`);
             isNew = true;
+            console.log("Create Payload:", JSON.stringify(customerPayload));
+
             const createRes = await fetch(`${asaasUrl}/customers`, {
                 method: 'POST',
                 headers: {
@@ -107,7 +115,10 @@ serve(async (req) => {
             });
             const createData = await createRes.json();
 
-            if (createData.errors) throw new Error(`Erro Asaas: ${createData.errors[0].description}`);
+            if (createData.errors) {
+                console.error("Asaas Create error details:", JSON.stringify(createData));
+                throw new Error(`Erro Asaas (Create): ${createData.errors[0].description}`);
+            }
             customerId = createData.id;
         }
 
