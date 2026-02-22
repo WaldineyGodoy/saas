@@ -166,17 +166,17 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const fetchAvailableUCs = async () => {
-        let query = supabase
+        if (!usina?.id) return;
+
+        const { data, error } = await supabase
             .from('consumer_units')
             .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh, franquia');
 
-        const { data, error } = await query;
-
         if (data) {
+            const currentId = String(usina.id).toLowerCase().trim();
             const filtered = data.filter(uc => {
-                const isLinkedToThis = usina && String(uc.usina_id) === String(usina.id);
-                const isAvailable = uc.usina_id === null;
-                return isLinkedToThis || isAvailable;
+                const ucUsinaId = uc.usina_id ? String(uc.usina_id).toLowerCase().trim() : null;
+                return ucUsinaId === currentId || ucUsinaId === null;
             });
             setAvailableUCs(filtered);
         }
@@ -393,7 +393,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 }}>
                     <div>
                         <h3 style={{ fontSize: '1.5rem', color: '#1e293b', fontWeight: 'bold' }}>
-                            {usina ? formData.name : 'Nova Usina'}
+                            {usina ? (usina.name || formData.name) : 'Nova Usina'}
                         </h3>
                         <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.2rem' }}>Configure os dados técnicos e comerciais da usina</p>
                     </div>
