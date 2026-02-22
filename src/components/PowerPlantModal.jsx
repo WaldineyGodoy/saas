@@ -165,23 +165,38 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     };
 
+    const [loadingUCs, setLoadingUCs] = useState(false);
+
     const fetchAvailableUCs = async () => {
-        try {
-            let query = supabase
-                .from('consumer_units')
-                .select('id, numero_uc, titular_conta, usina_id, concessionaria, status, consumo_medio_kwh, franquia');
-
-            if (usina?.id) {
-                query = query.or(`usina_id.eq.${usina.id},usina_id.is.null`);
-            } else {
-                query = query.is('usina_id', null);
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
+        if (!usina?.id && !usina) {
+            // New plant case: only show available ones
+            const { data } = await supabase.from('consumer_units').select('*').is('usina_id', null);
             setAvailableUCs(data || []);
-        } catch (err) {
-            console.error('Error fetching available UCs:', err);
+            return;
+        }
+
+        if (usina?.id) {
+            setLoadingUCs(true);
+            try {
+                // Fetch linked and available in parallel for speed and reliability
+                const [linkedRes, availableRes] = await Promise.all([
+                    supabase.from('consumer_units').select('*').eq('usina_id', usina.id),
+                    supabase.from('consumer_units').select('*').is('usina_id', null)
+                ]);
+
+                const combined = [
+                    ...(linkedRes.data || []),
+                    ...(availableRes.data || [])
+                ];
+
+                // De-duplicate just in case, though logically they should be distinct
+                const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                setAvailableUCs(unique);
+            } catch (err) {
+                console.error('Error fetching UCs:', err);
+            } finally {
+                setLoadingUCs(false);
+            }
         }
     };
 
@@ -660,8 +675,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 </div>
                             </div>
 
-                            {availableUCs.length === 0 ? (
-                                <p style={{ fontSize: '0.8rem', color: '#666', textAlign: 'center', padding: '1rem' }}>
+                            {loadingUCs ? (
+                                <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>
+                                    Carregando unidades disponíveis...
+                                </p>
+                            ) : availableUCs.length === 0 ? (
+                                <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>
                                     Nenhuma UC disponível encontrada.
                                 </p>
                             ) : (
