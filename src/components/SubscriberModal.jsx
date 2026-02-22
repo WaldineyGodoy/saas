@@ -110,7 +110,31 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
     const handleDocBlur = async () => {
         const doc = formData.cpf_cnpj.replace(/\D/g, '');
-        if (doc.length >= 11) {
+        if (doc.length > 11) { // CNPJ
+            setSearchingDoc(true);
+            try {
+                const data = await fetchCpfCnpjData(doc);
+                if (data.nome) {
+                    setFormData(prev => ({
+                        ...prev,
+                        name: data.nome || prev.name,
+                        email: data.email || prev.email,
+                        phone: data.telefone ? maskPhone(data.telefone) : prev.phone,
+                        cep: data.address?.cep || prev.cep,
+                        rua: data.address?.logradouro || prev.rua,
+                        numero: data.address?.numero || prev.numero,
+                        complemento: data.address?.complemento || prev.complemento,
+                        bairro: data.address?.bairro || prev.bairro,
+                        cidade: data.address?.municipio || prev.cidade,
+                        uf: data.address?.uf || prev.uf
+                    }));
+                }
+            } catch (error) {
+                console.error('Erro buscar doc', error);
+            } finally {
+                setSearchingDoc(false);
+            }
+        } else if (doc.length === 11) { // CPF
             setSearchingDoc(true);
             try {
                 const data = await fetchCpfCnpjData(doc);
