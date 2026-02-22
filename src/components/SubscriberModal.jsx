@@ -210,16 +210,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 asaasSyncSuccess = true;
 
             } catch (asaasError) {
-                console.error("Asaas Sync Error (SUPPRESSED):", asaasError);
-                // SUPPRESS ERROR as requested by user. Auto-proceed to local save.
-                /*
-                const proceed = await showConfirm(`Falha ao sincronizar com Asaas: ${asaasError.message}.\n\nDeseja salvar apenas no CRM (Localmente)?`, 'Erro de Sincronização');
+                console.error("Asaas Sync Error:", asaasError);
+                const proceed = await showConfirm(
+                    `Falha ao sincronizar com Asaas: ${asaasError.message}.\n\nDeseja salvar apenas no CRM (Localmente)?`,
+                    'Erro de Sincronização',
+                    'Salvar Localmente',
+                    'Corrigir Dados'
+                );
                 if (!proceed) {
                     setLoading(false);
                     return; // Abort save
                 }
-                */
-                // Just continue...
             }
 
             // 3. Save to Supabase

@@ -131,8 +131,14 @@ export default function SubscriberSignup() {
             });
             if (asaasResult?.success) asaasId = asaasResult.asaas_id;
         } catch (e) {
-            console.warn('Asaas Sync warning:', e);
-            // Continue execution, don't block
+            console.error('Asaas Sync Error:', e);
+            const proceed = await showConfirm(
+                `Aviso: Não foi possível sincronizar com o Asaas (${e.message}).\nDeseja finalizar o cadastro apenas localmente?`,
+                'Erro de Sincronização',
+                'Sim, Finalizar Local',
+                'Não, Vou Corrigir'
+            );
+            if (!proceed) throw new Error('Operação cancelada para correção de dados.');
         }
 
         const payload = {
