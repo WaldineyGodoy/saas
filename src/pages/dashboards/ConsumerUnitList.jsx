@@ -1,6 +1,126 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import {
+    DndContext,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCorners,
+    DragOverlay
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+
+const KANBAN_STATUSES = [
+    { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' },
+    { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' },
+    { status: 'ativo', label: 'Ativo', color: '#22c55e' },
+    { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' },
+    { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' },
+    { status: 'cancelado', label: 'Cancelado', color: '#ef4444' },
+    { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' }
+];
+
+function KanbanCard({ uc, onClick, isOverlay }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: uc.id, disabled: !!isOverlay });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
+        background: 'white',
+        padding: '1rem',
+        borderRadius: 'var(--radius-sm)',
+        boxShadow: isOverlay ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
+        cursor: isOverlay ? 'grabbing' : 'grab',
+        border: '1px solid transparent',
+        zIndex: isDragging ? 1000 : 1,
+        position: 'relative',
+        width: isOverlay ? '300px' : 'auto'
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...(!isOverlay ? attributes : {})}
+            {...(!isOverlay ? listeners : {})}
+            onClick={() => !isOverlay && onClick(uc)}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{uc.numero_uc}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                    {uc.concessionaria}
+                </span>
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--color-text-medium)', marginBottom: '0.2rem' }}>
+                {uc.subscriber?.name || 'Sem Assinante'}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                <span>{uc.address?.cidade}/{uc.address?.uf}</span>
+                <span>{uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : ''}</span>
+            </div>
+        </div>
+    );
+}
+
+function KanbanColumn({ status, label, color, units, onCardClick }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: status,
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                minWidth: '300px',
+                flex: 1,
+                background: isOver ? '#e2e8f0' : 'var(--color-bg-light)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.5rem',
+                borderTop: `4px solid ${color}`,
+                boxShadow: 'var(--shadow-sm)',
+                transition: 'background 0.2s ease'
+            }}
+        >
+            <h4 style={{
+                padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
+                color: color
+            }}>
+                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                    {label}
+                </span>
+                <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
+                    {units.length}
+                </span>
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '100px' }}>
+                <SortableContext
+                    items={units.map(u => u.id)}
+                    strategy={verticalListSortingStrategy}
+                >
+                    {units.map(uc => (
+                        <KanbanCard key={uc.id} uc={uc} onClick={onCardClick} />
+                    ))}
+                </SortableContext>
+            </div>
+        </div>
+    );
+}
 
 export default function ConsumerUnitList() {
     const [units, setUnits] = useState([]);
@@ -9,6 +129,15 @@ export default function ConsumerUnitList() {
     const [viewMode, setViewMode] = useState('kanban');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState(null);
+    const [activeId, setActiveId] = useState(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        })
+    );
 
     const filteredUnits = units.filter(u => {
         if (!searchTerm) return true;
@@ -47,14 +176,58 @@ export default function ConsumerUnitList() {
     };
 
     const handleSave = (savedUnit) => {
-        // Optimistic update or refresh
-        fetchUnits(); // Easiest to just refresh to get relation data properly
+        fetchUnits();
         setIsModalOpen(false);
     };
 
     const handleDelete = (id) => {
         setUnits(units.filter(u => u.id !== id));
         setIsModalOpen(false);
+    };
+
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setActiveId(null);
+        if (!over) return;
+
+        const activeId = active.id;
+        const overId = over.id;
+
+        // Determine target status
+        let newStatus = overId;
+        const isTargetStatus = KANBAN_STATUSES.some(s => s.status === overId);
+
+        if (!isTargetStatus) {
+            // Dropped over another card, get its status
+            const targetUnit = units.find(u => u.id === overId);
+            newStatus = targetUnit?.status;
+        }
+
+        if (!newStatus) return;
+
+        const unitToUpdate = units.find(u => u.id === activeId);
+        if (unitToUpdate && unitToUpdate.status !== newStatus) {
+            // Optimistic update
+            setUnits(prev => prev.map(u =>
+                u.id === activeId ? { ...u, status: newStatus } : u
+            ));
+
+            try {
+                const { error } = await supabase
+                    .from('consumer_units')
+                    .update({ status: newStatus })
+                    .eq('id', activeId);
+
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error updating status:', error);
+                fetchUnits(); // Rollback to actual data
+            }
+        }
     };
 
     return (
@@ -69,7 +242,6 @@ export default function ConsumerUnitList() {
                 </button>
             </div>
 
-            {/* Controls Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
                     <input
@@ -121,19 +293,13 @@ export default function ConsumerUnitList() {
                                         <tbody>
                                             {filteredUnits.map(uc => (
                                                 <tr key={uc.id}>
-                                                    <td style={{ fontWeight: 'bold' }}>
-                                                        {uc.numero_uc}
-                                                    </td>
-                                                    <td style={{ color: 'var(--color-text-medium)' }}>
-                                                        {uc.concessionaria || '-'}
-                                                    </td>
+                                                    <td style={{ fontWeight: 'bold' }}>{uc.numero_uc}</td>
+                                                    <td style={{ color: 'var(--color-text-medium)' }}>{uc.concessionaria || '-'}</td>
                                                     <td>
                                                         <div style={{ fontWeight: 'bold' }}>{uc.subscriber?.name || '-'}</div>
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)' }}>{uc.subscriber?.cpf_cnpj}</div>
                                                     </td>
-                                                    <td>
-                                                        {uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}
-                                                    </td>
+                                                    <td>{uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}</td>
                                                     <td>
                                                         <span className="badge" style={{
                                                             background: uc.status === 'ativo' ? 'var(--color-success-light)' :
@@ -144,9 +310,7 @@ export default function ConsumerUnitList() {
                                                             {uc.status?.replace('_', ' ').toUpperCase()}
                                                         </span>
                                                     </td>
-                                                    <td>
-                                                        {uc.address?.cidade} / {uc.address?.uf}
-                                                    </td>
+                                                    <td>{uc.address?.cidade} / {uc.address?.uf}</td>
                                                     <td>
                                                         <button
                                                             onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
@@ -164,64 +328,37 @@ export default function ConsumerUnitList() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {[
-                                { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' }, // Blue
-                                { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' }, // Yellow
-                                { status: 'ativo', label: 'Ativo', color: '#22c55e' }, // Green
-                                { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' }, // Slate
-                                { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' }, // Orange
-                                { status: 'cancelado', label: 'Cancelado', color: '#ef4444' }, // Red
-                                { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' } // Dark Red
-                            ].map(({ status, label, color }) => {
-                                const unitsInStatus = filteredUnits.filter(u => (u.status || 'em_ativacao') === status);
-
-                                return (
-                                    <div key={status} style={{ minWidth: '300px', flex: 1, background: 'var(--color-bg-light)', borderRadius: 'var(--radius-md)', padding: '0.5rem', borderTop: `4px solid ${color}`, boxShadow: 'var(--shadow-sm)' }}>
-                                        <h4 style={{
-                                            padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
-                                            color: color
-                                        }}>
-                                            <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                                                {label}
-                                            </span>
-                                            <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
-                                                {unitsInStatus.length}
-                                            </span>
-                                        </h4>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            {unitsInStatus.map(uc => (
-                                                <div
-                                                    key={uc.id}
-                                                    onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
-                                                    style={{
-                                                        background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)',
-                                                        cursor: 'pointer', border: '1px solid transparent', transition: '0.2s'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-blue)'}
-                                                    onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
-                                                >
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                        <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{uc.numero_uc}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                            {uc.concessionaria}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.9rem', color: 'var(--color-text-medium)', marginBottom: '0.2rem' }}>
-                                                        {uc.subscriber?.name || 'Sem Assinante'}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                                                        <span>{uc.address?.cidade}/{uc.address?.uf}</span>
-                                                        <span>{uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : ''}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCorners}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragCancel={() => setActiveId(null)}
+                        >
+                            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
+                                {KANBAN_STATUSES.map(({ status, label, color }) => {
+                                    const unitsInStatus = filteredUnits.filter(u => (u.status || 'em_ativacao') === status);
+                                    return (
+                                        <KanbanColumn
+                                            key={status}
+                                            status={status}
+                                            label={label}
+                                            color={color}
+                                            units={unitsInStatus}
+                                            onCardClick={(uc) => { setEditingUnit(uc); setIsModalOpen(true); }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                            <DragOverlay adjustScale={true}>
+                                {activeId ? (
+                                    <KanbanCard
+                                        uc={units.find(u => u.id === activeId)}
+                                        isOverlay={true}
+                                    />
+                                ) : null}
+                            </DragOverlay>
+                        </DndContext>
                     )}
                 </>
             )}

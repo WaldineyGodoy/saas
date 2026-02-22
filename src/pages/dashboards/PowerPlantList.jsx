@@ -3,6 +3,164 @@ import { supabase } from '../../lib/supabase';
 import PowerPlantModal from '../../components/PowerPlantModal';
 import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
 import { FileText } from 'lucide-react';
+import {
+    DndContext,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCorners,
+    DragOverlay
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+
+const KANBAN_STATUSES = [
+    { status: 'em_conexao', label: 'Em Conexão', color: '#9a3412', bg: '#ffedd5' },
+    { status: 'gerando', label: 'Gerando', color: '#166534', bg: '#dcfce7' },
+    { status: 'manutencao', label: 'Manutenção', color: '#991b1b', bg: '#fee2e2' },
+    { status: 'inativa', label: 'Inativa', color: '#64748b', bg: '#f1f5f9' },
+    { status: 'cancelada', label: 'Cancelada', color: '#94a3b8', bg: '#f1f5f9' }
+];
+
+function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: plant.id, disabled: !!isOverlay });
+
+    const statusConfig = KANBAN_STATUSES.find(s => s.status === plant.status) || KANBAN_STATUSES[0];
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
+        background: 'white',
+        padding: '1rem',
+        borderRadius: 'var(--radius-sm)',
+        boxShadow: isOverlay ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
+        cursor: isOverlay ? 'grabbing' : 'grab',
+        border: '1px solid transparent',
+        zIndex: isDragging ? 1000 : 1,
+        position: 'relative',
+        overflow: 'hidden',
+        width: isOverlay ? '300px' : 'auto'
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...(!isOverlay ? attributes : {})}
+            {...(!isOverlay ? listeners : {})}
+            onClick={() => !isOverlay && onClick(plant)}
+        >
+            <div style={{
+                display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px',
+                fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase',
+                background: statusConfig.bg, color: statusConfig.color,
+                marginBottom: '0.5rem'
+            }}>
+                {plant.status?.replace('_', ' ')}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)', lineHeight: '1.2' }}>{plant.name}</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                    {plant.concessionaria || 'Sem conc.'}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: '#666', background: '#f3f4f6', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                    {plant.supplier?.name || 'Sem Fornecedor'}
+                </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem', marginBottom: '0.5rem' }}>
+                <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Potência</div>
+                    <div style={{ fontWeight: 'bold' }}>{plant.potencia_kwp} kWp</div>
+                </div>
+                <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
+                    <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Geração Est.</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{plant.geracao_estimada_kwh} kWh</div>
+                </div>
+            </div>
+
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                <span>{plant.address?.cidade}/{plant.address?.uf}</span>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onClosingsClick(plant); }}
+                    style={{
+                        background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.8rem',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem'
+                    }}
+                >
+                    <FileText size={14} /> Fechamentos
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function KanbanColumn({ status, label, color, bg, plants, onCardClick, onClosingsClick }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: status,
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                minWidth: '300px',
+                flex: 1,
+                background: isOver ? '#e2e8f0' : 'var(--color-bg-light)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.5rem',
+                borderTop: `4px solid ${color}`,
+                boxShadow: 'var(--shadow-sm)',
+                transition: 'background 0.2s ease'
+            }}
+        >
+            <h4 style={{
+                padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
+                color: color
+            }}>
+                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                    {label}
+                </span>
+                <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
+                    {plants.length}
+                </span>
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '100px' }}>
+                <SortableContext
+                    items={plants.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                >
+                    {plants.map(plant => (
+                        <KanbanCard
+                            key={plant.id}
+                            plant={plant}
+                            onClick={onCardClick}
+                            onClosingsClick={onClosingsClick}
+                        />
+                    ))}
+                </SortableContext>
+            </div>
+        </div>
+    );
+}
 
 export default function PowerPlantList() {
     const [usinas, setUsinas] = useState([]);
@@ -13,6 +171,15 @@ export default function PowerPlantList() {
     const [selectedUsinaForClosings, setSelectedUsinaForClosings] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('kanban');
+    const [activeId, setActiveId] = useState(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        })
+    );
 
     const filteredUsinas = usinas.filter(u => {
         if (!searchTerm) return true;
@@ -60,15 +227,51 @@ export default function PowerPlantList() {
         setIsModalOpen(false);
     };
 
-    const getStatusStyle = (status) => {
-        switch (status) {
-            case 'gerando': return { bg: '#dcfce7', color: '#166534' };
-            case 'em_conexao': return { bg: '#ffedd5', color: '#9a3412' }; // Orange
-            case 'manutencao': return { bg: '#fee2e2', color: '#991b1b' }; // Red
-            case 'inativa': return { bg: '#f1f5f9', color: '#64748b' };
-            case 'cancelada': return { bg: '#f1f5f9', color: '#94a3b8' };
-            default: return { bg: '#f1f5f9', color: '#64748b' };
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setActiveId(null);
+        if (!over) return;
+
+        const activeId = active.id;
+        const overId = over.id;
+
+        let newStatus = overId;
+        const isTargetStatus = KANBAN_STATUSES.some(s => s.status === overId);
+
+        if (!isTargetStatus) {
+            const targetPlant = usinas.find(p => p.id === overId);
+            newStatus = targetPlant?.status;
         }
+
+        if (!newStatus) return;
+
+        const plantToUpdate = usinas.find(p => p.id === activeId);
+        if (plantToUpdate && plantToUpdate.status !== newStatus) {
+            setUsinas(prev => prev.map(p =>
+                p.id === activeId ? { ...p, status: newStatus } : p
+            ));
+
+            try {
+                const { error } = await supabase
+                    .from('usinas')
+                    .update({ status: newStatus })
+                    .eq('id', activeId);
+
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error updating status:', error);
+                fetchUsinas();
+            }
+        }
+    };
+
+    const getStatusStyle = (status) => {
+        const config = KANBAN_STATUSES.find(s => s.status === status) || { bg: '#f1f5f9', color: '#64748b' };
+        return { bg: config.bg, color: config.color };
     };
 
     return (
@@ -83,7 +286,6 @@ export default function PowerPlantList() {
                 </button>
             </div>
 
-            {/* Controls Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
                     <input
@@ -143,9 +345,7 @@ export default function PowerPlantList() {
                                                             </div>
                                                         </td>
                                                         <td>{u.supplier?.name || '-'}</td>
-                                                        <td>
-                                                            {u.address?.cidade}/{u.address?.uf}
-                                                        </td>
+                                                        <td>{u.address?.cidade}/{u.address?.uf}</td>
                                                         <td>
                                                             <div style={{ fontWeight: 'bold', color: 'var(--color-success)', fontSize: '1.05rem' }}>
                                                                 {u.geracao_estimada_kwh ? `${u.geracao_estimada_kwh} kWh/mês` : '-'}
@@ -157,9 +357,7 @@ export default function PowerPlantList() {
                                                         <td>
                                                             <span style={{
                                                                 padding: '0.3rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 'bold',
-                                                                background: statusStyle.bg,
-                                                                color: statusStyle.color,
-                                                                textTransform: 'uppercase'
+                                                                background: statusStyle.bg, color: statusStyle.color, textTransform: 'uppercase'
                                                             }}>
                                                                 {u.status?.replace('_', ' ')}
                                                             </span>
@@ -176,7 +374,6 @@ export default function PowerPlantList() {
                                                                 onClick={() => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
                                                                 className="btn btn-secondary"
                                                                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}
-                                                                title="Fechamentos Financeiros"
                                                             >
                                                                 <FileText size={14} />
                                                             </button>
@@ -190,91 +387,39 @@ export default function PowerPlantList() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['em_conexao', 'gerando', 'manutencao', 'inativa', 'cancelada'].map(status => {
-                                const usinasInStatus = filteredUsinas.filter(u => u.status === status);
-                                const statusStyle = getStatusStyle(status);
-
-                                return (
-                                    <div key={status} style={{ minWidth: '300px', flex: 1, background: 'var(--color-bg-light)', borderRadius: 'var(--radius-md)', padding: '0.5rem', borderTop: `4px solid ${statusStyle.color}`, boxShadow: 'var(--shadow-sm)' }}>
-                                        <h4 style={{
-                                            padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
-                                            color: statusStyle.color
-                                        }}>
-                                            <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                                                {status.replace('_', ' ')}
-                                            </span>
-                                            <span style={{ fontSize: '0.8rem', background: statusStyle.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
-                                                {usinasInStatus.length}
-                                            </span>
-                                        </h4>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            {usinasInStatus.map(u => (
-                                                <div
-                                                    key={u.id}
-                                                    onClick={() => { setEditingUsina(u); setIsModalOpen(true); }}
-                                                    style={{
-                                                        background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)',
-                                                        cursor: 'pointer', border: '1px solid transparent', transition: '0.2s',
-                                                        position: 'relative', overflow: 'hidden'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-blue)'}
-                                                    onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
-                                                >
-                                                    {/* Status Badge at Top */}
-                                                    <div style={{
-                                                        display: 'inline-block', padding: '0.2rem 0.6rem', borderRadius: '4px',
-                                                        fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase',
-                                                        background: statusStyle.bg, color: statusStyle.color,
-                                                        marginBottom: '0.5rem'
-                                                    }}>
-                                                        {status.replace('_', ' ')}
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
-                                                        <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)', lineHeight: '1.2' }}>{u.name}</span>
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                            {u.concessionaria || 'Sem conc.'}
-                                                        </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#666', background: '#f3f4f6', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                            {u.supplier?.name || 'Sem Fornecedor'}
-                                                        </span>
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.8rem', marginBottom: '0.5rem' }}>
-                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
-                                                            <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Potência</div>
-                                                            <div style={{ fontWeight: 'bold' }}>{u.potencia_kwp} kWp</div>
-                                                        </div>
-                                                        <div style={{ background: 'var(--color-bg-light)', padding: '0.3rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', flex: 1 }}>
-                                                            <div style={{ color: 'var(--color-text-light)', fontSize: '0.65rem' }}>Geração Est.</div>
-                                                            <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{u.geracao_estimada_kwh} kWh</div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                                                        <span>{u.address?.cidade}/{u.address?.uf}</span>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
-                                                            style={{
-                                                                background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.8rem',
-                                                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem'
-                                                            }}
-                                                        >
-                                                            <FileText size={14} /> Fechamentos
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCorners}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragCancel={() => setActiveId(null)}
+                        >
+                            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
+                                {KANBAN_STATUSES.map(({ status, label, color, bg }) => {
+                                    const usinasInStatus = filteredUsinas.filter(u => u.status === status);
+                                    return (
+                                        <KanbanColumn
+                                            key={status}
+                                            status={status}
+                                            label={label}
+                                            color={color}
+                                            bg={bg}
+                                            plants={usinasInStatus}
+                                            onCardClick={(u) => { setEditingUsina(u); setIsModalOpen(true); }}
+                                            onClosingsClick={(u) => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                            <DragOverlay adjustScale={true}>
+                                {activeId ? (
+                                    <KanbanCard
+                                        plant={usinas.find(p => p.id === activeId)}
+                                        isOverlay={true}
+                                    />
+                                ) : null}
+                            </DragOverlay>
+                        </DndContext>
                     )}
                 </>
             )}
