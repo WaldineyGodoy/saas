@@ -363,7 +363,17 @@ export default function IntegrationSettings({ serviceName, title, description })
                                         const { data, error } = await supabase.functions.invoke('manage-asaas-customer', {
                                             body: { test: true }
                                         });
-                                        if (error) throw error;
+
+                                        if (error) {
+                                            // Handle case where body contains { error: "..." }
+                                            let errorMsg = error.message;
+                                            try {
+                                                const body = await error.context?.json();
+                                                if (body && body.error) errorMsg = body.error;
+                                            } catch (e) { }
+                                            throw new Error(errorMsg);
+                                        }
+
                                         if (data?.success) {
                                             showAlert(data.message || 'Conexão OK!', 'success');
                                         } else {

@@ -34,11 +34,14 @@ serve(async (req) => {
         const asaasKey = configData.api_key;
         const asaasUrl = configData.endpoint_url;
 
+        console.log(`Config found: URL=${asaasUrl}, Key=${asaasKey.substring(0, 10)}...`);
+
         if (test) {
             console.log('Testando conexão Asaas...');
             const testRes = await fetch(`${asaasUrl}/customers?limit=1`, {
                 headers: { access_token: asaasKey }
             });
+            console.log(`Asaas Test Response Status: ${testRes.status}`);
             const testData = await testRes.json();
             if (testRes.status !== 200 || testData.errors) {
                 throw new Error(testData.errors?.[0]?.description || `Erro na conexão Asaas (Status ${testRes.status})`);
