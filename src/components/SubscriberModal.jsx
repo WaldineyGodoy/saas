@@ -47,6 +47,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
     useEffect(() => {
         fetchOriginators();
+    }, []); // Run once on mount
+
+    useEffect(() => {
         if (subscriber) {
             setFormData({
                 name: subscriber.name || '',
@@ -65,7 +68,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             });
             fetchConsumerUnits(subscriber.id);
         }
-    }, [subscriber]);
+    }, [subscriber?.id]); // Stable dependency
 
     const fetchOriginators = async () => {
         const { data } = await supabase
@@ -576,7 +579,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             {showUcModal && subscriber && (
                 <ConsumerUnitModal
-                    consumerUnit={{ subscriber_id: subscriber.id }} // Pre-fill subscriber
+                    consumerUnit={(() => {
+                        // Use a memoized-like approach or handle with a stable ID check in child
+                        // For simplicity here, we pass a stable reference if possible or just rely on child's new deps
+                        return { subscriber_id: subscriber.id };
+                    })()}
                     onClose={() => setShowUcModal(false)}
                     onSave={() => {
                         fetchConsumerUnits(subscriber.id); // Refresh List
