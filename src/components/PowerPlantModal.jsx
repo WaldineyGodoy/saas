@@ -168,35 +168,44 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [loadingUCs, setLoadingUCs] = useState(false);
 
     const fetchAvailableUCs = async () => {
+        console.log('--- fetchAvailableUCs Debug ---');
+        console.log('Current usina ID:', usina?.id);
+
         if (!usina?.id && !usina) {
-            // New plant case: only show available ones
-            const { data } = await supabase.from('consumer_units').select('*').is('usina_id', null);
+            console.log('New plant case detected');
+            const { data, error } = await supabase.from('consumer_units').select('*').is('usina_id', null);
+            console.log('Available UCs for new plant:', data?.length || 0);
             setAvailableUCs(data || []);
             return;
         }
 
         if (usina?.id) {
+            console.log('Existing plant case detected - Fetching...');
             setLoadingUCs(true);
             try {
-                // Fetch linked and available in parallel for speed and reliability
                 const [linkedRes, availableRes] = await Promise.all([
                     supabase.from('consumer_units').select('*').eq('usina_id', usina.id),
                     supabase.from('consumer_units').select('*').is('usina_id', null)
                 ]);
+
+                console.log('Linked UCs Result:', linkedRes.data?.length || 0, linkedRes.error || 'No error');
+                console.log('Available UCs Result:', availableRes.data?.length || 0, availableRes.error || 'No error');
 
                 const combined = [
                     ...(linkedRes.data || []),
                     ...(availableRes.data || [])
                 ];
 
-                // De-duplicate just in case, though logically they should be distinct
                 const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                console.log('Combined unique UCs:', unique.length);
                 setAvailableUCs(unique);
             } catch (err) {
-                console.error('Error fetching UCs:', err);
+                console.error('CRITICAL Error fetching UCs:', err);
             } finally {
                 setLoadingUCs(false);
             }
+        } else {
+            console.log('No usina.id and usina is not empty? usina state:', usina);
         }
     };
 
