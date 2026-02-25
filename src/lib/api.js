@@ -125,7 +125,17 @@ export const manageAsaasCustomer = async (data) => {
             body: data
         });
 
-        if (error) throw error;
+        if (error) {
+            let message = error.message;
+            try {
+                // Try to get detailed error from response body
+                const body = await error.context?.json();
+                if (body?.error) message = body.error;
+            } catch (e) {
+                console.warn('Could not parse error body:', e);
+            }
+            throw new Error(message);
+        }
         return result;
     } catch (error) {
         console.error('Erro Asaas Customer:', error);
@@ -163,8 +173,15 @@ export const createAsaasCharge = async (id, type = 'invoice') => {
         body: payload
     });
 
-    if (error) throw error;
-    return data; // Esperado: { success: true, url: '...', paymentId: '...' }
+    if (error) {
+        let message = error.message;
+        try {
+            const body = await error.context?.json();
+            if (body?.error) message = body.error;
+        } catch (e) { }
+        throw new Error(message);
+    }
+    return data;
 };
 
 export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
@@ -178,7 +195,14 @@ export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
             }
         });
 
-        if (error) throw error;
+        if (error) {
+            let message = error.message;
+            try {
+                const body = await error.context?.json();
+                if (body?.error) message = body.error;
+            } catch (e) { }
+            throw new Error(message);
+        }
         if (data?.error) throw new Error(data.error);
 
         return data;
