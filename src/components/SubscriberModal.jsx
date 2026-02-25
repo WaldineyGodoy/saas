@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
+import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 export default function SubscriberModal({ subscriber, onClose, onSave, onDelete }) {
     const { showAlert, showConfirm } = useUI();
@@ -14,6 +15,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [consumerUnits, setConsumerUnits] = useState([]);
     const [generating, setGenerating] = useState(false);
     const [showUcModal, setShowUcModal] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -101,7 +103,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 }));
             } catch (error) {
                 console.error('Erro ao buscar CEP:', error);
-                alert('Erro ao buscar CEP. Verifique se digitou corretamente.');
+                showAlert('Erro ao buscar CEP. Verifique se digitou corretamente.', 'error');
             } finally {
                 setSearchingCep(false);
             }
@@ -188,17 +190,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         setLoading(true);
 
         try {
-            // 1. Check for duplicates in Supabase (Application Level Check)
-            const cleanDoc = formData.cpf_cnpj.replace(/\D/g, '');
-            // Unique key usually expects checking logical uniqueness. 
-            // We search for the exact string first? 
-            // Problem: some might be saved with mask, some without?
-            // Assuming maskCpfCnpj always formats it consistent.
-
+            // 1. Check for duplicates
             let query = supabase
                 .from('subscribers')
                 .select('id')
-                .eq('cpf_cnpj', formData.cpf_cnpj); // Check exact match of formatted string
+                .eq('cpf_cnpj', formData.cpf_cnpj);
 
             if (subscriber?.id) {
                 query = query.neq('id', subscriber.id);
@@ -212,13 +208,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             // 2. Sync with Asaas
-            console.log("Syncing with Asaas...");
             let asaasId = null;
             let asaasSyncSuccess = false;
 
             try {
                 const asaasResult = await manageAsaasCustomer({
-                    id: subscriber?.asaas_customer_id, // Pass existing ID to force update
+                    id: subscriber?.asaas_customer_id,
                     name: formData.name,
                     cpfCnpj: formData.cpf_cnpj,
                     email: formData.email,
@@ -229,12 +224,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     province: formData.bairro
                 });
 
-                if (!asaasResult || !asaasResult.success) {
-                    throw new Error(asaasResult?.error || 'Erro desconhecido');
+                if (asaasResult && asaasResult.success) {
+                    asaasId = asaasResult.asaas_id;
+                    asaasSyncSuccess = true;
+                } else if (asaasResult) {
+                    throw new Error(asaasResult.error || 'Erro desconhecido');
                 }
-
-                asaasId = asaasResult.asaas_id;
-                asaasSyncSuccess = true;
 
             } catch (asaasError) {
                 console.error("Asaas Sync Error:", asaasError);
@@ -246,19 +241,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 );
                 if (!proceed) {
                     setLoading(false);
-                    return; // Abort save
+                    return;
                 }
             }
 
             // 3. Save to Supabase
-            const dataToSave = {
-                ...formData
-            };
-
-            if (asaasId) {
-                dataToSave.asaas_customer_id = asaasId;
-            }
-
+            const dataToSave = { ...formData };
+            if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
 
             let result;
@@ -285,39 +274,30 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 showAlert('Cliente salvo APENAS LOCALMENTE (Erro Asaas ignorado).', 'warning');
             }
 
-            // 4. Sync Lead Status (Try to find a lead with this email and update its status)
+            // 4. Sync Lead Status
             try {
-                // Determine new status for Lead
                 let newLeadStatus = null;
                 if (dataToSave.status === 'ativacao') {
-                    newLeadStatus = 'em_negociacao'; // Mapped: 'ativacao' not in Lead Enum
+                    newLeadStatus = 'em_negociacao';
                 } else if (dataToSave.status === 'ativo') {
                     newLeadStatus = 'ativo';
                 }
 
                 if (newLeadStatus && dataToSave.email) {
-                    // Find the most recent lead with this email
-                    const { data: leadsComp, error: leadFetchError } = await supabase
+                    const { data: leadsComp } = await supabase
                         .from('leads')
                         .select('id, status')
                         .eq('email', dataToSave.email)
                         .order('created_at', { ascending: false })
                         .limit(1);
 
-                    if (!leadFetchError && leadsComp && leadsComp.length > 0) {
+                    if (leadsComp && leadsComp.length > 0) {
                         const targetLead = leadsComp[0];
-                        // Only update if status is different
                         if (targetLead.status !== newLeadStatus) {
-                            const { error: leadUpdateError } = await supabase
+                            await supabase
                                 .from('leads')
                                 .update({ status: newLeadStatus })
                                 .eq('id', targetLead.id);
-
-                            if (leadUpdateError) {
-                                console.error('Error auto-updating lead status:', leadUpdateError);
-                            } else {
-                                console.log(`Lead ${targetLead.id} auto-updated to ${newLeadStatus}`);
-                            }
                         }
                     }
                 }
@@ -328,7 +308,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             onSave(result.data);
             onClose();
         } catch (error) {
-            console.error(error);
             showAlert('Erro ao salvar assinante: ' + error.message, 'error');
         } finally {
             setLoading(false);
@@ -370,11 +349,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             if (error) throw error;
 
-            // Refresh
             fetchConsumerUnits(subscriber.id);
             showAlert('UC desvinculada com sucesso!', 'success');
         } catch (error) {
-            console.error(error);
             showAlert('Erro ao desvincular UC: ' + error.message, 'error');
         }
     };
@@ -384,233 +361,277 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', width: '90%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
-                <h3 style={{ marginBottom: '1.5rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                    {subscriber ? 'Editar Assinante' : 'Novo Assinante'}
-                </h3>
-
-                <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '0.5rem', color: 'var(--color-blue)' }}>Dados Cadastrais</div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Status</label>
-                        <select
-                            value={formData.status}
-                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        >
-                            {statusOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Originador</label>
-                        <select
-                            value={formData.originator_id}
-                            onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        >
-                            <option value="">Selecione...</option>
-                            {originators.map(o => (
-                                <option key={o.id} value={o.id}>{o.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CPF/CNPJ (Busca Automática)</label>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <input
-                                value={formData.cpf_cnpj}
-                                onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
-                                onBlur={handleDocBlur}
-                                placeholder="000.000.000-00"
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: searchingDoc ? '#f0f9ff' : 'white' }}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Nome Completo / Razão Social</label>
-                        <input
-                            required
-                            value={formData.name}
-                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Email</label>
-                        <input
-                            type="email"
-                            value={formData.email}
-                            onChange={e => setFormData({ ...formData, email: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            required
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Telefone</label>
-                        <input
-                            value={formData.phone}
-                            onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                            placeholder="(00) 00000-0000"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    {/* --- Endereço --- */}
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem', color: 'var(--color-blue)' }}>Endereço</div>
-
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CEP (Busca)</label>
-                            <input
-                                value={formData.cep}
-                                onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                                onBlur={handleCepBlur}
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: searchingCep ? '#f0f9ff' : 'white' }}
-                            />
-                        </div>
-                        <div style={{ flex: 2 }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Cidade/UF</label>
-                            <input
-                                value={`${formData.cidade} - ${formData.uf}`}
-                                disabled
-                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: '#f9fafb' }}
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Rua</label>
-                        <input
-                            value={formData.rua}
-                            onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Número</label>
-                        <input
-                            value={formData.numero}
-                            onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Complemento</label>
-                        <input
-                            value={formData.complemento}
-                            onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Bairro</label>
-                        <input
-                            value={formData.bairro}
-                            onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    {/* --- UCs --- */}
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem', color: 'var(--color-blue)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Unidades Consumidoras (UCs)</span>
-                        {subscriber?.id && (
+            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '90%', maxWidth: '900px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* Modal Header */}
+                <div style={{
+                    padding: '1.25rem 2rem',
+                    borderBottom: '1px solid #eee',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#f8fafc'
+                }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
+                        {subscriber ? `Editar Assinante - ${formData.name}` : 'Novo Assinante'}
+                    </h3>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        {subscriber && (
                             <button
                                 type="button"
-                                onClick={() => setShowUcModal(true)}
+                                onClick={() => setShowHistory(true)}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.3rem',
-                                    background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5',
-                                    padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem'
+                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                    background: '#fff', color: 'var(--color-blue)',
+                                    border: '1px solid var(--color-blue)',
+                                    padding: '0.4rem 0.8rem', borderRadius: '6px',
+                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
                                 }}
                             >
-                                <Plus size={16} /> Cadastrar UCs
+                                <History size={16} /> Histórico
                             </button>
                         )}
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                            <X size={24} />
+                        </button>
                     </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        {consumerUnits.length > 0 ? (
-                            <ul style={{ listStyle: 'none', padding: 0 }}>
-                                {consumerUnits.map(uc => (
-                                    <li key={uc.id} style={{ background: '#f8fafc', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <span>UC: {uc.numero_uc} - {uc.concessionaria}</span>
-                                            <span style={{ display: 'block', fontSize: '0.8rem', color: '#666' }}>{uc.status?.replace('_', ' ').toUpperCase()}</span>
-                                        </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
+                    <form onSubmit={handleSubmit}>
+
+                        <CollapsibleSection title="Dados Cadastrais" icon={User} defaultOpen={true}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Status</label>
+                                <select
+                                    value={formData.status}
+                                    onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    {statusOptions.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Originador</label>
+                                <select
+                                    value={formData.originator_id}
+                                    onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {originators.map(o => (
+                                        <option key={o.id} value={o.id}>{o.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ</label>
+                                <input
+                                    value={formData.cpf_cnpj}
+                                    onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
+                                    onBlur={handleDocBlur}
+                                    placeholder="000.000.000-00"
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingDoc ? '#f0f9ff' : 'white', outline: 'none' }}
+                                    required
+                                />
+                            </div>
+
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Nome Completo / Razão Social</label>
+                                <input
+                                    required
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Email</label>
+                                <input
+                                    type="email"
+                                    value={formData.email}
+                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Telefone</label>
+                                <input
+                                    value={formData.phone}
+                                    onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                                    placeholder="(00) 00000-0000"
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection title="Endereço" icon={Home} defaultOpen={false}>
+                            <div style={{ flex: 1 }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP (Busca)</label>
+                                <input
+                                    value={formData.cep}
+                                    onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                    onBlur={handleCepBlur}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingCep ? '#f0f9ff' : 'white', outline: 'none' }}
+                                />
+                            </div>
+                            <div style={{ flex: 2 }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Cidade/UF</label>
+                                <input
+                                    value={`${formData.cidade} - ${formData.uf}`}
+                                    disabled
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #f1f5f9', borderRadius: '6px', background: '#f8fafc', color: '#64748b' }}
+                                />
+                            </div>
+
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Rua</label>
+                                <input
+                                    value={formData.rua}
+                                    onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número</label>
+                                <input
+                                    value={formData.numero}
+                                    onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Complemento</label>
+                                <input
+                                    value={formData.complemento}
+                                    onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Bairro</label>
+                                <input
+                                    value={formData.bairro}
+                                    onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection title="Unidades Consumidoras (UCs)" icon={Zap} defaultOpen={false}>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                                    {subscriber?.id && (
                                         <button
                                             type="button"
-                                            onClick={() => handleUnlinkUC(uc.id)}
+                                            onClick={() => setShowUcModal(true)}
                                             style={{
-                                                padding: '0.3rem', background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer'
+                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
+                                                background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5',
+                                                padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
                                             }}
-                                            title="Desvincular UC"
                                         >
-                                            <Trash2 size={16} />
+                                            <Plus size={16} /> Cadastrar UCs
                                         </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p style={{ color: '#999', fontSize: '0.9rem' }}>Nenhuma UC vinculada. Você pode adicionar UCs na tela de "Unidades Consumidoras" após salvar.</p>
-                        )}
-                        {/* Future: Add 'Link UC' button here */}
-                    </div>
+                                    )}
+                                </div>
 
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee', alignItems: 'center' }}>
-                        <div>
-                            {subscriber?.id && (
+                                {consumerUnits.length > 0 ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        {consumerUnits.map(uc => (
+                                            <div key={uc.id} style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>UC: {uc.numero_uc}</span>
+                                                    <span style={{ display: 'block', fontSize: '0.8rem', color: '#64748b' }}>{uc.concessionaria} - {uc.status?.replace('_', ' ').toUpperCase()}</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUnlinkUC(uc.id)}
+                                                    style={{ padding: '0.4rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                    title="Desvincular UC"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem', border: '2px dashed #e2e8f0', borderRadius: '8px' }}>
+                                        <p style={{ margin: 0, fontSize: '0.9rem' }}>Nenhuma UC vinculada.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </CollapsibleSection>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
+                            <div>
+                                {subscriber?.id && (
+                                    <button
+                                        type="button"
+                                        onClick={handleEmission}
+                                        disabled={generating}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                            background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
+                                            padding: '0.6rem 1.25rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600
+                                        }}
+                                    >
+                                        <CreditCard size={18} /> {generating ? 'Processando...' : 'Emitir Fatura Consolidada'}
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                {subscriber && onDelete && (
+                                    <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
+                                        Excluir
+                                    </button>
+                                )}
+                                <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: '#f1f5f9', color: '#475569', borderRadius: '6px', border: '1px solid #e2e8f0', fontWeight: 600 }}>Cancelar</button>
                                 <button
-                                    type="button"
-                                    onClick={handleEmission}
-                                    disabled={generating}
+                                    type="submit"
+                                    disabled={loading}
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                        background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
-                                        padding: '0.6rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+                                        padding: '0.6rem 1.25rem',
+                                        background: 'var(--color-blue)',
+                                        color: 'white',
+                                        borderRadius: '6px',
+                                        fontWeight: 600,
+                                        border: 'none',
+                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                                     }}
                                 >
-                                    {generating ? 'Processando...' : <><CreditCard size={18} /> Emitir Fatura Consolidada</>}
+                                    {loading ? 'Salvando...' : 'Salvar Assinante'}
                                 </button>
-                            )}
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            {subscriber && onDelete && (
-                                <button type="button" onClick={handleDelete} style={{ padding: '0.5rem 1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', border: '1px solid #fecaca', height: 'fit-content' }}>
-                                    Excluir
-                                </button>
-                            )}
-                            <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', background: '#ccc', borderRadius: '4px' }}>Cancelar</button>
-                            <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px' }}>
-                                {loading ? 'Salvando...' : 'Salvar Assinante'}
-                            </button>
-                        </div>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </div>
+
+            {showHistory && subscriber && (
+                <HistoryTimeline
+                    entityType="subscriber"
+                    entityId={subscriber.id}
+                    entityName={formData.name}
+                    onClose={() => setShowHistory(false)}
+                />
+            )}
 
             {showUcModal && subscriber && (
                 <ConsumerUnitModal
-                    consumerUnit={(() => {
-                        // Use a memoized-like approach or handle with a stable ID check in child
-                        // For simplicity here, we pass a stable reference if possible or just rely on child's new deps
-                        return { subscriber_id: subscriber.id };
-                    })()}
+                    consumerUnit={{ subscriber_id: subscriber.id }}
                     onClose={() => setShowUcModal(false)}
                     onSave={() => {
-                        fetchConsumerUnits(subscriber.id); // Refresh List
+                        fetchConsumerUnits(subscriber.id);
                         setShowUcModal(false);
                     }}
                 />

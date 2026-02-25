@@ -1,51 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
-import { ChevronDown, ChevronUp } from 'lucide-react'; // Import icons for collapsible
-
+import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
-
-// Collapsible Section Component
-const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
-    const [isOpen, setIsOpen] = useState(defaultOpen);
-    return (
-        <div style={{
-            gridColumn: '1 / -1',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-            marginBottom: '1rem'
-        }}>
-            <div
-                onClick={() => setIsOpen(!isOpen)}
-                style={{
-                    background: 'var(--color-bg-light)',
-                    padding: '0.75rem 1rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontWeight: 600,
-                    color: 'var(--color-text)'
-                }}
-            >
-                <span>{title}</span>
-                {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </div>
-            {isOpen && (
-                <div style={{
-                    padding: '1rem',
-                    borderTop: '1px solid var(--color-border)',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '1rem'
-                }}>
-                    {children}
-                </div>
-            )}
-        </div>
-    );
-};
+import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete }) {
     const { showAlert, showConfirm } = useUI();
@@ -53,6 +11,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -173,7 +132,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         else if (formData.tipo_ligacao === 'bifasico') multiplier = 50;
 
         const minTariff = tariff * multiplier;
-        // Fix: Display with 2 decimal places as requested (R$ XX,XX)
         const formattedMin = minTariff.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         setFormData(prev => ({
@@ -216,12 +174,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 if (addr.ibge) {
                     const offer = await fetchOfferData(addr.ibge);
                     if (offer) {
-                        // Handle Discount: If > 1, assume it's already %, else multiply by 100
                         let discountVal = offer['Desconto Assinante'] || 0;
-                        if (discountVal > 1) {
-                            // Already percentage (e.g. 20)
-                        } else {
-                            // Decimal (e.g. 0.2)
+                        if (discountVal <= 1) {
                             discountVal = discountVal * 100;
                         }
 
@@ -302,7 +256,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     };
 
     const handleDelete = async () => {
-        const confirm = await showConfirm('Excluir esta Unidade Consumidora?');
+        const confirm = await showConfirm('Tem certeza que deseja excluir esta Unidade Consumidora?');
         if (!confirm) return;
         setLoading(true);
         try {
@@ -321,303 +275,349 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '900px' }}>
-                <div className="modal-header">
-                    <h3>
-                        {consumerUnit ? (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '90%', maxWidth: '900px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* Modal Header */}
+                <div style={{
+                    padding: '1.25rem 2rem',
+                    borderBottom: '1px solid #eee',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#f8fafc'
+                }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
+                        {consumerUnit?.id ? (
                             subscriberName ? `Editar UC - ${subscriberName}` : 'Editar UC'
                         ) : 'Nova Unidade Consumidora'}
                     </h3>
-                    <button onClick={onClose} className="modal-close">&times;</button>
-                </div>
-
-                <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-
-                    {/* Status at Top */}
-                    <div className="form-group" style={{ gridColumn: '1 / -1', background: 'var(--color-bg-light)', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
-                        <label className="label">Status da Unidade</label>
-                        <select
-                            value={formData.status}
-                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                            className="select"
-                            style={{ maxWidth: '300px' }}
-                        >
-                            {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                    </div>
-
-                    <CollapsibleSection title="Vínculos" defaultOpen={true}>
-                        <div className="form-group">
-                            <label className="label">Assinante <span style={{ color: 'var(--color-error)' }}>*</span></label>
-                            <select
-                                required
-                                value={formData.subscriber_id}
-                                onChange={e => setFormData({ ...formData, subscriber_id: e.target.value })}
-                                className="select"
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        {consumerUnit?.id && (
+                            <button
+                                type="button"
+                                onClick={() => setShowHistory(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                    background: '#fff', color: 'var(--color-blue)',
+                                    border: '1px solid var(--color-blue)',
+                                    padding: '0.4rem 0.8rem', borderRadius: '6px',
+                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
+                                }}
                             >
-                                <option value="">Selecione...</option>
-                                {subscribers.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Usina (Opcional)</label>
-                            <select
-                                value={formData.usina_id}
-                                onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
-                                className="select"
-                            >
-                                <option value="">Selecione...</option>
-                                {usinas.map(u => (
-                                    <option key={u.id} value={u.id}>{u.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </CollapsibleSection>
-
-                    <CollapsibleSection title="Endereço de Instalação" defaultOpen={true}>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
-                            <div style={{ width: '150px' }}>
-                                <label className="label">CEP</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        value={formData.cep}
-                                        onChange={handleCepChange}
-                                        onBlur={handleCepBlur}
-                                        placeholder="00000-000"
-                                        maxLength={9}
-                                        className="input"
-                                    />
-                                    {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '10px', fontSize: '0.7rem', color: 'var(--color-text-light)' }}>...</span>}
-                                </div>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <label className="label">Concessionária (Auto)</label>
-                                <input
-                                    value={formData.concessionaria}
-                                    onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
-                                    className="input"
-                                    readOnly
-                                    style={{ background: 'var(--color-bg-light)' }}
-                                />
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '1rem', gridColumn: '1 / -1' }}>
-                            <div style={{ flex: 1 }}>
-                                <label className="label">Rua</label>
-                                <input
-                                    value={formData.rua}
-                                    onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                                    className="input"
-                                />
-                            </div>
-                            <div style={{ width: '100px' }}>
-                                <label className="label">Número</label>
-                                <input
-                                    value={formData.numero}
-                                    onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                                    className="input"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Bairro</label>
-                            <input
-                                value={formData.bairro}
-                                onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Complemento</label>
-                            <input
-                                value={formData.complemento}
-                                onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Cidade</label>
-                            <input
-                                value={formData.cidade}
-                                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">UF</label>
-                            <input
-                                value={formData.uf}
-                                onChange={e => setFormData({ ...formData, uf: e.target.value })}
-                                className="input"
-                            />
-                        </div>
-                    </CollapsibleSection>
-
-                    <CollapsibleSection title="Dados da Unidade" defaultOpen={true}>
-                        <div className="form-group">
-                            <label className="label">Número da UC <span style={{ color: 'var(--color-error)' }}>*</span></label>
-                            <input
-                                required
-                                value={formData.numero_uc}
-                                onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
-                                placeholder="Ex: 7204400277"
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Titular da Conta (Na Fatura)</label>
-                            <input
-                                required
-                                value={formData.titular_conta}
-                                onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
-                                placeholder="Nome Completo / Razão Social"
-                                className="input"
-                            />
-                        </div>
-                    </CollapsibleSection>
-
-                    <CollapsibleSection title="Dados Técnicos e Comerciais" defaultOpen={true}>
-                        <div className="form-group">
-                            <label className="label">Tipo de Ligação</label>
-                            <select
-                                value={formData.tipo_ligacao}
-                                onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
-                                className="select"
-                            >
-                                {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Modalidade</label>
-                            <select
-                                value={formData.modalidade}
-                                onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                className="select"
-                            >
-                                {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-
-                        <div style={{ gridColumn: '1 / -1', background: '#e0f2fe', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid #bae6fd', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <div style={{ gridColumn: '1 / -1', fontSize: '0.9rem', fontWeight: 'bold', color: '#0369a1', marginBottom: '0.5rem' }}>Componentes Tarifários</div>
-
-                            <div className="form-group">
-                                <label className="label" style={{ color: '#075985' }}>Tarifa Concessionária (R$/kWh)</label>
-                                <input
-                                    type="text"
-                                    value={formData.tarifa_concessionaria}
-                                    onChange={e => handleCurrencyChange('tarifa_concessionaria', e.target.value)}
-                                    placeholder="R$ 0,0000"
-                                    className="input"
-                                    style={{ borderColor: '#7dd3fc' }}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="label" style={{ color: '#075985' }}>TE (Energia) - R$/kWh</label>
-                                <input
-                                    type="text"
-                                    value={formData.te}
-                                    onChange={e => handleCurrencyChange('te', e.target.value)}
-                                    placeholder="R$ 0,0000"
-                                    className="input"
-                                    style={{ borderColor: '#7dd3fc' }}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="label" style={{ color: '#075985' }}>TUSD (Distribuição) - R$/kWh</label>
-                                <input
-                                    type="text"
-                                    value={formData.tusd}
-                                    onChange={e => handleCurrencyChange('tusd', e.target.value)}
-                                    placeholder="R$ 0,0000"
-                                    className="input"
-                                    style={{ borderColor: '#7dd3fc' }}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="label" style={{ color: '#075985' }}>Fio B - R$/kWh</label>
-                                <input
-                                    type="text"
-                                    value={formData.fio_b}
-                                    onChange={e => handleCurrencyChange('fio_b', e.target.value)}
-                                    placeholder="R$ 0,0000"
-                                    className="input"
-                                    style={{ borderColor: '#7dd3fc' }}
-                                />
-                            </div>
-                        </div>
-
-                        <div style={{ background: 'var(--color-warning-bg)', padding: '0.8rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-warning)' }}>
-                            <label className="label" style={{ color: 'var(--color-warning)', fontWeight: 'bold' }}>Tarifa Mínima Estimada (R$)</label>
-                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-warning)' }}>
-                                {formData.tarifa_minima || 'R$ 0,00'}
-                            </div>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--color-warning)' }}>
-                                Baseada no Tipo de Ligação ({formData.tipo_ligacao}) x Tarifa.
-                            </span>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Desconto Assinante (%)</label>
-                            <input
-                                type="number" step="0.01"
-                                value={formData.desconto_assinante}
-                                onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
-                                placeholder="%"
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Franquia / Consumo Min (kWh)</label>
-                            <input
-                                type="number"
-                                value={formData.franquia}
-                                onChange={e => setFormData({ ...formData, franquia: e.target.value })}
-                                className="input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label className="label">Dia de Vencimento</label>
-                            <select
-                                value={formData.dia_vencimento}
-                                onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
-                                className="select"
-                            >
-                                {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </div>
-                    </CollapsibleSection>
-
-                    <div className="modal-footer" style={{ gridColumn: '1 / -1' }}>
-                        {consumerUnit && onDelete && (
-                            <button type="button" onClick={handleDelete} className="btn btn-danger" style={{ marginRight: 'auto' }}>
-                                Excluir UC
+                                <History size={16} /> Histórico
                             </button>
                         )}
-                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
-                        <button type="submit" disabled={loading} className="btn btn-primary">
-                            {loading ? 'Salvando...' : 'Salvar UC'}
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                            <X size={24} />
                         </button>
                     </div>
+                </div>
 
-                </form>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
+                    <form onSubmit={handleSubmit}>
+
+                        <div style={{ background: 'var(--color-bg-light)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 600 }}>Status da Unidade</label>
+                            <select
+                                value={formData.status}
+                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                style={{ width: '100%', maxWidth: '300px', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                            >
+                                {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        </div>
+
+                        <CollapsibleSection title="Vínculos" icon={Link} defaultOpen={true}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Assinante <span style={{ color: '#ef4444' }}>*</span></label>
+                                <select
+                                    required
+                                    value={formData.subscriber_id}
+                                    onChange={e => setFormData({ ...formData, subscriber_id: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {subscribers.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
+                                <select
+                                    value={formData.usina_id}
+                                    onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {usinas.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection title="Endereço de Instalação" icon={Home} defaultOpen={true}>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <div style={{ width: '150px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            value={formData.cep}
+                                            onChange={handleCepChange}
+                                            onBlur={handleCepBlur}
+                                            placeholder="00000-000"
+                                            maxLength={9}
+                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none', background: searchingCep ? '#f0f9ff' : 'white' }}
+                                        />
+                                        {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '10px', fontSize: '0.7rem', color: '#94a3b8' }}>...</span>}
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Concessionária (Auto)</label>
+                                    <input
+                                        value={formData.concessionaria}
+                                        readOnly
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #f1f5f9', borderRadius: '6px', background: '#f8fafc', color: '#64748b', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Rua</label>
+                                    <input
+                                        value={formData.rua}
+                                        onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+                                <div style={{ width: '100px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número</label>
+                                    <input
+                                        value={formData.numero}
+                                        onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Bairro</label>
+                                <input
+                                    value={formData.bairro}
+                                    onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Complemento</label>
+                                <input
+                                    value={formData.complemento}
+                                    onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Cidade</label>
+                                <input
+                                    value={formData.cidade}
+                                    onChange={e => setFormData({ ...formData, cidade: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>UF</label>
+                                <input
+                                    value={formData.uf}
+                                    onChange={e => setFormData({ ...formData, uf: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={true}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input
+                                    required
+                                    value={formData.numero_uc}
+                                    onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
+                                    placeholder="Ex: 7204400277"
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Titular da Conta (Na Fatura)</label>
+                                <input
+                                    required
+                                    value={formData.titular_conta}
+                                    onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
+                                    placeholder="Nome Completo / Razão Social"
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+                        </CollapsibleSection>
+
+                        <CollapsibleSection title="Dados Técnicos e Comerciais" icon={Settings} defaultOpen={true}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
+                                <select
+                                    value={formData.tipo_ligacao}
+                                    onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Modalidade</label>
+                                <select
+                                    value={formData.modalidade}
+                                    onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                            </div>
+
+                            <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #bae6fd', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                                <div style={{ gridColumn: '1 / -1', fontSize: '0.95rem', fontWeight: 600, color: '#0369a1', marginBottom: '0.25rem' }}>Componentes Tarifários</div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>Tarifa Concessionária (R$/kWh)</label>
+                                    <input
+                                        type="text"
+                                        value={formData.tarifa_concessionaria}
+                                        onChange={e => handleCurrencyChange('tarifa_concessionaria', e.target.value)}
+                                        placeholder="R$ 0,0000"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>TE (Energia) - R$/kWh</label>
+                                    <input
+                                        type="text"
+                                        value={formData.te}
+                                        onChange={e => handleCurrencyChange('te', e.target.value)}
+                                        placeholder="R$ 0,0000"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>TUSD (Distribuição) - R$/kWh</label>
+                                    <input
+                                        type="text"
+                                        value={formData.tusd}
+                                        onChange={e => handleCurrencyChange('tusd', e.target.value)}
+                                        placeholder="R$ 0,0000"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>Fio B - R$/kWh</label>
+                                    <input
+                                        type="text"
+                                        value={formData.fio_b}
+                                        onChange={e => handleCurrencyChange('fio_b', e.target.value)}
+                                        placeholder="R$ 0,0000"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ background: '#fffbeb', padding: '1rem', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <label style={{ fontSize: '0.85rem', color: '#92400e', fontWeight: 600 }}>Tarifa Mínima Estimada</label>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#d97706' }}>
+                                    {formData.tarifa_minima || 'R$ 0,00'}
+                                </div>
+                                <span style={{ fontSize: '0.75rem', color: '#b45309' }}>
+                                    Baseada no Tipo de Ligação ({formData.tipo_ligacao}) x Tarifa.
+                                </span>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Desconto Assinante (%)</label>
+                                <input
+                                    type="number" step="0.01"
+                                    value={formData.desconto_assinante}
+                                    onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
+                                    placeholder="%"
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Franquia / Consumo Min (kWh)</label>
+                                <input
+                                    type="number"
+                                    value={formData.franquia}
+                                    onChange={e => setFormData({ ...formData, franquia: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Dia de Vencimento</label>
+                                <select
+                                    value={formData.dia_vencimento}
+                                    onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
+                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                >
+                                    {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                            </div>
+                        </CollapsibleSection>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
+                            {consumerUnit?.id && onDelete && (
+                                <button type="button" onClick={handleDelete} style={{ marginRight: 'auto', padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600, cursor: 'pointer' }}>
+                                    Excluir UC
+                                </button>
+                            )}
+                            <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: '#f1f5f9', color: '#475569', borderRadius: '6px', border: '1px solid #e2e8f0', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '0.6rem 1.25rem',
+                                    background: 'var(--color-blue)',
+                                    color: 'white',
+                                    borderRadius: '6px',
+                                    fontWeight: 600,
+                                    border: 'none',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                    cursor: loading ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {loading ? 'Salvando...' : 'Salvar UC'}
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
             </div>
+
+            {showHistory && consumerUnit?.id && (
+                <HistoryTimeline
+                    entityType="uc"
+                    entityId={consumerUnit.id}
+                    entityName={`UC: ${formData.numero_uc} - ${subscriberName}`}
+                    onClose={() => setShowHistory(false)}
+                />
+            )}
         </div>
     );
 }
