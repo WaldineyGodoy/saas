@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
-import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
@@ -12,6 +12,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -86,7 +88,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         complemento: '',
         bairro: '',
         cidade: '',
-        uf: ''
+        uf: '',
+        portal_credentials: { url: '', login: '', password: '' }
     });
 
     useEffect(() => {
@@ -119,7 +122,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 complemento: consumerUnit.address?.complemento || '',
                 bairro: consumerUnit.address?.bairro || '',
                 cidade: consumerUnit.address?.cidade || '',
-                uf: consumerUnit.address?.uf || ''
+                uf: consumerUnit.address?.uf || '',
+                portal_credentials: consumerUnit.portal_credentials || { url: '', login: '', password: '' }
             });
         }
     }, [consumerUnit?.id, consumerUnit?.subscriber_id]); // Stable dependencies
@@ -233,7 +237,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     bairro: formData.bairro,
                     cidade: formData.cidade,
                     uf: formData.uf
-                }
+                },
+                portal_credentials: formData.portal_credentials
             };
 
             if (!payload.subscriber_id) throw new Error('Assinante é obrigatório.');
@@ -378,12 +383,32 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     </div>
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Concessionária (Auto)</label>
                                     <input
                                         value={formData.concessionaria}
                                         readOnly
                                         style={{ width: '100%', padding: '0.6rem', border: '1px solid #f1f5f9', borderRadius: '6px', background: '#f8fafc', color: '#64748b', outline: 'none' }}
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCredentialsModal(true)}
+                                        style={{
+                                            marginTop: '0.5rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            padding: '0.4rem 0.8rem',
+                                            background: '#fef2f2',
+                                            color: '#ef4444',
+                                            borderRadius: '6px',
+                                            border: '1px solid #fee2e2',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            width: 'fit-content'
+                                        }}
+                                    >
+                                        <Key size={12} /> Credenciais
+                                    </button>
                                 </div>
                             </div>
 
@@ -617,6 +642,104 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     entityName={`UC: ${formData.numero_uc} - ${subscriberName}`}
                     onClose={() => setShowHistory(false)}
                 />
+            )}
+
+            {/* Credentials Pop-up Modal */}
+            {showCredentialsModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '16px', width: '90%', maxWidth: '400px',
+                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        position: 'relative'
+                    }}>
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '48px', height: '48px', background: '#fff7ed', borderRadius: '12px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
+                                color: '#f97316'
+                            }}>
+                                <Key size={24} />
+                            </div>
+                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais</h4>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>Acesso ao portal da concessionária</p>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>URL do Portal</label>
+                                <input
+                                    type="url"
+                                    value={formData.portal_credentials?.url || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        portal_credentials: { ...formData.portal_credentials, url: e.target.value }
+                                    })}
+                                    placeholder="http://portal.concessionaria.com.br"
+                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Email / Login</label>
+                                <input
+                                    type="text"
+                                    value={formData.portal_credentials?.login || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        portal_credentials: { ...formData.portal_credentials, login: e.target.value }
+                                    })}
+                                    placeholder="login@exemplo.com"
+                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Senha</label>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        value={formData.portal_credentials?.password || ''}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                        })}
+                                        placeholder="••••••••"
+                                        style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.2rem' }}
+                                    >
+                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', gap: '0.8rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowCredentialsModal(false)}
+                                style={{ flex: 1, padding: '0.75rem', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowCredentialsModal(false)}
+                                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)' }}
+                            >
+                                Salvar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

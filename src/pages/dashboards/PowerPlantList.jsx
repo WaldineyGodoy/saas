@@ -96,6 +96,24 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                 </div>
             </div>
 
+            {plant.geracao_estimada_kwh > 0 && plant.consumer_units?.length > 0 && (
+                <div style={{ marginBottom: '0.8rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748b', marginBottom: '0.2rem' }}>
+                        <span>Lotação / Franquia</span>
+                        <span style={{ fontWeight: 'bold', color: '#7c3aed' }}>
+                            {Math.round((plant.consumer_units.reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%
+                        </span>
+                    </div>
+                    <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{
+                            height: '100%',
+                            background: '#7c3aed',
+                            width: `${Math.min(100, (plant.consumer_units.reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%`
+                        }} />
+                    </div>
+                </div>
+            )}
+
             <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
                 <span>{plant.address?.cidade}/{plant.address?.uf}</span>
                 <button
@@ -204,7 +222,8 @@ export default function PowerPlantList() {
                 .from('usinas')
                 .select(`
                     *,
-                    supplier:supplier_id (name)
+                    supplier:supplier_id (name),
+                    consumer_units (*)
                 `)
                 .order('created_at', { ascending: false });
 
