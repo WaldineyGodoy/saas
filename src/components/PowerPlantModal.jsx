@@ -56,7 +56,8 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, 
 };
 
 // Sortable UC Item Component
-const SortableUCItem = ({ uc, index, onToggle }) => {
+const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada }) => {
+    const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
     const {
         attributes,
         listeners,
@@ -111,6 +112,11 @@ const SortableUCItem = ({ uc, index, onToggle }) => {
                 <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
                     {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
                 </div>
+                {percentage && (
+                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                        {percentage}%
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -423,9 +429,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     <SortableContext items={listToRender.map(i => i.id)} strategy={verticalListSortingStrategy}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             {listToRender.map((uc, index) => (
-                                <SortableUCItem key={uc.id} uc={uc} index={index} isSelected={true} onToggle={(checked) => {
-                                    if (!checked) setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
-                                }} />
+                                <SortableUCItem
+                                    key={uc.id}
+                                    uc={uc}
+                                    index={index}
+                                    isSelected={true}
+                                    geracaoEstimada={formData.geracao_estimada_kwh}
+                                    onToggle={(checked) => {
+                                        if (!checked) setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                    }}
+                                />
                             ))}
                         </div>
                     </SortableContext>
@@ -438,11 +451,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 {listToRender.map(uc => {
                     const isSelected = selectedUCs.some(u => u.id === uc.id);
                     return (
-                        <label key={uc.id} style={{
+                        <div key={uc.id} style={{
                             display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.85rem',
                             padding: '0.8rem', border: isSelected ? '1px solid #8b5cf6' : '1px solid #ddd',
                             borderRadius: '6px', background: isSelected ? 'white' : 'rgba(255,255,255,0.6)',
-                            cursor: 'pointer', transition: '0.2s', boxShadow: isSelected ? '0 2px 4px rgba(139, 92, 246, 0.1)' : 'none'
+                            transition: '0.2s', boxShadow: isSelected ? '0 2px 4px rgba(139, 92, 246, 0.1)' : 'none'
                         }}>
                             <input
                                 type="checkbox"
@@ -451,7 +464,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     if (e.target.checked) setSelectedUCs([...selectedUCs, uc]);
                                     else setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
                                 }}
-                                style={{ transform: 'scale(1.1)', accentColor: '#7c3aed' }}
+                                style={{ transform: 'scale(1.1)', accentColor: '#7c3aed', cursor: 'pointer' }}
                             />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
@@ -462,8 +475,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
                                     {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
                                 </div>
+                                {isSelected && formData.geracao_estimada_kwh > 0 && (
+                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                                        {((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
+                                    </div>
+                                )}
                             </div>
-                        </label>
+                        </div>
                     );
                 })}
             </div>
@@ -962,6 +980,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 ({Math.round((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100)}% da Geração)
                                             </span>
                                         )}
+                                    </div>
+                                    <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
+                                        Total de Ucs Vinculadas: {selectedUCs.length}
                                     </div>
                                 </div>
 
