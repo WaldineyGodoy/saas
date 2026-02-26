@@ -477,17 +477,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={true}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div style={{ gridColumn: '1 / -1' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
                                     <select
-                                        value={formData.usina_id}
-                                        onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
+                                        value={formData.tipo_ligacao}
+                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
                                         style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                     >
-                                        <option value="">Selecione...</option>
-                                        {usinas.map(u => (
-                                            <option key={u.id} value={u.id}>{u.name}</option>
-                                        ))}
+                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
                                 </div>
 
@@ -569,14 +566,17 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </CollapsibleSection>
 
                         <CollapsibleSection title="Dados Técnicos e Comerciais" icon={Settings} defaultOpen={true}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
                                 <select
-                                    value={formData.tipo_ligacao}
-                                    onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                    value={formData.usina_id}
+                                    onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
                                     style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                 >
-                                    {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    <option value="">Selecione...</option>
+                                    {usinas.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
                                 </select>
                             </div>
 
