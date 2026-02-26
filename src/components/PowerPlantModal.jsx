@@ -478,12 +478,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             return;
         }
 
-        // 1. Sort: Unidade Geradora first, then by priority/order
-        const sortedUCs = [...selectedUCs].sort((a, b) => {
-            if (a.tipo_unidade === 'geradora') return -1;
-            if (b.tipo_unidade === 'geradora') return 1;
-            return (a.prioridade || 0) - (b.prioridade || 0);
-        });
+        // 1. Order: Unidade Geradora first, then the rest in their UI order
+        // In the UI, Generator is already forced at index 0, so we just use selectedUCs directly.
+        // We do a stable filter just to be absolutely sure the generator is at the top.
+        const geradora = selectedUCs.find(u => u.tipo_unidade === 'geradora');
+        const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
+        const sortedUCs = geradora ? [geradora, ...beneficiarias] : beneficiarias;
 
         const isPorcentagem = formData.rateio_type === 'porcentagem';
         let processedUCs = [];
