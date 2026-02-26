@@ -100,7 +100,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         bairro: '',
         cidade: '',
         uf: '',
-        portal_credentials: { url: '', login: '', password: '' }
+        portal_credentials: { url: '', login: '', password: '' },
+        saldo_remanescente: false
     });
 
     useEffect(() => {
@@ -138,7 +139,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 bairro: consumerUnit.address?.bairro || '',
                 cidade: consumerUnit.address?.cidade || '',
                 uf: consumerUnit.address?.uf || '',
-                portal_credentials: consumerUnit.portal_credentials || { url: '', login: '', password: '' }
+                portal_credentials: consumerUnit.portal_credentials || { url: '', login: '', password: '' },
+                saldo_remanescente: !!consumerUnit.saldo_remanescente
             });
         }
     }, [consumerUnit?.id, consumerUnit?.subscriber_id]); // Stable dependencies
@@ -257,7 +259,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     cidade: formData.cidade,
                     uf: formData.uf
                 },
-                portal_credentials: formData.portal_credentials
+                portal_credentials: formData.portal_credentials,
+                saldo_remanescente: formData.saldo_remanescente
             };
 
             if (!payload.subscriber_id) throw new Error('Assinante é obrigatório.');
@@ -580,15 +583,43 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 </select>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Modalidade</label>
-                                <select
-                                    value={formData.modalidade}
-                                    onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.5fr) 1fr', gap: '1.5rem', alignItems: 'end' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Modalidade</label>
+                                    <select
+                                        value={formData.modalidade}
+                                        onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#64748b' }}>Saldo Remanescente</label>
+                                    <div style={{ display: 'flex', gap: '1.25rem', padding: '0.55rem 0' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#475569' }}>
+                                            <input
+                                                type="radio"
+                                                name="saldo_remanescente"
+                                                checked={formData.saldo_remanescente === true}
+                                                onChange={() => setFormData({ ...formData, saldo_remanescente: true })}
+                                                style={{ cursor: 'pointer', accentColor: 'var(--color-blue)' }}
+                                            />
+                                            Sim
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#475569' }}>
+                                            <input
+                                                type="radio"
+                                                name="saldo_remanescente"
+                                                checked={formData.saldo_remanescente === false}
+                                                onChange={() => setFormData({ ...formData, saldo_remanescente: false })}
+                                                style={{ cursor: 'pointer', accentColor: 'var(--color-blue)' }}
+                                            />
+                                            Não
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
                             <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #bae6fd', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
