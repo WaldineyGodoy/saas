@@ -278,7 +278,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             try {
                 let newLeadStatus = null;
                 if (dataToSave.status === 'ativacao') {
-                    newLeadStatus = 'em_negociacao';
+                    newLeadStatus = 'ativacao';
                 } else if (dataToSave.status === 'ativo') {
                     newLeadStatus = 'ativo';
                 }

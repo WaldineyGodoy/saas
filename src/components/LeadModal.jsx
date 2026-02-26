@@ -15,12 +15,13 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
     // Status Options: Simulação, Indicado, Em negociação, Negocio Perdido, Ativo, Pago
     const statusOptions = [
-        { value: 'simulacao', label: 'Simulação' },
         { value: 'indicado', label: 'Indicado' },
+        { value: 'simulacao', label: 'Simulação' },
         { value: 'em_negociacao', label: 'Em Negociação' },
-        { value: 'negocio_perdido', label: 'Negócio Perdido' },
+        { value: 'ativacao', label: 'Ativação' },
         { value: 'ativo', label: 'Ativo' },
         { value: 'pago', label: 'Pago' },
+        { value: 'negocio_perdido', label: 'Negócio Perdido' },
         { value: 'convertido', label: 'Convertido (Legado)' } // Mantendo caso exista
     ];
 

@@ -20,12 +20,13 @@ import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
 const KANBAN_STATUSES = [
-    { status: 'simulacao', label: 'Simulação', color: '#64748b' },
     { status: 'indicado', label: 'Indicado', color: '#0ea5e9' },
+    { status: 'simulacao', label: 'Simulação', color: '#64748b' },
     { status: 'em_negociacao', label: 'Em Negociação', color: '#eab308' },
+    { status: 'ativacao', label: 'Ativação', color: '#7c3aed' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
-    { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' },
-    { status: 'pago', label: 'Pago', color: '#8b5cf6' }
+    { status: 'pago', label: 'Pago', color: '#8b5cf6' },
+    { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' }
 ];
 
 function KanbanCard({ lead, onClick, isOverlay }) {
