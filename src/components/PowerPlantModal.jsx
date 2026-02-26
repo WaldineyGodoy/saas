@@ -56,8 +56,9 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, 
 };
 
 // Sortable UC Item Component
-const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview }) => {
+const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers }) => {
     const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
+    const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
     const {
         attributes,
         listeners,
@@ -112,11 +113,14 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview }) => 
                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                     {uc.titular_conta}
                 </div>
-                {uc.cpf_cnpj_fatura && (
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                        {uc.cpf_cnpj_fatura}
+                {subscriber && (
+                    <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem' }}>
+                        Titular: {subscriber.name}
                     </div>
                 )}
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                    CPF/CNPJ: {uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || 'Não inf.'}
+                </div>
             </div>
 
             <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
@@ -279,7 +283,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     }, [usina?.id]);
 
     const fetchLinkedUCs = async (usinaId) => {
-        const { data } = await supabase.from('consumer_units').select('*').eq('usina_id', usinaId);
+        const { data } = await supabase.from('consumer_units')
+            .select('*')
+            .eq('usina_id', usinaId)
+            .order('prioridade', { ascending: true });
         if (data) {
             setSelectedUCs(data);
         }
@@ -465,6 +472,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     index={index}
                                     isSelected={true}
                                     geracaoEstimada={formData.geracao_estimada_kwh}
+                                    subscribers={subscribers}
                                     onPreview={() => {
                                         setPreviewUC(uc);
                                         setShowPreviewModal(true);
@@ -526,11 +534,21 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
                                     {uc.titular_conta}
                                 </div>
-                                {uc.cpf_cnpj_fatura && (
-                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                                        {uc.cpf_cnpj_fatura}
-                                    </div>
-                                )}
+                                {(() => {
+                                    const sub = subscribers.find(s => s.id === uc.titular_fatura_id);
+                                    return (
+                                        <>
+                                            {sub && (
+                                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem' }}>
+                                                    Titular: {sub.name}
+                                                </div>
+                                            )}
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                                CPF/CNPJ: {uc.cpf_cnpj_fatura || sub?.cpf_cnpj || 'Não inf.'}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                                 <div>
