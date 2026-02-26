@@ -147,6 +147,9 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                             {percentage}%
                         </div>
                     )}
+                    <div style={{ fontSize: '0.65rem', color: uc.saldo_remanescente ? '#dc2626' : '#94a3b8', fontWeight: uc.saldo_remanescente ? 'bold' : 'normal', marginTop: '0.1rem' }}>
+                        Saldo R.: {uc.saldo_remanescente ? 'Sim' : 'Não'}
+                    </div>
                 </div>
                 <button
                     type="button"
@@ -1410,6 +1413,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Dia de Leitura</label>
                                 <div style={{ fontSize: '0.9rem', color: '#475569' }}>{previewUC.dia_leitura || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Saldo Remanescente</label>
+                                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: previewUC.saldo_remanescente ? '#dc2626' : '#475569' }}>
+                                    {previewUC.saldo_remanescente ? 'Sim' : 'Não'}
+                                </div>
                             </div>
                         </div>
 
