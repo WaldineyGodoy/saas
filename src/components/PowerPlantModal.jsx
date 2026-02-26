@@ -1268,7 +1268,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 </div>
                                 <div>
                                     <h4 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Detalhes da UC</h4>
-                                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>Visualização básica (somente leitura)</p>
+                                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
+                                        Visualização básica - <strong>{subscribers.find(s => s.id === previewUC.subscriber_id)?.name || 'N/A'}</strong>
+                                    </p>
                                 </div>
                             </div>
                             <button onClick={() => setShowPreviewModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
@@ -1287,9 +1289,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     {previewUC.status?.replace('_', ' ').toUpperCase()}
                                 </span>
                             </div>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Identificação da Fatura</label>
-                                <div style={{ fontSize: '1rem', color: '#1e293b' }}>{previewUC.titular_conta}</div>
+                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Identificação da Fatura</label>
+                                    <div style={{ fontSize: '1rem', color: '#1e293b' }}>{previewUC.titular_conta}</div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Vencimento</label>
+                                    <div style={{ fontSize: '1rem', color: '#1e293b', fontWeight: 600 }}>Dia {previewUC.dia_vencimento || 'N/A'}</div>
+                                </div>
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Titular da Fatura</label>
