@@ -1230,6 +1230,89 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     </div>
                 </div>
             )}
+            {/* UC Detail Preview Modal */}
+            {showPreviewModal && previewUC && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200,
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '16px', width: '95%', maxWidth: '600px',
+                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                        position: 'relative', maxH: '90vh', overflowY: 'auto'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <div style={{ padding: '0.6rem', background: '#f5f3ff', color: '#7c3aed', borderRadius: '10px' }}>
+                                    <Zap size={24} />
+                                </div>
+                                <div>
+                                    <h4 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Detalhes da UC</h4>
+                                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>Visualização básica (somente leitura)</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowPreviewModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Número da UC</label>
+                                <div style={{ fontSize: '1rem', fontWeight: 600, color: '#1e293b' }}>{previewUC.numero_uc}</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Status</label>
+                                <span style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem', borderRadius: '20px', background: '#f0fdf4', color: '#166534', fontWeight: 600 }}>
+                                    {previewUC.status?.replace('_', ' ').toUpperCase()}
+                                </span>
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Identificação da Fatura</label>
+                                <div style={{ fontSize: '1rem', color: '#1e293b' }}>{previewUC.titular_conta}</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Titular da Fatura</label>
+                                <div style={{ fontSize: '0.9rem', color: '#475569' }}>
+                                    {subscribers.find(s => s.id === previewUC.titular_fatura_id)?.name || 'N/A'}
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>CPF/CNPJ do Titular</label>
+                                <div style={{ fontSize: '0.9rem', color: '#475569' }}>{previewUC.cpf_cnpj_fatura || 'N/A'}</div>
+                            </div>
+                            <div style={{ height: '1px', background: '#f1f5f9', gridColumn: '1 / -1' }}></div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Tipo de Unidade</label>
+                                <div style={{ fontSize: '0.9rem', color: '#475569', textTransform: 'capitalize' }}>{previewUC.tipo_unidade || 'Beneficiária'}</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Concessionária</label>
+                                <div style={{ fontSize: '0.9rem', color: '#475569' }}>{previewUC.concessionaria}</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Franquia (kWh)</label>
+                                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#059669' }}>{previewUC.franquia} kWh</div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Dia de Leitura</label>
+                                <div style={{ fontSize: '0.9rem', color: '#475569' }}>{previewUC.dia_leitura || 'N/A'}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setShowPreviewModal(false)}
+                                style={{ padding: '0.7rem 2rem', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
