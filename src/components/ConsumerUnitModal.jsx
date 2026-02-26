@@ -65,12 +65,23 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     const vencimentoOptions = [1, 5, 10, 15, 20, 25, 30];
 
+    const tipoUnidadeOptions = [
+        { value: 'beneficiaria', label: 'Beneficiária' },
+        { value: 'geradora', label: 'Geradora' }
+    ];
+
+    const diaLeituraOptions = Array.from({ length: 31 }, (_, i) => i + 1);
+
     const [formData, setFormData] = useState({
         subscriber_id: '',
         usina_id: '',
         status: 'em_ativacao',
         numero_uc: '',
         titular_conta: '',
+        titular_fatura_id: '',
+        cpf_cnpj_fatura: '',
+        tipo_unidade: 'beneficiaria',
+        dia_leitura: 1,
         modalidade: 'geracao_compartilhada',
         concessionaria: '',
         tipo_ligacao: 'trifasico',
@@ -105,6 +116,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 status: consumerUnit.status || 'em_ativacao',
                 numero_uc: consumerUnit.numero_uc || '',
                 titular_conta: consumerUnit.titular_conta || '',
+                titular_fatura_id: consumerUnit.titular_fatura_id || '',
+                cpf_cnpj_fatura: consumerUnit.cpf_cnpj_fatura || '',
+                tipo_unidade: consumerUnit.tipo_unidade || 'beneficiaria',
+                dia_leitura: consumerUnit.dia_leitura || 1,
                 modalidade: consumerUnit.modalidade || 'geracao_compartilhada',
                 concessionaria: consumerUnit.concessionaria || '',
                 tipo_ligacao: consumerUnit.tipo_ligacao || 'trifasico',
@@ -219,6 +234,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 status: formData.status,
                 numero_uc: formData.numero_uc,
                 titular_conta: formData.titular_conta,
+                titular_fatura_id: formData.titular_fatura_id || null,
+                cpf_cnpj_fatura: formData.cpf_cnpj_fatura,
+                tipo_unidade: formData.tipo_unidade,
+                dia_leitura: Number(formData.dia_leitura),
                 modalidade: formData.modalidade,
                 concessionaria: formData.concessionaria,
                 tipo_ligacao: formData.tipo_ligacao,
@@ -336,33 +355,21 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </div>
 
                         <CollapsibleSection title="Vínculos" icon={Link} defaultOpen={true}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Assinante <span style={{ color: '#ef4444' }}>*</span></label>
-                                <select
-                                    required
-                                    value={formData.subscriber_id}
-                                    onChange={e => setFormData({ ...formData, subscriber_id: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {subscribers.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
-                                <select
-                                    value={formData.usina_id}
-                                    onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {usinas.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name}</option>
-                                    ))}
-                                </select>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Assinante <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <select
+                                        required
+                                        value={formData.subscriber_id}
+                                        onChange={e => setFormData({ ...formData, subscriber_id: e.target.value, titular_fatura_id: formData.titular_fatura_id || e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {subscribers.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </CollapsibleSection>
 
@@ -469,26 +476,95 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </CollapsibleSection>
 
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={true}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
-                                <input
-                                    required
-                                    value={formData.numero_uc}
-                                    onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
-                                    placeholder="Ex: 7204400277"
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
+                                    <select
+                                        value={formData.usina_id}
+                                        onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {usinas.map(u => (
+                                            <option key={u.id} value={u.id}>{u.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Titular da Conta (Na Fatura)</label>
-                                <input
-                                    required
-                                    value={formData.titular_conta}
-                                    onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
-                                    placeholder="Nome Completo / Razão Social"
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <input
+                                        required
+                                        value={formData.numero_uc}
+                                        onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
+                                        placeholder="Ex: 7204400277"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Identificação da Fatura</label>
+                                    <input
+                                        required
+                                        value={formData.titular_conta}
+                                        onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
+                                        placeholder="Nome Completo / Razão Social"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Titular da Fatura</label>
+                                    <select
+                                        value={formData.titular_fatura_id}
+                                        onChange={e => {
+                                            const sub = subscribers.find(s => s.id === e.target.value);
+                                            setFormData({
+                                                ...formData,
+                                                titular_fatura_id: e.target.value,
+                                                cpf_cnpj_fatura: sub ? sub.cpf_cnpj : formData.cpf_cnpj_fatura
+                                            });
+                                        }}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {subscribers.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ do Titular</label>
+                                    <input
+                                        value={formData.cpf_cnpj_fatura}
+                                        onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
+                                        placeholder="000.000.000-00"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Unidade Consumidora</label>
+                                    <select
+                                        value={formData.tipo_unidade}
+                                        onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Dia de Leitura</label>
+                                    <select
+                                        value={formData.dia_leitura}
+                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </CollapsibleSection>
 
