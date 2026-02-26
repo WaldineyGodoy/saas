@@ -1241,7 +1241,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     <div style={{
                         background: 'white', borderRadius: '16px', width: '95%', maxWidth: '600px',
                         padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                        position: 'relative', maxH: '90vh', overflowY: 'auto'
+                        position: 'relative', maxHeight: '90vh', overflowY: 'auto'
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
