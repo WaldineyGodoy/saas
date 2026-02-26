@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
-import { ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, GripVertical, Key, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, GripVertical, Key, Eye, EyeOff, Download, FileText } from 'lucide-react';
 import {
     DndContext,
     closestCorners,
@@ -19,6 +19,8 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Collapsible Section Component
 const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, color = 'var(--color-blue)', rightContent }) => {
@@ -468,6 +470,165 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 return newItems;
             });
         }
+    };
+
+    const handleGenerateList = () => {
+        if (selectedUCs.length === 0) {
+            showAlert('Não há UCs vinculadas para gerar a lista.', 'warning');
+            return;
+        }
+
+        // 1. Sort: Unidade Geradora first, then by priority/order
+        const sortedUCs = [...selectedUCs].sort((a, b) => {
+            if (a.tipo_unidade === 'geradora') return -1;
+            if (b.tipo_unidade === 'geradora') return 1;
+            return (a.prioridade || 0) - (b.prioridade || 0);
+        });
+
+        const isPorcentagem = formData.rateio_type === 'porcentagem';
+        let processedUCs = [];
+
+        if (isPorcentagem) {
+            let currentTotal = 0;
+            let saldoRemanescenteIndex = -1;
+
+            // First pass: identify Saldo Remanescente target
+            sortedUCs.forEach((uc, idx) => {
+                if (uc.saldo_remanescente) {
+                    saldoRemanescenteIndex = idx;
+                }
+            });
+
+            // Fallback: If no beneficial UC is marked, use Geradora
+            if (saldoRemanescenteIndex === -1) {
+                const geradoraIdx = sortedUCs.findIndex(uc => uc.tipo_unidade === 'geradora');
+                saldoRemanescenteIndex = geradoraIdx !== -1 ? geradoraIdx : 0;
+            }
+
+            // Second pass: Filter and balance to 100%
+            for (let i = 0; i < sortedUCs.length; i++) {
+                const uc = { ...sortedUCs[i] };
+                const val = Number(uc.franquia) || 0;
+
+                if (currentTotal + val <= 100) {
+                    currentTotal += val;
+                    processedUCs.push(uc);
+                } else if (currentTotal < 100) {
+                    // Truncate the last one to fit exactly 100
+                    uc.franquia = 100 - currentTotal;
+                    currentTotal = 100;
+                    processedUCs.push(uc);
+                    break;
+                } else {
+                    // Already at 100
+                    break;
+                }
+            }
+
+            // Third pass: If total < 100, add difference to Saldo Remanescente UC
+            if (currentTotal < 100 && processedUCs.length > 0) {
+                const targetId = sortedUCs[saldoRemanescenteIndex]?.id;
+                const targetInProcessed = processedUCs.findIndex(u => u.id === targetId);
+
+                if (targetInProcessed !== -1) {
+                    processedUCs[targetInProcessed].franquia = Number(processedUCs[targetInProcessed].franquia || 0) + (100 - currentTotal);
+                } else {
+                    processedUCs[0].franquia = Number(processedUCs[0].franquia || 0) + (100 - currentTotal);
+                }
+            }
+        } else {
+            processedUCs = sortedUCs.map((uc, idx) => ({ ...uc, prioridade: idx + 1 }));
+        }
+
+        // CSV Generation
+        const csvHeaders = ['tipoCompensacao', 'cpf/cnpj', 'Conta contrato', 'Prioridade', 'Porcentagem', 'Saldo Remanescente'];
+        const csvRows = processedUCs.map(uc => {
+            const sub = subscribers.find(s => s.id === uc.subscriber_id);
+            const cpfCnpj = uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '';
+            const tipoComp = uc.tipo_unidade === 'geradora' ? 'Unidade Geradora' : 'Unidade consumidora';
+
+            return [
+                tipoComp,
+                cpfCnpj,
+                uc.numero_uc,
+                !isPorcentagem ? uc.prioridade : '',
+                isPorcentagem ? `${Number(uc.franquia).toFixed(2)}%` : '',
+                uc.saldo_remanescente ? 'x' : ''
+            ].join(';');
+        });
+
+        const csvContent = [csvHeaders.join(';'), ...csvRows].join('\n');
+        const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const csvUrl = URL.createObjectURL(csvBlob);
+        const csvLink = document.createElement('a');
+        csvLink.href = csvUrl;
+        csvLink.download = `lista_ucs_${formData.name || 'usina'}.csv`;
+        csvLink.click();
+
+        // PDF Generation (Anexo IV)
+        const doc = jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(56, 128, 56);
+        const titleLines = [
+            'ANEXO IV - LISTA DAS UNIDADES',
+            'CONSUMIDORAS PARTICIPANTES DO SISTEMA',
+            'DE COMPENSAÇÃO E INDICAÇÃO DO',
+            'PERCENTUAL DE RATEIO DOS CRÉDITOS'
+        ];
+        let currentY = 20;
+        titleLines.forEach(line => {
+            doc.text(line, pageWidth / 2, currentY, { align: 'center' });
+            currentY += 6;
+        });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        currentY += 10;
+        const introText = "Declarar o percentual da energia excedente que será destinada a unidade principal (geradora) e a cada unidade consumidora participante do sistema de compensação de energia elétrica.";
+        const splitText = doc.splitTextToSize(introText, pageWidth - 40);
+        doc.text(splitText, 20, currentY);
+        currentY += splitText.length * 5 + 10;
+
+        const tableData = processedUCs.map(uc => {
+            const sub = subscribers.find(s => s.id === uc.subscriber_id);
+            return [
+                uc.numero_uc,
+                uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '',
+                uc.tipo_unidade === 'geradora' ? 'Principal(Gerador)' : 'Compensação',
+                isPorcentagem ? `${Number(uc.franquia).toFixed(2)}%` : uc.prioridade
+            ];
+        });
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [['Conta Contato', 'CPF/CNPJ', 'Unidade Consumidora', isPorcentagem ? 'Percentual' : 'Prioridade']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [100, 160, 60], textColor: [255, 255, 255], halign: 'center' },
+            bodyStyles: { halign: 'center', fontSize: 9 },
+            columnStyles: {
+                2: { halign: 'left' }
+            }
+        });
+
+        currentY = Math.max(doc.lastAutoTable.finalY + 30, 250);
+        const today = new Date().toLocaleDateString('pt-BR');
+
+        doc.line(20, currentY, 70, currentY);
+        doc.text('Local: Natal RN', 20, currentY + 5);
+
+        doc.line(pageWidth / 2 - 25, currentY, pageWidth / 2 + 25, currentY);
+        doc.text(`Data: ${today}`, pageWidth / 2, currentY + 5, { align: 'center' });
+
+        doc.line(pageWidth - 70, currentY, pageWidth - 20, currentY);
+        doc.text('Assinatura', pageWidth - 45, currentY + 5, { align: 'center' });
+
+        doc.save(`anexo_iv_${formData.name || 'usina'}.pdf`);
+        showAlert('Arquivo CSV e PDF gerados com sucesso!', 'success');
     };
 
     const renderUCList = () => {
@@ -1202,7 +1363,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             cursor: 'pointer',
                                             boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
                                         }}
-                                        onClick={() => showAlert('Função "Gerar Lista" em desenvolvimento.', 'info')}
+                                        onClick={handleGenerateList}
                                     >
                                         Gerar Lista
                                     </button>
