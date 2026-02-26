@@ -489,8 +489,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         let processedUCs = [];
 
         if (isPorcentagem) {
-            let currentTotal = 0;
+            let currentTotalPrc = 0;
             let saldoRemanescenteIndex = -1;
+            const totalCapacity = Number(formData.geracao_estimada_kwh) || 1;
 
             // First pass: identify Saldo Remanescente target
             sortedUCs.forEach((uc, idx) => {
@@ -505,35 +506,37 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 saldoRemanescenteIndex = geradoraIdx !== -1 ? geradoraIdx : 0;
             }
 
-            // Second pass: Filter and balance to 100%
+            // Second pass: Calculate percentages and Filter by 100% limit
             for (let i = 0; i < sortedUCs.length; i++) {
                 const uc = { ...sortedUCs[i] };
-                const val = Number(uc.franquia) || 0;
+                const kWhVal = Number(uc.franquia) || 0;
+                const prcVal = (kWhVal / totalCapacity) * 100;
 
-                if (currentTotal + val <= 100) {
-                    currentTotal += val;
+                if (currentTotalPrc + prcVal <= 100) {
+                    currentTotalPrc += prcVal;
+                    uc.calculatedPercentage = prcVal;
                     processedUCs.push(uc);
-                } else if (currentTotal < 100) {
-                    // Truncate the last one to fit exactly 100
-                    uc.franquia = 100 - currentTotal;
-                    currentTotal = 100;
+                } else if (currentTotalPrc < 100) {
+                    // Truncate the last one to fit exactly 100%
+                    uc.calculatedPercentage = 100 - currentTotalPrc;
+                    currentTotalPrc = 100;
                     processedUCs.push(uc);
                     break;
                 } else {
-                    // Already at 100
+                    // Already at or exceeded 100%
                     break;
                 }
             }
 
-            // Third pass: If total < 100, add difference to Saldo Remanescente UC
-            if (currentTotal < 100 && processedUCs.length > 0) {
+            // Third pass: If total < 100%, add difference to Saldo Remanescente UC
+            if (currentTotalPrc < 100 && processedUCs.length > 0) {
                 const targetId = sortedUCs[saldoRemanescenteIndex]?.id;
                 const targetInProcessed = processedUCs.findIndex(u => u.id === targetId);
 
                 if (targetInProcessed !== -1) {
-                    processedUCs[targetInProcessed].franquia = Number(processedUCs[targetInProcessed].franquia || 0) + (100 - currentTotal);
+                    processedUCs[targetInProcessed].calculatedPercentage = (processedUCs[targetInProcessed].calculatedPercentage || 0) + (100 - currentTotalPrc);
                 } else {
-                    processedUCs[0].franquia = Number(processedUCs[0].franquia || 0) + (100 - currentTotal);
+                    processedUCs[0].calculatedPercentage = (processedUCs[0].calculatedPercentage || 0) + (100 - currentTotalPrc);
                 }
             }
         } else {
@@ -552,7 +555,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 cpfCnpj,
                 uc.numero_uc,
                 !isPorcentagem ? uc.prioridade : '',
-                isPorcentagem ? `${Number(uc.franquia).toFixed(2)}%` : '',
+                isPorcentagem ? Number(uc.calculatedPercentage || 0).toFixed(2) : '',
                 uc.saldo_remanescente ? 'x' : ''
             ].join(';');
         });
@@ -599,7 +602,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 uc.numero_uc,
                 uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '',
                 uc.tipo_unidade === 'geradora' ? 'Principal(Gerador)' : 'Compensação',
-                isPorcentagem ? `${Number(uc.franquia).toFixed(2)}%` : uc.prioridade
+                isPorcentagem ? `${Number(uc.calculatedPercentage || 0).toFixed(2)}%` : uc.prioridade
             ];
         });
 
