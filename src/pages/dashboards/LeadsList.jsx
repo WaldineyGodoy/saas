@@ -9,6 +9,9 @@ import {
     useSensor,
     useSensors,
     closestCorners,
+    rectIntersection,
+    pointerWithin,
+    getFirstCollision,
     DragOverlay
 } from '@dnd-kit/core';
 import {
@@ -216,10 +219,39 @@ export default function LeadsList() {
         setActiveId(event.active.id);
     };
 
+    const handleDragOver = (event) => {
+        const { active, over } = event;
+        if (!over) return;
+
+        const activeId = active.id;
+        const overId = over.id;
+
+        // Find the container
+        let overContainer = overId;
+        const isTargetStatus = KANBAN_STATUSES.some(s => s.status === overId);
+
+        if (!isTargetStatus) {
+            const targetLead = leads.find(l => l.id === overId);
+            overContainer = targetLead?.status;
+        }
+
+        if (!overContainer) return;
+
+        const leadToUpdate = leads.find(l => l.id === activeId);
+        if (leadToUpdate && leadToUpdate.status !== overContainer) {
+            setLeads(prev => prev.map(l =>
+                l.id === activeId ? { ...l, status: overContainer } : l
+            ));
+        }
+    };
+
     const handleDragEnd = async (event) => {
         const { active, over } = event;
         setActiveId(null);
-        if (!over) return;
+        if (!over) {
+            fetchLeads(); // Reset to original if dropped outside
+            return;
+        }
 
         const activeId = active.id;
         const overId = over.id;
@@ -233,26 +265,24 @@ export default function LeadsList() {
             newStatus = targetLead?.status;
         }
 
-        if (!newStatus) return;
+        if (!newStatus) {
+            fetchLeads();
+            return;
+        }
 
         const leadToUpdate = leads.find(l => l.id === activeId);
-        if (leadToUpdate && leadToUpdate.status !== newStatus) {
-            // Optimistic update
-            setLeads(prev => prev.map(l =>
-                l.id === activeId ? { ...l, status: newStatus } : l
-            ));
+        // We don't check leadToUpdate.status !== newStatus here because handleDragOver might have already updated the local state
 
-            try {
-                const { error } = await supabase
-                    .from('leads')
-                    .update({ status: newStatus })
-                    .eq('id', activeId);
+        try {
+            const { error } = await supabase
+                .from('leads')
+                .update({ status: newStatus })
+                .eq('id', activeId);
 
-                if (error) throw error;
-            } catch (error) {
-                console.error('Error updating lead status:', error);
-                fetchLeads(); // Rollback
-            }
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating lead status:', error);
+            fetchLeads(); // Rollback
         }
     };
 
@@ -370,10 +400,18 @@ export default function LeadsList() {
                     ) : (
                         <DndContext
                             sensors={sensors}
-                            collisionDetection={closestCorners}
+                            collisionDetection={(args) => {
+                                // First try pointerWithin (good for empty columns)
+                                const pointerCollisions = pointerWithin(args);
+                                if (pointerCollisions.length > 0) return pointerCollisions;
+
+                                // Fallback to rectIntersection
+                                return rectIntersection(args);
+                            }}
                             onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
-                            onDragCancel={() => setActiveId(null)}
+                            onDragCancel={() => { setActiveId(null); fetchLeads(); }}
                         >
                             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
                                 {KANBAN_STATUSES.map(({ status, label, color }) => {

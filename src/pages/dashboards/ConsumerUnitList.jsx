@@ -7,6 +7,9 @@ import {
     useSensor,
     useSensors,
     closestCorners,
+    rectIntersection,
+    pointerWithin,
+    getFirstCollision,
     DragOverlay
 } from '@dnd-kit/core';
 import {
@@ -185,6 +188,32 @@ export default function ConsumerUnitList() {
         setIsModalOpen(false);
     };
 
+    const handleDragOver = (event) => {
+        const { active, over } = event;
+        if (!over) return;
+
+        const activeId = active.id;
+        const overId = over.id;
+
+        // Determine target status
+        let overContainer = overId;
+        const isTargetStatus = KANBAN_STATUSES.some(s => s.status === overId);
+
+        if (!isTargetStatus) {
+            const targetUnit = units.find(u => u.id === overId);
+            overContainer = targetUnit?.status;
+        }
+
+        if (!overContainer) return;
+
+        const unitToUpdate = units.find(u => u.id === activeId);
+        if (unitToUpdate && unitToUpdate.status !== overContainer) {
+            setUnits(prev => prev.map(u =>
+                u.id === activeId ? { ...u, status: overContainer } : u
+            ));
+        }
+    };
+
     const handleDragStart = (event) => {
         setActiveId(event.active.id);
     };
@@ -192,7 +221,10 @@ export default function ConsumerUnitList() {
     const handleDragEnd = async (event) => {
         const { active, over } = event;
         setActiveId(null);
-        if (!over) return;
+        if (!over) {
+            fetchUnits();
+            return;
+        }
 
         const activeId = active.id;
         const overId = over.id;
@@ -207,26 +239,23 @@ export default function ConsumerUnitList() {
             newStatus = targetUnit?.status;
         }
 
-        if (!newStatus) return;
+        if (!newStatus) {
+            fetchUnits();
+            return;
+        }
 
         const unitToUpdate = units.find(u => u.id === activeId);
-        if (unitToUpdate && unitToUpdate.status !== newStatus) {
-            // Optimistic update
-            setUnits(prev => prev.map(u =>
-                u.id === activeId ? { ...u, status: newStatus } : u
-            ));
 
-            try {
-                const { error } = await supabase
-                    .from('consumer_units')
-                    .update({ status: newStatus })
-                    .eq('id', activeId);
+        try {
+            const { error } = await supabase
+                .from('consumer_units')
+                .update({ status: newStatus })
+                .eq('id', activeId);
 
-                if (error) throw error;
-            } catch (error) {
-                console.error('Error updating status:', error);
-                fetchUnits(); // Rollback to actual data
-            }
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating status:', error);
+            fetchUnits(); // Rollback to actual data
         }
     };
 
@@ -330,10 +359,18 @@ export default function ConsumerUnitList() {
                     ) : (
                         <DndContext
                             sensors={sensors}
-                            collisionDetection={closestCorners}
+                            collisionDetection={(args) => {
+                                // First try pointerWithin (good for empty columns)
+                                const pointerCollisions = pointerWithin(args);
+                                if (pointerCollisions.length > 0) return pointerCollisions;
+
+                                // Fallback to rectIntersection
+                                return rectIntersection(args);
+                            }}
                             onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
                             onDragEnd={handleDragEnd}
-                            onDragCancel={() => setActiveId(null)}
+                            onDragCancel={() => { setActiveId(null); fetchUnits(); }}
                         >
                             <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
                                 {KANBAN_STATUSES.map(({ status, label, color }) => {
