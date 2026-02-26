@@ -843,7 +843,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Geradora (Seleção Única)</label>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
                                         {(() => {
-                                            const geradoras = [...availableUCs, ...selectedUCs].filter(uc => uc.tipo_unidade === 'geradora');
+                                            const allUCs = [...availableUCs, ...selectedUCs];
+                                            const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
+                                            const geradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
                                             if (geradoras.length === 0) return <p style={{ fontSize: '0.8rem', color: '#64748b', padding: '1rem' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>;
 
                                             return geradoras.map(uc => {
