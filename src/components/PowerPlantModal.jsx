@@ -56,7 +56,7 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, 
 };
 
 // Sortable UC Item Component
-const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada }) => {
+const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview }) => {
     const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
     const {
         attributes,
@@ -103,20 +103,41 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada }) => {
             />
 
             <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{uc.titular_conta?.substring(0, 20)}</div>
-            </div>
-
-            <div style={{ textAlign: 'right' }}>
-                <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                    {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
+                    <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: uc.tipo_unidade === 'geradora' ? '#fef3c7' : '#e0f2fe', color: uc.tipo_unidade === 'geradora' ? '#92400e' : '#075985', fontWeight: 600, textTransform: 'capitalize' }}>
+                        {uc.tipo_unidade || 'Beneficiária'}
+                    </span>
                 </div>
-                {percentage && (
-                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                        {percentage}%
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    {uc.titular_conta}
+                </div>
+                {uc.cpf_cnpj_fatura && (
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                        {uc.cpf_cnpj_fatura}
                     </div>
                 )}
+            </div>
+
+            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                <div>
+                    <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
+                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                        {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
+                    </div>
+                    {percentage && (
+                        <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                            {percentage}%
+                        </div>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={() => onPreview(uc)}
+                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '0.4rem', color: '#64748b', cursor: 'pointer' }}
+                >
+                    <Eye size={16} />
+                </button>
             </div>
         </div>
     );
@@ -194,7 +215,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const [availableUCs, setAvailableUCs] = useState([]);
     const [selectedUCs, setSelectedUCs] = useState([]); // Store full objects
+    const [subscribers, setSubscribers] = useState([]);
     const [ucFilter, setUcFilter] = useState('linked'); // 'linked' or 'unlinked'
+    const [previewUC, setPreviewUC] = useState(null);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -217,6 +241,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     useEffect(() => {
         fetchSuppliers();
         fetchInverterBrands();
+        fetchSubscribers();
         if (usina) {
             setFormData({
                 supplier_id: usina.supplier_id || '',
@@ -300,6 +325,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const fetchSuppliers = async () => {
         const { data } = await supabase.from('suppliers').select('id, name').order('name');
         setSuppliers(data || []);
+    };
+
+    const fetchSubscribers = async () => {
+        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj');
+        setSubscribers(data || []);
     };
 
     const fetchInverterBrands = async () => {
@@ -435,8 +465,20 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     index={index}
                                     isSelected={true}
                                     geracaoEstimada={formData.geracao_estimada_kwh}
-                                    onToggle={(checked) => {
-                                        if (!checked) setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                    onPreview={() => {
+                                        setPreviewUC(uc);
+                                        setShowPreviewModal(true);
+                                    }}
+                                    onToggle={async (checked) => {
+                                        if (!checked) {
+                                            const confirm = await showConfirm(
+                                                'Remover Vínculo?',
+                                                `Deseja realmente remover a UC ${uc.numero_uc} desta usina?`
+                                            );
+                                            if (confirm) {
+                                                setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                            }
+                                        }
                                     }}
                                 />
                             ))}
@@ -447,7 +489,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
 
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.8rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
                 {listToRender.map(uc => {
                     const isSelected = selectedUCs.some(u => u.id === uc.id);
                     return (
@@ -460,26 +502,58 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             <input
                                 type="checkbox"
                                 checked={isSelected}
-                                onChange={e => {
-                                    if (e.target.checked) setSelectedUCs([...selectedUCs, uc]);
-                                    else setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                onChange={async (e) => {
+                                    const checked = e.target.checked;
+                                    const action = checked ? 'vincular' : 'remover o vínculo da';
+                                    const confirm = await showConfirm(
+                                        `${checked ? 'Vincular' : 'Remover'} UC?`,
+                                        `Deseja realmente ${action} UC ${uc.numero_uc}?`
+                                    );
+                                    if (confirm) {
+                                        if (checked) setSelectedUCs([...selectedUCs, uc]);
+                                        else setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                    }
                                 }}
                                 style={{ transform: 'scale(1.1)', accentColor: '#7c3aed', cursor: 'pointer' }}
                             />
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{uc.titular_conta?.substring(0, 20)}</div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                                <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                                    {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
+                                    <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: uc.tipo_unidade === 'geradora' ? '#fef3c7' : '#e0f2fe', color: uc.tipo_unidade === 'geradora' ? '#92400e' : '#075985', fontWeight: 600, textTransform: 'capitalize' }}>
+                                        {uc.tipo_unidade || 'Beneficiária'}
+                                    </span>
                                 </div>
-                                {isSelected && formData.geracao_estimada_kwh > 0 && (
-                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                                        {((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    {uc.titular_conta}
+                                </div>
+                                {uc.cpf_cnpj_fatura && (
+                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                        {uc.cpf_cnpj_fatura}
                                     </div>
                                 )}
+                            </div>
+                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <div>
+                                    <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
+                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                                        {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
+                                    </div>
+                                    {isSelected && formData.geracao_estimada_kwh > 0 && (
+                                        <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                                            {((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setPreviewUC(uc);
+                                        setShowPreviewModal(true);
+                                    }}
+                                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '0.4rem', color: '#64748b', cursor: 'pointer' }}
+                                >
+                                    <Eye size={16} />
+                                </button>
                             </div>
                         </div>
                     );
@@ -911,7 +985,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', width: 'fit-content' }}>
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, rateio_type: 'prioridade' })}
+                                            onClick={async () => {
+                                                const confirm = await showConfirm(
+                                                    'Alterar Rateio?',
+                                                    'Deseja alterar o tipo de rateio para Prioridade? A ordem das UCs será preservada.'
+                                                );
+                                                if (confirm) setFormData({ ...formData, rateio_type: 'prioridade' });
+                                            }}
                                             style={{
                                                 padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                                 background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent',
@@ -924,7 +1004,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, rateio_type: 'porcentagem' })}
+                                            onClick={async () => {
+                                                const confirm = await showConfirm(
+                                                    'Alterar Rateio?',
+                                                    'Deseja alterar o tipo de rateio para Porcentagem?'
+                                                );
+                                                if (confirm) setFormData({ ...formData, rateio_type: 'porcentagem' });
+                                            }}
                                             style={{
                                                 padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                                 background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent',
@@ -996,6 +1082,25 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         {renderUCList()}
                                     </div>
                                 )}
+
+                                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #ede9fe', paddingTop: '1rem' }}>
+                                    <button
+                                        type="button"
+                                        style={{
+                                            padding: '0.6rem 1.2rem',
+                                            background: '#ef4444',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                        }}
+                                        onClick={() => showAlert('Função "Gerar Lista" em desenvolvimento.', 'info')}
+                                    >
+                                        Gerar Lista
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </CollapsibleSection>
