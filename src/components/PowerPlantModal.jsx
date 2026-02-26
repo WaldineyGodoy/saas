@@ -21,17 +21,15 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 // Collapsible Section Component
-const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, color = 'var(--color-blue)' }) => {
+const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, color = 'var(--color-blue)', rightContent }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
 
     return (
         <div style={{ marginBottom: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
             <div
-                onClick={() => setIsOpen(!isOpen)}
                 style={{
                     padding: '1rem',
                     background: isOpen ? `${color}10` : 'white',
-                    cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -39,11 +37,15 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, 
                     transition: 'background 0.2s'
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontWeight: 'bold', color: color }}>
+                <div
+                    onClick={() => setIsOpen(!isOpen)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontWeight: 'bold', color: color, cursor: 'pointer', flex: 1 }}
+                >
                     {Icon && <Icon size={20} />}
                     <span style={{ fontSize: '1rem' }}>{title}</span>
+                    {isOpen ? <ChevronUp size={20} color="#64748b" style={{ marginLeft: 'auto' }} /> : <ChevronDown size={20} color="#64748b" style={{ marginLeft: 'auto' }} />}
                 </div>
-                {isOpen ? <ChevronUp size={20} color="#64748b" /> : <ChevronDown size={20} color="#64748b" />}
+                {rightContent && <div style={{ marginLeft: '1rem' }}>{rightContent}</div>}
             </div>
 
             {isOpen && (
@@ -56,7 +58,7 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, 
 };
 
 // Sortable UC Item Component
-const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers }) => {
+const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
     const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
     const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
     const {
@@ -66,7 +68,10 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         transform,
         transition,
         isDragging
-    } = useSortable({ id: uc.id });
+    } = useSortable({
+        id: uc.id,
+        disabled: isFixed
+    });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -88,9 +93,17 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
 
     return (
         <div ref={setNodeRef} style={style}>
-            <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
-                <GripVertical size={18} />
-            </div>
+            {!isFixed && (
+                <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
+                    <GripVertical size={18} />
+                </div>
+            )}
+            {isFixed && (
+                <div style={{ width: '18px', display: 'flex', alignItems: 'center', color: '#cbd5e1' }}>
+                    {/* Empty space or fixed icon */}
+                    <div style={{ width: '18px' }} />
+                </div>
+            )}
 
             <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#7c3aed', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>
                 {index + 1}
@@ -438,6 +451,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 const oldIndex = items.findIndex(i => i.id === active.id);
                 const newIndex = items.findIndex(i => i.id === over.id);
 
+                // If the item at index 0 is the Unidade Geradora, prevent others from moving to 0
+                // and prevent it from moving elsewhere
+                const isGeradoraAt0 = items[0]?.numero_uc === formData.unidade_geradora;
+                if (isGeradoraAt0 && (oldIndex === 0 || newIndex === 0)) {
+                    return items;
+                }
+
                 const newItems = [...items];
                 const [movedItem] = newItems.splice(oldIndex, 1);
                 newItems.splice(newIndex, 0, movedItem);
@@ -473,11 +493,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     isSelected={true}
                                     geracaoEstimada={formData.geracao_estimada_kwh}
                                     subscribers={subscribers}
+                                    isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
                                     onPreview={() => {
                                         setPreviewUC(uc);
                                         setShowPreviewModal(true);
                                     }}
                                     onToggle={async (checked) => {
+                                        if (index === 0 && uc.numero_uc === formData.unidade_geradora) {
+                                            showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Identificação.', 'warning');
+                                            return;
+                                        }
                                         if (!checked) {
                                             const confirm = await showConfirm(
                                                 'Remover Vínculo?',
@@ -720,7 +745,37 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
 
                     {/* Section 1: Identificação e Localização */}
-                    <CollapsibleSection title="Identificação e Localização" icon={MapPin} defaultOpen={true} color="#2563eb">
+                    <CollapsibleSection
+                        title="Identificação e Localização"
+                        icon={MapPin}
+                        defaultOpen={true}
+                        color="#2563eb"
+                        rightContent={
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowCredentialsModal(true);
+                                }}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.5rem 0.8rem',
+                                    background: '#fef2f2',
+                                    color: '#ef4444',
+                                    borderRadius: '6px',
+                                    border: '1px solid #fee2e2',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: '0.2s'
+                                }}
+                            >
+                                <Key size={14} /> Credenciais
+                            </button>
+                        }
+                    >
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Nome da Usina</label>
@@ -780,41 +835,69 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         placeholder="Ex: Cemig"
                                         style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCredentialsModal(true)}
-                                        style={{
-                                            marginTop: '0.5rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            padding: '0.5rem 0.8rem',
-                                            background: '#fef2f2',
-                                            color: '#ef4444',
-                                            borderRadius: '6px',
-                                            border: '1px solid #fee2e2',
-                                            fontSize: '0.85rem',
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            width: 'fit-content',
-                                            transition: '0.2s'
-                                        }}
-                                    >
-                                        <Key size={14} /> Credenciais
-                                    </button>
                                 </div>
                             </div>
 
                             <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Unidade Geradora</label>
-                                    <input
-                                        value={formData.unidade_geradora}
-                                        onChange={e => setFormData({ ...formData, unidade_geradora: e.target.value.substring(0, 20) })}
-                                        maxLength={20}
-                                        placeholder="Max 20 caracteres"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                    />
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Geradora (Seleção Única)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
+                                        {(() => {
+                                            const geradoras = [...availableUCs, ...selectedUCs].filter(uc => uc.tipo_unidade === 'geradora');
+                                            if (geradoras.length === 0) return <p style={{ fontSize: '0.8rem', color: '#64748b', padding: '1rem' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>;
+
+                                            return geradoras.map(uc => {
+                                                const isSelected = formData.unidade_geradora === uc.numero_uc;
+                                                const subscriber = subscribers.find(s => s.id === uc.titular_fatura_id);
+
+                                                return (
+                                                    <div
+                                                        key={uc.id}
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                // Deselecting
+                                                                setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
+                                                            } else {
+                                                                // Selecting
+                                                                setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
+
+                                                                // Force as Priority 1 in selectedUCs
+                                                                setSelectedUCs(prev => {
+                                                                    const otherUCs = prev.filter(u => u.id !== uc.id);
+                                                                    return [uc, ...otherUCs];
+                                                                });
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            padding: '0.8rem',
+                                                            background: 'white',
+                                                            border: isSelected ? '2px solid #7c3aed' : '1px solid #cbd5e1',
+                                                            borderRadius: '8px',
+                                                            cursor: 'pointer',
+                                                            position: 'relative',
+                                                            transition: '0.2s',
+                                                            boxShadow: isSelected ? '0 4px 6px -1px rgba(124, 58, 237, 0.1)' : 'none'
+                                                        }}
+                                                    >
+                                                        <div style={{ position: 'absolute', top: '0.8rem', right: '0.8rem' }}>
+                                                            <div style={{
+                                                                width: '18px', height: '18px', borderRadius: '50%',
+                                                                border: isSelected ? '5px solid #7c3aed' : '2px solid #cbd5e1',
+                                                                background: 'white'
+                                                            }} />
+                                                        </div>
+                                                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{uc.numero_uc}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>{uc.titular_conta}</div>
+                                                        {subscriber && <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>{subscriber.name}</div>}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
+                                                            <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>{uc.franquia} kWh</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>CNPJ/CPF</label>
