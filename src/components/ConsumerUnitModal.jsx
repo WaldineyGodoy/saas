@@ -478,17 +478,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={true}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
-                                    <select
-                                        value={formData.tipo_ligacao}
-                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    >
-                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
                                     <input
                                         required
@@ -539,6 +528,17 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         placeholder="000.000.000-00"
                                         style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                     />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
+                                    <select
+                                        value={formData.tipo_ligacao}
+                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    >
+                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
                                 </div>
 
                                 <div>
