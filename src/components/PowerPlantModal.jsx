@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
-import { ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, GripVertical, Key, Eye, EyeOff, Download, FileText } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import {
     DndContext,
     closestCorners,
@@ -241,6 +241,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [ucFilter, setUcFilter] = useState('linked'); // 'linked' or 'unlinked'
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [showExpandedUCs, setShowExpandedUCs] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -647,7 +648,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             );
         }
 
-        if (ucFilter === 'linked' && formData.rateio_type === 'prioridade') {
+        if (ucFilter === 'linked') {
             return (
                 <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
                     <SortableContext items={listToRender.map(i => i.id)} strategy={verticalListSortingStrategy}>
@@ -853,7 +854,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         supabase.from('consumer_units')
                             .update({
                                 usina_id: usinaId,
-                                prioridade: formData.rateio_type === 'prioridade' ? index + 1 : null
+                                prioridade: index + 1
                             })
                             .eq('id', uc.id)
                     );
@@ -1337,8 +1338,24 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             </span>
                                         )}
                                     </div>
-                                    <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
-                                        Total de Ucs Vinculadas: {selectedUCs.length}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
+                                            Total de Ucs Vinculadas: {selectedUCs.length}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowExpandedUCs(true)}
+                                            style={{
+                                                background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px',
+                                                padding: '0.4rem', color: '#64748b', cursor: 'pointer', display: 'flex',
+                                                alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600,
+                                                transition: '0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}
+                                            title="Expandir Visualização"
+                                        >
+                                            <Maximize2 size={16} />
+                                            Expandir
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1592,6 +1609,132 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 style={{ padding: '0.7rem 2rem', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
                             >
                                 Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Expanded UC List Modal */}
+            {showExpandedUCs && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200,
+                    padding: '2rem'
+                }}>
+                    <div style={{
+                        background: '#f8fafc', borderRadius: '16px', width: '95%', maxWidth: '1000px',
+                        height: '90vh', display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden', animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Gerenciamento de Unidades Consumidoras</h3>
+                                <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>Ordene e gerencie as UCs vinculadas à usina</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowExpandedUCs(false)}
+                                style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '0.5rem', color: '#64748b', cursor: 'pointer', transition: '0.2s' }}
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '1.5rem', background: '#fdfcfe', borderBottom: '1px solid #ede9fe', display: 'flex', gap: '2rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Filtro de Exibição</label>
+                                <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setUcFilter('linked')}
+                                        style={{
+                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
+                                            background: ucFilter === 'linked' ? 'white' : 'transparent',
+                                            color: ucFilter === 'linked' ? '#7c3aed' : '#64748b',
+                                            boxShadow: ucFilter === 'linked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >Vinculadas</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setUcFilter('unlinked')}
+                                        style={{
+                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
+                                            background: ucFilter === 'unlinked' ? 'white' : 'transparent',
+                                            color: ucFilter === 'unlinked' ? '#7c3aed' : '#64748b',
+                                            boxShadow: ucFilter === 'unlinked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >Não Vinculadas</button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Tipo de Rateio</label>
+                                <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const confirm = await showConfirm(
+                                                'Alterar Rateio?',
+                                                'Deseja alterar o tipo de rateio para Prioridade? A ordem das UCs será preservada.'
+                                            );
+                                            if (confirm) setFormData({ ...formData, rateio_type: 'prioridade' });
+                                        }}
+                                        style={{
+                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
+                                            background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent',
+                                            color: formData.rateio_type === 'prioridade' ? '#7c3aed' : '#64748b',
+                                            boxShadow: formData.rateio_type === 'prioridade' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >Prioridade</button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const confirm = await showConfirm(
+                                                'Alterar Rateio?',
+                                                'Deseja alterar o tipo de rateio para Porcentagem?'
+                                            );
+                                            if (confirm) setFormData({ ...formData, rateio_type: 'porcentagem' });
+                                        }}
+                                        style={{
+                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
+                                            background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent',
+                                            color: formData.rateio_type === 'porcentagem' ? '#7c3aed' : '#64748b',
+                                            boxShadow: formData.rateio_type === 'porcentagem' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >Porcentagem</button>
+                                </div>
+                            </div>
+
+                            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: '1.5rem' }}>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Comprometido</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#5b21b6' }}>{totalFranquiaVinculada.toFixed(0)} kWh</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Total de UCs</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#059669' }}>{selectedUCs.length}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', background: '#f8fafc' }}>
+                            {renderUCList()}
+                        </div>
+
+                        <div style={{ padding: '1.5rem', background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowExpandedUCs(false)}
+                                style={{ padding: '0.8rem 2.5rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}
+                            >
+                                Concluir Gerenciamento
                             </button>
                         </div>
                     </div>
