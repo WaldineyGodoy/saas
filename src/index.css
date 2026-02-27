@@ -264,19 +264,40 @@ textarea {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 2rem;
+  padding: 0.5rem;
 }
 
 .sidebar-link {
   width: 100%;
   display: flex;
-  align-items: center;
-  padding: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
   color: white;
   background: transparent;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
   cursor: pointer;
-  opacity: 0.8;
+  opacity: 0.85;
+  text-align: left;
+  gap: 0.75rem;
+  line-height: 1.2;
+}
+
+.sidebar-link i {
+  font-size: 1.25rem;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: -2px;
+  /* Slight adjustment for better alignment with text */
+}
+
+.sidebar-link span {
+  font-size: 0.95rem;
+  font-weight: 500;
+  flex: 1;
 }
 
 .sidebar-link:hover {
@@ -286,8 +307,9 @@ textarea {
 
 .sidebar-link.active {
   background: var(--color-orange);
-  font-weight: 600;
+  color: white;
   opacity: 1;
+  box-shadow: 0 4px 6px rgba(255, 102, 0, 0.2);
 }
 
 .sidebar-footer {
@@ -299,13 +321,23 @@ textarea {
 .sidebar-footer-btn {
   background: rgba(255, 255, 255, 0.1);
   color: white;
-  padding: 0.5rem;
+  padding: 0.75rem 1rem;
   width: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: background 0.2s;
+  gap: 0.75rem;
+  transition: all 0.2s;
+}
+
+.sidebar-footer-btn i {
+  font-size: 1.25rem;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar-footer-btn:hover {

@@ -1,8 +1,3 @@
-import {
-    LayoutDashboard, Users, Megaphone, Home, Briefcase, Factory, Zap, FileText, Settings,
-    Menu, ChevronLeft, ChevronRight, LogOut, UserCheck, Truck, DollarSign
-} from 'lucide-react';
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -57,61 +52,61 @@ export default function Dashboard() {
 
         // 1. Leads
         if (role !== 'subscriber') {
-            items.push({ id: 'leads', label: 'Leads', icon: Megaphone });
+            items.push({ id: 'leads', label: 'Leads', icon: 'bi-megaphone' });
         }
 
         // 2. Originadores
         const originatorsAllowed = ['originator', 'coordinator', 'manager', 'admin', 'super_admin'];
         if (originatorsAllowed.includes(role)) {
             if (role === 'originator') {
-                items.push({ id: 'originator_dashboard', label: 'Minhas Comissões', icon: LayoutDashboard });
-                items.push({ id: 'originators_list', label: 'Equipe', icon: Briefcase });
+                items.push({ id: 'originator_dashboard', label: 'Minhas Comissões', icon: 'bi-speedometer2' });
+                items.push({ id: 'originators_list', label: 'Equipe', icon: 'bi-briefcase' });
             } else {
-                items.push({ id: 'originators_list', label: 'Originadores', icon: Briefcase });
+                items.push({ id: 'originators_list', label: 'Originadores', icon: 'bi-briefcase' });
             }
         }
 
         // 3. Assinantes
         if (role !== 'lead') {
             if (role === 'subscriber') {
-                items.push({ id: 'subscriber_dashboard', label: 'Meu Painel', icon: LayoutDashboard });
+                items.push({ id: 'subscriber_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2' });
             } else {
-                items.push({ id: 'subscribers_list', label: 'Assinantes', icon: UserCheck });
+                items.push({ id: 'subscribers_list', label: 'Assinantes', icon: 'bi-person-check' });
             }
         }
 
         // 4. Unidades Consumidoras
         if (role !== 'lead' && role !== 'subscriber') {
-            items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: Home });
+            items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: 'bi-house' });
         }
 
         // 5. Faturas
-        items.push({ id: 'invoices', label: 'Faturas', icon: FileText });
+        items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-file-earmark-text' });
 
         // 6. Fornecedores
         const suppliersAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
         if (suppliersAllowed.includes(role)) {
             if (role === 'supplier') {
-                items.push({ id: 'supplier_dashboard', label: 'Meu Painel', icon: LayoutDashboard });
+                items.push({ id: 'supplier_dashboard', label: 'Meu Painel', icon: 'bi-speedometer2' });
             } else {
-                items.push({ id: 'suppliers_list', label: 'Fornecedores', icon: Truck });
+                items.push({ id: 'suppliers_list', label: 'Fornecedores', icon: 'bi-truck' });
             }
         }
 
         // 7. Usinas
         if (suppliersAllowed.includes(role)) {
-            items.push({ id: 'power_plants', label: 'Usinas', icon: Zap });
+            items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
         }
 
         // 8. Billing
         const billingAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
         if (billingAllowed.includes(role)) {
-            items.push({ id: 'billing', label: 'Billing', icon: DollarSign });
+            items.push({ id: 'billing', label: 'Billing', icon: 'bi-currency-dollar' });
         }
 
         // 9. Gestão de Usuários
         if (['admin', 'super_admin'].includes(role)) {
-            items.push({ id: 'settings', label: 'Configurações', icon: Settings });
+            items.push({ id: 'settings', label: 'Configurações', icon: 'bi-gear' });
         }
 
         return items;
@@ -148,7 +143,7 @@ export default function Dashboard() {
                 className="menu-toggle"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
-                <Menu size={24} />
+                <i className="bi bi-list" style={{ fontSize: '24px' }}></i>
             </button>
 
             {/* Mobile Overlay */}
@@ -180,7 +175,7 @@ export default function Dashboard() {
                         style={{ background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: isSidebarOpen ? 'none' : 'block' }} // Hide on mobile open
                         className="desktop-only-btn" // Add class if needed for media query, or keep inline for now since media query handles sidebar width
                     >
-                        {isDesktopCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                        {isDesktopCollapsed ? <i className="bi bi-chevron-right"></i> : <i className="bi bi-chevron-left"></i>}
                     </button>
                 </div>
 
@@ -199,7 +194,7 @@ export default function Dashboard() {
                                         className={`sidebar-link ${activeView === item.id ? 'active' : ''}`}
                                         style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
                                     >
-                                        <Icon size={20} style={{ marginRight: isDesktopCollapsed ? 0 : '0.75rem', flexShrink: 0 }} />
+                                        <i className={`bi ${item.icon}`} style={{ marginRight: isDesktopCollapsed ? 0 : '0.75rem', flexShrink: 0 }}></i>
                                         {!isDesktopCollapsed && <span>{item.label}</span>}
                                     </button>
                                 </li>
@@ -221,7 +216,7 @@ export default function Dashboard() {
                         className="sidebar-footer-btn"
                         style={{ justifyContent: isDesktopCollapsed ? 'center' : 'flex-start' }}
                     >
-                        <LogOut size={20} style={{ marginRight: isDesktopCollapsed ? 0 : '0.5rem' }} />
+                        <i className="bi bi-box-arrow-right" style={{ marginRight: isDesktopCollapsed ? 0 : '0.5rem' }}></i>
                         {!isDesktopCollapsed && <span>Sair</span>}
                     </button>
                 </div>
