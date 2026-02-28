@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
+import { useAuth } from '../contexts/AuthContext';
 import { cancelAsaasCharge } from '../lib/api';
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
