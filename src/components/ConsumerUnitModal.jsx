@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
-import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, FileSearch, PlusCircle } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
+import UCInvoicesModal from './UCInvoicesModal';
+import InvoiceFormModal from './InvoiceFormModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete }) {
     const { showAlert, showConfirm } = useUI();
@@ -14,6 +16,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showHistory, setShowHistory] = useState(false);
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+    const [showIssueInvoiceModal, setShowIssueInvoiceModal] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -318,7 +322,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 }}>
                     <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>
                         {consumerUnit?.id ? (
-                            subscriberName ? `Editar UC - ${subscriberName}` : 'Editar UC'
+                            `${formData.numero_uc} - ${subscriberName} - ${formData.titular_conta}`
                         ) : 'Nova Unidade Consumidora'}
                     </h3>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -596,7 +600,27 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#64748b' }}>Saldo Remanescente</label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <label style={{ fontSize: '0.9rem', color: '#64748b' }}>Saldo Remanescente</label>
+                                        {consumerUnit?.id && (
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowInvoicesModal(true)}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}
+                                                >
+                                                    <FileSearch size={14} /> Visualizar
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowIssueInvoiceModal(true)}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', color: '#2563eb', fontWeight: 600 }}
+                                                >
+                                                    <PlusCircle size={14} /> Emitir Fatura
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <div style={{ display: 'flex', gap: '1.25rem', padding: '0.55rem 0' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#475569' }}>
                                             <input
@@ -847,6 +871,24 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showInvoicesModal && (
+                <UCInvoicesModal
+                    uc={consumerUnit}
+                    onClose={() => setShowInvoicesModal(false)}
+                />
+            )}
+
+            {showIssueInvoiceModal && (
+                <InvoiceFormModal
+                    ucs={[consumerUnit]}
+                    onClose={() => setShowIssueInvoiceModal(false)}
+                    onSave={() => {
+                        setShowIssueInvoiceModal(false);
+                        setShowInvoicesModal(true);
+                    }}
+                />
             )}
         </div>
     );
