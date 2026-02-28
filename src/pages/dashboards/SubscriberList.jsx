@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import SubscriberModal from '../../components/SubscriberModal';
-import { CreditCard, X } from 'lucide-react';
+import { CreditCard, X, Eye, Pencil } from 'lucide-react';
 import {
     DndContext,
     PointerSensor,
@@ -379,9 +379,17 @@ export default function SubscriberList() {
                                                         </button>
                                                         <button
                                                             onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
-                                                            style={{ border: '1px solid #ccc', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer' }}
+                                                            title="Visualizar Assinante"
+                                                            style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                                         >
-                                                            Editar
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
+                                                            title="Editar Assinante"
+                                                            style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <Pencil size={16} />
                                                         </button>
                                                     </div>
                                                 </td>

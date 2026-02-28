@@ -7,7 +7,7 @@ import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import UCInvoicesModal from './UCInvoicesModal';
 import InvoiceFormModal from './InvoiceFormModal';
 
-export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete }) {
+export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'all' }) {
     const { showAlert, showConfirm } = useUI();
     const [subscribers, setSubscribers] = useState([]);
     const [usinas, setUsinas] = useState([]);
@@ -361,7 +361,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             </select>
                         </div>
 
-                        <CollapsibleSection title="Vínculos" icon={Link} defaultOpen={true}>
+                        <CollapsibleSection title="Vínculos" icon={Link} defaultOpen={defaultSection === 'all' || defaultSection === 'technical'}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Assinante <span style={{ color: '#ef4444' }}>*</span></label>
@@ -380,7 +380,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Endereço de Instalação" icon={Home} defaultOpen={true}>
+                        <CollapsibleSection title="Endereço de Instalação" icon={Home} defaultOpen={defaultSection === 'all'}>
                             <div style={{ display: 'flex', gap: '1rem' }}>
                                 <div style={{ width: '150px' }}>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP</label>
@@ -482,7 +482,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={true}>
+                        <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={defaultSection === 'all'}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
@@ -572,7 +572,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Dados Técnicos e Comerciais" icon={Settings} defaultOpen={true}>
+                        <CollapsibleSection title="Dados Técnicos e Comerciais" icon={Settings} defaultOpen={defaultSection === 'all' || defaultSection === 'technical'}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
                                 <select
