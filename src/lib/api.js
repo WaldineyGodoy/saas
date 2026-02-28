@@ -215,6 +215,35 @@ export async function cancelAsaasCharge(invoiceId) {
     }
 }
 
+// Função auxiliar para atualizar cobrança no Asaas
+export async function updateAsaasCharge(invoiceId, value, dueDate) {
+    try {
+        const { data, error } = await supabase.functions.invoke('update-asaas-charge', {
+            body: {
+                invoice_id: invoiceId,
+                value,
+                dueDate
+            }
+        });
+
+        if (error) {
+            let message = error.message;
+            try {
+                if (error.context?.context?.status === 400) {
+                    const body = await error.context.response.json();
+                    message = body.error || message;
+                }
+            } catch (e) { }
+            throw new Error(message);
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error in updateAsaasCharge:', error);
+        throw error;
+    }
+}
+
 export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
     try {
         const { data, error } = await supabase.functions.invoke('send-whatsapp', {

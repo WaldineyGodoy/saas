@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { cancelAsaasCharge } from '../lib/api';
+import { cancelAsaasCharge, updateAsaasCharge } from '../lib/api';
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const { profile } = useAuth();
@@ -283,6 +283,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             if (invoice?.id || action === 'update') {
                 const targetId = invoice?.id || duplicateInfo?.existing?.id;
                 result = await supabase.from('invoices').update(payload).eq('id', targetId).select().single();
+
+                // Sincronizar com Asaas se já houver cobrança emitida
+                if (!result.error && result.data?.asaas_payment_id) {
+                    try {
+                        await updateAsaasCharge(targetId, payload.valor_a_pagar, payload.vencimento);
+                    } catch (syncError) {
+                        console.error('Erro ao sincronizar com Asaas:', syncError);
+                        // Opcional: Avisar o usuário que salvou local mas falhou no Asaas
+                        showAlert('Fatura salva localmente, mas houve um erro ao atualizar no Asaas: ' + syncError.message, 'warning');
+                        onSave();
+                        onClose();
+                        return;
+                    }
+                }
             } else {
                 result = await supabase.from('invoices').insert(payload).select().single();
             }
