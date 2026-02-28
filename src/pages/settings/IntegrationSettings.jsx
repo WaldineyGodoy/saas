@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, Eye, EyeOff, Plus, Trash2, Server } from 'lucide-react';
+import { Save, Eye, EyeOff, Plus, Trash2, Server, HelpCircle, X } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
 export default function IntegrationSettings({ serviceName, title, description }) {
@@ -18,6 +18,15 @@ export default function IntegrationSettings({ serviceName, title, description })
         sandbox_secret_key: '',
         environment: 'production',
         variables: [] // Array of { key, value } for UI
+    });
+
+    // Custom Confirmation Modal State
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: null,
+        targetEnv: ''
     });
 
     useEffect(() => {
@@ -164,9 +173,14 @@ export default function IntegrationSettings({ serviceName, title, description })
                         <button
                             type="button"
                             onClick={() => {
-                                if (window.confirm('Tem certeza que deseja alterar o ambiente para Produção?')) {
-                                    setFormData({ ...formData, environment: 'production' });
-                                }
+                                if (formData.environment === 'production') return;
+                                setConfirmModal({
+                                    isOpen: true,
+                                    title: 'Alterar Ambiente',
+                                    message: 'Deseja alterar o ambiente para Produção?',
+                                    targetEnv: 'Produção',
+                                    onConfirm: () => setFormData({ ...formData, environment: 'production' })
+                                });
                             }}
                             style={{
                                 flex: 1,
@@ -186,9 +200,14 @@ export default function IntegrationSettings({ serviceName, title, description })
                         <button
                             type="button"
                             onClick={() => {
-                                if (window.confirm('Tem certeza que deseja alterar o ambiente para Sandbox?')) {
-                                    setFormData({ ...formData, environment: 'sandbox' });
-                                }
+                                if (formData.environment === 'sandbox') return;
+                                setConfirmModal({
+                                    isOpen: true,
+                                    title: 'Alterar Ambiente',
+                                    message: 'Deseja alterar o ambiente para Sandbox?',
+                                    targetEnv: 'Sandbox',
+                                    onConfirm: () => setFormData({ ...formData, environment: 'sandbox' })
+                                });
                             }}
                             style={{
                                 flex: 1,
@@ -497,6 +516,119 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 )}
             </form>
+
+            {/* Custom Premium Confirmation Modal */}
+            {confirmModal.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        width: '100%',
+                        maxWidth: '500px',
+                        borderRadius: '24px',
+                        padding: '2.5rem',
+                        position: 'relative',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        animation: 'modalSlideUp 0.3s ease-out'
+                    }}>
+                        <style>{`
+                            @keyframes modalSlideUp {
+                                from { transform: translateY(20px); opacity: 0; }
+                                to { transform: translateY(0); opacity: 1; }
+                            }
+                        `}</style>
+
+                        <button
+                            onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                            style={{ position: 'absolute', right: '2rem', top: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                        >
+                            <X size={24} />
+                        </button>
+
+                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '2.5rem' }}>
+                            <div style={{
+                                width: '80px',
+                                height: '80px',
+                                background: '#FFF3E0',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                            }}>
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    background: '#FFB74D',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <HelpCircle size={32} color="white" />
+                                </div>
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.6rem', color: '#1e293b', fontWeight: 700, lineHeight: 1.2 }}>
+                                    Deseja alterar o ambiente para {confirmModal.targetEnv}?
+                                </h3>
+                                <p style={{ margin: 0, fontSize: '1.1rem', color: '#64748b' }}>
+                                    Alterar Modo?
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                            <button
+                                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                style={{
+                                    padding: '1rem 2.5rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid #e2e8f0',
+                                    background: '#f8fafc',
+                                    color: '#64748b',
+                                    fontSize: '1rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    confirmModal.onConfirm?.();
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }}
+                                style={{
+                                    padding: '1rem 2.5rem',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    background: '#002D5E', // Navy Blue from Image
+                                    color: 'white',
+                                    fontSize: '1rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 10px 15px -3px rgba(0, 45, 94, 0.3)'
+                                }}
+                            >
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
