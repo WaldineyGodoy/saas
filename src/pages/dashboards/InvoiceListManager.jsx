@@ -368,7 +368,10 @@ export default function InvoiceListManager() {
                                                             Venc: {inv.vencimento ? new Date(inv.vencimento).toLocaleDateString('pt-BR') : '-'}
                                                         </span>
                                                     </div>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-medium)', marginBottom: '0.5rem' }}>
+                                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500', marginBottom: '0.1rem' }}>
+                                                        {inv.consumer_units?.subscribers?.name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-medium)', marginBottom: '0.5rem' }}>
                                                         {inv.consumer_units?.titular_conta}
                                                     </div>
 
