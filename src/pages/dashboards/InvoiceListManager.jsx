@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar } from 'lucide-react';
 
 import { useUI } from '../../contexts/UIContext';
 
@@ -59,11 +59,11 @@ export default function InvoiceListManager() {
                         numero_uc,
                         titular_conta,
                         concessionaria,
-                        subscribers!consumer_units_subscriber_id_fkey ( name )
+                        subscribers!consumer_units_subscriber_id_fkey(name)
                     )
                 `)
-                .gte('mes_referencia', startDate)
-                .lte('mes_referencia', endDate)
+                .gte('vencimento', startDate)
+                .lte('vencimento', endDate)
                 .order('vencimento', { ascending: true });
 
             if (error) throw error;
@@ -176,14 +176,15 @@ export default function InvoiceListManager() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ background: 'white', padding: '0.5rem 1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
-                        <Filter size={18} />
+                        <Calendar size={18} />
                         <span style={{ fontWeight: 'bold' }}>Mês:</span>
                     </div>
                     <input
                         type="month"
                         value={monthFilter}
+                        onClick={(e) => e.target.showPicker && e.target.showPicker()}
                         onChange={e => setMonthFilter(e.target.value)}
-                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', outline: 'none' }}
                     />
 
                     <div style={{ width: '1px', height: '20px', background: '#e2e8f0' }}></div>
