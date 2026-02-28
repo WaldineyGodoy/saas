@@ -553,7 +553,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             <div key={uc.id} style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <div style={{ flex: 1 }}>
                                                     <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>UC: {uc.numero_uc}</span>
-                                                    <span style={{ display: 'block', fontSize: '0.8rem', color: '#64748b' }}>{uc.concessionaria} - {uc.status?.replace('_', ' ').toUpperCase()}</span>
+                                                    <span style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>{uc.titular_conta}</span>
+                                                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8' }}>{uc.concessionaria} - {uc.status?.replace('_', ' ').toUpperCase()}</span>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                     <button
@@ -672,7 +673,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 <div>
                                     <h4 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Detalhes da Unidade Consumidora</h4>
                                     <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                                        UC: <strong>{previewUC.numero_uc}</strong>
+                                        UC: <strong>{previewUC.numero_uc}</strong> - {previewUC.titular_conta}
                                     </p>
                                 </div>
                             </div>
@@ -716,9 +717,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Endereço da Unidade</label>
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.4 }}>
-                                    {previewUC.rua}{previewUC.numero ? `, ${previewUC.numero}` : ''}<br />
-                                    {previewUC.bairro} - {previewUC.cidade}/{previewUC.uf}<br />
-                                    CEP: {previewUC.cep}
+                                    {previewUC.rua || 'N/A'}{previewUC.numero ? `, ${previewUC.numero}` : ''}<br />
+                                    {previewUC.bairro || 'N/A'} - {previewUC.cidade || 'N/A'}/{previewUC.uf || 'N/A'}<br />
+                                    CEP: {previewUC.cep || 'N/A'}
                                 </div>
                             </div>
                         </div>
