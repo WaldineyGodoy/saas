@@ -72,9 +72,23 @@ function KanbanCard({ uc, onClick, isOverlay }) {
             <div style={{ fontSize: '0.9rem', color: 'var(--color-text-medium)', marginBottom: '0.2rem' }}>
                 {uc.subscriber?.name || 'Sem Assinante'}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                <span>{uc.address?.cidade}/{uc.address?.uf}</span>
-                <span>{uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : ''}</span>
+            {uc.titular_conta && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginBottom: '0.5rem', fontStyle: 'italic' }}>
+                    Identificação: {uc.titular_conta}
+                </div>
+            )}
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ flex: 1, paddingRight: '0.5rem' }}>
+                        {uc.address?.rua}{uc.address?.numero ? `, ${uc.address.numero}` : ''}
+                        {uc.address?.bairro ? ` - ${uc.address.bairro}` : ''}
+                        <br />
+                        {uc.address?.cidade}/{uc.address?.uf} {uc.address?.cep ? `- CEP: ${uc.address.cep}` : ''}
+                    </span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-success)', whiteSpace: 'nowrap' }}>
+                        {uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : ''}
+                    </span>
+                </div>
             </div>
         </div>
     );
