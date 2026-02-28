@@ -176,13 +176,44 @@ export const createAsaasCharge = async (id, type = 'invoice') => {
     if (error) {
         let message = error.message;
         try {
-            const body = await error.context?.json();
-            if (body?.error) message = body.error;
+            // Tentar extrair erro do body se for FunctionsHttpError
+            if (error.context?.context?.status === 400) {
+                const body = await error.context.response.json();
+                message = body.error || message;
+            } else {
+                const body = await error.context?.json();
+                if (body?.error) message = body.error;
+            }
         } catch (e) { }
         throw new Error(message);
     }
     return data;
 };
+
+// Função auxiliar para cancelar fatura e cobrança no Asaas
+export async function cancelAsaasCharge(invoiceId) {
+    try {
+        const { data, error } = await supabase.functions.invoke('cancel-asaas-charge', {
+            body: { invoice_id: invoiceId }
+        });
+
+        if (error) {
+            let message = error.message;
+            try {
+                if (error.context?.context?.status === 400) {
+                    const body = await error.context.response.json();
+                    message = body.error || message;
+                }
+            } catch (e) { }
+            throw new Error(message);
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error in cancelAsaasCharge:', error);
+        throw error;
+    }
+}
 
 export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
     try {

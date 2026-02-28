@@ -117,44 +117,69 @@ export const UIProvider = ({ children }) => {
                         flexDirection: 'column',
                         gap: '16px'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                <div style={{
-                                    padding: '8px',
-                                    borderRadius: '50%',
-                                    background: dialog.variant === 'error' ? '#fee2e2' :
-                                        dialog.variant === 'success' ? '#dcfce7' :
-                                            dialog.variant === 'warning' ? '#fef3c7' : '#dbeafe'
-                                }}>
-                                    {getIcon()}
-                                </div>
-                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: '#1f2937' }}>{dialog.title}</h3>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '8px'
+                        }}>
+                            <div style={{
+                                padding: '12px',
+                                borderRadius: '16px',
+                                background: dialog.variant === 'error' ? '#fef2f2' :
+                                    dialog.variant === 'success' ? '#f0fdf4' :
+                                        dialog.variant === 'warning' ? '#fffbeb' : '#f0f9ff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.05)'
+                            }}>
+                                {getIcon()}
                             </div>
-                            <button onClick={closeDialog} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
-                                <X size={20} />
+                            <button
+                                onClick={closeDialog}
+                                style={{
+                                    background: '#f8fafc',
+                                    border: '1px solid #f1f5f9',
+                                    borderRadius: '8px',
+                                    padding: '4px',
+                                    cursor: 'pointer',
+                                    color: '#94a3b8',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseOver={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = '#f1f5f9'; }}
+                                onMouseOut={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = '#f8fafc'; }}
+                            >
+                                <X size={18} />
                             </button>
                         </div>
 
-                        <p style={{ margin: 0, color: '#4b5563', fontSize: '1rem', lineHeight: '1.5' }}>
-                            {dialog.message}
-                        </p>
+                        <div style={{ marginBottom: '8px' }}>
+                            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', letterSpacing: '-0.025em' }}>
+                                {dialog.title}
+                            </h3>
+                            <p style={{ margin: 0, color: '#64748b', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                                {dialog.message}
+                            </p>
+                        </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                             {dialog.type === 'confirm' && (
                                 <button
                                     onClick={closeDialog}
                                     style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e5e7eb',
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        border: '1px solid #e2e8f0',
                                         background: 'white',
-                                        color: '#374151',
-                                        fontWeight: '500',
+                                        color: '#475569',
+                                        fontWeight: '600',
+                                        fontSize: '0.9rem',
                                         cursor: 'pointer',
-                                        transition: 'background 0.2s'
+                                        transition: 'all 0.2s'
                                     }}
-                                    onMouseOver={e => e.currentTarget.style.background = '#f9fafb'}
-                                    onMouseOut={e => e.currentTarget.style.background = 'white'}
+                                    onMouseOver={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                    onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
                                 >
                                     {dialog.cancelText}
                                 </button>
@@ -162,18 +187,21 @@ export const UIProvider = ({ children }) => {
                             <button
                                 onClick={handleConfirm}
                                 style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '6px',
+                                    padding: '10px 24px',
+                                    borderRadius: '10px',
                                     border: 'none',
-                                    background: dialog.variant === 'error' ? '#dc2626' : 'var(--color-blue)',
+                                    background: dialog.variant === 'error' ? '#ef4444' :
+                                        dialog.variant === 'success' ? '#22c55e' : 'var(--color-blue)',
                                     color: 'white',
-                                    fontWeight: '500',
+                                    fontWeight: '600',
+                                    fontSize: '0.9rem',
                                     cursor: 'pointer',
-                                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                                    transition: 'filter 0.2s'
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                    transition: 'all 0.2s',
+                                    transform: 'translateY(0)'
                                 }}
-                                onMouseOver={e => e.currentTarget.style.filter = 'brightness(0.9)'}
-                                onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+                                onMouseOver={e => { e.currentTarget.style.filter = 'brightness(1.1)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                onMouseOut={e => { e.currentTarget.style.filter = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
                             >
                                 {dialog.confirmText}
                             </button>
@@ -181,7 +209,10 @@ export const UIProvider = ({ children }) => {
                     </div>
                     <style>{`
                         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                        @keyframes slideUp { 
+                            from { opacity: 0; transform: scale(0.95) translateY(10px); } 
+                            to { opacity: 1; transform: scale(1) translateY(0); } 
+                        }
                     `}</style>
                 </div>
             )}

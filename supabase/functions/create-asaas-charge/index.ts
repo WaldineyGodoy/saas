@@ -58,7 +58,7 @@ serve(async (req) => {
                 .select(`
             *,
             consumer_units (
-                subscriber:subscribers (*)
+                subscriber:subscribers!subscriber_id (*)
             )
         `)
                 .eq('id', invoice_id)
@@ -76,7 +76,7 @@ serve(async (req) => {
                 *,
                 consumer_units!inner (
                     subscriber_id,
-                    subscriber:subscribers (*)
+                    subscriber:subscribers!subscriber_id (*)
                 )
             `)
                 .eq('consumer_units.subscriber_id', subscriber_id)
