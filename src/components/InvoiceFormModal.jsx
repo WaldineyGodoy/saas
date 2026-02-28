@@ -130,6 +130,31 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         selectedUc
     ]);
 
+    // Automatic Due Date Calculation
+    useEffect(() => {
+        // Only automate for NEW invoices
+        if (!invoice && selectedUc && formData.mes_referencia) {
+            const [year, month] = formData.mes_referencia.split('-').map(Number);
+            const dueDay = selectedUc.dia_vencimento;
+
+            if (dueDay) {
+                // Calculate next month
+                let nextMonth = month + 1;
+                let nextYear = year;
+                if (nextMonth > 12) {
+                    nextMonth = 1;
+                    nextYear++;
+                }
+
+                // Ensure valid date
+                const dateObj = new Date(nextYear, nextMonth - 1, dueDay);
+                const formattedDate = dateObj.toISOString().split('T')[0];
+
+                setFormData(prev => ({ ...prev, vencimento: formattedDate }));
+            }
+        }
+    }, [formData.mes_referencia, selectedUc, invoice]);
+
 
     const handleCurrencyChange = (field, value) => {
         const digits = value.replace(/\D/g, '');
