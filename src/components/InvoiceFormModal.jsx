@@ -28,6 +28,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [selectedUc, setSelectedUc] = useState(null);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [duplicateInfo, setDuplicateInfo] = useState(null); // { existing, type: 'block' | 'ask' }
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
     // Helpers
     const formatCurrency = (val) => {
@@ -192,8 +194,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleSubmit = async (e, action = null) => {
+        if (e) e.preventDefault();
         setLoading(true);
 
         try {
@@ -213,9 +215,34 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
             if (!payload.uc_id) throw new Error('Selecione uma Unidade Consumidora.');
 
+            // Duplicate Check (Only for new invoices and if no action has been decided)
+            if (!invoice?.id && !action) {
+                const { data: existing } = await supabase
+                    .from('invoices')
+                    .select('id, vencimento')
+                    .eq('uc_id', payload.uc_id)
+                    .eq('mes_referencia', payload.mes_referencia);
+
+                if (existing && existing.length > 0) {
+                    const exactMatch = existing.find(ex => ex.vencimento === payload.vencimento);
+                    if (exactMatch) {
+                        setDuplicateInfo({ existing: exactMatch, type: 'block' });
+                        setShowDuplicateModal(true);
+                        setLoading(false);
+                        return;
+                    } else {
+                        setDuplicateInfo({ existing: existing[0], type: 'ask' });
+                        setShowDuplicateModal(true);
+                        setLoading(false);
+                        return;
+                    }
+                }
+            }
+
             let result;
-            if (invoice?.id) {
-                result = await supabase.from('invoices').update(payload).eq('id', invoice.id).select().single();
+            if (invoice?.id || action === 'update') {
+                const targetId = invoice?.id || duplicateInfo?.existing?.id;
+                result = await supabase.from('invoices').update(payload).eq('id', targetId).select().single();
             } else {
                 result = await supabase.from('invoices').insert(payload).select().single();
             }
@@ -398,6 +425,63 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                 </form>
             </div>
+
+            {/* Duplicate Safety Modal */}
+            {showDuplicateModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, backdropFilter: 'blur(8px)' }}>
+                    <div style={{ background: 'white', borderRadius: '24px', padding: '2rem', width: '90%', maxWidth: '450px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+                        <div style={{ background: '#fff7ed', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: '#f97316' }}>
+                            <AlertCircle size={32} />
+                        </div>
+
+                        <h3 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 'bold', marginBottom: '1rem' }}>
+                            {duplicateInfo?.type === 'block' ? 'Fatura Já Existente' : 'Fatura Detectada'}
+                        </h3>
+
+                        <p style={{ color: '#64748b', marginBottom: '2rem', lineHeight: '1.5' }}>
+                            {duplicateInfo?.type === 'block'
+                                ? `Já existe uma fatura emitida para esta UC com mês de referência ${formData.mes_referencia} e vencimento em ${new Date(duplicateInfo.existing.vencimento).toLocaleDateString('pt-BR')}.`
+                                : `Já existe uma fatura para o mês de referência ${formData.mes_referencia}, porém com uma data de vencimento diferente. O que deseja fazer?`
+                            }
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            {duplicateInfo?.type === 'block' ? (
+                                <button
+                                    onClick={() => setShowDuplicateModal(false)}
+                                    style={{ padding: '1rem', background: '#f1f5f9', color: '#475569', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    Entendido
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => { setShowDuplicateModal(false); handleSubmit(null, 'new'); }}
+                                        style={{ padding: '1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    >
+                                        Emitir Nova Fatura
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowDuplicateModal(false);
+                                            handleSubmit(null, 'update');
+                                        }}
+                                        style={{ padding: '1rem', background: '#fff7ed', color: '#c2410c', borderRadius: '12px', border: '1px solid #ffedd5', cursor: 'pointer', fontWeight: 'bold' }}
+                                    >
+                                        Ajustar Data de Vencimento
+                                    </button>
+                                    <button
+                                        onClick={() => setShowDuplicateModal(false)}
+                                        style={{ padding: '1rem', background: 'white', color: '#64748b', borderRadius: '12px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: '600' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
