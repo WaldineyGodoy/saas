@@ -453,7 +453,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
                         <div>
                             {invoice?.id && !invoice.asaas_boleto_url && (
-                                <button type="button" onClick={handleEmission} disabled={generating} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5', padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                <button type="button" onClick={() => handleEmission()} disabled={generating} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5', padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}>
                                     {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto Agora</>}
                                 </button>
                             )}
@@ -463,7 +463,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             {invoice?.id && invoice.status !== 'cancelado' && canManageStatus && (
                                 <button
                                     type="button"
-                                    onClick={handleCancel}
+                                    onClick={() => handleCancel()}
                                     disabled={loading}
                                     style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
