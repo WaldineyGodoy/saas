@@ -163,7 +163,11 @@ export default function IntegrationSettings({ serviceName, title, description })
                     <div style={{ display: 'flex', background: '#e2e8f0', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                         <button
                             type="button"
-                            onClick={() => setFormData({ ...formData, environment: 'production' })}
+                            onClick={() => {
+                                if (window.confirm('Tem certeza que deseja alterar o ambiente para Produção?')) {
+                                    setFormData({ ...formData, environment: 'production' });
+                                }
+                            }}
                             style={{
                                 flex: 1,
                                 padding: '8px 16px',
@@ -177,13 +181,17 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 transition: 'all 0.2s'
                             }}
                         >
-                            Produção
+                            Api de Produção
                         </button>
                         <button
                             type="button"
-                            onClick={() => setFormData({ ...formData, environment: 'sandbox' })}
+                            onClick={() => {
+                                if (window.confirm('Tem certeza que deseja alterar o ambiente para Sandbox?')) {
+                                    setFormData({ ...formData, environment: 'sandbox' });
+                                }
+                            }}
                             style={{
-                                flex: 2,
+                                flex: 1,
                                 padding: '8px 16px',
                                 borderRadius: '6px',
                                 border: 'none',
@@ -195,7 +203,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 transition: 'all 0.2s'
                             }}
                         >
-                            Api Produção/SandBox
+                            Api sandBox
                         </button>
                     </div>
                 )}
@@ -239,47 +247,51 @@ export default function IntegrationSettings({ serviceName, title, description })
                         </div>
                     </div>
                 )}
-                {/* ... fields ... */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
-                    <input
-                        type="url"
-                        placeholder="https://api.exemplo.com/v1"
-                        value={formData.endpoint_url}
-                        onChange={e => setFormData({ ...formData, endpoint_url: e.target.value })}
-                        style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
-                    />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>API Key / Token</label>
-                        <div style={{ position: 'relative' }}>
+                {/* Production Fields - Visible only in production mode or for other services */}
+                {(serviceName !== 'financial_api' || formData.environment === 'production') && (
+                    <>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
                             <input
-                                type={showKey ? "text" : "password"}
-                                value={formData.api_key}
-                                onChange={e => setFormData({ ...formData, api_key: e.target.value })}
+                                type="url"
+                                placeholder="https://api.exemplo.com/v1"
+                                value={formData.endpoint_url}
+                                onChange={e => setFormData({ ...formData, endpoint_url: e.target.value })}
                                 style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
                             />
-                            <button
-                                type="button"
-                                onClick={() => setShowKey(!showKey)}
-                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
-                            >
-                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
                         </div>
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Secret Key (Opcional)</label>
-                        <input
-                            type="password"
-                            value={formData.secret_key}
-                            onChange={e => setFormData({ ...formData, secret_key: e.target.value })}
-                            style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
-                        />
-                    </div>
-                </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>API Key / Token</label>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showKey ? "text" : "password"}
+                                        value={formData.api_key}
+                                        onChange={e => setFormData({ ...formData, api_key: e.target.value })}
+                                        style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowKey(!showKey)}
+                                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                                    >
+                                        {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Secret Key (Opcional)</label>
+                                <input
+                                    type="password"
+                                    value={formData.secret_key}
+                                    onChange={e => setFormData({ ...formData, secret_key: e.target.value })}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {/* Specific Fields for Evolution API */}
                 {serviceName === 'evolution_api' && (
