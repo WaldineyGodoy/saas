@@ -13,6 +13,10 @@ export default function IntegrationSettings({ serviceName, title, description })
         endpoint_url: '',
         api_key: '',
         secret_key: '',
+        sandbox_endpoint_url: '',
+        sandbox_api_key: '',
+        sandbox_secret_key: '',
+        environment: 'production',
         variables: [] // Array of { key, value } for UI
     });
 
@@ -38,6 +42,10 @@ export default function IntegrationSettings({ serviceName, title, description })
                 endpoint_url: data.endpoint_url || '',
                 api_key: data.api_key || '',
                 secret_key: data.secret_key || '',
+                sandbox_endpoint_url: data.sandbox_endpoint_url || '',
+                sandbox_api_key: data.sandbox_api_key || '',
+                sandbox_secret_key: data.sandbox_secret_key || '',
+                environment: data.environment || 'production',
                 variables: varsArray
             });
         } else if (error && error.code !== 'PGRST116') {
@@ -61,6 +69,10 @@ export default function IntegrationSettings({ serviceName, title, description })
             endpoint_url: formData.endpoint_url,
             api_key: formData.api_key,
             secret_key: formData.secret_key,
+            sandbox_endpoint_url: formData.sandbox_endpoint_url,
+            sandbox_api_key: formData.sandbox_api_key,
+            sandbox_secret_key: formData.sandbox_secret_key,
+            environment: formData.environment,
             variables: varsObject,
             updated_at: new Date().toISOString()
         };
@@ -146,9 +158,87 @@ export default function IntegrationSettings({ serviceName, title, description })
                         <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>{description}</p>
                     </div>
                 </div>
+
+                {serviceName === 'financial_api' && (
+                    <div style={{ display: 'flex', background: '#e2e8f0', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, environment: 'production' })}
+                            style={{
+                                flex: 1,
+                                padding: '8px 16px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                background: formData.environment === 'production' ? '#3b82f6' : 'transparent',
+                                color: formData.environment === 'production' ? 'white' : '#64748b',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Produção
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, environment: 'sandbox' })}
+                            style={{
+                                flex: 2,
+                                padding: '8px 16px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                background: formData.environment === 'sandbox' ? '#3b82f6' : 'transparent',
+                                color: formData.environment === 'sandbox' ? 'white' : '#64748b',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Api Produção/SandBox
+                        </button>
+                    </div>
+                )}
             </div>
 
             <form onSubmit={handleSave} style={{ padding: '2rem' }}>
+                {serviceName === 'financial_api' && formData.environment === 'sandbox' && (
+                    <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#92400e', fontSize: '0.95rem' }}>Configurações de Sandbox</h4>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>Sandbox Endpoint URL</label>
+                            <input
+                                type="url"
+                                placeholder="https://sandbox.asaas.com/api/v3"
+                                value={formData.sandbox_endpoint_url}
+                                onChange={e => setFormData({ ...formData, sandbox_endpoint_url: e.target.value })}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #fcd34d', fontSize: '0.95rem', background: '#fff' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>Sandbox API Key</label>
+                                <input
+                                    type="password"
+                                    value={formData.sandbox_api_key}
+                                    onChange={e => setFormData({ ...formData, sandbox_api_key: e.target.value })}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #fcd34d', fontSize: '0.95rem', background: '#fff' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>Sandbox Secret Key (Opcional)</label>
+                                <input
+                                    type="password"
+                                    value={formData.sandbox_secret_key}
+                                    onChange={e => setFormData({ ...formData, sandbox_secret_key: e.target.value })}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #fcd34d', fontSize: '0.95rem', background: '#fff' }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {/* ... fields ... */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>

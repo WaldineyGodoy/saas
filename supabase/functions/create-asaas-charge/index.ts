@@ -31,16 +31,21 @@ serve(async (req) => {
 
         const { data: configData, error: configError } = await supabase
             .from('integrations_config')
-            .select('api_key, endpoint_url')
+            .select('api_key, endpoint_url, sandbox_api_key, sandbox_endpoint_url, environment')
             .eq('service_name', 'financial_api')
             .single()
 
-        if (configError || !configData?.api_key || !configData?.endpoint_url) {
+        if (configError) {
             throw new Error('Integração Asaas não configurada no painel. Verifique as configurações financeiras.')
         }
 
-        const asaasKey = configData.api_key;
-        const asaasUrl = configData.endpoint_url;
+        const isSandbox = configData.environment === 'sandbox';
+        const asaasKey = isSandbox ? configData.sandbox_api_key : configData.api_key;
+        const asaasUrl = isSandbox ? configData.sandbox_endpoint_url : configData.endpoint_url;
+
+        if (!asaasKey || !asaasUrl) {
+            throw new Error(`Configurações de ${isSandbox ? 'Sandbox' : 'Produção'} incompletas.`);
+        }
 
         let invoicesToCharge = [];
         let subscriber = null;

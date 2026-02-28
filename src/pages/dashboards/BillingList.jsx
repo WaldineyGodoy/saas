@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import BillingModal from '../../components/BillingModal';
+import LedgerStatementModal from '../../components/LedgerStatementModal';
 
 export default function BillingList() {
     const [billings, setBillings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState('kanban');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isExtratoOpen, setIsExtratoOpen] = useState(false);
     const [selectedBilling, setSelectedBilling] = useState(null);
 
     useEffect(() => {
@@ -130,13 +132,20 @@ export default function BillingList() {
     return (
         <div style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ color: 'var(--color-blue)', fontSize: '1.5rem', fontWeight: 'bold' }}>Fechamento Mensal</h2>
-                <button
-                    onClick={handleCreate}
-                    style={{ background: 'var(--color-orange)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                    Novo Fechamento
-                </button>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button
+                        onClick={() => setIsExtratoOpen(true)}
+                        style={{ background: 'var(--color-blue)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                        EXTRATO
+                    </button>
+                    <button
+                        onClick={handleCreate}
+                        style={{ background: 'var(--color-orange)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                    >
+                        Novo Fechamento
+                    </button>
+                </div>
             </div>
 
             {/* Controls Header */}
@@ -284,6 +293,12 @@ export default function BillingList() {
                         </div>
                     )}
                 </>
+            )}
+
+            {isExtratoOpen && (
+                <LedgerStatementModal
+                    onClose={() => setIsExtratoOpen(false)}
+                />
             )}
 
             {isModalOpen && (
