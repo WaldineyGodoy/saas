@@ -59,7 +59,7 @@ export default function InvoiceListManager() {
                         numero_uc,
                         titular_conta,
                         concessionaria,
-                        subscribers ( name )
+                        subscribers!consumer_units_subscriber_id_fkey ( name )
                     )
                 `)
                 .gte('mes_referencia', startDate)
@@ -79,7 +79,7 @@ export default function InvoiceListManager() {
     const fetchUcs = async () => {
         const { data, error } = await supabase
             .from('consumer_units')
-            .select('id, numero_uc, concessionaria, titular_conta, tarifa_concessionaria, desconto_assinante, tipo_ligacao')
+            .select('id, numero_uc, concessionaria, titular_conta, tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento')
             .eq('status', 'ativo')
             .order('titular_conta');
 
