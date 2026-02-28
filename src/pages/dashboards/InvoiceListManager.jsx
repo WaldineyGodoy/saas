@@ -30,8 +30,9 @@ export default function InvoiceListManager() {
             const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
             const assinante = inv.consumer_units?.subscribers?.name?.toLowerCase() || '';
             const uc = inv.consumer_units?.numero_uc?.toLowerCase() || '';
+            const invoiceId = inv.id?.toLowerCase() || '';
 
-            if (!titular.includes(lower) && !assinante.includes(lower) && !uc.includes(lower)) {
+            if (!titular.includes(lower) && !assinante.includes(lower) && !uc.includes(lower) && !invoiceId.includes(lower)) {
                 return false;
             }
         }
@@ -46,13 +47,7 @@ export default function InvoiceListManager() {
     const fetchInvoices = async () => {
         setLoading(true);
         try {
-            // Filter by month using the first and last day
-            const [year, month] = monthFilter.split('-');
-            const startDate = `${year}-${month}-01`;
-            const lastDay = new Date(year, month, 0).getDate();
-            const endDate = `${year}-${month}-${lastDay}`;
-
-            const { data, error } = await supabase
+            let query = supabase
                 .from('invoices')
                 .select(`
                     *,
@@ -62,10 +57,17 @@ export default function InvoiceListManager() {
                         concessionaria,
                         subscribers!consumer_units_subscriber_id_fkey(name)
                     )
-                `)
-                .gte('vencimento', startDate)
-                .lte('vencimento', endDate)
-                .order('vencimento', { ascending: true });
+                `);
+
+            if (monthFilter !== 'all') {
+                const [year, month] = monthFilter.split('-');
+                const startDate = `${year}-${month}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${year}-${month}-${lastDay}`;
+                query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+            }
+
+            const { data, error } = await query.order('vencimento', { ascending: true });
 
             if (error) throw error;
             setInvoices(data || []);
@@ -185,26 +187,41 @@ export default function InvoiceListManager() {
                             onClick={() => setShowMonthPicker(!showMonthPicker)}
                             style={{ padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '140px' }}
                         >
-                            <span>{new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                            <span>{monthFilter === 'all' ? 'Qualquer Data' : new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
                         </button>
 
                         {showMonthPicker && (
                             <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                    <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) - 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                    <span style={{ fontWeight: 'bold' }}>{monthFilter.split('-')[0]}</span>
-                                    <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) + 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <button
+                                        onClick={() => { setMonthFilter('all'); setShowMonthPicker(false); }}
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: monthFilter === 'all' ? 'var(--color-blue)' : 'white', color: monthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                    >
+                                        Qualquer Data
+                                    </button>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                                    <button onClick={() => {
+                                        const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-');
+                                        setMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`);
+                                    }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
+                                    <span style={{ fontWeight: 'bold' }}>{monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0]}</span>
+                                    <button onClick={() => {
+                                        const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-');
+                                        setMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`);
+                                    }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
                                     {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
                                         const mVal = String(idx + 1).padStart(2, '0');
-                                        const isSelected = monthFilter.split('-')[1] === mVal;
+                                        const currentYear = monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0];
+                                        const isSelected = monthFilter === `${currentYear}-${mVal}`;
                                         return (
                                             <button
                                                 key={m}
                                                 onClick={() => {
-                                                    const [y] = monthFilter.split('-');
-                                                    setMonthFilter(`${y}-${mVal}`);
+                                                    setMonthFilter(`${currentYear}-${mVal}`);
                                                     setShowMonthPicker(false);
                                                 }}
                                                 style={{
@@ -248,10 +265,10 @@ export default function InvoiceListManager() {
                         <Search size={18} />
                     </div>
                     <input
-                        placeholder="Buscar por Nome..."
+                        placeholder="Buscar por Nome, UC ou ID..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', minWidth: '200px' }}
+                        style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', minWidth: '220px' }}
                     />
                 </div>
 
@@ -276,7 +293,7 @@ export default function InvoiceListManager() {
             {loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', background: 'white', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '1rem' }}><FileText size={48} /></div>
-                    <h3 style={{ color: '#475569', fontWeight: 'bold' }}>Nenhuma Fatura emitida para o Mês selecionado</h3>
+                    <h3 style={{ color: '#475569', fontWeight: 'bold' }}>{monthFilter === 'all' ? 'Nenhuma Fatura encontrada' : 'Nenhuma Fatura emitida para o Mês selecionado'}</h3>
                     <p style={{ color: '#94a3b8' }}>Tente alterar o filtro ou criar uma nova fatura.</p>
                 </div>
             ) : (
