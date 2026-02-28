@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2 } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban } from 'lucide-react';
 
 import { useUI } from '../../contexts/UIContext';
 
@@ -146,6 +146,7 @@ export default function InvoiceListManager() {
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
+            'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
         };
         const s = map[status] || map['a_vencer'];
         const Icon = s.icon;

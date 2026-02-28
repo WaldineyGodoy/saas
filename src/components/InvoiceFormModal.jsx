@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { createAsaasCharge } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle } from 'lucide-react';
+import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban } from 'lucide-react';
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const { profile } = useAuth();
@@ -172,6 +172,28 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         if (part === 'month') month = value;
         if (part === 'year') year = value;
         setFormData(prev => ({ ...prev, mes_referencia: `${year}-${month}` }));
+    };
+
+    const handleCancel = async () => {
+        if (!invoice?.id) return;
+        if (!confirm('Você realmente deseja cancelar essa fatura? Esta ação é irreversível e manterá o registro apenas para fins de histórico.')) return;
+
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ status: 'cancelado' })
+                .eq('id', invoice.id);
+
+            if (error) throw error;
+            onSave();
+            onClose();
+        } catch (error) {
+            console.error('Error canceling invoice:', error);
+            alert('Erro ao cancelar fatura: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleEmission = async () => {
@@ -413,6 +435,21 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             )}
                             {invoice?.asaas_boleto_url && (
                                 <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 'bold', textDecoration: 'none' }}><FileText size={18} /> Ver Boleto Emitido</a>
+                            )}
+                            {invoice?.id && invoice.status !== 'cancelado' && canManageStatus && (
+                                <button
+                                    type="button"
+                                    onClick={handleCancel}
+                                    disabled={loading}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                                        background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0',
+                                        padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer',
+                                        fontWeight: 'bold', fontSize: '0.9rem', marginLeft: invoice.asaas_boleto_url ? '1rem' : 0
+                                    }}
+                                >
+                                    <Ban size={18} /> Cancelar Fatura
+                                </button>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
