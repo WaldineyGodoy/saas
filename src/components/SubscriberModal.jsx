@@ -717,9 +717,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Endereço da Unidade</label>
                                 <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.4 }}>
-                                    {previewUC.rua || 'N/A'}{previewUC.numero ? `, ${previewUC.numero}` : ''}<br />
-                                    {previewUC.bairro || 'N/A'} - {previewUC.cidade || 'N/A'}/{previewUC.uf || 'N/A'}<br />
-                                    CEP: {previewUC.cep || 'N/A'}
+                                    {previewUC.address?.rua || 'N/A'}{previewUC.address?.numero ? `, ${previewUC.address.numero}` : ''}<br />
+                                    {previewUC.address?.bairro || 'N/A'} - {previewUC.address?.cidade || 'N/A'}/{previewUC.address?.uf || 'N/A'}<br />
+                                    CEP: {previewUC.address?.cep || 'N/A'}
                                 </div>
                             </div>
                         </div>
