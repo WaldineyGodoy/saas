@@ -30,6 +30,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [generating, setGenerating] = useState(false);
     const [duplicateInfo, setDuplicateInfo] = useState(null); // { existing, type: 'block' | 'ask' }
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'info', onConfirm: null });
 
     // Helpers
     const formatCurrency = (val) => {
@@ -174,10 +175,21 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         setFormData(prev => ({ ...prev, mes_referencia: `${year}-${month}` }));
     };
 
-    const handleCancel = async () => {
+    const handleCancel = async (force = false) => {
         if (!invoice?.id) return;
-        if (!confirm('Você realmente deseja cancelar essa fatura? Esta ação é irreversível e manterá o registro apenas para fins de histórico.')) return;
 
+        if (!force) {
+            setConfirmModal({
+                show: true,
+                title: 'Confirmar Cancelamento',
+                message: 'Você realmente deseja cancelar essa fatura? Esta ação é irreversível e manterá o registro apenas para fins de histórico.',
+                type: 'danger',
+                onConfirm: () => handleCancel(true)
+            });
+            return;
+        }
+
+        setConfirmModal({ ...confirmModal, show: false });
         setLoading(true);
         try {
             const { error } = await supabase
@@ -196,9 +208,21 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         }
     };
 
-    const handleEmission = async () => {
+    const handleEmission = async (force = false) => {
         if (!invoice?.id) { alert('Salve a fatura antes de emitir o boleto.'); return; }
-        if (!confirm('Gerar boleto Asaas agora?')) return;
+
+        if (!force) {
+            setConfirmModal({
+                show: true,
+                title: 'Emitir Boleto',
+                message: 'Deseja gerar o boleto Asaas agora para esta fatura?',
+                type: 'info',
+                onConfirm: () => handleEmission(true)
+            });
+            return;
+        }
+
+        setConfirmModal({ ...confirmModal, show: false });
         setGenerating(true);
         try {
             const result = await createAsaasCharge(invoice.id);
@@ -515,6 +539,49 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     </button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Premium Confirmation Modal */}
+            {confirmModal.show && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, backdropFilter: 'blur(8px)' }}>
+                    <div style={{ background: 'white', borderRadius: '24px', padding: '2rem', width: '90%', maxWidth: '400px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+                        <div style={{
+                            background: confirmModal.type === 'danger' ? '#fee2e2' : '#eff6ff',
+                            width: '64px', height: '64px', borderRadius: '50%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem',
+                            color: confirmModal.type === 'danger' ? '#ef4444' : 'var(--color-blue)'
+                        }}>
+                            {confirmModal.type === 'danger' ? <Zap size={32} /> : <FileText size={32} />}
+                        </div>
+
+                        <h3 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 'bold', marginBottom: '1rem' }}>
+                            {confirmModal.title}
+                        </h3>
+
+                        <p style={{ color: '#64748b', marginBottom: '2rem', lineHeight: '1.5', fontSize: '1rem' }}>
+                            {confirmModal.message}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                onClick={() => setConfirmModal({ ...confirmModal, show: false })}
+                                style={{ flex: 1, padding: '0.8rem', background: '#f1f5f9', color: '#475569', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '600' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                style={{
+                                    flex: 1, padding: '0.8rem',
+                                    background: confirmModal.type === 'danger' ? '#ef4444' : 'var(--color-blue)',
+                                    color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold'
+                                }}
+                            >
+                                Confirmar
+                            </button>
                         </div>
                     </div>
                 </div>
