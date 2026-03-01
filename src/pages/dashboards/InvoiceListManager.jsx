@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar } from 'lucide-react';
+import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History } from 'lucide-react';
 
 import { useUI } from '../../contexts/UIContext';
 
@@ -14,6 +15,7 @@ export default function InvoiceListManager() {
     const [viewMode, setViewMode] = useState('kanban');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7)); // YYYY-MM
     const [statusFilter, setStatusFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -172,12 +174,22 @@ export default function InvoiceListManager() {
                     <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold' }}>Faturas</h2>
                     <p style={{ color: '#64748b' }}>Gerencie os lançamentos mensais das Unidades Consumidoras</p>
                 </div>
-                <button
-                    onClick={handleCreate}
-                    style={{ background: 'var(--color-orange)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                >
-                    <Plus size={18} /> Nova Fatura
-                </button>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button
+                        onClick={() => setIsHistoryModalOpen(true)}
+                        style={{ background: 'white', color: '#475569', padding: '0.8rem 1.5rem', borderRadius: '4px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = 'var(--color-blue)'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                    >
+                        <History size={18} /> Histórico
+                    </button>
+                    <button
+                        onClick={handleCreate}
+                        style={{ background: 'var(--color-orange)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                        <Plus size={18} /> Nova Fatura
+                    </button>
+                </div>
             </div>
 
             {/* Filters and Controls */}
@@ -498,6 +510,11 @@ export default function InvoiceListManager() {
                     ucs={ucs}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
+                />
+            )}
+            {isHistoryModalOpen && (
+                <InvoiceHistoryModal
+                    onClose={() => setIsHistoryModalOpen(false)}
                 />
             )}
         </div>
