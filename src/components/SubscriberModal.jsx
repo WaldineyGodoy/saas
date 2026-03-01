@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, DollarSign } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
@@ -20,6 +20,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [editingUC, setEditingUC] = useState(null);
     const [ucModalMode, setUcModalMode] = useState('all'); // 'all' | 'technical'
+    const [invoices, setInvoices] = useState([]);
+    const [loadingInvoices, setLoadingInvoices] = useState(false);
+    const [invoiceMonthFilter, setInvoiceMonthFilter] = useState(new Date().toISOString().substring(0, 7));
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -73,8 +77,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 originator_id: subscriber.originator_id || ''
             });
             fetchConsumerUnits(subscriber.id);
+            fetchInvoices(subscriber.id);
         }
-    }, [subscriber?.id]); // Stable dependency
+    }, [subscriber?.id, invoiceMonthFilter]); // Stable dependency
 
     const fetchOriginators = async () => {
         const { data } = await supabase
@@ -90,6 +95,51 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             .select('*')
             .eq('subscriber_id', subscriberId);
         setConsumerUnits(data || []);
+    };
+
+    const fetchInvoices = async (subscriberId) => {
+        if (!subscriberId) return;
+        setLoadingInvoices(true);
+        try {
+            // Primeiro pegar as UCs do assinante
+            const { data: ucs } = await supabase
+                .from('consumer_units')
+                .select('id')
+                .eq('subscriber_id', subscriberId);
+
+            if (!ucs || ucs.length === 0) {
+                setInvoices([]);
+                return;
+            }
+
+            const ucIds = ucs.map(u => u.id);
+            let query = supabase
+                .from('invoices')
+                .select(`
+                    *,
+                    consumer_units (
+                        numero_uc,
+                        titular_conta
+                    )
+                `)
+                .in('uc_id', ucIds);
+
+            if (invoiceMonthFilter !== 'all') {
+                const [year, month] = invoiceMonthFilter.split('-');
+                const startDate = `${year}-${month}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${year}-${month}-${lastDay}`;
+                query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+            }
+
+            const { data, error } = await query.order('vencimento', { ascending: false });
+            if (error) throw error;
+            setInvoices(data || []);
+        } catch (error) {
+            console.error('Error fetching subscriber invoices:', error);
+        } finally {
+            setLoadingInvoices(false);
+        }
     };
 
     const handleCepBlur = async () => {
@@ -606,23 +656,116 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             </div>
                         </CollapsibleSection>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
-                            <div>
-                                {subscriber?.id && (
-                                    <button
-                                        type="button"
-                                        onClick={handleEmission}
-                                        disabled={generating}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                            background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
-                                            padding: '0.6rem 1.25rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600
-                                        }}
-                                    >
-                                        <CreditCard size={18} /> {generating ? 'Processando...' : 'Emitir Fatura Consolidada'}
-                                    </button>
+                        <CollapsibleSection title="Faturas" icon={CreditCard} defaultOpen={true}>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowMonthPicker(!showMonthPicker)}
+                                                style={{ padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px', fontSize: '0.85rem' }}
+                                            >
+                                                <Calendar size={16} style={{ color: '#64748b' }} />
+                                                <span>{invoiceMonthFilter === 'all' ? 'Qualquer Data' : new Date(`${invoiceMonthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                            </button>
+                                            {showMonthPicker && (
+                                                <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
+                                                    <div style={{ marginBottom: '1rem' }}>
+                                                        <button type="button" onClick={() => { setInvoiceMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: invoiceMonthFilter === 'all' ? 'var(--color-blue)' : 'white', color: invoiceMonthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualquer Data</button>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                        <button type="button" onClick={() => { const parts = invoiceMonthFilter === 'all' ? [new Date().getFullYear(), '01'] : invoiceMonthFilter.split('-'); setInvoiceMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
+                                                        <span style={{ fontWeight: 'bold' }}>{invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0]}</span>
+                                                        <button type="button" onClick={() => { const parts = invoiceMonthFilter === 'all' ? [new Date().getFullYear(), '01'] : invoiceMonthFilter.split('-'); setInvoiceMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                                    </div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
+                                                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
+                                                            const mVal = String(idx + 1).padStart(2, '0');
+                                                            const currentYear = invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0];
+                                                            const isSelected = invoiceMonthFilter === `${currentYear}-${mVal}`;
+                                                            return <button type="button" key={m} onClick={() => { setInvoiceMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.4rem', border: 'none', borderRadius: '4px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.75rem' }}>{m}</button>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {subscriber?.id && (
+                                        <button
+                                            type="button"
+                                            onClick={handleEmission}
+                                            disabled={generating}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
+                                                padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem'
+                                            }}
+                                        >
+                                            <CreditCard size={18} /> {generating ? 'Processando...' : 'Emitir Fatura Consolidada'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {loadingInvoices ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
+                                ) : invoices.length > 0 ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                                        {invoices.map(inv => {
+                                            const statusMap = {
+                                                'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7', icon: CheckCircle },
+                                                'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2', icon: AlertCircle },
+                                                'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3', icon: Clock },
+                                                'cancelado': { color: '#475569', label: 'Cancelada', bg: '#f1f5f9', icon: Ban }
+                                            };
+                                            const s = statusMap[inv.status] || statusMap['a_vencer'];
+                                            const Icon = s.icon;
+                                            const isBoletoEmitido = !!inv.asaas_boleto_url;
+                                            const formatCurrency = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                                            return (
+                                                <div key={inv.id} style={{ background: '#fff', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', borderLeft: `5px solid ${s.color}`, display: 'flex', flexDirection: 'column', gap: '0.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                        <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>{inv.consumer_units?.titular_conta}</div>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-blue)' }}>{formatCurrency(inv.valor_a_pagar)}</div>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.2rem' }}>
+                                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.1rem 0.4rem', background: s.bg, color: s.color, borderRadius: '4px', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase' }}>
+                                                                <Icon size={10} /> {s.label}
+                                                            </span>
+                                                            <span style={{
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: '800',
+                                                                color: isBoletoEmitido ? '#0369a1' : '#c2410c',
+                                                                background: isBoletoEmitido ? '#e0f2fe' : '#fff7ed',
+                                                                padding: '0.1rem 0.4rem',
+                                                                borderRadius: '4px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.2rem'
+                                                            }}>
+                                                                {isBoletoEmitido ? <TicketCheck size={10} /> : <TicketMinus size={10} />}
+                                                                {isBoletoEmitido ? 'Emitido' : 'Gerar'}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>{new Date(inv.vencimento).toLocaleDateString('pt-BR')}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem', border: '2px dashed #e2e8f0', borderRadius: '8px' }}>
+                                        <p style={{ margin: 0, fontSize: '0.9rem' }}>Nenhuma fatura encontrada para este período.</p>
+                                    </div>
                                 )}
                             </div>
+                        </CollapsibleSection>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                 {subscriber && onDelete && (
                                     <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
