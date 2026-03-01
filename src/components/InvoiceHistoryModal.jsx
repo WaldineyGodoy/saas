@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
-import { Clock, User, Calendar as CalendarIcon, X, FileText, Activity } from 'lucide-react';
+import { Clock, User, Calendar as CalendarIcon, X, FileText, Activity, Search, Filter } from 'lucide-react';
 
 export default function InvoiceHistoryModal({ onClose }) {
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [typeFilter, setTypeFilter] = useState('all');
+    const [dateFilter, setDateFilter] = useState('');
 
     useEffect(() => {
         fetchHistory();
@@ -30,6 +33,23 @@ export default function InvoiceHistoryModal({ onClose }) {
         }
     };
 
+    const eventTypes = ['all', ...new Set(history.map(item => item.event_type))];
+
+    const filteredHistory = history.filter(item => {
+        const matchesSearch =
+            (item.uc_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            (item.subscriber_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            (item.numero_uc?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+
+        const matchesType = typeFilter === 'all' || item.event_type === typeFilter;
+
+        const matchesDate = !dateFilter || item.created_at.startsWith(dateFilter);
+
+        return matchesSearch && matchesType && matchesDate;
+    });
+
+    const formatCurrency = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
     const formatMetadata = (metadata, eventType) => {
         if (!metadata || Object.keys(metadata).length === 0) return null;
 
@@ -43,7 +63,6 @@ export default function InvoiceHistoryModal({ onClose }) {
         }
 
         if (eventType === 'Alteração de Valor') {
-            const formatCurrency = (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             return (
                 <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: '#64748b' }}>
                     De: <span style={{ textDecoration: 'line-through' }}>{formatCurrency(metadata.de)}</span> →
@@ -56,7 +75,7 @@ export default function InvoiceHistoryModal({ onClose }) {
             return (
                 <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: '#64748b' }}>
                     Ref: <span style={{ fontWeight: 600 }}>{metadata.mes_referencia}</span> |
-                    Valor: <span style={{ fontWeight: 600 }}>{Number(metadata.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    Valor inicial: <span style={{ fontWeight: 600 }}>{formatCurrency(metadata.valor_a_pagar)}</span>
                 </div>
             );
         }
@@ -74,9 +93,9 @@ export default function InvoiceHistoryModal({ onClose }) {
                 background: 'white',
                 padding: '0',
                 borderRadius: '12px',
-                width: '90%',
-                maxWidth: '700px',
-                height: '85vh',
+                width: '95%',
+                maxWidth: '800px',
+                height: '90vh',
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
@@ -111,17 +130,51 @@ export default function InvoiceHistoryModal({ onClose }) {
                     </button>
                 </div>
 
+                {/* Filters */}
+                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ flex: 2, minWidth: '200px', position: 'relative' }}>
+                        <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            placeholder="Buscar por UC, Assinante..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            style={{ width: '100%', padding: '0.6rem 0.6rem 0.6rem 2.2rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                        />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                        <select
+                            value={typeFilter}
+                            onChange={e => setTypeFilter(e.target.value)}
+                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                        >
+                            <option value="all">Todos Eventos</option>
+                            {eventTypes.filter(t => t !== 'all').map(t => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={e => setDateFilter(e.target.value)}
+                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                        />
+                    </div>
+                </div>
+
                 {/* Content */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', backgroundColor: '#f8fafc' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', backgroundColor: '#f1f5f9' }}>
                     {loading ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
                             <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #003366', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                             <p style={{ marginTop: '1rem' }}>Carregando histórico...</p>
                         </div>
-                    ) : history.length === 0 ? (
+                    ) : filteredHistory.length === 0 ? (
                         <div style={{ textAlign: 'center', color: '#94a3b8', padding: '5rem 0' }}>
                             <Clock size={64} style={{ marginBottom: '1.5rem', opacity: 0.3 }} />
-                            <p style={{ fontSize: '1.1rem' }}>Nenhuma movimentação registrada.</p>
+                            <p style={{ fontSize: '1.1rem' }}>Nenhuma movimentação encontrada com estes filtros.</p>
                         </div>
                     ) : (
                         <div style={{ position: 'relative', paddingLeft: '2.5rem' }}>
@@ -131,14 +184,14 @@ export default function InvoiceHistoryModal({ onClose }) {
                                 width: '2px', background: 'linear-gradient(to bottom, #cbd5e1 0%, #cbd5e1 100%)'
                             }} />
 
-                            {history.map((item, index) => (
-                                <div key={item.id} style={{ position: 'relative', marginBottom: '2rem' }}>
+                            {filteredHistory.map((item, index) => (
+                                <div key={item.id} style={{ position: 'relative', marginBottom: '1.5rem' }}>
                                     {/* Dot */}
                                     <div style={{
                                         position: 'absolute', left: '-36px', top: '0',
                                         width: '24px', height: '24px', borderRadius: '50%',
                                         background: 'white',
-                                        border: '4px solid ' + (index === 0 ? '#003366' : '#cbd5e1'),
+                                        border: '4px solid #cbd5e1',
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                                         zIndex: 1
                                     }} />
@@ -149,46 +202,53 @@ export default function InvoiceHistoryModal({ onClose }) {
                                         borderRadius: '12px',
                                         border: '1px solid #e2e8f0',
                                         boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                        transition: 'transform 0.2s',
-                                        cursor: 'default'
-                                    }} onMouseOver={e => e.currentTarget.style.transform = 'translateX(5px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateX(0)'}>
+                                        transition: 'all 0.2s'
+                                    }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                    {item.uc_name || 'UC Não Identificada'}
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: 'white', background: '#003366', padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                                        {item.subscriber_name || 'Assinante Indefinido'}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#64748b', background: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                                                        {item.uc_name}
+                                                    </span>
                                                 </div>
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '1rem', marginTop: '0.1rem' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '1rem' }}>
                                                     {item.event_type}
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.8rem' }}>
-                                                    <CalendarIcon size={14} />
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.75rem' }}>
+                                                    <CalendarIcon size={12} />
                                                     {new Date(item.created_at).toLocaleString('pt-BR')}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'flex-end', marginTop: '0.3rem', color: '#003366', fontWeight: 600, fontSize: '0.8rem' }}>
-                                                    <User size={14} />
+                                                    <User size={12} />
                                                     {item.author_name}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {formatMetadata(item.metadata, item.event_type)}
+                                        <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', borderLeft: '3px solid #003366', marginBottom: '0.75rem' }}>
+                                            {formatMetadata(item.metadata, item.event_type) || <div style={{ fontSize: '0.85rem', color: '#475569' }}>Lançamento padrão registrado.</div>}
+                                        </div>
 
                                         <div style={{
-                                            marginTop: '0.75rem',
-                                            paddingTop: '0.75rem',
-                                            borderTop: '1px solid #f1f5f9',
                                             display: 'flex',
+                                            justifyContent: 'space-between',
                                             alignItems: 'center',
-                                            gap: '0.5rem',
                                             fontSize: '0.75rem',
-                                            color: '#94a3b8'
+                                            color: '#94a3b8',
+                                            marginTop: '0.5rem'
                                         }}>
-                                            <FileText size={12} />
-                                            <span>Mês de Referência: {item.mes_referencia ? new Date(item.mes_referencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '-'}</span>
-                                            <span style={{ margin: '0 0.5rem' }}>•</span>
-                                            <span>UC: {item.numero_uc || '-'}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <FileText size={12} />
+                                                <span>Ref: {item.mes_referencia ? new Date(item.mes_referencia + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '-'}</span>
+                                            </div>
+                                            <div style={{ fontWeight: 'bold', color: '#1e293b' }}>
+                                                Valor Atual: <span style={{ color: '#059669' }}>{formatCurrency(item.current_invoice_value)}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
