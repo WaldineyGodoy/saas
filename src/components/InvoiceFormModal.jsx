@@ -23,7 +23,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         // Calculated/Display fields
         valor_a_pagar: '',
         economia_reais: '',
-        consumo_reais: '' // New Field
+        consumo_reais: '', // energy cost before taxes/extras
+        consumo_compensado: 0, // kWh
+        energia_compensada_reais: '' // R$
     });
 
     const [selectedUc, setSelectedUc] = useState(null);
@@ -85,51 +87,50 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         // Only calculate if we have Consumption and a selected UC with tariff
         if (formData.consumo_kwh && selectedUc) {
             const consumo = Number(formData.consumo_kwh);
-            const tarifa = parseCurrency(String(selectedUc.tarifa_concessionaria || '0'));
-            // Note: tarifa_concessionaria from DB might be float or big string. 
-            // If it came from DB as number, '0.98', parseCurrency might mess it up if it expects 'R$ 0,98'.
-            // Let's assume fetchUcs returns it as number.
-
-            // Wait, fetchUcs returns raw DB value. If it is numeric(10,4), it's a number.
-            // If parseCurrency divides by 100, we need to be careful.
-            // Let's safe check:
             const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
-
             const descontoPercent = Number(selectedUc.desconto_assinante) || 0;
-
-            const consumoBrutoReais = consumo * rawTarifa;
-            let economia = 0;
-
-            // Logic: Desconto is applied on the energy value?
-            // "Economia Gerada R$ = (Consumo Kwh * Tarifa da Concessionaria) * Desconto assinante%"
-            // If discount is 20 (meaning 20%), then 0.20
-
-            // Adjust percent: If > 1, treat as e.g. 20. If <= 1, treat as 0.20? 
-            // Convention in other files seems to be storing as whole number or decimal.
-            // Let's assume it is stored as percentage (e.g. 10, 15, 20).
             const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
 
-            economia = consumoBrutoReais * multiplier;
+            // Rule for Minimum Consumption (Cost of Availability)
+            const tipoLigacao = selectedUc.tipo_ligacao || 'monofasico';
+            const kwhMinimo = tipoLigacao === 'trifasico' ? 100 : (tipoLigacao === 'bifasico' ? 50 : 30);
 
-            const consumoLiquido = consumoBrutoReais - economia;
+            // Consumo Compensado = Consumo - Mínimo (cannot be negative)
+            const consumoCompensado = Math.max(0, consumo - kwhMinimo);
+
+            // Tarifa Mínima R$ = Mínimo * Tarifa
+            const tarifaMinimaReais = kwhMinimo * rawTarifa;
+
+            // Energia Compensada R$ = Consumo Compensado * Tarifa * (1 - Desconto)
+            // Note: rawTarifa * (1 - multiplier) is the effective rate after discount
+            const energiaCompensadaReais = consumoCompensado * rawTarifa * (1 - multiplier);
+
+            // Economia Gerada (for display/DB): (Consumo Compensado * Tarifa) * Desconto
+            const economia = (consumoCompensado * rawTarifa) * multiplier;
+
+            // Consumo Bruto (just for summary display): (Consumo * Tarifa)
+            // Consumo Líquido (Consumo R$ field): ConsumoBruto - Economia
 
             const ip = parseCurrency(formData.iluminacao_publica);
-            const min = parseCurrency(formData.tarifa_minima);
             const outros = parseCurrency(formData.outros_lancamentos);
 
-            const total = consumoLiquido + ip + min + outros;
+            // Total = Energia Compensada + Tarifa Mínima + IP + Outros
+            const total = energiaCompensadaReais + tarifaMinimaReais + ip + outros;
 
             setFormData(prev => ({
                 ...prev,
+                consumo_compensado: consumoCompensado,
+                tarifa_minima: formatCurrency(tarifaMinimaReais),
+                energia_compensada_reais: formatCurrency(energiaCompensadaReais),
                 economia_reais: formatCurrency(economia),
-                consumo_reais: formatCurrency(consumoLiquido), // "Consumo R$"
+                consumo_reais: formatCurrency(energiaCompensadaReais + tarifaMinimaReais), // Matches total energy cost
                 valor_a_pagar: formatCurrency(total)
             }));
         }
     }, [
         formData.consumo_kwh,
         formData.iluminacao_publica,
-        formData.tarifa_minima,
+        // formData.tarifa_minima, // Removed to prevent loop since we automate it
         formData.outros_lancamentos,
         selectedUc
     ]);
@@ -343,9 +344,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             ))}
                         </select>
                         {selectedUc && (
-                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', background: '#eff6ff', padding: '0.5rem', borderRadius: '4px', display: 'inline-flex', gap: '1rem' }}>
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', background: '#eff6ff', padding: '0.5rem', borderRadius: '4px', display: 'inline-flex', gap: '1rem', flexWrap: 'wrap' }}>
                                 <span><strong>Tarifa:</strong> R$ {Number(selectedUc.tarifa_concessionaria || 0).toFixed(4)}</span>
                                 <span><strong>Desconto:</strong> {selectedUc.desconto_assinante || 0}%</span>
+                                <span><strong>Tipo Ligação:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao || 'Não inf.'}</span></span>
                             </div>
                         )}
                     </div>
@@ -395,7 +397,12 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <input type="number" step="any" required value={formData.consumo_kwh} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="0" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
                             </div>
 
-                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><DollarSign size={18} /> Valores Adicionais</h4>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Consumo Compensado (kWh)</label>
+                                <input type="number" readOnly value={formData.consumo_compensado} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc', color: '#64748b' }} />
+                            </div>
+
+                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><DollarSign size={18} /> Valores de energia e Adicionais</h4>
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Iluminação Pública (R$)</label>
@@ -403,8 +410,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Energia Compensada (R$)</label>
+                                <input type="text" readOnly value={formData.energia_compensada_reais} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', fontWeight: 600 }} />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Tarifa Mínima (R$)</label>
-                                <input type="text" value={formData.tarifa_minima} onChange={e => handleCurrencyChange('tarifa_minima', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                                <input type="text" readOnly value={formData.tarifa_minima} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc' }} />
+                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.2rem' }}>Calculado automaticamente (30/50/100 kWh)</p>
                             </div>
 
                             <div>
@@ -424,13 +437,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534', background: '#dcfce7', padding: '0.5rem', borderRadius: '4px' }}>
-                                    <span>Economia Gerada:</span>
+                                    <span>Economia Gerada (Desconto):</span>
                                     <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>Consumo Líquido (R$):</span>
-                                    <span style={{ fontWeight: 600 }}>{formData.consumo_reais || 'R$ 0,00'}</span>
+                                    <span style={{ color: '#64748b' }}>Energia Compensada:</span>
+                                    <span style={{ fontWeight: 600 }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
                                 </div>
 
                                 <div style={{ height: '1px', background: '#cbd5e1', margin: '0.5rem 0' }}></div>
