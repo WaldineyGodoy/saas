@@ -24,7 +24,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState(new Date().toISOString().substring(0, 7));
     const [showMonthPicker, setShowMonthPicker] = useState(false);
-    const [billingMode, setBillingMode] = useState('consolidada'); // 'consolidada' | 'individualizada'
+    const [billingMode, setBillingMode] = useState(subscriber?.billing_mode || 'consolidada'); // 'consolidada' | 'individualizada'
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -59,6 +59,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     useEffect(() => {
         fetchOriginators();
     }, []); // Run once on mount
+
+    useEffect(() => {
+        if (subscriber?.billing_mode) {
+            setBillingMode(subscriber.billing_mode);
+        }
+    }, [subscriber?.id]);
 
     useEffect(() => {
         if (subscriber) {
@@ -302,7 +308,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             // 3. Save to Supabase
-            const dataToSave = { ...formData };
+            const dataToSave = { ...formData, billing_mode: billingMode };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
 
