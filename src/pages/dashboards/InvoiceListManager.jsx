@@ -158,7 +158,7 @@ export default function InvoiceListManager() {
     const CalendarView = ({ invoices, onEdit }) => {
         const days = Array.from({ length: 31 }, (_, i) => i + 1);
         const groupedInvoices = invoices.reduce((acc, inv) => {
-            if (inv.vencimento) {
+            if (inv.vencimento && inv.status !== 'cancelado') {
                 const date = new Date(inv.vencimento);
                 const day = date.getUTCDate();
                 if (!acc[day]) acc[day] = [];
@@ -172,17 +172,28 @@ export default function InvoiceListManager() {
                 {days.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
                     const totalAmount = dayInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+
+                    const counts = dayInvoices.reduce((acc, inv) => {
+                        acc[inv.status] = (acc[inv.status] || 0) + 1;
+                        return acc;
+                    }, {});
+
                     return (
-                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '200px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s' }}>
-                            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '14px', borderTopRightRadius: '14px' }}>
-                                <span style={{ fontWeight: '800', color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
+                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '260px', height: '260px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
+                            <div style={{ padding: '0.75rem 0.75rem', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    <span style={{ fontWeight: '800', color: 'var(--color-blue)', fontSize: '0.85rem', marginRight: '0.4rem' }}>D{day}</span>
+                                    {counts.pago > 0 && <span title={`Pagos: ${counts.pago}`} style={{ background: '#10b981', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.pago}</span>}
+                                    {counts.a_vencer > 0 && <span title={`A Vencer: ${counts.a_vencer}`} style={{ background: '#f59e0b', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.a_vencer}</span>}
+                                    {counts.atrasado > 0 && <span title={`Vencidos: ${counts.atrasado}`} style={{ background: '#ef4444', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>{counts.atrasado}</span>}
+                                </div>
                                 {totalAmount > 0 && (
-                                    <span style={{ fontSize: '0.75rem', color: '#166534', background: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: '99px', fontWeight: '800' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#166534', background: '#dcfce7', padding: '0.15rem 0.5rem', borderRadius: '99px', fontWeight: '800' }}>
                                         {formatCurrency(totalAmount)}
                                     </span>
                                 )}
                             </div>
-                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', maxHeight: '300px' }}>
+                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                                 {dayInvoices.length === 0 ? (
                                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem faturas</div>
                                 ) : (
@@ -190,8 +201,7 @@ export default function InvoiceListManager() {
                                         const statusData = {
                                             'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
                                             'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
-                                            'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3' },
-                                            'cancelado': { color: '#64748b', label: 'Cancelado', bg: '#f1f5f9' }
+                                            'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3' }
                                         };
                                         const s = statusData[inv.status] || statusData['a_vencer'];
                                         const isBoletoEmitido = !!inv.asaas_boleto_url;
@@ -209,7 +219,8 @@ export default function InvoiceListManager() {
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s',
                                                     position: 'relative',
-                                                    overflow: 'hidden'
+                                                    flexShrink: 0,
+                                                    height: 'fit-content'
                                                 }}
                                                 onMouseOver={e => {
                                                     e.currentTarget.style.transform = 'translateY(-2px)';
