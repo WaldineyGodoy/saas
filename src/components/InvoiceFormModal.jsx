@@ -430,19 +430,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             gap: '0.5rem',
-                                            background: '#fff7ed',
-                                            color: '#c2410c',
-                                            border: '1px solid #ffedd5',
+                                            background: '#FF6600',
+                                            color: 'white',
+                                            border: 'none',
                                             padding: '0.8rem 1rem',
                                             borderRadius: '6px',
                                             cursor: 'pointer',
                                             fontWeight: 'bold',
                                             fontSize: '0.9rem',
                                             width: '100%',
-                                            transition: 'all 0.2s'
+                                            transition: 'all 0.2s',
+                                            boxShadow: '0 4px 6px -1px rgba(255, 102, 0, 0.2)'
                                         }}
-                                        onMouseOver={e => { e.currentTarget.style.background = '#ffedd5'; }}
-                                        onMouseOut={e => { e.currentTarget.style.background = '#fff7ed'; }}
+                                        onMouseOver={e => { e.currentTarget.style.background = '#e65c00'; }}
+                                        onMouseOut={e => { e.currentTarget.style.background = '#FF6600'; }}
                                     >
                                         {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto Agora</>}
                                     </button>
@@ -455,22 +456,22 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Detalhamento da Fatura</h4>
 
                             {selectedUc && (
-                                <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', border: '1px solid #334155' }}>
-                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid #334155', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Assinante</label>
-                                        <span style={{ fontWeight: 'bold', color: '#f8fafc', fontSize: '0.95rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
+                                <div style={{ background: '#003366', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', border: '1px solid #002244' }}>
+                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Assinante</label>
+                                        <span style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Número da UC</label>
-                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Número da UC</label>
+                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Identificação</label>
-                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Identificação</label>
+                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Mês Referência</label>
-                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Mês Referência</label>
+                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>
                                             {(() => {
                                                 const [y, m] = formData.mes_referencia.split('-');
                                                 const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -479,15 +480,15 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         </span>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Vencimento</label>
-                                        <span style={{ fontWeight: 'bold', color: '#fb7185', fontSize: '0.85rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Vencimento</label>
+                                        <span style={{ fontWeight: 'bold', color: '#ff8a8a', fontSize: '0.85rem' }}>
                                             {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                         </span>
                                     </div>
-                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid #334155' }}>
+                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase' }}>Tipo de Ligação</span>
-                                            <span style={{ background: '#334155', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#f8fafc', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
+                                            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Tipo de Ligação</span>
+                                            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#ffffff', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
                                         </div>
                                     </div>
                                 </div>
