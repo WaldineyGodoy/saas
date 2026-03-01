@@ -659,7 +659,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Unidades Consumidoras (UCs)" icon={Zap} defaultOpen={false}>
+                        <CollapsibleSection title="Unidades Consumidoras (UCs)" icon={Zap} defaultOpen={false} noGrid={true}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                                     {subscriber?.id && (
@@ -734,7 +734,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             </div>
                         </CollapsibleSection>
 
-                        <CollapsibleSection title="Faturas" icon={CreditCard} defaultOpen={true}>
+                        <CollapsibleSection title="Faturas" icon={CreditCard} defaultOpen={true} noGrid={true}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>

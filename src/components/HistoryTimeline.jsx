@@ -5,7 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import { Clock, Send, User, Calendar as CalendarIcon, X } from 'lucide-react';
 
 // Reusable CollapsibleSection Component
-export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }) => {
+export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, noGrid = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
         <div style={{
@@ -42,8 +42,8 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
                 <div style={{
                     padding: '1.25rem',
                     borderTop: '1px solid #e2e8f0',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    display: noGrid ? 'block' : 'grid',
+                    gridTemplateColumns: noGrid ? 'none' : '1fr 1fr',
                     gap: '1.25rem'
                 }}>
                     {children}
