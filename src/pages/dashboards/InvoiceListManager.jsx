@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History, Layout, List, Info, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
 export default function InvoiceListManager() {
@@ -168,34 +168,93 @@ export default function InvoiceListManager() {
         }, {});
 
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem', padding: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '1.5rem', padding: '1rem' }}>
                 {days.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
                     const totalAmount = dayInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
                     return (
-                        <div key={day} style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', minHeight: '180px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s' }}>
-                            <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
-                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
+                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '200px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s' }}>
+                            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '14px', borderTopRightRadius: '14px' }}>
+                                <span style={{ fontWeight: '800', color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
                                 {totalAmount > 0 && (
-                                    <span style={{ fontSize: '0.75rem', color: '#166534', background: '#dcfce7', padding: '0.2rem 0.5rem', borderRadius: '12px', fontWeight: 700 }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#166534', background: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: '99px', fontWeight: '800' }}>
                                         {formatCurrency(totalAmount)}
                                     </span>
                                 )}
                             </div>
-                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
+                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', maxHeight: '300px' }}>
                                 {dayInvoices.length === 0 ? (
-                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem faturas</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem faturas</div>
                                 ) : (
                                     dayInvoices.map(inv => {
-                                        const statusColors = { 'pago': '#166534', 'atrasado': '#dc2626', 'a_vencer': '#854d0e', 'cancelado': '#64748b' };
+                                        const statusData = {
+                                            'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
+                                            'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
+                                            'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3' },
+                                            'cancelado': { color: '#64748b', label: 'Cancelado', bg: '#f1f5f9' }
+                                        };
+                                        const s = statusData[inv.status] || statusData['a_vencer'];
+                                        const isBoletoEmitido = !!inv.asaas_boleto_url;
+
                                         return (
-                                            <div key={inv.id} onClick={() => onEdit(inv)} style={{ padding: '0.6rem', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: `4px solid ${statusColors[inv.status] || '#cbd5e1'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {inv.consumer_units?.subscribers?.name || 'S/ Assinante'}
+                                            <div
+                                                key={inv.id}
+                                                onClick={() => onEdit(inv)}
+                                                style={{
+                                                    padding: '0.75rem',
+                                                    borderRadius: '10px',
+                                                    background: 'white',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderLeft: `5px solid ${s.color}`,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                                onMouseOver={e => {
+                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
+                                                    e.currentTarget.style.borderColor = 'var(--color-blue)';
+                                                }}
+                                                onMouseOut={e => {
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                    e.currentTarget.style.boxShadow = 'none';
+                                                    e.currentTarget.style.borderColor = '#e2e8f0';
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                                                        {inv.consumer_units?.subscribers?.name || 'S/ Assinante'}
+                                                    </div>
                                                 </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.2rem', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.65rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</span>
-                                                    <span style={{ fontWeight: '700', fontSize: '0.75rem', color: 'var(--color-blue)' }}>{formatCurrency(inv.valor_a_pagar)}</span>
+
+                                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.5rem' }}>
+                                                    UC: {inv.consumer_units?.numero_uc}
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                        <span style={{ fontSize: '0.6rem', fontWeight: '800', color: s.color, background: s.bg, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                                            {s.label}
+                                                        </span>
+                                                        <span style={{
+                                                            fontSize: '0.6rem',
+                                                            fontWeight: '800',
+                                                            color: isBoletoEmitido ? '#0369a1' : '#c2410c',
+                                                            background: isBoletoEmitido ? '#e0f2fe' : '#fff7ed',
+                                                            padding: '0.1rem 0.4rem',
+                                                            borderRadius: '4px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.2rem'
+                                                        }}>
+                                                            {isBoletoEmitido ? <TicketCheck size={10} /> : <TicketMinus size={10} />}
+                                                            {isBoletoEmitido ? 'Emitido' : 'Gerar'}
+                                                        </span>
+                                                    </div>
+                                                    <span style={{ fontWeight: '900', fontSize: '0.8rem', color: 'var(--color-blue)' }}>
+                                                        {formatCurrency(inv.valor_a_pagar)}
+                                                    </span>
                                                 </div>
                                             </div>
                                         );
