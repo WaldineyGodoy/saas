@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard } from 'lucide-react';
+import { Users, Code, CreditCard, Palette } from 'lucide-react';
 
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
+import CustomizationSettings from '../settings/CustomizationSettings';
 
 export default function SettingsLayout() {
     const [activeTab, setActiveTab] = useState('users');
@@ -11,6 +12,7 @@ export default function SettingsLayout() {
         { id: 'users', label: 'Perfil de Usuários', icon: Users, desc: 'Gerenciar usuários e acesso' },
         { id: 'evolution', label: 'Evolution API', icon: Code, desc: 'Configuração da API WhatsApp' },
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
+        { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
     ];
 
     const renderContent = () => {
@@ -21,6 +23,8 @@ export default function SettingsLayout() {
                 return <IntegrationSettings serviceName="evolution_api" title="Evolution API" description="Configuração da API de WhatsApp" />;
             case 'financial':
                 return <IntegrationSettings serviceName="financial_api" title="Integração Financeira" description="Gateways de Pagamento (Asaas, etc)" />;
+            case 'branding':
+                return <CustomizationSettings />;
             default:
                 return null;
         }

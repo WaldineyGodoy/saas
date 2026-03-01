@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useBranding } from '../contexts/BrandingContext';
 
 // Dashboards Existing
 import AdminDashboard from './dashboards/AdminDashboard';
@@ -21,6 +22,7 @@ import SettingsLayout from './dashboards/SettingsLayout';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
+    const { branding } = useBranding();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState('default');
 
@@ -161,11 +163,11 @@ export default function Dashboard() {
                     {!isDesktopCollapsed && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <img
-                                src="https://b2wenergia.com.br/wp-content/uploads/2025/12/Logo-Laranja-estreito.png"
-                                alt="B2W Energia"
+                                src={branding.logo_url}
+                                alt={branding.company_name}
                                 style={{ height: '35px', objectFit: 'contain' }}
                             />
-                            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>B2W Energia</span>
+                            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>{branding.company_name}</span>
                         </div>
                     )}
 

@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import ReferralLanding from './pages/ReferralLanding';
 import { UIProvider } from './contexts/UIContext';
+import { BrandingProvider } from './contexts/BrandingContext';
 
 const ProtectedRoute = () => {
   const { user } = useAuth();
@@ -22,22 +23,24 @@ function App() {
   return (
     <BrowserRouter>
       <UIProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/simulacao" element={<LeadLanding />} />
-            <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
-            <Route path="/assine" element={<LeadSignup />} />
-            <Route path="/originador" element={<ReferralLanding />} />
-            <Route path="/contrato" element={<SubscriberSignup />} />
+        <BrandingProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/simulacao" element={<LeadLanding />} />
+              <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
+              <Route path="/assine" element={<LeadSignup />} />
+              <Route path="/originador" element={<ReferralLanding />} />
+              <Route path="/contrato" element={<SubscriberSignup />} />
 
-            <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-            </Route>
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+              </Route>
 
-            <Route path="/" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </AuthProvider>
+              <Route path="/" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </AuthProvider>
+        </BrandingProvider>
       </UIProvider>
     </BrowserRouter>
   );
