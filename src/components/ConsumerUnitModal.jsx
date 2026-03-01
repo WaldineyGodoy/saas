@@ -175,6 +175,28 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         setUsinas(data || []);
     };
 
+    const handleSubscriberChange = async (subscriberId) => {
+        setFormData(prev => ({ ...prev, subscriber_id: subscriberId }));
+        if (subscriberId) {
+            try {
+                const { data, error } = await supabase
+                    .from('subscribers')
+                    .select('consolidated_due_day, billing_mode')
+                    .eq('id', subscriberId)
+                    .single();
+
+                if (!error && data && data.billing_mode === 'consolidada') {
+                    setFormData(prev => ({
+                        ...prev,
+                        dia_vencimento: data.consolidated_due_day || 10
+                    }));
+                }
+            } catch (err) {
+                console.error('Erro ao buscar dados do assinante:', err);
+            }
+        }
+    };
+
     const handleCepChange = (e) => {
         const masked = maskCEP(e.target.value);
         setFormData(prev => ({ ...prev, cep: masked }));
@@ -368,7 +390,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     <select
                                         required
                                         value={formData.subscriber_id}
-                                        onChange={e => setFormData({ ...formData, subscriber_id: e.target.value, titular_fatura_id: formData.titular_fatura_id || e.target.value })}
+                                        onChange={e => handleSubscriberChange(e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                     >
                                         <option value="">Selecione...</option>

@@ -166,8 +166,10 @@ export const fetchOfferData = async (ibge) => {
  * @param {string} id Invoice ID OR Subscriber ID (for consolidated)
  * @param {'invoice'|'subscriber'} type Type of the ID
  */
-export const createAsaasCharge = async (id, type = 'invoice') => {
-    const payload = type === 'invoice' ? { invoice_id: id } : { subscriber_id: id };
+export const createAsaasCharge = async (id, type = 'invoice', extra = {}) => {
+    const payload = type === 'invoice'
+        ? { invoice_id: id, ...extra }
+        : { subscriber_id: id, ...extra };
 
     const { data, error } = await supabase.functions.invoke('create-asaas-charge', {
         body: payload

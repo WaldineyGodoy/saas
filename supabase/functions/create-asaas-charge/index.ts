@@ -1,13 +1,4 @@
 
-// Siga estas instruções para implantar:
-// 1. No Painel do Supabase, vá em "Edge Functions".
-// 2. Clique em "Create a new Function".
-// 3. Nome: "create-asaas-charge".
-// 4. Copie e cole este código no editor.
-// 5. Vá em "Manage Secrets" (ou .env) e adicione:
-//    - ASAAS_API_KEY: (Cole seu token aqui)
-//    - ASAAS_API_URL: https://sandbox.asaas.com/api/v3 (Para homologação) ou https://www.asaas.com/api/v3 (Para produção)
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
@@ -27,7 +18,7 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const { invoice_id, subscriber_id } = await req.json()
+        const { invoice_id, subscriber_id, invoice_ids, dueDate: customDueDate } = await req.json()
 
         const { data: configData, error: configError } = await supabase
             .from('integrations_config')
@@ -35,148 +26,141 @@ serve(async (req) => {
             .eq('service_name', 'financial_api')
             .single()
 
-        if (configError) {
-            throw new Error('Integração Asaas não configurada no painel. Verifique as configurações financeiras.')
-        }
+        if (configError) throw new Error('Integração Asaas não configurada.')
 
         const isSandbox = configData.environment === 'sandbox';
         const asaasKey = isSandbox ? configData.sandbox_api_key : configData.api_key;
         const asaasUrl = isSandbox ? configData.sandbox_endpoint_url : configData.endpoint_url;
 
-        if (!asaasKey || !asaasUrl) {
-            throw new Error(`Configurações de ${isSandbox ? 'Sandbox' : 'Produção'} incompletas.`);
-        }
-
         let invoicesToCharge = [];
         let subscriber = null;
+        let isConsolidated = false;
 
-        // 1. Buscar Faturas e Assinante
         if (invoice_id) {
-            // Cobrança Individual
             const { data: inv, error: invErr } = await supabase
                 .from('invoices')
-                .select(`
-            *,
-            consumer_units (
-                subscriber:subscribers!subscriber_id (*)
-            )
-        `)
+                .select('*, consumer_units (subscriber:subscribers!subscriber_id (*))')
                 .eq('id', invoice_id)
                 .single();
-
             if (invErr) throw invErr;
             invoicesToCharge = [inv];
             subscriber = inv.consumer_units?.subscriber;
-
         } else if (subscriber_id) {
-            // Cobrança Consolidada (Todas as faturas 'pendentes' do assinante)
-            const { data: invs, error: invsErr } = await supabase
+            isConsolidated = true;
+            let query = supabase
                 .from('invoices')
-                .select(`
-                *,
-                consumer_units!inner (
-                    subscriber_id,
-                    subscriber:subscribers!subscriber_id (*)
-                )
-            `)
+                .select('*, consumer_units!inner (subscriber_id, subscriber:subscribers!subscriber_id (*))')
                 .eq('consumer_units.subscriber_id', subscriber_id)
-                .neq('status', 'pago') // Ajuste conforme seus status (ex: 'aberta', 'pendente')
-                .is('asaas_payment_id', null); // Apenas as que ainda não tem boleto
+                .neq('status', 'pago')
+                .neq('status', 'cancelado') // CRITICAL: Excluir canceladas
+                .is('asaas_payment_id', null);
 
+            if (invoice_ids && invoice_ids.length > 0) {
+                query = query.in('id', invoice_ids);
+            }
+
+            const { data: invs, error: invsErr } = await query;
             if (invsErr) throw invsErr;
-            if (!invs || invs.length === 0) throw new Error("Nenhuma fatura pendente encontrada para este assinante.");
+            if (!invs || invs.length === 0) throw new Error("Nenhuma fatura pendente/ativa encontrada.");
 
             invoicesToCharge = invs;
             subscriber = invs[0].consumer_units.subscriber;
-        } else {
-            throw new Error("Parâmetros inválidos. Informe invoice_id ou subscriber_id.");
         }
 
         if (!subscriber) throw new Error("Assinante não encontrado.");
 
-        // 2. Garantir Cliente no Asaas
+        // Garantir Cliente no Asaas
         let asaasCustomerId = subscriber.asaas_customer_id;
-
         if (!asaasCustomerId) {
-            console.log("Criando cliente no Asaas...");
             const customerData = {
                 name: subscriber.name,
                 cpfCnpj: subscriber.cpf_cnpj?.replace(/\D/g, ''),
                 email: subscriber.email,
-                phone: subscriber.phone?.replace(/\D/g, ''),
-                notificationDisabled: false
+                phone: subscriber.phone?.replace(/\D/g, '')
             };
-
-            // Buscar cliente existente por CPF/Email primeiro para evitar duplicidade no Asaas?
-            // O Asaas permite buscar. Vamos tentar criar direto, se der erro de duplicidade tratamos? 
-            // Melhor buscar.
-            const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, {
-                headers: { access_token: asaasKey }
-            });
+            const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, { headers: { access_token: asaasKey } });
             const searchData = await searchRes.json();
-
             if (searchData.data && searchData.data.length > 0) {
                 asaasCustomerId = searchData.data[0].id;
             } else {
                 const createRes = await fetch(`${asaasUrl}/customers`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        access_token: asaasKey
-                    },
+                    headers: { 'Content-Type': 'application/json', access_token: asaasKey },
                     body: JSON.stringify(customerData)
                 });
                 const createData = await createRes.json();
                 if (createData.errors) throw new Error(`Erro Asaas Customer: ${createData.errors[0].description}`);
                 asaasCustomerId = createData.id;
             }
-
-            // Salvar no banco
             await supabase.from('subscribers').update({ asaas_customer_id: asaasCustomerId }).eq('id', subscriber.id);
         }
 
-        // 3. Gerar Cobrança (Boleto)
-        // Somar valor total
         const totalValue = invoicesToCharge.reduce((acc, inv) => acc + Number(inv.valor_a_pagar || 0), 0);
-        // Usar a menor data de vencimento ou a do primeiro? Vamos usar a do primeiro.
-        const dueDate = invoicesToCharge[0].vencimento || new Date().toISOString().split('T')[0];
-
-        const billingData = {
-            customer: asaasCustomerId,
-            billingType: 'BOLETO',
-            value: totalValue,
-            dueDate: dueDate,
-            description: `Fatura de Energia - Ref: ${invoicesToCharge.map(i => i.mes_referencia).join(', ')}`,
-            postalService: false
-        };
+        const dueDate = customDueDate || invoicesToCharge[0].vencimento || new Date().toISOString().split('T')[0];
 
         const chargeRes = await fetch(`${asaasUrl}/payments`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                access_token: asaasKey
-            },
-            body: JSON.stringify(billingData)
+            headers: { 'Content-Type': 'application/json', access_token: asaasKey },
+            body: JSON.stringify({
+                customer: asaasCustomerId,
+                billingType: 'BOLETO',
+                value: totalValue,
+                dueDate: dueDate,
+                description: isConsolidated ? `Fatura Consolidada - ${invoicesToCharge.length} UCs` : `Fatura de Energia - Ref: ${invoicesToCharge[0].mes_referencia}`,
+            })
         });
 
         const chargeData = await chargeRes.json();
         if (chargeData.errors) throw new Error(`Erro Asaas Payment: ${chargeData.errors[0].description}`);
 
-        const boletoUrl = chargeData.bankSlipUrl || chargeData.invoiceUrl; // Às vezes bankSlipUrl
-
-        // 4. Atualizar Faturas com o ID do pagamento
+        const boletoUrl = chargeData.bankSlipUrl || chargeData.invoiceUrl;
         const invoiceIds = invoicesToCharge.map(i => i.id);
+
+        let consolidatedId = null;
+        if (isConsolidated) {
+            const { data: cons, error: consErr } = await supabase.from('consolidated_invoices').insert({
+                subscriber_id: subscriber.id,
+                total_value: totalValue,
+                due_date: dueDate,
+                asaas_payment_id: chargeData.id,
+                asaas_boleto_url: boletoUrl,
+                status: 'pending'
+            }).select().single();
+            if (consErr) throw consErr;
+            consolidatedId = cons.id;
+        }
+
+        // Atualizar Faturas Individuais
         await supabase.from('invoices')
             .update({
                 asaas_payment_id: chargeData.id,
                 asaas_boleto_url: boletoUrl,
-                asaas_status: 'PENDING'
+                asaas_status: 'PENDING',
+                consolidated_invoice_id: consolidatedId
             })
             .in('id', invoiceIds);
 
+        // Registrar no Histórico
+        const historyEntries = invoiceIds.map(id => ({
+            entity_type: 'invoice',
+            entity_id: id,
+            action: 'payment_issued',
+            details: { asaas_id: chargeData.id, consolidated: isConsolidated, value: totalValue }
+        }));
+
+        if (isConsolidated) {
+            historyEntries.push({
+                entity_type: 'consolidated_invoice',
+                entity_id: consolidatedId,
+                action: 'created',
+                details: { asaas_id: chargeData.id, total_value: totalValue, invoices_count: invoiceIds.length }
+            });
+        }
+
+        await supabase.from('entity_history').insert(historyEntries);
 
         return new Response(
-            JSON.stringify({ success: true, url: boletoUrl, paymentId: chargeData.id }),
+            JSON.stringify({ success: true, url: boletoUrl, paymentId: chargeData.id, consolidatedId }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 

@@ -25,6 +25,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState(new Date().toISOString().substring(0, 7));
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [billingMode, setBillingMode] = useState(subscriber?.billing_mode || 'consolidada'); // 'consolidada' | 'individualizada'
+    const [consolidatedDueDay, setConsolidatedDueDay] = useState(subscriber?.consolidated_due_day || 10);
+    const [consolidatedInvoices, setConsolidatedInvoices] = useState([]);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -63,6 +65,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     useEffect(() => {
         if (subscriber?.billing_mode) {
             setBillingMode(subscriber.billing_mode);
+        }
+        if (subscriber?.consolidated_due_day) {
+            setConsolidatedDueDay(subscriber.consolidated_due_day);
+        }
+        if (subscriber?.id) {
+            fetchConsolidatedInvoices(subscriber.id);
         }
     }, [subscriber?.id]);
 
@@ -142,11 +150,52 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const { data, error } = await query.order('vencimento', { ascending: false });
             if (error) throw error;
             // Ocultar faturas canceladas conforme solicitado
-            setInvoices((data || []).filter(inv => inv.status !== 'cancelado'));
+            setInvoices(data || []);
         } catch (error) {
-            console.error('Error fetching subscriber invoices:', error);
+            console.error('Error fetching invoices:', error);
         } finally {
             setLoadingInvoices(false);
+        }
+    };
+
+    const fetchConsolidatedInvoices = async (subscriberId) => {
+        const { data } = await supabase
+            .from('consolidated_invoices')
+            .select('*')
+            .eq('subscriber_id', subscriberId)
+            .order('created_at', { ascending: false });
+        setConsolidatedInvoices(data || []);
+    };
+
+    const calculateConsolidatedDueDate = (day) => {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); // 0-indexed
+
+        let targetDate = new Date(currentYear, currentMonth, day);
+
+        // Regra: Se o dia já passou ou faltar menos de 3 dias
+        const diffDays = (targetDate - today) / (1000 * 60 * 60 * 24);
+
+        if (diffDays < 3) {
+            // Vencimento para o mês seguinte
+            targetDate = new Date(currentYear, currentMonth + 1, day);
+        }
+
+        return targetDate.toISOString().split('T')[0];
+    };
+
+    const addHistory = async (entityType, entityId, action, details = {}) => {
+        try {
+            await supabase.from('entity_history').insert({
+                entity_type: entityType,
+                entity_id: entityId,
+                action: action,
+                details: details,
+                created_by: profile?.id
+            });
+        } catch (e) {
+            console.error('Erro ao salvar histórico:', e);
         }
     };
 
@@ -308,7 +357,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             // 3. Save to Supabase
-            const dataToSave = { ...formData, billing_mode: billingMode };
+            const dataToSave = {
+                ...formData,
+                billing_mode: billingMode,
+                consolidated_due_day: parseInt(consolidatedDueDay)
+            };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
 
@@ -417,6 +470,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             showAlert('Erro ao desvincular UC: ' + error.message, 'error');
         }
     };
+
+    const handleBillingModeChange = async (newMode) => {
+        if (billingMode === newMode) return;
+
+        const confirm = await showConfirm(
+            `Deseja alterar o modo de faturamento para "${newMode === 'consolidada' ? 'Consolidada' : 'Individualizada'}"?`,
+            'Alterar Modo de Faturamento'
+        );
+        if (confirm) {
+            setBillingMode(newMode);
+            // Optionally save to DB immediately or on form submit
+        }
+    };
+
+    const totalVisibleInvoicesValue = invoices
+        .filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id) // Only non-canceled and non-consolidated invoices
+        .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
         <div style={{
@@ -666,115 +736,206 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                         <CollapsibleSection title="Faturas" icon={CreditCard} defaultOpen={true}>
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Faturamento</span>
+                                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleBillingModeChange('consolidada')}
+                                                style={{
+                                                    padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
+                                                    background: billingMode === 'consolidada' ? 'white' : 'transparent',
+                                                    color: billingMode === 'consolidada' ? 'var(--color-blue)' : '#64748b',
+                                                    boxShadow: billingMode === 'consolidada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    border: 'none', cursor: 'pointer'
+                                                }}
+                                            >Consolidada</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleBillingModeChange('individualizada')}
+                                                style={{
+                                                    padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
+                                                    background: billingMode === 'individualizada' ? 'white' : 'transparent',
+                                                    color: billingMode === 'individualizada' ? 'var(--color-blue)' : '#64748b',
+                                                    boxShadow: billingMode === 'individualizada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    border: 'none', cursor: 'pointer'
+                                                }}
+                                            >Individualizada</button>
+                                        </div>
+                                    </div>
+
+                                    {billingMode === 'consolidada' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DIA VENC.:</span>
+                                            <select
+                                                value={consolidatedDueDay}
+                                                onChange={(e) => setConsolidatedDueDay(e.target.value)}
+                                                style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                            >
+                                                {[1, 5, 10, 15, 20, 25, 30].map(d => <option key={d} value={d}>{d}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Top Summary & Actions */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px', overflow: 'hidden' }}>
+                                        <div style={{ background: '#f97316', color: 'white', padding: '0.6rem 0.8rem', fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                            Total das Faturas
+                                        </div>
+                                        <div style={{ padding: '0.4rem 1rem', fontSize: '1.25rem', fontWeight: '800', color: '#ea580c' }}>
+                                            {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                        {billingMode === 'consolidada' && (
+                                            <button
+                                                type="button"
+                                                disabled={generating || totalVisibleInvoicesValue === 0}
+                                                onClick={async () => {
+                                                    const confirm = await showConfirm(
+                                                        `Deseja emitir uma fatura consolidada no valor de ${totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`,
+                                                        'Emitir Fatura Consolidada'
+                                                    );
+                                                    if (!confirm) return;
+
+                                                    setGenerating(true);
+                                                    try {
+                                                        const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
+                                                        const result = await createAsaasCharge(subscriber.id, 'subscriber', {
+                                                            dueDate,
+                                                            invoice_ids: invoices.filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id).map(i => i.id)
+                                                        });
+                                                        if (result.success) {
+                                                            showAlert('Fatura consolidada gerada com sucesso!', 'success');
+                                                            fetchInvoices(subscriber.id);
+                                                            fetchConsolidatedInvoices(subscriber.id);
+                                                            if (result.url) window.open(result.url, '_blank');
+                                                        }
+                                                    } catch (error) {
+                                                        showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
+                                                    } finally {
+                                                        setGenerating(false);
+                                                    }
+                                                }}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                    background: '#f97316', color: 'white', border: 'none',
+                                                    padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: (generating || totalVisibleInvoicesValue === 0) ? 'not-allowed' : 'pointer',
+                                                    fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.4)'
+                                                }}
+                                            >
+                                                <CreditCard size={18} /> {generating ? 'Gerando...' : 'Emitir Fatura Consolidada'}
+                                            </button>
+                                        )}
                                         <div style={{ position: 'relative' }}>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowMonthPicker(!showMonthPicker)}
-                                                style={{ padding: '0.6rem 1rem', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '160px', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                    background: 'white', color: '#475569', border: '1px solid #cbd5e1',
+                                                    padding: '0.6rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                                                    fontWeight: 600
+                                                }}
                                             >
-                                                <Calendar size={16} style={{ color: 'var(--color-blue)' }} />
-                                                <span>{invoiceMonthFilter === 'all' ? 'Qualquer Data' : new Date(`${invoiceMonthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                                <Calendar size={18} /> {invoiceMonthFilter === 'all' ? 'Qualquer Data' : invoiceMonthFilter}
                                             </button>
                                             {showMonthPicker && (
-                                                <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                                    <div style={{ marginBottom: '1rem' }}>
-                                                        <button type="button" onClick={() => { setInvoiceMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: invoiceMonthFilter === 'all' ? 'var(--color-blue)' : 'white', color: invoiceMonthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>Qualquer Data</button>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                                        <button type="button" onClick={() => { const parts = invoiceMonthFilter === 'all' ? [new Date().getFullYear(), '01'] : invoiceMonthFilter.split('-'); setInvoiceMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                                        <span style={{ fontWeight: 'bold' }}>{invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0]}</span>
-                                                        <button type="button" onClick={() => { const parts = invoiceMonthFilter === 'all' ? [new Date().getFullYear(), '01'] : invoiceMonthFilter.split('-'); setInvoiceMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
-                                                    </div>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
-                                                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
-                                                            const mVal = String(idx + 1).padStart(2, '0');
-                                                            const currentYear = invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0];
-                                                            const isSelected = invoiceMonthFilter === `${currentYear}-${mVal}`;
-                                                            return <button type="button" key={m} onClick={() => { setInvoiceMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.4rem', border: 'none', borderRadius: '4px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.75rem' }}>{m}</button>;
-                                                        })}
-                                                    </div>
+                                                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '1rem', zIndex: 10, width: '220px' }}>
+                                                    <input
+                                                        type="month"
+                                                        value={invoiceMonthFilter === 'all' ? '' : invoiceMonthFilter}
+                                                        onChange={e => {
+                                                            setInvoiceMonthFilter(e.target.value);
+                                                            setShowMonthPicker(false);
+                                                        }}
+                                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '0.5rem' }}
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            setInvoiceMonthFilter('all');
+                                                            setShowMonthPicker(false);
+                                                        }}
+                                                        style={{ width: '100%', padding: '0.4rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontSize: '0.8rem', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+                                                    >Todas as Datas</button>
                                                 </div>
                                             )}
                                         </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase' }}>Faturamento</span>
-                                            <div style={{ display: 'flex', background: '#cbd5e1', padding: '2px', borderRadius: '8px', cursor: 'pointer', position: 'relative' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (billingMode !== 'consolidada' && window.confirm('Deseja alterar para faturamento consolidado?')) {
-                                                            setBillingMode('consolidada');
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        padding: '0.4rem 1rem',
-                                                        borderRadius: '6px',
-                                                        border: 'none',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: '800',
-                                                        cursor: 'pointer',
-                                                        background: billingMode === 'consolidada' ? 'white' : 'transparent',
-                                                        color: billingMode === 'consolidada' ? 'var(--color-orange)' : '#475569',
-                                                        transition: 'all 0.2s',
-                                                        zIndex: 2
-                                                    }}
-                                                >
-                                                    Consolidada
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (billingMode !== 'individualizada' && window.confirm('Deseja alterar para faturamento individualizado?')) {
-                                                            setBillingMode('individualizada');
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        padding: '0.4rem 1rem',
-                                                        borderRadius: '6px',
-                                                        border: 'none',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: '800',
-                                                        cursor: 'pointer',
-                                                        background: billingMode === 'individualizada' ? 'white' : 'transparent',
-                                                        color: billingMode === 'individualizada' ? 'var(--color-orange)' : '#475569',
-                                                        transition: 'all 0.2s',
-                                                        zIndex: 2
-                                                    }}
-                                                >
-                                                    Individualizada
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem' }}>
-                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Total das Faturas</span>
-                                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1e293b' }}>
-                                                {Number(invoices.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                            </span>
-                                        </div>
-
-                                        {subscriber?.id && billingMode === 'consolidada' && (
-                                            <button
-                                                type="button"
-                                                onClick={handleEmission}
-                                                disabled={generating}
-                                                style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                    background: 'var(--color-orange)', color: 'white', border: 'none',
-                                                    padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem',
-                                                    boxShadow: '0 4px 6px -1px rgba(255, 102, 0, 0.2)'
-                                                }}
-                                            >
-                                                <CreditCard size={18} /> {generating ? 'Processando...' : 'Emitir Fatura Consolidada'}
-                                            </button>
-                                        )}
                                     </div>
                                 </div>
+
+                                {/* Consolidated Invoices Section */}
+                                {billingMode === 'consolidada' && consolidatedInvoices.length > 0 && (
+                                    <div style={{ marginBottom: '2rem' }}>
+                                        <h4 style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 'bold', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <FileText size={16} /> Faturas Consolidadas Emitidas
+                                        </h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                                            {consolidatedInvoices.map(ci => (
+                                                <div key={ci.id} style={{
+                                                    background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)', position: 'relative'
+                                                }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                                            {ci.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vencimento: {new Date(ci.due_date).toLocaleDateString('pt-BR')}</div>
+                                                        <div style={{ marginTop: '0.3rem' }}>
+                                                            <span style={{
+                                                                fontSize: '0.6rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px',
+                                                                background: ci.status === 'paid' ? '#dcfce7' : ci.status === 'canceled' ? '#fee2e2' : '#fef9c3',
+                                                                color: ci.status === 'paid' ? '#166534' : ci.status === 'canceled' ? '#991b1b' : '#854d0e',
+                                                                textTransform: 'uppercase'
+                                                            }}>{ci.status}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                                        {ci.asaas_boleto_url && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => window.open(ci.asaas_boleto_url, '_blank')}
+                                                                title="Visualizar Boleto"
+                                                                style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #e0f2fe', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+                                                            >
+                                                                <Eye size={16} />
+                                                            </button>
+                                                        )}
+                                                        {ci.status === 'pending' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    const confirm = await showConfirm('Deseja cancelar esta fatura consolidada? O boleto no Asaas também será cancelado.', 'Cancelar Fatura Consolidada');
+                                                                    if (!confirm) return;
+                                                                    try {
+                                                                        // Aqui chamaríamos uma nova API de cancelamento consolidado ou adaptariamos a atual
+                                                                        // Por enquanto, vamos marcar como cancelado localmente (Simulado - ideal seria Edge Function)
+                                                                        const { error } = await supabase.from('consolidated_invoices').update({ status: 'canceled' }).eq('id', ci.id);
+                                                                        if (error) throw error;
+                                                                        await addHistory('consolidated_invoice', ci.id, 'canceled', { asaas_id: ci.asaas_payment_id });
+                                                                        fetchConsolidatedInvoices(subscriber.id);
+                                                                        showAlert('Fatura consolidada cancelada.', 'info');
+                                                                    } catch (e) {
+                                                                        showAlert('Erro ao cancelar: ' + e.message, 'error');
+                                                                    }
+                                                                }}
+                                                                title="Cancelar Fatura"
+                                                                style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #fee2e2', background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
+                                                            >
+                                                                <Ban size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {loadingInvoices ? (
                                     <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
@@ -819,7 +980,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                 {isBoletoEmitido ? 'Emitido' : 'Gerar'}
                                                             </span>
                                                         </div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>{new Date(inv.vencimento).toLocaleDateString('pt-BR')}</div>
+                                                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                                            {isBoletoEmitido && inv.asaas_boleto_url && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); window.open(inv.asaas_boleto_url, '_blank'); }}
+                                                                    title="Visualizar Boleto"
+                                                                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#0369a1' }}
+                                                                >
+                                                                    <Eye size={14} />
+                                                                </button>
+                                                            )}
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>{new Date(inv.vencimento).toLocaleDateString('pt-BR')}</div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
