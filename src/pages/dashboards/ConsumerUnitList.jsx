@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import { Calendar as CalendarIcon, List, Layout, Info } from 'lucide-react';
 import {
     DndContext,
     PointerSensor,
@@ -139,6 +140,104 @@ function KanbanColumn({ status, label, color, units, onCardClick }) {
     );
 }
 
+function CalendarView({ units, onCardClick, searchTerm }) {
+    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+
+    const groupedUnits = units.reduce((acc, unit) => {
+        const day = unit.dia_leitura || 0;
+        if (!acc[day]) acc[day] = [];
+        acc[day].push(unit);
+        return acc;
+    }, {});
+
+    return (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '1.5rem',
+            padding: '1rem'
+        }}>
+            {days.map(day => {
+                const dayUnits = (groupedUnits[day] || []).filter(u => {
+                    if (!searchTerm) return true;
+                    const lower = searchTerm.toLowerCase();
+                    return (
+                        u.numero_uc?.toLowerCase().includes(lower) ||
+                        u.subscriber?.name?.toLowerCase().includes(lower) ||
+                        u.concessionaria?.toLowerCase().includes(lower)
+                    );
+                });
+
+                return (
+                    <div key={day} style={{
+                        background: 'white',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)',
+                        minHeight: '180px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: 'var(--shadow-sm)',
+                        transition: 'transform 0.2s',
+                    }} onMouseOver={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'} onMouseOut={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}>
+                        <div style={{
+                            padding: '0.6rem 1rem',
+                            borderBottom: '1px solid var(--color-border)',
+                            background: '#f8fafc',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderTopLeftRadius: 'var(--radius-md)',
+                            borderTopRightRadius: 'var(--radius-md)'
+                        }}>
+                            <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
+                                {dayUnits.length}
+                            </span>
+                        </div>
+                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
+                            {dayUnits.length === 0 ? (
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
+                            ) : (
+                                dayUnits.map(uc => (
+                                    <div
+                                        key={uc.id}
+                                        onClick={() => onCardClick(uc)}
+                                        style={{
+                                            padding: '0.6rem',
+                                            borderRadius: '8px',
+                                            background: '#f1f5f9',
+                                            borderLeft: `4px solid ${KANBAN_STATUSES.find(s => s.status === uc.status)?.color || '#cbd5e1'}`,
+                                            cursor: 'pointer',
+                                            fontSize: '0.8rem',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => {
+                                            e.currentTarget.style.transform = 'translateX(4px)';
+                                            e.currentTarget.style.background = '#e2e8f0';
+                                        }}
+                                        onMouseOut={e => {
+                                            e.currentTarget.style.transform = 'translateX(0)';
+                                            e.currentTarget.style.background = '#f1f5f9';
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {uc.subscriber?.name || 'S/ Assinante'}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.1rem', display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>UC: {uc.numero_uc}</span>
+                                            <span style={{ fontStyle: 'italic', fontSize: '0.6rem' }}>{uc.concessionaria}</span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function ConsumerUnitList() {
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -147,6 +246,7 @@ export default function ConsumerUnitList() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState(null);
     const [activeId, setActiveId] = useState(null);
+    const [showTooltip, setShowTooltip] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -258,8 +358,6 @@ export default function ConsumerUnitList() {
             return;
         }
 
-        const unitToUpdate = units.find(u => u.id === activeId);
-
         try {
             const { error } = await supabase
                 .from('consumer_units')
@@ -274,91 +372,203 @@ export default function ConsumerUnitList() {
     };
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2>Gestão de Unidades Consumidoras (UCs)</h2>
+        <div style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+                <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em' }}>
+                    Gestão de Unidades Consumidoras
+                </h2>
                 <button
                     onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
-                    style={{ padding: '0.6rem 1.2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        background: 'var(--color-blue)',
+                        color: 'white',
+                        borderRadius: '8px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        border: 'none',
+                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2)',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
                 >
                     + Nova UC
                 </button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1.5rem' }}>
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
-                    <input
-                        placeholder="Buscar por UC, Assinante, Concessionária ou Status..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="input"
-                        style={{ maxWidth: '400px' }}
-                    />
-                    <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                    <div style={{ position: 'relative', flex: 1, maxWidth: '450px' }}>
+                        <input
+                            placeholder="Buscar por UC, Assinante, Concessionária..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="input"
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                            }}
+                        />
+                    </div>
+
+                    <div className="btn-group" style={{
+                        display: 'flex',
+                        background: '#f1f5f9',
+                        padding: '0.3rem',
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0'
+                    }}>
                         <button
                             onClick={() => setViewMode('list')}
                             className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ borderRadius: 0, border: 'none' }}
+                            style={{
+                                borderRadius: '8px',
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.6rem 1.2rem',
+                                background: viewMode === 'list' ? 'white' : 'transparent',
+                                color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b',
+                                boxShadow: viewMode === 'list' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+                                fontWeight: viewMode === 'list' ? '700' : '500'
+                            }}
                         >
-                            Lista
+                            <List size={18} /> Lista
                         </button>
                         <button
                             onClick={() => setViewMode('kanban')}
                             className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ borderRadius: 0, border: 'none' }}
+                            style={{
+                                borderRadius: '8px',
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.6rem 1.2rem',
+                                background: viewMode === 'kanban' ? 'white' : 'transparent',
+                                color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b',
+                                boxShadow: viewMode === 'kanban' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+                                fontWeight: viewMode === 'kanban' ? '700' : '500'
+                            }}
                         >
-                            Kanban
+                            <Layout size={18} /> Kanban
                         </button>
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setViewMode('calendar')}
+                                className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.6rem 1.2rem',
+                                    background: viewMode === 'calendar' ? 'white' : 'transparent',
+                                    color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b',
+                                    boxShadow: viewMode === 'calendar' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+                                    fontWeight: viewMode === 'calendar' ? '700' : '500'
+                                }}
+                                onMouseEnter={() => setShowTooltip(true)}
+                                onMouseLeave={() => setShowTooltip(false)}
+                            >
+                                <CalendarIcon size={18} /> Calendário
+                            </button>
+                            {showTooltip && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '130%',
+                                    right: 0,
+                                    background: '#1e293b',
+                                    color: 'white',
+                                    padding: '0.75rem 1.25rem',
+                                    borderRadius: '10px',
+                                    fontSize: '0.85rem',
+                                    zIndex: 1000,
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.6rem',
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                                    pointerEvents: 'none',
+                                    border: '1px solid rgba(255,255,255,0.1)'
+                                }}>
+                                    <Info size={16} style={{ color: '#3b82f6' }} />
+                                    Calendário agrupa as UCs por dia de leitura.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {loading ? <p>Carregando...</p> : (
-                <>
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+                    <p style={{ color: '#64748b', fontWeight: '600' }}>Carregando Unidades...</p>
+                </div>
+            ) : (
+                <div style={{ minHeight: '600px' }}>
                     {viewMode === 'list' ? (
-                        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                             <div className="table-container">
                                 {filteredUnits.length === 0 ? (
-                                    <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-light)' }}>Nenhuma UC encontrada.</p>
+                                    <p style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma Unidade Consumidora encontrada.</p>
                                 ) : (
                                     <table className="table">
                                         <thead>
                                             <tr>
-                                                <th>UC</th>
-                                                <th>Concessionária</th>
-                                                <th>Assinante</th>
-                                                <th>Franquia</th>
-                                                <th>Status</th>
-                                                <th>Cidade</th>
-                                                <th>Ações</th>
+                                                <th style={{ background: '#f8fafc' }}>UC</th>
+                                                <th style={{ background: '#f8fafc' }}>Concessionária</th>
+                                                <th style={{ background: '#f8fafc' }}>Assinante</th>
+                                                <th style={{ background: '#f8fafc' }}>Franquia</th>
+                                                <th style={{ background: '#f8fafc' }}>Status</th>
+                                                <th style={{ background: '#f8fafc' }}>Cidade</th>
+                                                <th style={{ background: '#f8fafc' }}>Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {filteredUnits.map(uc => (
-                                                <tr key={uc.id}>
-                                                    <td style={{ fontWeight: 'bold' }}>{uc.numero_uc}</td>
-                                                    <td style={{ color: 'var(--color-text-medium)' }}>{uc.concessionaria || '-'}</td>
+                                                <tr key={uc.id} style={{ transition: 'background 0.2s' }}>
+                                                    <td style={{ fontWeight: '700', color: '#1e293b' }}>{uc.numero_uc}</td>
+                                                    <td style={{ color: '#64748b' }}>{uc.concessionaria || '-'}</td>
                                                     <td>
-                                                        <div style={{ fontWeight: 'bold' }}>{uc.subscriber?.name || '-'}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)' }}>{uc.subscriber?.cpf_cnpj}</div>
+                                                        <div style={{ fontWeight: '700', color: '#334155' }}>{uc.subscriber?.name || '-'}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{uc.subscriber?.cpf_cnpj}</div>
                                                     </td>
-                                                    <td>{uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}</td>
+                                                    <td style={{ fontWeight: '600', color: 'var(--color-success)' }}>
+                                                        {uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}
+                                                    </td>
                                                     <td>
                                                         <span className="badge" style={{
-                                                            background: uc.status === 'ativo' ? 'var(--color-success-light)' :
-                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#fee2e2' : 'var(--color-bg-light)',
-                                                            color: uc.status === 'ativo' ? 'var(--color-success)' :
-                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#dc2626' : 'var(--color-text-light)'
+                                                            padding: '0.35rem 0.75rem',
+                                                            borderRadius: '99px',
+                                                            background: uc.status === 'ativo' ? '#dcfce7' :
+                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#fee2e2' : '#f1f5f9',
+                                                            color: uc.status === 'ativo' ? '#166534' :
+                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#991b1b' : '#475569',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: '700'
                                                         }}>
                                                             {uc.status?.replace('_', ' ').toUpperCase()}
                                                         </span>
                                                     </td>
-                                                    <td>{uc.address?.cidade} / {uc.address?.uf}</td>
+                                                    <td style={{ color: '#64748b' }}>{uc.address?.cidade} / {uc.address?.uf}</td>
                                                     <td>
                                                         <button
                                                             onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
                                                             className="btn btn-secondary"
-                                                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                                            style={{
+                                                                padding: '0.4rem 0.8rem',
+                                                                fontSize: '0.75rem',
+                                                                borderRadius: '6px',
+                                                                fontWeight: '600',
+                                                                border: '1px solid #e2e8f0'
+                                                            }}
                                                         >
                                                             Editar
                                                         </button>
@@ -370,15 +580,12 @@ export default function ConsumerUnitList() {
                                 )}
                             </div>
                         </div>
-                    ) : (
+                    ) : viewMode === 'kanban' ? (
                         <DndContext
                             sensors={sensors}
                             collisionDetection={(args) => {
-                                // First try pointerWithin (good for empty columns)
                                 const pointerCollisions = pointerWithin(args);
                                 if (pointerCollisions.length > 0) return pointerCollisions;
-
-                                // Fallback to rectIntersection
                                 return rectIntersection(args);
                             }}
                             onDragStart={handleDragStart}
@@ -386,7 +593,7 @@ export default function ConsumerUnitList() {
                             onDragEnd={handleDragEnd}
                             onDragCancel={() => { setActiveId(null); fetchUnits(); }}
                         >
-                            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
+                            <div style={{ display: 'flex', gap: '1.5rem', overflowX: 'auto', paddingBottom: '2rem' }}>
                                 {KANBAN_STATUSES.map(({ status, label, color }) => {
                                     const unitsInStatus = filteredUnits.filter(u => (u.status || 'em_ativacao') === status);
                                     return (
@@ -410,8 +617,16 @@ export default function ConsumerUnitList() {
                                 ) : null}
                             </DragOverlay>
                         </DndContext>
+                    ) : (
+                        <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
+                            <CalendarView
+                                units={filteredUnits}
+                                onCardClick={(uc) => { setEditingUnit(uc); setIsModalOpen(true); }}
+                                searchTerm={searchTerm}
+                            />
+                        </div>
                     )}
-                </>
+                </div>
             )}
 
             {isModalOpen && (
