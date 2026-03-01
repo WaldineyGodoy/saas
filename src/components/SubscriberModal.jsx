@@ -698,7 +698,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             <div style={{ display: 'flex', background: '#cbd5e1', padding: '2px', borderRadius: '8px', cursor: 'pointer', position: 'relative' }}>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setBillingMode('consolidada')}
+                                                    onClick={() => {
+                                                        if (billingMode !== 'consolidada' && window.confirm('Deseja alterar para faturamento consolidado?')) {
+                                                            setBillingMode('consolidada');
+                                                        }
+                                                    }}
                                                     style={{
                                                         padding: '0.4rem 1rem',
                                                         borderRadius: '6px',
@@ -716,7 +720,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setBillingMode('individualizada')}
+                                                    onClick={() => {
+                                                        if (billingMode !== 'individualizada' && window.confirm('Deseja alterar para faturamento individualizado?')) {
+                                                            setBillingMode('individualizada');
+                                                        }
+                                                    }}
                                                     style={{
                                                         padding: '0.4rem 1rem',
                                                         borderRadius: '6px',
@@ -738,7 +746,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem' }}>
-                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Total Sugerido</span>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Total das Faturas</span>
                                             <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#1e293b' }}>
                                                 {Number(invoices.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                             </span>
