@@ -432,8 +432,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>Consumo Bruto:</span>
-                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_kwh) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
+                                    <span style={{ color: '#64748b' }}>Consumo Compensado ({formData.consumo_compensado} kWh):</span>
+                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_compensado) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534', background: '#dcfce7', padding: '0.5rem', borderRadius: '4px' }}>
