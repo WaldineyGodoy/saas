@@ -30,6 +30,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
     const [selectedUc, setSelectedUc] = useState(null);
     const [localInvoiceId, setLocalInvoiceId] = useState(invoice?.id || null);
+    const [loading, setLoading] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [duplicateInfo, setDuplicateInfo] = useState(null); // { existing, type: 'block' | 'ask' }
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
     const { showAlert, showConfirm } = useUI();
     const [showSuccess, setShowSuccess] = useState(false);
     const [subscriberBillingMode, setSubscriberBillingMode] = useState('consolidada');
