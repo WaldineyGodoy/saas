@@ -11,7 +11,7 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
         <div style={{
             border: '1px solid #e2e8f0',
             borderRadius: '8px',
-            overflow: 'hidden',
+            overflow: 'visible',
             marginBottom: '1rem',
             background: 'white'
         }}>
