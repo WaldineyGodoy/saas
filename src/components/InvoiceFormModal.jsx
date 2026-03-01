@@ -262,7 +262,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     .from('invoices')
                     .select('id, vencimento')
                     .eq('uc_id', payload.uc_id)
-                    .eq('mes_referencia', payload.mes_referencia);
+                    .eq('mes_referencia', payload.mes_referencia)
+                    .neq('status', 'cancelado');
 
                 if (existing && existing.length > 0) {
                     const exactMatch = existing.find(ex => ex.vencimento === payload.vencimento);
