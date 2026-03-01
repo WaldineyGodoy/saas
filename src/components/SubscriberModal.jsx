@@ -941,7 +941,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
                                 ) : invoices.length > 0 ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                        {invoices.map(inv => {
+                                        {invoices.filter(inv => inv.status !== 'cancelado').map(inv => {
                                             const statusMap = {
                                                 'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7', icon: CheckCircle },
                                                 'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2', icon: AlertCircle },
