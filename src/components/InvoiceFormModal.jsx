@@ -455,22 +455,22 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Detalhamento da Fatura</h4>
 
                             {selectedUc && (
-                                <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
+                                <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', border: '1px solid #334155' }}>
+                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid #334155', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Assinante</label>
-                                        <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.9rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
+                                        <span style={{ fontWeight: 'bold', color: '#f8fafc', fontSize: '0.95rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Número da UC</label>
-                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
+                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Identificação</label>
-                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
+                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Mês Referência</label>
-                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>
+                                        <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: '0.85rem' }}>
                                             {(() => {
                                                 const [y, m] = formData.mes_referencia.split('-');
                                                 const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -480,14 +480,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Vencimento</label>
-                                        <span style={{ fontWeight: 'bold', color: '#ef4444', fontSize: '0.85rem' }}>
+                                        <span style={{ fontWeight: 'bold', color: '#fb7185', fontSize: '0.85rem' }}>
                                             {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                         </span>
                                     </div>
-                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid #334155' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase' }}>Tipo de Ligação</span>
-                                            <span style={{ background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
+                                            <span style={{ background: '#334155', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#f8fafc', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
                                         </div>
                                     </div>
                                 </div>
