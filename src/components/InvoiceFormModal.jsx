@@ -319,35 +319,12 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             <div style={{ background: '#f8fafc', borderRadius: '12px', width: '95%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
 
                 {/* Header */}
-                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div>
-                            <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{invoice ? 'Editar Fatura' : 'Nova Fatura'}</h3>
-                            <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
-                        </div>
-                        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+                    <div>
+                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{invoice ? 'Editar Fatura' : 'Nova Fatura'}</h3>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
                     </div>
-
-                    {selectedUc && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Assinante</label>
-                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Número da UC</label>
-                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.numero_uc}</span>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Identificação</label>
-                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.titular_conta}</span>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Tipo de Ligação</label>
-                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
-                            </div>
-                        </div>
-                    )}
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
@@ -446,6 +423,45 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         {/* Right Column: Calculated Results */}
                         <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                             <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Detalhamento da Fatura</h4>
+
+                            {selectedUc && (
+                                <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Assinante</label>
+                                        <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.9rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Número da UC</label>
+                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Identificação</label>
+                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Mês Referência</label>
+                                        <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>
+                                            {(() => {
+                                                const [y, m] = formData.mes_referencia.split('-');
+                                                const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                                return `${months[parseInt(m) - 1]}/${y}`;
+                                            })()}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Vencimento</label>
+                                        <span style={{ fontWeight: 'bold', color: '#ef4444', fontSize: '0.85rem' }}>
+                                            {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                                        </span>
+                                    </div>
+                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase' }}>Tipo de Ligação</span>
+                                            <span style={{ background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#475569', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
