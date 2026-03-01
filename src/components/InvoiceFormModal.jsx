@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { cancelAsaasCharge, updateAsaasCharge } from '../lib/api';
+import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge } from '../lib/api';
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const { profile } = useAuth();
