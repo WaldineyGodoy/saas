@@ -318,19 +318,42 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             <div style={{ background: '#f8fafc', borderRadius: '12px', width: '95%', maxWidth: '800px', maxHeight: '95vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
 
                 {/* Header */}
-                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
-                    <div>
-                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{invoice ? 'Editar Fatura' : 'Nova Fatura'}</h3>
-                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
+                <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <div>
+                            <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{invoice ? 'Editar Fatura' : 'Nova Fatura'}</h3>
+                            <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
+                        </div>
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+
+                    {selectedUc && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Assinante</label>
+                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Número da UC</label>
+                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.numero_uc}</span>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Identificação</label>
+                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block' }}>{selectedUc.titular_conta}</span>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Tipo de Ligação</label>
+                                <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', display: 'block', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
 
                     {/* UC Selection */}
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
+                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Trocar Unidade Consumidora</label>
                         <select
                             required
                             value={formData.uc_id}
@@ -343,13 +366,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
                             ))}
                         </select>
-                        {selectedUc && (
-                            <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', background: '#eff6ff', padding: '0.5rem', borderRadius: '4px', display: 'inline-flex', gap: '1rem', flexWrap: 'wrap' }}>
-                                <span><strong>Tarifa:</strong> R$ {Number(selectedUc.tarifa_concessionaria || 0).toFixed(4)}</span>
-                                <span><strong>Desconto:</strong> {selectedUc.desconto_assinante || 0}%</span>
-                                <span><strong>Tipo Ligação:</strong> <span style={{ textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao || 'Não inf.'}</span></span>
-                            </div>
-                        )}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -427,29 +443,39 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         </div>
 
                         {/* Right Column: Calculated Results */}
-                        <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Resumo do Cálculo</h4>
+                        <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Detalhamento da Fatura</h4>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                                     <span style={{ color: '#64748b' }}>Consumo Compensado ({formData.consumo_compensado} kWh):</span>
                                     <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_compensado) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
                                 </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534', background: '#dcfce7', padding: '0.5rem', borderRadius: '4px' }}>
-                                    <span>Economia Gerada (Desconto):</span>
-                                    <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>
+                                    <span>Valor da Tarifa:</span>
+                                    <span>R$ {Number(selectedUc?.tarifa_concessionaria || 0).toFixed(4).replace('.', ',')}</span>
                                 </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>Energia Compensada:</span>
-                                    <span style={{ fontWeight: 600 }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', background: '#dcfce7', padding: '0.6rem', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534' }}>
+                                        <span style={{ fontWeight: 600 }}>Economia Gerada:</span>
+                                        <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#15803d' }}>
+                                        <span>Desconto Aplicado:</span>
+                                        <span>{selectedUc?.desconto_assinante || 0}%</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                                    <span style={{ color: '#64748b', fontWeight: 600 }}>Energia Compensada Líquida:</span>
+                                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
                                 </div>
 
                                 <div style={{ height: '1px', background: '#cbd5e1', margin: '0.5rem 0' }}></div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Ilum. Pública:</span>
+                                    <span style={{ color: '#64748b' }}>+ Iluminação Pública:</span>
                                     <span>{formData.iluminacao_publica || 'R$ 0,00'}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
@@ -457,16 +483,34 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     <span>{formData.tarifa_minima || 'R$ 0,00'}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Outros:</span>
+                                    <span style={{ color: '#64748b' }}>+ Outros Lançamentos:</span>
                                     <span>{formData.outros_lancamentos || 'R$ 0,00'}</span>
                                 </div>
 
-                                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '2px dashed #cbd5e1' }}>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', marginBottom: '0.2rem' }}>Total a Pagar</label>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--color-blue)' }}>
-                                        {formData.valor_a_pagar || 'R$ 0,00'}
+                                <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
+                                    <div style={{
+                                        marginLeft: 'auto',
+                                        width: 'fit-content',
+                                        padding: '1rem',
+                                        background: '#f0fdf4',
+                                        border: '2px solid #22c55e',
+                                        borderRadius: '12px',
+                                        textAlign: 'right'
+                                    }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total a Pagar</label>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#14532d' }}>
+                                            {formData.valor_a_pagar || 'R$ 0,00'}
+                                        </div>
                                     </div>
                                 </div>
+
+                                {invoice?.asaas_boleto_url && (
+                                    <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'center' }}>
+                                        <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem' }}>
+                                            <FileText size={18} /> Ver Boleto Emitido
+                                        </a>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -478,9 +522,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <button type="button" onClick={() => handleEmission()} disabled={generating} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5', padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}>
                                     {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto Agora</>}
                                 </button>
-                            )}
-                            {invoice?.asaas_boleto_url && (
-                                <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontWeight: 'bold', textDecoration: 'none' }}><FileText size={18} /> Ver Boleto Emitido</a>
                             )}
                             {invoice?.id && invoice.status !== 'cancelado' && canManageStatus && (
                                 <button
