@@ -34,7 +34,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [consolidatedInvoices, setConsolidatedInvoices] = useState([]);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
+    const [consolidatedToDownload, setConsolidatedToDownload] = useState(null);
     const hiddenRef = useRef(null);
+    const hiddenConsolidatedRef = useRef(null);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -193,22 +195,33 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         return targetDate.toISOString().split('T')[0];
     };
 
-    const handleDownloadCombined = async (invoice) => {
-        if (!invoice.asaas_payment_id && !invoice.asaas_boleto_url) {
-            showAlert('Boleto não disponível para esta fatura.', 'warning');
+    const handleDownloadConsolidated = async (consolidated) => {
+        if (!consolidated.asaas_payment_id && !consolidated.asaas_boleto_url) {
+            showAlert('Boleto não disponível para esta fatura consolidada.', 'warning');
             return;
         }
 
         setIsGeneratingPdf(true);
-        setInvoiceToDownload(invoice);
 
         try {
-            // Wait for the hidden render to update
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // Fetch individual invoices for this consolidated one
+            const { data: invs, error } = await supabase
+                .from('invoices')
+                .select('*, consumer_units (numero_uc, identification, titular_conta)')
+                .eq('consolidated_invoice_id', consolidated.id)
+                .neq('status', 'cancelado');
 
-            // 1. Prepare PDF of the detailed summary
-            const element = hiddenRef.current;
-            if (!element) throw new Error("Elemento de captura não encontrado");
+            if (error) throw error;
+            if (!invs || invs.length === 0) throw new Error("Nenhuma fatura individual encontrada para este consolidado.");
+
+            // Set data for hidden render
+            setConsolidatedToDownload({ ...consolidated, items: invs });
+
+            // Wait for render
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            const element = hiddenConsolidatedRef.current;
+            if (!element) throw new Error("Elemento de captura consolidado não encontrado");
 
             const canvas = await html2canvas(element, {
                 scale: 2,
@@ -224,24 +237,92 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
             const summaryBase64 = pdfSummary.output('datauristring');
+            const asaasUrl = consolidated.asaas_boleto_url;
 
-            // 2. Call the Edge Function for Backend Merge
-            const asaasUrl = invoice.asaas_boleto_url;
-            if (!asaasUrl) throw new Error("URL do boleto não encontrada");
-
-            const fileName = `Fatura_${invoice.mes_referencia}_${subscriber.name.replace(/\s+/g, '_')}.pdf`;
+            const fileName = `Fatura_Consolidada_${consolidated.due_date}_${subscriber.name.replace(/\s+/g, '_')}.pdf`;
 
             await mergePdf(summaryBase64, asaasUrl, fileName);
-
-            showAlert('PDF gerado com sucesso!', 'success');
+            showAlert('PDF Consolidado gerado!', 'success');
 
         } catch (error) {
-            console.error("Error generating combined PDF:", error);
-            showAlert('Erro ao gerar PDF combinado. Por favor, tente novamente.', 'error');
+            console.error("Error generating consolidated PDF:", error);
+            showAlert('Erro ao gerar PDF consolidado.', 'error');
         } finally {
             setIsGeneratingPdf(false);
-            setInvoiceToDownload(null);
+            setConsolidatedToDownload(null);
         }
+    };
+
+    const renderHiddenConsolidatedDetail = (data) => {
+        if (!data) return null;
+
+        const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+        return (
+            <div className="pdf-capture-wrapper consolidated">
+                <div className="detail-card">
+                    <div className="branded-header">
+                        {branding?.logo_url ? (
+                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                        ) : (
+                            <div className="company-info-fallback">
+                                <FileText size={24} color="#FF6600" />
+                                <span>{branding?.company_name || 'B2W Energia'}</span>
+                            </div>
+                        )}
+                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                            <h3 style={{ margin: 0, color: '#003366', fontSize: '1.2rem' }}>Resumo Consolidado</h3>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Vencimento: {new Date(data.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    </div>
+
+                    <div className="consolidated-subscriber-info" style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                        <div className="detail-item">
+                            <label>ASSINANTE</label>
+                            <span style={{ fontSize: '1.1rem', color: '#003366', fontWeight: 800 }}>{subscriber?.name}</span>
+                        </div>
+                    </div>
+
+                    <div className="consolidated-table-container" style={{ padding: '24px' }}>
+                        <table className="consolidated-table">
+                            <thead>
+                                <tr>
+                                    <th>UC / IDENTIFICAÇÃO</th>
+                                    <th>REFERÊNCIA</th>
+                                    <th>CONSUMO (kWh)</th>
+                                    <th>ECONOMIA</th>
+                                    <th>VALOR</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.items.map(inv => (
+                                    <tr key={inv.id}>
+                                        <td>
+                                            <div style={{ fontWeight: 600 }}>{inv.consumer_units?.numero_uc}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inv.consumer_units?.identification || inv.consumer_units?.titular_conta}</div>
+                                        </td>
+                                        <td>{inv.mes_referencia}</td>
+                                        <td>{inv.consumo_kwh}</td>
+                                        <td style={{ color: '#16a34a', fontWeight: 600 }}>- {formatCurrency(inv.economia_reais)}</td>
+                                        <td style={{ fontWeight: 700 }}>{formatCurrency(inv.valor_a_pagar)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colSpan="4" style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1rem' }}>TOTAL CONSOLIDADO:</td>
+                                    <td style={{ fontSize: '1.1rem', fontWeight: 800, color: '#003366' }}>{formatCurrency(data.total_value)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div style={{ padding: '0 24px 24px', color: '#64748b', fontSize: '0.75rem', fontStyle: 'italic' }}>
+                        * Este documento é um demonstrativo das faturas de energia compensada do período. O boleto para pagamento encontra-se na página seguinte.
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const renderHiddenInvoiceDetail = (invoice) => {
@@ -1006,7 +1087,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                             showAlert('Fatura consolidada gerada com sucesso!', 'success');
                                                             fetchInvoices(subscriber.id);
                                                             fetchConsolidatedInvoices(subscriber.id);
-                                                            if (result.url) window.open(result.url, '_blank');
+
+                                                            // Trigger download of the consolidated PDF
+                                                            if (result.consolidatedId) {
+                                                                const { data: newCons } = await supabase
+                                                                    .from('consolidated_invoices')
+                                                                    .select('*')
+                                                                    .eq('id', result.consolidatedId)
+                                                                    .single();
+                                                                if (newCons) handleDownloadConsolidated(newCons);
+                                                            } else if (result.url) {
+                                                                window.open(result.url, '_blank');
+                                                            }
                                                         }
                                                     } catch (error) {
                                                         showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
@@ -1090,14 +1182,25 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                     </div>
                                                     <div style={{ display: 'flex', gap: '0.4rem' }}>
                                                         {ci.asaas_boleto_url && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => window.open(ci.asaas_boleto_url, '_blank')}
-                                                                title="Visualizar Boleto"
-                                                                style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #e0f2fe', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
-                                                            >
-                                                                <Eye size={16} />
-                                                            </button>
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => window.open(ci.asaas_boleto_url, '_blank')}
+                                                                    title="Visualizar Boleto"
+                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #e0f2fe', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer' }}
+                                                                >
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDownloadConsolidated(ci)}
+                                                                    title="Download PDF Consolidado"
+                                                                    disabled={isGeneratingPdf}
+                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #ffedd5', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
+                                                                >
+                                                                    {isGeneratingPdf ? <Loader2 size={16} className="spin-animation" /> : <Download size={16} />}
+                                                                </button>
+                                                            </>
                                                         )}
                                                         {ci.status === 'pending' && (
                                                             <button
@@ -1360,10 +1463,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     </div>
                 </div>
             )}
-            {/* Hidden wrapper for PDF capture */}
+            {/* Hidden wrappers for PDF capture */}
             <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
                 <div ref={hiddenRef}>
                     {invoiceToDownload && renderHiddenInvoiceDetail(invoiceToDownload)}
+                </div>
+                <div ref={hiddenConsolidatedRef}>
+                    {consolidatedToDownload && renderHiddenConsolidatedDetail(consolidatedToDownload)}
                 </div>
             </div>
 
