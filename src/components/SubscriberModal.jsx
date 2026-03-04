@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer } from '../lib/api';
+import { useBranding } from '../contexts/BrandingContext';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import './InvoicesModal.css';
 
 export default function SubscriberModal({ subscriber, onClose, onSave, onDelete }) {
     const { showAlert, showConfirm } = useUI();
+    const { branding } = useBranding();
     const { profile } = useAuth();
     const [originators, setOriginators] = useState([]);
     const [consumerUnits, setConsumerUnits] = useState([]);
@@ -27,6 +32,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [billingMode, setBillingMode] = useState(subscriber?.billing_mode || 'consolidada'); // 'consolidada' | 'individualizada'
     const [consolidatedDueDay, setConsolidatedDueDay] = useState(subscriber?.consolidated_due_day || 10);
     const [consolidatedInvoices, setConsolidatedInvoices] = useState([]);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [invoiceToDownload, setInvoiceToDownload] = useState(null);
+    const hiddenRef = useRef(null);
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -183,6 +191,191 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         }
 
         return targetDate.toISOString().split('T')[0];
+    };
+
+    const handleDownloadCombined = async (invoice) => {
+        if (!invoice.asaas_payment_id && !invoice.asaas_boleto_url) {
+            showAlert('Boleto não disponível para esta fatura.', 'warning');
+            return;
+        }
+
+        setIsGeneratingPdf(true);
+        setInvoiceToDownload(invoice);
+
+        try {
+            // Wait for the hidden render to update
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // 1. Prepare PDF of the detailed summary
+            const element = hiddenRef.current;
+            if (!element) throw new Error("Elemento de captura não encontrado");
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: "#f8fafc"
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfSummary = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdfSummary.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+            const summaryBase64 = pdfSummary.output('datauristring');
+
+            // 2. Call the Edge Function for Backend Merge
+            const asaasUrl = invoice.asaas_boleto_url;
+            if (!asaasUrl) throw new Error("URL do boleto não encontrada");
+
+            const fileName = `Fatura_${invoice.mes_referencia}_${subscriber.name.replace(/\s+/g, '_')}.pdf`;
+
+            await mergePdf(summaryBase64, asaasUrl, fileName);
+
+            showAlert('PDF gerado com sucesso!', 'success');
+
+        } catch (error) {
+            console.error("Error generating combined PDF:", error);
+            showAlert('Erro ao gerar PDF combinado. Por favor, tente novamente.', 'error');
+        } finally {
+            setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
+        }
+    };
+
+    const renderHiddenInvoiceDetail = (invoice) => {
+        if (!invoice) return null;
+
+        // Get matching UC for this invoice to get technical data
+        const uc = consumerUnits.find(u => u.id === invoice.consumer_unit_id);
+
+        const statusLabel = invoice.status?.toUpperCase() || 'N/A';
+        const statusColor = invoice.status === 'pago' ? '#27ae60' : (invoice.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+
+        // Data Sync Math
+        const tarifa = parseFloat(invoice.tarifa_concessionaria || uc?.tarifa_concessionaria || 1);
+        const totalKwh = parseFloat(invoice.consumo_kwh || 0);
+        const tarifaMinimaRs = parseFloat(invoice.tarifa_minima || 0);
+        const tarifaMinimaKwh = tarifaMinimaRs / tarifa;
+
+        const consumoCompensadoKwh = Math.max(0, totalKwh - tarifaMinimaKwh);
+        const consumoCompensadoReais = consumoCompensadoKwh * tarifa;
+
+        const economia = parseFloat(invoice.economia_reais || 0);
+        const energiaCompensadaLiquida = Math.max(0, consumoCompensadoReais - economia);
+
+        const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+        return (
+            <div className="pdf-capture-wrapper">
+                <div className="detail-card">
+                    <div className="branded-header">
+                        {branding?.logo_url ? (
+                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                        ) : (
+                            <div className="company-info-fallback">
+                                <FileText size={24} color="#FF6600" />
+                                <span>{branding?.company_name || 'B2W Energia'}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                        <div className="header-info">
+                            <Info size={20} color="#ffffff" />
+                            <h3>Detalhamento da Fatura</h3>
+                        </div>
+                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                            {statusLabel}
+                        </span>
+                    </div>
+
+                    <div className="detail-grid">
+                        <div className="detail-section dark">
+                            <div className="detail-item">
+                                <label>ASSINANTE</label>
+                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || 'N/A'}</span>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>NÚMERO DA UC</label>
+                                    <span>{uc?.numero_uc || 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
+                                </div>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>MÊS REFERÊNCIA</label>
+                                    <span>{invoice.mes_referencia ? `${invoice.mes_referencia.split('-')[1]}/${invoice.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>VENCIMENTO</label>
+                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                                        {invoice.vencimento ? new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="detail-item">
+                                <label>TIPO DE LIGAÇÃO</label>
+                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                                    {invoice.tipo_ligacao || uc?.tipo_ligacao || 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="detail-section metrics">
+                            <div className="metric-line">
+                                <span>Consumo Compensado ({consumoCompensadoKwh.toFixed(0)} kWh):</span>
+                                <span>{formatCurrency(consumoCompensadoReais)}</span>
+                            </div>
+                            <div className="metric-line secondary">
+                                <span>Valor da Tarifa:</span>
+                                <span>R$ {tarifa.toFixed(4)}</span>
+                            </div>
+
+                            <div className="economy-box">
+                                <div className="metric-line economy">
+                                    <span>Economia Gerada:</span>
+                                    <span>- {formatCurrency(economia)}</span>
+                                </div>
+                                <div className="metric-line discount">
+                                    <span>Desconto Aplicado:</span>
+                                    <span>{invoice.desconto_assinante || uc?.desconto_assinante || 0}%</span>
+                                </div>
+                            </div>
+
+                            <div className="metric-line bold">
+                                <span>Energia Compensada Líquida:</span>
+                                <span>{formatCurrency(energiaCompensadaLiquida)}</span>
+                            </div>
+
+                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
+
+                            <div className="metric-line">
+                                <span>+ Iluminação Pública:</span>
+                                <span>{formatCurrency(invoice.iluminacao_publica)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Tarifa Mínima:</span>
+                                <span>{formatCurrency(invoice.tarifa_minima)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Outros Lançamentos:</span>
+                                <span>{formatCurrency(invoice.outros_lancamentos)}</span>
+                            </div>
+
+                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
+                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
+                                <div className="total-value">{formatCurrency(invoice.valor_a_pagar)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const addHistory = async (entityType, entityId, action, details = {}) => {
@@ -982,14 +1175,37 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                         </div>
                                                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                                                             {isBoletoEmitido && inv.asaas_boleto_url && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => { e.stopPropagation(); window.open(inv.asaas_boleto_url, '_blank'); }}
-                                                                    title="Visualizar Boleto"
-                                                                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#0369a1' }}
-                                                                >
-                                                                    <Eye size={14} />
-                                                                </button>
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); window.open(inv.asaas_boleto_url, '_blank'); }}
+                                                                        title="Visualizar Boleto"
+                                                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#0369a1' }}
+                                                                    >
+                                                                        <Eye size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleDownloadCombined(inv); }}
+                                                                        disabled={isGeneratingPdf}
+                                                                        title="Baixar Detalhamento + Boleto"
+                                                                        style={{
+                                                                            background: 'none',
+                                                                            border: 'none',
+                                                                            padding: 0,
+                                                                            cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                                            color: '#ff6600',
+                                                                            opacity: isGeneratingPdf ? 0.5 : 1,
+                                                                            marginLeft: '0.3rem'
+                                                                        }}
+                                                                    >
+                                                                        {isGeneratingPdf && invoiceToDownload?.id === inv.id ? (
+                                                                            <Loader2 size={14} className="spin-animation" />
+                                                                        ) : (
+                                                                            <Download size={14} />
+                                                                        )}
+                                                                    </button>
+                                                                </>
                                                             )}
                                                             <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>{new Date(inv.vencimento).toLocaleDateString('pt-BR')}</div>
                                                         </div>
@@ -1141,6 +1357,22 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 Fechar
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Hidden wrapper for PDF capture */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
+                <div ref={hiddenRef}>
+                    {invoiceToDownload && renderHiddenInvoiceDetail(invoiceToDownload)}
+                </div>
+            </div>
+
+            {isGeneratingPdf && (
+                <div className="generation-overlay">
+                    <div className="generation-spinner">
+                        <Loader2 size={48} className="spin-animation" style={{ color: branding?.secondary_color || '#ff6600' }} />
+                        <p style={{ marginTop: '1rem', fontWeight: 600, fontSize: '1.1rem' }}>Gerando PDF combinado...</p>
+                        <p style={{ fontSize: '0.875rem', opacity: 0.8 }}>Mesclando Detalhamento com Boleto Asaas.</p>
                     </div>
                 </div>
             )}

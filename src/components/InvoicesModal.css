@@ -1,0 +1,232 @@
+/* Premium Invoice Detailing Styles */
+.invoice-detail-view {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.detail-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.branded-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    background: #fff;
+}
+
+.company-logo-modal {
+    max-height: 48px;
+    max-width: 180px;
+    object-fit: contain;
+}
+
+.company-info-fallback {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    color: #003366;
+    font-size: 1.1rem;
+}
+
+.detail-header {
+    background: #003366;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-info h3 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.detail-status {
+    padding: 6px 16px;
+    border-radius: 30px;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 24px;
+    gap: 24px;
+}
+
+.detail-section.dark {
+    background: #f1f5f9;
+    padding: 24px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.detail-item label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    letter-spacing: 0.025em;
+}
+
+.detail-item span {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.detail-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.connection-type-badge {
+    background: #003366;
+    color: #ffffff;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    text-transform: capitalize;
+}
+
+.detail-section.metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.metric-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.metric-line.secondary {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-top: -8px;
+}
+
+.economy-box {
+    background: #f0fdf4;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #dcfce7;
+    margin: 8px 0;
+}
+
+.metric-line.economy {
+    color: #15803d;
+    font-weight: 700;
+}
+
+.metric-line.discount {
+    color: #166534;
+    font-size: 0.75rem;
+    margin-top: 4px;
+}
+
+.metric-line.bold {
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 8px;
+}
+
+.total-box {
+    margin-top: auto;
+    background: #f0fdf4;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid #22c55e;
+    text-align: right;
+}
+
+.total-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #166534;
+}
+
+.total-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+/* Generation Overlay */
+.generation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+}
+
+.generation-spinner {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.spin-animation {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.pdf-capture-wrapper {
+    width: 800px;
+    padding: 40px;
+    background: #f8fafc;
+}

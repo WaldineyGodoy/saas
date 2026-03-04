@@ -273,3 +273,28 @@ export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
         throw error;
     }
 };
+export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf') => {
+    try {
+        const { data, error } = await supabase.functions.invoke('merge-pdf', {
+            body: { summaryBase64, asaasUrl }
+        });
+
+        if (error) throw error;
+
+        // data is a Blob because of the response in Edge Function
+        const blob = new Blob([data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        return true;
+    } catch (error) {
+        console.error('Erro ao mesclar PDF:', error);
+        throw error;
+    }
+};
