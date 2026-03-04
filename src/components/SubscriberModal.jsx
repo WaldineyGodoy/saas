@@ -760,7 +760,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const totalVisibleInvoicesValue = invoices
-        .filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id) // Only non-canceled and non-consolidated invoices
+        .filter(inv => inv.status !== 'cancelado') // Show total for all visible, non-canceled invoices
+        .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
+
+    const totalToConsolidate = invoices
+        .filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id) // Only what's left to consolidate
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
@@ -1056,76 +1060,111 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                                 {/* Top Summary & Actions */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px', overflow: 'hidden' }}>
-                                        <div style={{ background: '#f97316', color: 'white', padding: '0.6rem 0.8rem', fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                            Total das Faturas
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'flex-end',
+                                        background: '#f0fdf4',
+                                        border: '2px solid #22c55e',
+                                        borderRadius: '12px',
+                                        padding: '0.6rem 1.2rem',
+                                        minWidth: '180px'
+                                    }}>
+                                        <div style={{ color: '#166534', fontWeight: 'bold', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.2rem' }}>
+                                            TOTAL A PAGAR
                                         </div>
-                                        <div style={{ padding: '0.4rem 1rem', fontSize: '1.25rem', fontWeight: '800', color: '#ea580c' }}>
+                                        <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1e293b' }}>
                                             {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                         </div>
-                                        {(totalVisibleInvoicesValue === 0 && invoices.some(inv => inv.status !== 'cancelado' && inv.asaas_payment_id)) && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowConsolidationHelp(true)}
-                                                style={{ background: 'none', border: 'none', padding: '0 0.8rem', cursor: 'pointer', color: '#f97316' }}
-                                                title="Por que o total está R$ 0,00?"
-                                            >
-                                                <Info size={20} />
-                                            </button>
-                                        )}
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                         {billingMode === 'consolidada' && (
-                                            <button
-                                                type="button"
-                                                disabled={generating || totalVisibleInvoicesValue === 0}
-                                                onClick={async () => {
-                                                    const confirm = await showConfirm(
-                                                        `Deseja emitir uma fatura consolidada no valor de ${totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`,
-                                                        'Emitir Fatura Consolidada'
-                                                    );
-                                                    if (!confirm) return;
+                                            <div style={{ position: 'relative' }}
+                                                onMouseEnter={() => totalToConsolidate === 0 && setShowConsolidationHelp(true)}
+                                                onMouseLeave={() => setShowConsolidationHelp(false)}>
+                                                <button
+                                                    type="button"
+                                                    disabled={generating || totalToConsolidate === 0}
+                                                    onClick={async () => {
+                                                        const confirm = await showConfirm(
+                                                            `Deseja emitir uma fatura consolidada no valor de ${totalToConsolidate.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?`,
+                                                            'Emitir Fatura Consolidada'
+                                                        );
+                                                        if (!confirm) return;
 
-                                                    setGenerating(true);
-                                                    try {
-                                                        const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
-                                                        const result = await createAsaasCharge(subscriber.id, 'subscriber', {
-                                                            dueDate,
-                                                            invoice_ids: invoices.filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id).map(i => i.id)
-                                                        });
-                                                        if (result.success) {
-                                                            showAlert('Fatura consolidada gerada com sucesso!', 'success');
-                                                            fetchInvoices(subscriber.id);
-                                                            fetchConsolidatedInvoices(subscriber.id);
+                                                        setGenerating(true);
+                                                        try {
+                                                            const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
+                                                            const result = await createAsaasCharge(subscriber.id, 'subscriber', {
+                                                                dueDate,
+                                                                invoice_ids: invoices.filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id).map(i => i.id)
+                                                            });
+                                                            if (result.success) {
+                                                                showAlert('Fatura consolidada gerada com sucesso!', 'success');
+                                                                fetchInvoices(subscriber.id);
+                                                                fetchConsolidatedInvoices(subscriber.id);
 
-                                                            // Trigger download of the consolidated PDF
-                                                            if (result.consolidatedId) {
-                                                                const { data: newCons } = await supabase
-                                                                    .from('consolidated_invoices')
-                                                                    .select('*')
-                                                                    .eq('id', result.consolidatedId)
-                                                                    .single();
-                                                                if (newCons) handleDownloadConsolidated(newCons);
-                                                            } else if (result.url) {
-                                                                window.open(result.url, '_blank');
+                                                                // Trigger download of the consolidated PDF
+                                                                if (result.consolidatedId) {
+                                                                    const { data: newCons } = await supabase
+                                                                        .from('consolidated_invoices')
+                                                                        .select('*')
+                                                                        .eq('id', result.consolidatedId)
+                                                                        .single();
+                                                                    if (newCons) handleDownloadConsolidated(newCons);
+                                                                } else if (result.url) {
+                                                                    window.open(result.url, '_blank');
+                                                                }
                                                             }
+                                                        } catch (error) {
+                                                            showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
+                                                        } finally {
+                                                            setGenerating(false);
                                                         }
-                                                    } catch (error) {
-                                                        showAlert('Erro ao gerar consolidada: ' + error.message, 'error');
-                                                    } finally {
-                                                        setGenerating(false);
-                                                    }
-                                                }}
-                                                style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                    background: '#f97316', color: 'white', border: 'none',
-                                                    padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: (generating || totalVisibleInvoicesValue === 0) ? 'not-allowed' : 'pointer',
-                                                    fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.4)'
-                                                }}
-                                            >
-                                                <CreditCard size={18} /> {generating ? 'Gerando...' : 'Emitir Fatura Consolidada'}
-                                            </button>
+                                                    }}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                        background: '#f97316', color: 'white', border: 'none',
+                                                        padding: '0.6rem 1.25rem', borderRadius: '8px', cursor: (generating || totalToConsolidate === 0) ? 'not-allowed' : 'pointer',
+                                                        fontWeight: 'bold', boxShadow: (generating || totalToConsolidate === 0) ? 'none' : '0 4px 6px -1px rgba(249, 115, 22, 0.4)',
+                                                        opacity: (generating || totalToConsolidate === 0) ? 0.6 : 1
+                                                    }}
+                                                >
+                                                    <CreditCard size={18} /> {generating ? 'Gerando...' : 'Emitir Fatura Consolidada'}
+                                                </button>
+
+                                                {showConsolidationHelp && totalToConsolidate === 0 && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        bottom: '100%',
+                                                        left: '50%',
+                                                        transform: 'translateX(-50%)',
+                                                        marginBottom: '10px',
+                                                        width: '240px',
+                                                        background: '#1e293b',
+                                                        color: 'white',
+                                                        padding: '1rem',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.8rem',
+                                                        zIndex: 100,
+                                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
+                                                        pointerEvents: 'none'
+                                                    }}>
+                                                        <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#fb923c' }}>Consolidação Indisponível</div>
+                                                        Todas as faturas visíveis já possuem boletos emitidos individualmente. Para consolidar, cancele os boletos existentes.
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '100%',
+                                                            left: '50%',
+                                                            transform: 'translateX(-50%)',
+                                                            borderWidth: '6px',
+                                                            borderStyle: 'solid',
+                                                            borderColor: '#1e293b transparent transparent transparent'
+                                                        }}></div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                         <div style={{ position: 'relative' }}>
                                             <button
