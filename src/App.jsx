@@ -28,6 +28,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/simulacao" element={<LeadLanding />} />
+              <Route path="/cadastro" element={<OriginatorLanding />} />
               <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
               <Route path="/assine" element={<LeadSignup />} />
               <Route path="/originador" element={<ReferralLanding />} />
@@ -37,7 +38,7 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
               </Route>
 
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </AuthProvider>
         </BrandingProvider>
