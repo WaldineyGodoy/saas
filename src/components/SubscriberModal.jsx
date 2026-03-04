@@ -35,6 +35,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     const [consolidatedToDownload, setConsolidatedToDownload] = useState(null);
+    const [showConsolidationHelp, setShowConsolidationHelp] = useState(false);
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
 
@@ -1062,6 +1063,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                         <div style={{ padding: '0.4rem 1rem', fontSize: '1.25rem', fontWeight: '800', color: '#ea580c' }}>
                                             {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                         </div>
+                                        {(totalVisibleInvoicesValue === 0 && invoices.some(inv => inv.status !== 'cancelado' && inv.asaas_payment_id)) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConsolidationHelp(true)}
+                                                style={{ background: 'none', border: 'none', padding: '0 0.8rem', cursor: 'pointer', color: '#f97316' }}
+                                                title="Por que o total está R$ 0,00?"
+                                            >
+                                                <Info size={20} />
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -1479,6 +1490,39 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         <Loader2 size={48} className="spin-animation" style={{ color: branding?.secondary_color || '#ff6600' }} />
                         <p style={{ marginTop: '1rem', fontWeight: 600, fontSize: '1.1rem' }}>Gerando PDF combinado...</p>
                         <p style={{ fontSize: '0.875rem', opacity: 0.8 }}>Mesclando Detalhamento com Boleto Asaas.</p>
+                    </div>
+                </div>
+            )}
+
+            {showConsolidationHelp && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000
+                }}>
+                    <div style={{ background: 'white', borderRadius: '16px', width: '90%', maxWidth: '500px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', color: '#ea580c' }}>
+                            <AlertCircle size={32} />
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Faturamento Consolidado</h3>
+                        </div>
+
+                        <div style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                            <p>O botão de emissão está desativado porque <strong>todas as faturas deste período já possuem boletos emitidos</strong> individualmente.</p>
+                            <p style={{ marginTop: '1rem' }}>Para consolidar estas faturas em um único boleto, você deve:</p>
+                            <ol style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
+                                <li>Cancelar os boletos individuais atuais (no Asaas ou via CRM).</li>
+                                <li>Uma vez que as faturas voltem ao estado "Pendente de Emissão", o total será recalculado e o botão ficará ativo.</li>
+                            </ol>
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setShowConsolidationHelp(false)}
+                                style={{ padding: '0.6rem 2rem', background: '#f97316', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                                Entendi
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
