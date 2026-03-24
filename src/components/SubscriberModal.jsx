@@ -5,7 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -36,6 +36,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     const [consolidatedToDownload, setConsolidatedToDownload] = useState(null);
     const [showConsolidationHelp, setShowConsolidationHelp] = useState(false);
+    const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
 
@@ -62,7 +64,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         bairro: '',
         cidade: '',
         uf: '',
-        originator_id: ''
+        originator_id: '',
+        portal_credentials: { url: '', login: '', password: '' }
     });
 
     const [loading, setLoading] = useState(false);
@@ -100,7 +103,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 bairro: subscriber.bairro || '',
                 cidade: subscriber.cidade || '',
                 uf: subscriber.uf || '',
-                originator_id: subscriber.originator_id || ''
+                originator_id: subscriber.originator_id || '',
+                portal_credentials: subscriber.portal_credentials || { url: '', login: '', password: '' }
             });
             fetchConsumerUnits(subscriber.id);
             fetchInvoices(subscriber.id);
@@ -635,7 +639,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const dataToSave = {
                 ...formData,
                 billing_mode: billingMode,
-                consolidated_due_day: parseInt(consolidatedDueDay)
+                consolidated_due_day: parseInt(consolidatedDueDay),
+                portal_credentials: formData.portal_credentials
             };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
@@ -838,16 +843,38 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 </select>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ</label>
-                                <input
-                                    value={formData.cpf_cnpj}
-                                    onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
-                                    onBlur={handleDocBlur}
-                                    placeholder="000.000.000-00"
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingDoc ? '#f0f9ff' : 'white', outline: 'none' }}
-                                    required
-                                />
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ</label>
+                                    <input
+                                        value={formData.cpf_cnpj}
+                                        onChange={e => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
+                                        onBlur={handleDocBlur}
+                                        placeholder="000.000.000-00"
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingDoc ? '#f0f9ff' : 'white', outline: 'none' }}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCredentialsModal(true)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.6rem 1rem',
+                                        background: '#fef2f2',
+                                        color: '#ef4444',
+                                        borderRadius: '6px',
+                                        border: '1px solid #fee2e2',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        height: '42px'
+                                    }}
+                                >
+                                    <Key size={16} /> Credenciais
+                                </button>
                             </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
@@ -1560,6 +1587,104 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 style={{ padding: '0.6rem 2rem', background: '#f97316', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
                             >
                                 Entendi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Credentials Pop-up Modal */}
+            {showCredentialsModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '16px', width: '90%', maxWidth: '400px',
+                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        position: 'relative'
+                    }}>
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '48px', height: '48px', background: '#fff7ed', borderRadius: '12px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
+                                color: '#f97316'
+                            }}>
+                                <Key size={24} />
+                            </div>
+                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais</h4>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>Acesso ao portal da concessionária</p>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>URL do Portal</label>
+                                <input
+                                    type="url"
+                                    value={formData.portal_credentials?.url || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        portal_credentials: { ...formData.portal_credentials, url: e.target.value }
+                                    })}
+                                    placeholder="http://portal.concessionaria.com.br"
+                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Email / Login</label>
+                                <input
+                                    type="text"
+                                    value={formData.portal_credentials?.login || ''}
+                                    onChange={e => setFormData({
+                                        ...formData,
+                                        portal_credentials: { ...formData.portal_credentials, login: e.target.value }
+                                    })}
+                                    placeholder="login@exemplo.com"
+                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Senha</label>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        value={formData.portal_credentials?.password || ''}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                        })}
+                                        placeholder="••••••••"
+                                        style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.2rem' }}
+                                    >
+                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '2rem', display: 'flex', gap: '0.8rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowCredentialsModal(false)}
+                                style={{ flex: 1, padding: '0.75rem', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowCredentialsModal(false)}
+                                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)' }}
+                            >
+                                Salvar
                             </button>
                         </div>
                     </div>
