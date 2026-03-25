@@ -75,6 +75,24 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     ];
 
     const diaLeituraOptions = Array.from({ length: 31 }, (_, i) => i + 1);
+    
+    const concessionariaOptions = [
+        { value: 'Neoenergia Cosern', label: 'Neoenergia Cosern' },
+        { value: 'Neoenergia Coelba', label: 'Neoenergia Coelba' },
+        { value: 'Neoenergia Elektro', label: 'Neoenergia Elektro' },
+        { value: 'Neoenergia Pernambuco', label: 'Neoenergia Pernambuco' },
+        { value: 'Enel Ceará', label: 'Enel Ceará' },
+        { value: 'Enel Rio', label: 'Enel Rio' },
+        { value: 'Enel São Paulo', label: 'Enel São Paulo' },
+        { value: 'CPFL Paulista', label: 'CPFL Paulista' },
+        { value: 'Equatorial Maranhão', label: 'Equatorial Maranhão' },
+        { value: 'Equatorial Pará', label: 'Equatorial Pará' },
+        { value: 'Equatorial Piauí', label: 'Equatorial Piauí' },
+        { value: 'Equatorial Alagoas', label: 'Equatorial Alagoas' },
+        { value: 'Cemig', label: 'Cemig' },
+        { value: 'Copel', label: 'Copel' },
+        { value: 'Celesc', label: 'Celesc' }
+    ];
 
     const [formData, setFormData] = useState({
         subscriber_id: '',
