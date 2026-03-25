@@ -166,7 +166,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.tarifa_concessionaria, formData.tipo_ligacao]);
 
     const fetchSubscribers = async () => {
-        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj').order('name');
+        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj, portal_credentials').order('name');
         setSubscribers(data || []);
     };
 
@@ -174,6 +174,19 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         const { data } = await supabase.from('usinas').select('id, name').order('name');
         setUsinas(data || []);
     };
+
+    // Sync portal_credentials with titular when subscribers or titular changes
+    useEffect(() => {
+        if (formData.titular_fatura_id && subscribers.length > 0) {
+            const titular = subscribers.find(s => s.id === formData.titular_fatura_id);
+            if (titular && titular.portal_credentials) {
+                setFormData(prev => ({
+                    ...prev,
+                    portal_credentials: titular.portal_credentials
+                }));
+            }
+        }
+    }, [formData.titular_fatura_id, subscribers]);
 
     const handleSubscriberChange = async (subscriberId) => {
         setFormData(prev => ({ ...prev, subscriber_id: subscriberId }));
@@ -285,7 +298,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     cidade: formData.cidade,
                     uf: formData.uf
                 },
-                portal_credentials: formData.portal_credentials,
+                // portal_credentials move to subscriber
                 saldo_remanescente: formData.saldo_remanescente
             };
 
@@ -419,32 +432,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     </div>
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <input
-                                        value={formData.concessionaria}
-                                        readOnly
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #f1f5f9', borderRadius: '6px', background: '#f8fafc', color: '#64748b', outline: 'none' }}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCredentialsModal(true)}
-                                        style={{
-                                            marginTop: '0.5rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            padding: '0.4rem 0.8rem',
-                                            background: '#fef2f2',
-                                            color: '#ef4444',
-                                            borderRadius: '6px',
-                                            border: '1px solid #fee2e2',
-                                            fontSize: '0.8rem',
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            width: 'fit-content'
-                                        }}
-                                    >
-                                        <Key size={12} /> Credenciais
-                                    </button>
+                                    {/* Fields moved to Dados da Unidade */}
                                 </div>
                             </div>
 
@@ -505,6 +493,40 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </CollapsibleSection>
 
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={defaultSection === 'all'}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1fr', gap: '1rem', marginBottom: '1.5rem', alignItems: 'center', background: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #dcfce7' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#166534', fontWeight: 600 }}>Concessionária</label>
+                                    <input
+                                        value={formData.concessionaria}
+                                        readOnly
+                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #bbf7d0', borderRadius: '6px', background: '#dcfce7', color: '#166534', outline: 'none', fontWeight: 600 }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', paddingTop: '1.2rem' }}>
+                                    <button
+                                        type="button"
+                                        disabled={!formData.titular_fatura_id}
+                                        onClick={() => setShowCredentialsModal(true)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            padding: '0.6rem 1rem',
+                                            background: formData.titular_fatura_id ? '#fef2f2' : '#f1f5f9',
+                                            color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
+                                            borderRadius: '6px',
+                                            border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <Key size={14} /> Credenciais do Titular
+                                    </button>
+                                </div>
+                            </div>
+
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
@@ -537,7 +559,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             setFormData({
                                                 ...formData,
                                                 titular_fatura_id: e.target.value,
-                                                cpf_cnpj_fatura: sub ? sub.cpf_cnpj : formData.cpf_cnpj_fatura
+                                                cpf_cnpj_fatura: sub ? sub.cpf_cnpj : formData.cpf_cnpj_fatura,
+                                                portal_credentials: sub?.portal_credentials || { url: '', login: '', password: '' }
                                             });
                                         }}
                                         style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
@@ -818,8 +841,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             }}>
                                 <Key size={24} />
                             </div>
-                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais</h4>
-                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>Acesso ao portal da concessionária</p>
+                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais do Titular</h4>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                {subscribers.find(s => s.id === formData.titular_fatura_id)?.name || 'Portal da concessionária'}
+                            </p>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
@@ -885,8 +910,33 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setShowCredentialsModal(false)}
-                                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)' }}
+                                onClick={async () => {
+                                    if (!formData.titular_fatura_id) return;
+                                    setLoading(true);
+                                    try {
+                                        const { error } = await supabase
+                                            .from('subscribers')
+                                            .update({ portal_credentials: formData.portal_credentials })
+                                            .eq('id', formData.titular_fatura_id);
+
+                                        if (error) throw error;
+
+                                        // Update local subscribers state
+                                        setSubscribers(prev => prev.map(s => 
+                                            s.id === formData.titular_fatura_id 
+                                                ? { ...s, portal_credentials: formData.portal_credentials }
+                                                : s
+                                        ));
+
+                                        showAlert('Credenciais do titular salvas com sucesso!', 'success');
+                                        setShowCredentialsModal(false);
+                                    } catch (err) {
+                                        showAlert('Erro ao salvar credenciais: ' + err.message, 'error');
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                style={{ flex: 1, padding: '0.75rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(34, 197, 94, 0.2)' }}
                             >
                                 Salvar
                             </button>
