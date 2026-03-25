@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
+const pdf = require('pdf-parse');
 require('dotenv').config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -236,6 +237,10 @@ async function run() {
                                     await dl.saveAs(localPath);
                                     
                                     const publicUrl = await uploadToSupabase(localPath, uc.numero_uc, fileName);
+                                    
+                                    // Scanner do PDF para extrair kWh e CIP
+                                    const { consumoKwh, cipValor } = await parseInvoicePdf(localPath);
+
                                     const mesReferenciaBase = parseMesRef(mesRefStr.trim());
                                     if (mesReferenciaBase) {
                                         // Regras de Criação de Fatura Automática
@@ -261,9 +266,10 @@ async function run() {
                                             tipo_ligacao: uc.tipo_ligacao,
                                             tarifa_concessionaria: tarifa,
                                             tarifa_minima: valorTarifaMinima,
-                                            consumo_kwh: 0, // Placeholder
-                                            consumo_reais: valorTarifaMinima, // Placeholder (mínimo)
-                                            valor_a_pagar: valorTarifaMinima, // Placeholder (mínimo)
+                                            consumo_kwh: consumoKwh || 0, 
+                                            iluminacao_publica: cipValor || 0,
+                                            consumo_reais: (consumoKwh || kwhMinimo) * tarifa, 
+                                            valor_a_pagar: ((consumoKwh || kwhMinimo) * tarifa) + (cipValor || 0), 
                                             desconto_assinante: Number(uc.desconto_assinante) || 0,
                                             status: 'a_vencer',
                                             concessionaria_pdf_url: publicUrl 
@@ -307,6 +313,46 @@ async function run() {
 
     await browser.close();
     console.log('\nProcesso Calendário Neoenergia Finalizado.');
+}
+
+async function parseInvoicePdf(filePath) {
+    const dataBuffer = fs.readFileSync(filePath);
+    try {
+        const data = await pdf(dataBuffer);
+        const text = data.text;
+
+        // Padrões Neoenergia Cosern
+        const consumptionMatch = text.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) || 
+                                 text.match(/kWh[^\d]*(\d+)/i) ||
+                                 text.match(/(\d+)\s*kWh/i);
+        
+        const cipMatch = text.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d,.]+)/i) ||
+                         text.match(/Ilum\.?\s*P[uú]bl\.?[^\d]*([\d,.]+)/i);
+
+        let consumoKwh = 0;
+        if (consumptionMatch) {
+            consumoKwh = parseInt(consumptionMatch[1].replace(/\D/g, ''));
+        }
+
+        let cipValor = 0;
+        if (cipMatch) {
+            const rawCip = cipMatch[1];
+            // Se tiver vírgula e ponto (ex: 1.234,56 ou 23,45)
+            if (rawCip.includes(',') && rawCip.includes('.')) {
+                cipValor = parseFloat(rawCip.replace(/\./g, '').replace(',', '.'));
+            } else if (rawCip.includes(',')) {
+                cipValor = parseFloat(rawCip.replace(',', '.'));
+            } else {
+                cipValor = parseFloat(rawCip);
+            }
+        }
+
+        console.log(`      [Scanner PDF] Extração Completa: Consumo=${consumoKwh} kWh, CIP=R$ ${cipValor}`);
+        return { consumoKwh, cipValor };
+    } catch (err) {
+        console.error('      [Scanner PDF] Erro ao processar arquivo:', err.message);
+        return { consumoKwh: 0, cipValor: 0 };
+    }
 }
 
 function parseMesRef(mesRefStr) {
