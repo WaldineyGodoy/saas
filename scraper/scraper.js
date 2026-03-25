@@ -28,7 +28,11 @@ async function run() {
             numero_uc, 
             subscriber_id,
             concessionaria,
+            tipo_ligacao,
+            tarifa_concessionaria,
+            desconto_assinante,
             dia_leitura,
+            dia_vencimento,
             last_scraping_status,
             subscriber:subscriber_id (
                 id, 
@@ -234,11 +238,37 @@ async function run() {
                                     const publicUrl = await uploadToSupabase(localPath, uc.numero_uc, fileName);
                                     const mesReferenciaBase = parseMesRef(mesRefStr.trim());
                                     if (mesReferenciaBase) {
+                                        // Regras de Criação de Fatura Automática
+                                        const [month, year] = mesReferenciaBase.split('/').map(Number);
+                                        
+                                        // Vencimento: Dia do vencimento no mês seguinte
+                                        let nextMonth = month + 1;
+                                        let nextYear = year;
+                                        if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+                                        const vencimentoDate = new Date(nextYear, nextMonth - 1, uc.dia_vencimento || 10);
+                                        const vencimentoStr = vencimentoDate.toISOString().split('T')[0];
+
+                                        // Regra: Consumo Mínimo por Tipo de Ligação
+                                        const kwhMinimo = uc.tipo_ligacao === 'trifasico' ? 100 : (uc.tipo_ligacao === 'bifasico' ? 50 : 30);
+                                        const tarifa = Number(uc.tarifa_concessionaria) || 0;
+                                        const valorTarifaMinima = kwhMinimo * tarifa;
+
+                                        // Upsert no CRM
                                         await supabase.from('invoices').upsert({ 
                                             uc_id: uc.id, 
-                                            mes_referencia: mesReferenciaBase,
+                                            mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                            vencimento: vencimentoStr,
+                                            tipo_ligacao: uc.tipo_ligacao,
+                                            tarifa_concessionaria: tarifa,
+                                            tarifa_minima: valorTarifaMinima,
+                                            consumo_kwh: 0, // Placeholder
+                                            consumo_reais: valorTarifaMinima, // Placeholder (mínimo)
+                                            valor_a_pagar: valorTarifaMinima, // Placeholder (mínimo)
+                                            desconto_assinante: Number(uc.desconto_assinante) || 0,
+                                            status: 'a_vencer',
                                             concessionaria_pdf_url: publicUrl 
                                         }, { onConflict: 'uc_id,mes_referencia' });
+                                        
                                         foundBill = true;
                                     }
                                 }

@@ -790,30 +790,41 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     </div>
                                 </div>
 
-                                {invoice?.asaas_boleto_url && (
-                                    <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                                        <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem' }}>
-                                            <CreditCard size={18} /> Ver Boleto
-                                        </a>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDownloadCombined()}
-                                            disabled={isGeneratingPdf}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.5rem',
-                                                color: '#ff6600',
-                                                fontWeight: 'bold',
-                                                border: 'none',
-                                                background: 'none',
-                                                cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                fontSize: '0.9rem'
-                                            }}
-                                        >
-                                            {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Download size={18} />}
-                                            Download PDF Combinado
-                                        </button>
+                                {((invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada') || invoice?.concessionaria_pdf_url) && (
+                                    <div style={{ marginTop: '1rem', padding: '0.8rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                        {invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
+                                            <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.85rem' }}>
+                                                <CreditCard size={16} /> Ver Boleto
+                                            </a>
+                                        )}
+
+                                        {invoice?.concessionaria_pdf_url && (
+                                            <a href={invoice.concessionaria_pdf_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: branding?.primary_color || '#003366', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.85rem' }}>
+                                                <FileText size={16} /> Fatura Concessionária
+                                            </a>
+                                        )}
+                                        
+                                        {invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDownloadCombined()}
+                                                disabled={isGeneratingPdf}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    color: '#ff6600',
+                                                    fontWeight: 'bold',
+                                                    border: 'none',
+                                                    background: 'none',
+                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                    fontSize: '0.85rem'
+                                                }}
+                                            >
+                                                {isGeneratingPdf ? <Loader2 size={16} className="spin-animation" /> : <Download size={16} />}
+                                                Download PDF Combinado
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
