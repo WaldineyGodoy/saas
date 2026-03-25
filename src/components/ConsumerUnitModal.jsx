@@ -493,65 +493,32 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </CollapsibleSection>
 
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={defaultSection === 'all'}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) 1fr', gap: '1rem', marginBottom: '1.5rem', alignItems: 'center', background: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #dcfce7' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#166534', fontWeight: 600 }}>Concessionária</label>
-                                    <input
-                                        value={formData.concessionaria}
-                                        readOnly
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #bbf7d0', borderRadius: '6px', background: '#dcfce7', color: '#166534', outline: 'none', fontWeight: 600 }}
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', paddingTop: '1.2rem' }}>
-                                    <button
-                                        type="button"
-                                        disabled={!formData.titular_fatura_id}
-                                        onClick={() => setShowCredentialsModal(true)}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            padding: '0.6rem 1rem',
-                                            background: formData.titular_fatura_id ? '#fef2f2' : '#f1f5f9',
-                                            color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
-                                            borderRadius: '6px',
-                                            border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
-                                            fontSize: '0.85rem',
-                                            fontWeight: 600,
-                                            cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <Key size={14} /> Credenciais do Titular
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
                                     <input
                                         required
                                         value={formData.numero_uc}
                                         onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
                                         placeholder="Ex: 7204400277"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
                                     />
                                 </div>
-
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Identificação da Fatura</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Identificação da Fatura</label>
                                     <input
                                         required
                                         value={formData.titular_conta}
                                         onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
-                                        placeholder="Nome Completo / Razão Social"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        placeholder="Nome Completo / Razão Social como consta no documento"
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
                                     />
                                 </div>
+                            </div>
 
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '1.25rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Titular da Fatura</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante (Titular)</label>
                                     <select
                                         value={formData.titular_fatura_id}
                                         onChange={e => {
@@ -563,56 +530,114 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 portal_credentials: sub?.portal_credentials || { url: '', login: '', password: '' }
                                             });
                                         }}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f0f9ff', color: '#0369a1' }}
                                     >
-                                        <option value="">Selecione...</option>
+                                        <option value="">Selecione o assinante...</option>
                                         {subscribers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
+                                            <option key={s.id} value={s.id}>{s.name}</option>
                                         ))}
                                     </select>
                                 </div>
-
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CPF/CNPJ do Titular</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ do Titular</label>
                                     <input
                                         value={formData.cpf_cnpj_fatura}
                                         onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
                                         placeholder="000.000.000-00"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
                                     />
                                 </div>
-
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tipo de Ligação</label>
-                                    <select
-                                        value={formData.tipo_ligacao}
-                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    >
-                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Unidade Consumidora</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo da UC</label>
                                     <select
                                         value={formData.tipo_unidade}
                                         onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
                                     >
                                         {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
                                 </div>
+                            </div>
 
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Dia de Leitura</label>
-                                    <select
-                                        value={formData.dia_leitura}
-                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    >
-                                        {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'flex-start' }}>
+                                <div style={{ 
+                                    gridColumn: 'span 2', 
+                                    background: '#f0fdf4', 
+                                    padding: '1rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #dcfce7',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.75rem',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
+                                            <label style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>Concessionária de Energia</label>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={!formData.titular_fatura_id}
+                                            onClick={() => setShowCredentialsModal(true)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.35rem 0.8rem',
+                                                background: formData.titular_fatura_id ? '#fff' : '#f1f5f9',
+                                                color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
+                                                borderRadius: '6px',
+                                                border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}
+                                        >
+                                            <Key size={12} /> Acesso ao Portal
+                                        </button>
+                                    </div>
+                                    <input
+                                        value={formData.concessionaria}
+                                        readOnly
+                                        style={{ 
+                                            width: '100%', 
+                                            padding: '0.8rem', 
+                                            border: '1px solid #bbf7d0', 
+                                            borderRadius: '8px', 
+                                            background: '#fff', 
+                                            color: '#166534', 
+                                            outline: 'none', 
+                                            fontWeight: 700,
+                                            fontSize: '1rem',
+                                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
+                                        <select
+                                            value={formData.tipo_ligacao}
+                                            onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                        >
+                                            {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Leitura</label>
+                                        <select
+                                            value={formData.dia_leitura}
+                                            onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                        >
+                                            <option value="">Selecione o dia...</option>
+                                            {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </CollapsibleSection>
