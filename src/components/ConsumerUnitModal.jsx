@@ -144,7 +144,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 cidade: consumerUnit.address?.cidade || '',
                 uf: consumerUnit.address?.uf || '',
                 portal_credentials: consumerUnit.portal_credentials || { url: '', login: '', password: '' },
-                saldo_remanescente: !!consumerUnit.saldo_remanescente
+                saldo_remanescente: !!consumerUnit.saldo_remanescente,
+                last_scraping_status: consumerUnit.last_scraping_status || 'pending',
+                last_scraping_at: consumerUnit.last_scraping_at || null,
+                last_scraping_error: consumerUnit.last_scraping_error || null
             });
         }
     }, [consumerUnit?.id, consumerUnit?.subscriber_id]); // Stable dependencies
@@ -596,25 +599,64 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                             }}
                                         >
-                                            <Key size={12} /> Acesso ao Portal
+                                            <Key size={12} /> Portal
                                         </button>
                                     </div>
-                                    <input
-                                        value={formData.concessionaria}
-                                        readOnly
-                                        style={{ 
-                                            width: '100%', 
-                                            padding: '0.8rem', 
-                                            border: '1px solid #bbf7d0', 
-                                            borderRadius: '8px', 
-                                            background: '#fff', 
-                                            color: '#166534', 
-                                            outline: 'none', 
-                                            fontWeight: 700,
-                                            fontSize: '1rem',
-                                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
-                                        }}
-                                    />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
+                                        <select
+                                            value={formData.concessionaria}
+                                            onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
+                                            style={{ flex: 1, padding: '0.7rem', border: '1px solid #bbf7d0', borderRadius: '8px', outline: 'none', background: 'white', color: '#166534', fontWeight: 600 }}
+                                        >
+                                            <option value="">Selecione a concessionária...</option>
+                                            {concessionariaOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+
+                                        {formData.last_scraping_status && formData.concessionaria === 'Neoenergia Cosern' && (
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '0.5rem', 
+                                                padding: '0.5rem 0.75rem', 
+                                                borderRadius: '8px',
+                                                background: formData.last_scraping_status === 'success' ? '#dcfce7' : 
+                                                            formData.last_scraping_status === 'not_available' ? '#fef9c3' : '#fee2e2',
+                                                border: `1px solid ${
+                                                    formData.last_scraping_status === 'success' ? '#86efac' : 
+                                                    formData.last_scraping_status === 'not_available' ? '#fde047' : '#fca5a5'
+                                                }`
+                                            }}>
+                                                <div style={{ 
+                                                    width: '8px', 
+                                                    height: '8px', 
+                                                    borderRadius: '50%', 
+                                                    background: formData.last_scraping_status === 'success' ? '#22c55e' : 
+                                                                formData.last_scraping_status === 'not_available' ? '#eab308' : '#ef4444'
+                                                }} />
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ 
+                                                        fontSize: '0.65rem', 
+                                                        fontWeight: 700, 
+                                                        color: formData.last_scraping_status === 'success' ? '#166534' : 
+                                                               formData.last_scraping_status === 'not_available' ? '#854d0e' : '#991b1b',
+                                                        textTransform: 'uppercase'
+                                                    }}>
+                                                        Status Agente: {formData.last_scraping_status}
+                                                    </span>
+                                                    {formData.last_scraping_at && (
+                                                        <span style={{ fontSize: '0.6rem', color: '#64748b' }}>
+                                                            {new Date(formData.last_scraping_at).toLocaleString('pt-BR')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {formData.last_scraping_status === 'error' && formData.last_scraping_error && (
+                                        <div style={{ fontSize: '0.7rem', color: '#991b1b', background: '#fff', padding: '0.4rem', borderRadius: '4px', border: '1px solid #fee2e2', marginTop: '0.25rem' }}>
+                                            <strong>Erro:</strong> {formData.last_scraping_error}
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     <div>

@@ -205,27 +205,51 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                                         style={{
                                             padding: '0.6rem',
                                             borderRadius: '8px',
-                                            background: '#f1f5f9',
-                                            borderLeft: `4px solid ${KANBAN_STATUSES.find(s => s.status === uc.status)?.color || '#cbd5e1'}`,
+                                            background: uc.last_scraping_status === 'success' ? '#f0fdf4' : 
+                                                        uc.last_scraping_status === 'not_available' ? '#fefce8' : 
+                                                        uc.last_scraping_status === 'error' ? '#fef2f2' : '#f8fafc',
+                                            borderLeft: `5px solid ${
+                                                uc.last_scraping_status === 'success' ? '#22c55e' : 
+                                                uc.last_scraping_status === 'not_available' ? '#eab308' : 
+                                                uc.last_scraping_status === 'error' ? '#ef4444' : 
+                                                (KANBAN_STATUSES.find(s => s.status === uc.status)?.color || '#cbd5e1')
+                                            }`,
                                             cursor: 'pointer',
                                             fontSize: '0.8rem',
-                                            transition: 'all 0.2s'
+                                            transition: 'all 0.2s',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                            position: 'relative'
                                         }}
                                         onMouseOver={e => {
-                                            e.currentTarget.style.transform = 'translateX(4px)';
-                                            e.currentTarget.style.background = '#e2e8f0';
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
                                         }}
                                         onMouseOut={e => {
-                                            e.currentTarget.style.transform = 'translateX(0)';
-                                            e.currentTarget.style.background = '#f1f5f9';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
                                         }}
+                                        title={uc.last_scraping_error || ''}
                                     >
-                                        <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {uc.subscriber?.name || 'S/ Assinante'}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
+                                                {uc.subscriber?.name || 'S/ Assinante'}
+                                            </div>
+                                            {uc.last_scraping_status && (
+                                                <div style={{ 
+                                                    width: '8px', 
+                                                    height: '8px', 
+                                                    borderRadius: '50%', 
+                                                    background: uc.last_scraping_status === 'success' ? '#22c55e' : 
+                                                                uc.last_scraping_status === 'not_available' ? '#eab308' : 
+                                                                uc.last_scraping_status === 'error' ? '#ef4444' : '#cbd5e1'
+                                                }}></div>
+                                            )}
                                         </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.1rem', display: 'flex', justifyContent: 'space-between' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span>UC: {uc.numero_uc}</span>
-                                            <span style={{ fontStyle: 'italic', fontSize: '0.6rem' }}>{uc.concessionaria}</span>
+                                            <span style={{ fontStyle: 'italic', fontSize: '0.65rem', background: 'rgba(0,0,0,0.05)', padding: '0 0.3rem', borderRadius: '4px' }}>
+                                                {uc.concessionaria?.split(' ')[0]}
+                                            </span>
                                         </div>
                                     </div>
                                 ))
