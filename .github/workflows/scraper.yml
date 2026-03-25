@@ -1,0 +1,38 @@
+name: Neoenergia Invoice Scraper
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
+  workflow_dispatch: # Permite execução manual
+
+jobs:
+  scrape:
+    name: Executar Agente Neoenergia
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd scraper
+          npm install
+
+      - name: Install Playwright Browsers
+        run: |
+          cd scraper
+          npx playwright install chromium --with-deps
+
+      - name: Run Scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          cd scraper
+          node scraper.js
