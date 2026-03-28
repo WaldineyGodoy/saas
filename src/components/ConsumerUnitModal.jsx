@@ -659,7 +659,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                formData.last_scraping_status === 'not_available' ? '#854d0e' : '#991b1b',
                                                         textTransform: 'uppercase'
                                                     }}>
-                                                        Status Agente: {formData.last_scraping_status}
+                                                        Status Faturista: {formData.last_scraping_status}
                                                     </span>
                                                     {formData.last_scraping_at && (
                                                         <span style={{ fontSize: '0.6rem', color: '#64748b' }}>

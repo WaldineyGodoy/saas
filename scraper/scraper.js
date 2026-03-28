@@ -8,7 +8,7 @@ require('dotenv').config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 async function run() {
-    console.log('Iniciando agente Neoenergia (Modo Calendário)...');
+    console.log('Iniciando Faturista (Modo Calendário)...');
     
     // 1. Identifica o dia atual para filtrar faturas do calendário
     const todayDay = new Date().getDate();
@@ -28,6 +28,7 @@ async function run() {
             id, 
             numero_uc, 
             subscriber_id,
+            titular_fatura_id,
             concessionaria,
             tipo_ligacao,
             tarifa_concessionaria,
@@ -38,6 +39,11 @@ async function run() {
             subscriber:subscriber_id (
                 id, 
                 name, 
+                portal_credentials
+            ),
+            titular_fatura:titular_fatura_id (
+                id,
+                name,
                 portal_credentials
             )
         `)
@@ -78,13 +84,16 @@ async function run() {
 
     console.log(`\nAgente Playwright Iniciado para ${ucsToScrape.length} UCs.`);
 
-    // 3. Agrupa UCs selecionadas por Titular
+    // 3. Agrupa UCs selecionadas por Titular das Credenciais
     const groups = ucsToScrape.reduce((acc, uc) => {
-        const subId = uc.subscriber_id;
+        // Prioriza o titular_fatura se houver, senão usa o subscriber_id
+        const effectiveSub = uc.titular_fatura || uc.subscriber;
+        const subId = effectiveSub?.id || uc.subscriber_id;
+        
         if (!acc[subId]) {
             acc[subId] = {
-                subscriber: uc.subscriber,
-                credentials: uc.subscriber?.portal_credentials,
+                subscriber: effectiveSub,
+                credentials: effectiveSub?.portal_credentials,
                 ucs: []
             };
         }
