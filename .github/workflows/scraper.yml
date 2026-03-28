@@ -27,7 +27,7 @@ jobs:
       - name: Install Playwright Browsers
         run: |
           cd scraper
-          npx playwright install chromium --with-deps
+          npx playwright install firefox --with-deps
 
       - name: Run Scraper
         env:
