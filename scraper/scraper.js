@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { firefox } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
@@ -101,7 +101,9 @@ async function run() {
         return acc;
     }, {});
 
-    const browser = await chromium.launch({ headless: true }); // Headless true para GitHub Actions
+    console.log(`[Faturista] Iniciando processamento de ${allUcs.length} UCs em ${Object.keys(groups).length} contas de titular.`);
+
+    const browser = await firefox.launch({ headless: true }); 
     const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
         acceptDownloads: true
@@ -128,11 +130,11 @@ async function run() {
     // Processa cada grupo (Titular)
     for (const subId in groups) {
         const group = groups[subId];
-        const { subscriber, credentials, ucs: groupUcs } = group;
+        const { subscriber, credentials: creds, ucs: groupUcs } = group;
 
         console.log(`\n=== Processando Assinante: ${subscriber.name} (${groupUcs.length} UCs) ===`);
 
-        if (!credentials?.login || !credentials?.password) {
+        if (!creds?.login || !creds?.password) {
             console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
             for (const uc of groupUcs) {
                 await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
@@ -164,11 +166,26 @@ async function run() {
                 }
 
                 if (await userField.isVisible()) {
-                    const cleanUser = credentials.login.replace(/\D/g, '');
-                    await userField.fill(cleanUser);
-                    await passField.fill(credentials.password);
-                    await enterBtn.click();
-                    await page.waitForLoadState('networkidle').catch(() => {});
+                    console.log(`   [Faturista] Preenchendo credenciais para ${creds.login} (Modo Humano)...`);
+                    const cleanUser = creds.login.replace(/\D/g, '');
+                    
+                    await userField.click();
+                    await page.keyboard.press('Control+A');
+                    await page.keyboard.press('Backspace');
+                    await userField.pressSequentially(cleanUser, { delay: 100 });
+                    
+                    await passField.click();
+                    await page.keyboard.press('Control+A');
+                    await page.keyboard.press('Backspace');
+                    await passField.pressSequentially(creds.password, { delay: 100 });
+                    
+                    await page.waitForTimeout(2000);
+                    if (await enterBtn.isEnabled()) {
+                        await enterBtn.click({ noWaitAfter: true });
+                    } else {
+                        await enterBtn.click({ force: true, noWaitAfter: true });
+                    }
+                    await page.waitForTimeout(5000);
                     continue;
                 }
 
@@ -203,8 +220,8 @@ async function run() {
 
                     const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId').filter({ visible: true }).first();
                     if (await userFormField.isVisible()) {
-                        await userFormField.fill(credentials.login.replace(/\D/g, ''));
-                        await page.locator('input#password').fill(credentials.password);
+                        await userFormField.fill(creds.login.replace(/\D/g, ''));
+                        await page.locator('input#password').fill(creds.password);
                         await page.locator('button').filter({ hasText: /^ENTRAR$/ }).filter({ visible: true }).first().click();
                         await page.waitForTimeout(5000);
                     }
