@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import ConsumerUnitModal from '../../components/ConsumerUnitModal';
-import { Calendar as CalendarIcon, List, Layout, Info } from 'lucide-react';
+import { Calendar as CalendarIcon, List, Layout, Info, Download } from 'lucide-react';
+import ScraperTriggerModal from '../../components/ScraperTriggerModal';
 import {
     DndContext,
     PointerSensor,
@@ -271,6 +271,7 @@ export default function ConsumerUnitList() {
     const [editingUnit, setEditingUnit] = useState(null);
     const [activeId, setActiveId] = useState(null);
     const [showTooltip, setShowTooltip] = useState(false);
+    const [isScraperModalOpen, setIsScraperModalOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -401,24 +402,49 @@ export default function ConsumerUnitList() {
                 <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em' }}>
                     Gestão de Unidades Consumidoras
                 </h2>
-                <button
-                    onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
-                    style={{
-                        padding: '0.75rem 1.5rem',
-                        background: 'var(--color-blue)',
-                        color: 'white',
-                        borderRadius: '8px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        border: 'none',
-                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2)',
-                        transition: 'all 0.2s'
-                    }}
-                    onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-                >
-                    + Nova UC
-                </button>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    {viewMode === 'calendar' && (
+                        <button
+                            onClick={() => setIsScraperModalOpen(true)}
+                            style={{
+                                padding: '0.75rem 1.5rem',
+                                background: '#f59e0b',
+                                color: 'white',
+                                borderRadius: '8px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                border: 'none',
+                                boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.2)',
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                        >
+                            <Download size={18} /> Extrair Faturas
+                        </button>
+                    )}
+                    <button
+                        onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
+                        style={{
+                            padding: '0.75rem 1.5rem',
+                            background: 'var(--color-blue)',
+                            color: 'white',
+                            borderRadius: '8px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            border: 'none',
+                            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2)',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                        + Nova UC
+                    </button>
+                </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1.5rem' }}>
@@ -660,6 +686,9 @@ export default function ConsumerUnitList() {
                     onSave={handleSave}
                     onDelete={handleDelete}
                 />
+            )}
+            {isScraperModalOpen && (
+                <ScraperTriggerModal onClose={() => setIsScraperModalOpen(false)} />
             )}
         </div>
     );

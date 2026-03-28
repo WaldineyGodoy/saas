@@ -10,9 +10,12 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 async function run() {
     console.log('Iniciando Faturista (Modo Calendário)...');
     
-    // 1. Identifica o dia atual para filtrar faturas do calendário
+    // 1. Identifica o dia atual ou os dias informados via variável de ambiente
+    const manualDays = process.env.TARGET_DAYS ? process.env.TARGET_DAYS.split(',').map(d => parseInt(d.trim())) : [];
     const todayDay = new Date().getDate();
-    console.log(`Dia do Calendário: ${todayDay}`);
+    const targetedDays = manualDays.length > 0 ? manualDays : [todayDay];
+    
+    console.log(manualDays.length > 0 ? `[Faturista] MODO MANUAL: Processando dias ${manualDays.join(', ')}` : `Dia do Calendário: ${todayDay}`);
 
     // 2. Busca UCs da Neoenergia cujo dia de leitura é hoje ou já passou no mês corrente
     // E que ainda não possuem a fatura baixada para o mês de referência atual.
@@ -48,7 +51,7 @@ async function run() {
             )
         `)
         .eq('concessionaria', 'Neoenergia Cosern')
-        .lte('dia_leitura', todayDay); // Busca todas as UCs cuja leitura já ocorreu ou ocorre hoje no mês
+        .in('dia_leitura', targetedDays); 
 
     if (ucError) {
         console.error('Erro ao buscar UCs:', ucError.message);

@@ -3,7 +3,16 @@ name: Neoenergia Invoice Scraper
 on:
   schedule:
     - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
-  workflow_dispatch: # Permite execução manual
+  workflow_dispatch: 
+    inputs:
+      target_days:
+        description: 'Dias de leitura (ex: 5 ou 1,2,3...)'
+        required: false
+        default: ''
+      reason:
+        description: 'Motivo do disparo manual'
+        required: false
+        default: 'Manual trigger from CRM'
 
 jobs:
   scrape:
@@ -33,6 +42,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TARGET_DAYS: ${{ github.event.inputs.target_days || '' }}
         run: |
           cd scraper
           node scraper.js
