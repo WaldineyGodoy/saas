@@ -24,7 +24,7 @@ export default function Dashboard() {
     const { profile, signOut } = useAuth();
     const { branding } = useBranding();
     const navigate = useNavigate();
-    const [activeView, setActiveView] = useState('default');
+    const [activeView, setActiveView] = useState(localStorage.getItem('dashboard_active_view') || 'default');
 
     // Mobile sidebar state
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -42,8 +42,16 @@ export default function Dashboard() {
         }
     }, [profile, activeView]);
 
+    // Persist view whenever it changes
+    useEffect(() => {
+        if (activeView !== 'default') {
+            localStorage.setItem('dashboard_active_view', activeView);
+        }
+    }, [activeView]);
+
     const handleLogout = async () => {
         await signOut();
+        localStorage.removeItem('dashboard_active_view');
         navigate('/login');
     };
 
