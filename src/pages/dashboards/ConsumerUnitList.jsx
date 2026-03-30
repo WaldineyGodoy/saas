@@ -229,7 +229,15 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                                             e.currentTarget.style.transform = 'translateY(0)';
                                             e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
                                         }}
-                                        title={uc.last_scraping_error || ''}
+                                        title={(() => {
+                                            const hasCreds = (uc.subscriber?.portal_credentials?.login && uc.subscriber?.portal_credentials?.password) ||
+                                                             (uc.titular_fatura?.portal_credentials?.login && uc.titular_fatura?.portal_credentials?.password);
+                                            
+                                            if (hasCreds && uc.last_scraping_error?.includes('Credenciais')) {
+                                                return '';
+                                            }
+                                            return uc.last_scraping_error || '';
+                                        })()}
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
@@ -259,6 +267,64 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                     </div>
                 );
             })}
+
+            {/* Legenda de Cores */}
+            <div style={{
+                marginTop: '1.5rem',
+                padding: '1.5rem',
+                background: 'white',
+                borderRadius: '16px',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1.25rem',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                gridColumn: '1 / -1'
+            }}>
+                <div style={{ 
+                    fontWeight: '800', 
+                    color: '#1e293b', 
+                    fontSize: '0.8rem', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.05em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                }}>
+                    <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
+                    Legenda de Status (Extração de Faturas)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eab308', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada no portal</span>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou sem credenciais</span>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#cbd5e1', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento ou sem status</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -305,7 +371,8 @@ export default function ConsumerUnitList() {
                 .from('consumer_units')
                 .select(`
                     *,
-                    subscriber:subscriber_id (name, cpf_cnpj)
+                    subscriber:subscriber_id (name, cpf_cnpj, portal_credentials),
+                    titular_fatura:titular_fatura_id (name, portal_credentials)
                 `)
                 .order('created_at', { ascending: false });
 

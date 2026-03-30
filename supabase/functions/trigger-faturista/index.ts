@@ -16,6 +16,7 @@ serve(async (req) => {
 
     // Validação básica
     if (!type || !value) {
+      console.error('Trigger Error: Missing fields', { type, value })
       throw new Error('Tipo (type) e Valor (value) são obrigatórios.')
     }
 
@@ -25,7 +26,8 @@ serve(async (req) => {
     const GH_REPO = Deno.env.get('GH_REPO_NAME') || 'faturista'
 
     if (!GH_TOKEN) {
-      throw new Error('Script error: GH_TOKEN não configurado no Supabase.')
+      console.error('Trigger Error: GH_TOKEN NOT SET')
+      throw new Error('Script error: GH_TOKEN não configurado nos Secrets do Supabase. Use: npx supabase secrets set GH_TOKEN=seu_token')
     }
 
     // Traduzimos o período para uma lista de dias ou um range que o scraper entenda
