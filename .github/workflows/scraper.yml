@@ -50,7 +50,7 @@ jobs:
           node scraper.js
 
       - name: Upload Debug Screenshots
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debug-screenshots
