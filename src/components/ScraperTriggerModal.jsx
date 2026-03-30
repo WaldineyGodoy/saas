@@ -12,20 +12,32 @@ export default function ScraperTriggerModal({ onClose }) {
     const handleTrigger = async () => {
         setLoading(true);
         setStatus(null);
+        setMessage('');
+        
         try {
             const { data, error } = await supabase.functions.invoke('trigger-faturista', {
                 body: { type, value: dateValue }
             });
 
-            if (error) throw error;
+            if (error) {
+                // Tenta extrair a mensagem de erro do corpo se disponível
+                let errorMsg = error.message || 'Falha ao acionar o robô.';
+                try {
+                    const errorDetails = await error.context?.json();
+                    if (errorDetails?.error) errorMsg = errorDetails.error;
+                } catch (e) {
+                    console.error('Não foi possível extrair detalhes do erro:', e);
+                }
+                throw new Error(errorMsg);
+            }
 
             setStatus('success');
-            setMessage(`Agente Faturista acionado com sucesso para o(s) dia(s) de leitura: ${data.targetDays}`);
-            setTimeout(() => onClose(), 4000);
+            setMessage(data.message || `Agente acionado com sucesso para: ${data.target}`);
+            setTimeout(() => onClose(), 5000);
         } catch (err) {
-            console.error('Erro ao acionar scraper:', err);
+            console.error('Erro detalhado ao acionar scraper:', err);
             setStatus('error');
-            setMessage(err.message || 'Falha ao acionar o robô no GitHub.');
+            setMessage(err.message || 'Erro inesperado ao falar com o Supabase.');
         } finally {
             setLoading(false);
         }
