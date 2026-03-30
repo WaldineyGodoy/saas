@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar as CalendarIcon, List, Layout, Info, Download } from 'lucide-react';
+import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import ScraperTriggerModal from '../../components/ScraperTriggerModal';
 import {
     DndContext,
