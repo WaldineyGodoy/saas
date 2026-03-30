@@ -211,11 +211,25 @@ async function run() {
                 const checkOla = page.locator('text=Olá,').first();
                 const checkSair = page.locator('button:has-text("Sair"), a:has-text("Sair")').first();
 
-                // Safe login check: strictly waits for greeting or logout button
-                if (await checkOla.isVisible() || await checkSair.isVisible()) {
-                    console.log('ACESSO REALIZADO!');
+                // Safe login check: strictly waits for dashboard search input or dashboard cards
+                if (await ucSearchInput.isVisible() || page.url().includes('/home/dashboard')) {
+                    console.log('ACESSO REALIZADO E DASHBOARD CARREGADO!');
                     loggedIn = true;
                     break;
+                }
+
+                if (await checkOla.isVisible()) {
+                    const currentUrl = page.url();
+                    if (!(await ucSearchInput.isVisible()) && !currentUrl.includes('/dashboard')) {
+                        console.log('   [Faturista] Logado, mas preso na home pública. Clicando em "2ª Via de Pagamento"...');
+                        const segundaViaBtn = page.locator('mat-card:has-text("2ª Via de Pagamento"), mat-card:has-text("2a Via de Pagamento"), a:has-text("2ª Via de Pagamento")').first();
+                        if (await segundaViaBtn.isVisible()) {
+                            await segundaViaBtn.click({ force: true });
+                        } else {
+                            await page.goto('https://agenciavirtual.neoenergia.com/rn/#/home');
+                        }
+                        continue;
+                    }
                 }
 
                 if (await userField.isVisible()) {
@@ -243,7 +257,7 @@ async function run() {
                 }
 
                 const loginBtn = page.locator('.btn-login, button:has-text("LOGIN")').filter({ hasNotText: 'Cadastrar' }).first();
-                if (await loginBtn.isVisible()) {
+                if (await loginBtn.isVisible() && !(await checkOla.isVisible())) {
                     await loginBtn.click({ force: true });
                     continue;
                 }
