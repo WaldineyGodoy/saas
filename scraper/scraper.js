@@ -297,11 +297,27 @@ async function run() {
                             await page.waitForTimeout(4000);
                         }
                     }
-                    const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input').filter({ visible: true }).first();
+                    const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input, input[name="username"], input[name="cpfCnpj"]').filter({ visible: true }).first();
                     if (await userFormField.isVisible()) {
-                        await userFormField.fill(creds.login.replace(/\D/g, ''));
-                        await page.locator('input#password, input[type="password"]').first().fill(creds.password);
-                        await page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).filter({ visible: true }).first().click();
+                        console.log('   [Faturista] Refazendo login no loop interno (Modo Humano)...');
+                        await userFormField.click();
+                        await page.keyboard.press('Control+A');
+                        await page.keyboard.press('Backspace');
+                        await userFormField.pressSequentially(creds.login.replace(/\D/g, ''), { delay: 100 });
+                        
+                        const innerPass = page.locator('input#password, input[type="password"]').first();
+                        await innerPass.click();
+                        await page.keyboard.press('Control+A');
+                        await page.keyboard.press('Backspace');
+                        await innerPass.pressSequentially(creds.password, { delay: 100 });
+                        
+                        await page.waitForTimeout(2000);
+                        const innerEnter = page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).filter({ visible: true }).first();
+                        if (await innerEnter.isEnabled()) {
+                            await innerEnter.click({ noWaitAfter: true });
+                        } else {
+                            await innerEnter.click({ force: true, noWaitAfter: true });
+                        }
                         await page.waitForTimeout(5000);
                     }
 
