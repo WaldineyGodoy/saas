@@ -118,6 +118,17 @@ async function run() {
         return;
     }
 
+    console.log(`\nMarcando ${ucsToScrape.length} UCs como PROCESSING no banco de dados...`);
+    for (const uc of ucsToScrape) {
+        await supabase
+            .from('consumer_units')
+            .update({ 
+                last_scraping_status: 'processing',
+                last_scraping_error: null 
+            })
+            .eq('id', uc.id);
+    }
+
     console.log(`\nAgente Playwright Iniciado para ${ucsToScrape.length} UCs.`);
 
     // 3. Agrupa UCs selecionadas por Titular das Credenciais
@@ -263,7 +274,18 @@ async function run() {
                     }
 
                     const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"]').first();
-                    await searchInput.waitFor({ state: 'visible', timeout: 20000 });
+                    
+                    try {
+                        await searchInput.waitFor({ state: 'visible', timeout: 35000 });
+                    } catch (e) {
+                        const debugPath = `./downloads/debug/timeout_search_${uc.numero_uc}_${Date.now()}.png`;
+                        console.error(`[Faturista] Timeout aguardando campo de busca. Tirando print para debug em: ${debugPath}`);
+                        const debugDir = './downloads/debug';
+                        if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+                        await page.screenshot({ path: debugPath });
+                        throw e; // Re-lança o erro para o fluxo normal de captura
+                    }
+
                     await searchInput.fill(paddedUC);
                     await page.click('button[aria-label="Pesquisar"]');
                     await page.waitForTimeout(4000);
