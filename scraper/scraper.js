@@ -282,9 +282,21 @@ async function run() {
                     const paddedUC = uc.numero_uc.toString().padStart(12, '0');
                     console.log(`-> UC: ${uc.numero_uc}`);
                     
-                    await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(() => {});
-                    await page.waitForTimeout(3000);
-
+                    // Retorno ao painel principal, caso não esteja na home
+                    const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
+                    
+                    if (!(await searchInput.isVisible())) {
+                        console.log('   [Faturista] Buscador não encontrado. Retornando ao dashboard (2ª Via)...');
+                        const segundaViaBtn = page.locator('mat-card:has-text("2ª Via de Pagamento"), mat-card:has-text("2a Via de Pagamento"), a:has-text("2ª Via de Pagamento")').first();
+                        if (await segundaViaBtn.isVisible()) {
+                            await segundaViaBtn.click({ force: true });
+                            await page.waitForTimeout(4000);
+                        } else {
+                            // Tenta ir pelo menu ou página inicial se o botão não estiver visível
+                            await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(() => {});
+                            await page.waitForTimeout(4000);
+                        }
+                    }
                     const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input').filter({ visible: true }).first();
                     if (await userFormField.isVisible()) {
                         await userFormField.fill(creds.login.replace(/\D/g, ''));
@@ -293,8 +305,6 @@ async function run() {
                         await page.waitForTimeout(5000);
                     }
 
-                    const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
-                    
                     try {
                         await searchInput.waitFor({ state: 'visible', timeout: 35000 });
                     } catch (e) {
