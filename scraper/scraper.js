@@ -282,19 +282,33 @@ async function run() {
                     const paddedUC = uc.numero_uc.toString().padStart(12, '0');
                     console.log(`-> UC: ${uc.numero_uc}`);
                     
-                    // Retorno ao painel principal, caso não esteja na home
+                    // Verifica se o campo de busca está visível (espera até 6 segundos para a página carregar caso acabe de logar)
                     const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
                     
-                    if (!(await searchInput.isVisible())) {
-                        console.log('   [Faturista] Buscador não encontrado. Retornando ao dashboard (2ª Via)...');
-                        const segundaViaBtn = page.locator('mat-card:has-text("2ª Via de Pagamento"), mat-card:has-text("2a Via de Pagamento"), a:has-text("2ª Via de Pagamento")').first();
-                        if (await segundaViaBtn.isVisible()) {
-                            await segundaViaBtn.click({ force: true });
-                            await page.waitForTimeout(4000);
-                        } else {
-                            // Tenta ir pelo menu ou página inicial se o botão não estiver visível
-                            await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(() => {});
-                            await page.waitForTimeout(4000);
+                    let isSearchReady = false;
+                    try {
+                        await searchInput.waitFor({ state: 'visible', timeout: 6000 });
+                        isSearchReady = true;
+                    } catch (e) {
+                        isSearchReady = false;
+                    }
+
+                    if (!isSearchReady) {
+                        console.log('   [Faturista] Buscador não encontrado. Forçando rota do dashboard...');
+                        // Se estivermos dentro de uma UC anterior ou perdidos, forçamos o roteador angular para o dashboard
+                        await page.goto('https://agenciavirtual.neoenergia.com/rn/#/home/dashboard').catch(() => {});
+                        await page.waitForTimeout(4000);
+                        
+                        try {
+                            await searchInput.waitFor({ state: 'visible', timeout: 6000 });
+                        } catch (e) {
+                            console.log('   [Faturista] Buscador ainda não encontrado após forçar dashboard. Verificando botão "Trocar Unidade"...');
+                            // Tenta procurar botões de voltar/trocar UC que existem quando estamos dentro de uma fatura
+                            const trocarUcBtn = page.locator('button:has-text("Trocar unidade"), a:has-text("Mudar de unidade")').first();
+                            if (await trocarUcBtn.isVisible()) {
+                                await trocarUcBtn.click({ force: true });
+                                await page.waitForTimeout(3000);
+                            }
                         }
                     }
                     const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input, input[name="username"], input[name="cpfCnpj"]').filter({ visible: true }).first();
