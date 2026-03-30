@@ -48,3 +48,10 @@ jobs:
         run: |
           cd scraper
           node scraper.js
+
+      - name: Upload Debug Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: scraper/downloads/debug/
