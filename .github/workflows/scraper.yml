@@ -13,6 +13,8 @@ on:
         description: 'Motivo do disparo manual'
         required: false
         default: 'Manual trigger from CRM'
+  repository_dispatch:
+    types: [trigger-scraper]
 
 jobs:
   scrape:
@@ -42,7 +44,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          TARGET_DAYS: ${{ github.event.inputs.target_days || '' }}
+          TARGET_DAYS: ${{ github.event.inputs.target_days || github.event.client_payload.value || '' }}
         run: |
           cd scraper
           node scraper.js
