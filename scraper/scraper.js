@@ -120,13 +120,14 @@ async function run() {
 
     console.log(`\nMarcando ${ucsToScrape.length} UCs como PROCESSING no banco de dados...`);
     for (const uc of ucsToScrape) {
-        await supabase
+        const { error } = await supabase
             .from('consumer_units')
             .update({ 
                 last_scraping_status: 'processing',
                 last_scraping_error: null 
             })
             .eq('id', uc.id);
+        if (error) console.error(`[Faturista] Erro RLS ao marcar processing em UC ${uc.id}:`, error.message);
     }
 
     console.log(`\nAgente Playwright Iniciado para ${ucsToScrape.length} UCs.`);
@@ -164,7 +165,7 @@ async function run() {
     }
 
     async function updateUCStatus(ucId, status, errorMsg = null) {
-        await supabase
+        const { error } = await supabase
             .from('consumer_units')
             .update({ 
                 last_scraping_status: status,
@@ -172,6 +173,9 @@ async function run() {
                 last_scraping_error: errorMsg
             })
             .eq('id', ucId);
+        if (error) {
+            console.error(`[Faturista] Erro ao atualizar UC ${ucId} para '${status}':`, error.message);
+        }
     }
 
     // Processa cada grupo (Titular)
@@ -203,7 +207,7 @@ async function run() {
                 const enterBtn = page.locator('button:has-text("ENTRAR")');
                 const portalAccessBtn = page.locator('button[aria-label="Conectar-se a agência virtual"]');
                 const rnCard = page.locator('mat-card:has-text("Rio Grande do Norte")');
-                const searchInput = page.locator('input[placeholder*="Código"]').first();
+                const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"]').first();
                 const checkOla = page.locator('text=Olá,').first();
 
                 if (url.includes('/home') || await searchInput.isVisible() || await checkOla.isVisible()) {
@@ -273,7 +277,7 @@ async function run() {
                         await page.waitForTimeout(5000);
                     }
 
-                    const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"]').first();
+                    const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"]').first();
                     
                     try {
                         await searchInput.waitFor({ state: 'visible', timeout: 35000 });
