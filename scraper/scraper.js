@@ -207,10 +207,12 @@ async function run() {
                 const enterBtn = page.locator('button:has-text("ENTRAR")');
                 const portalAccessBtn = page.locator('button[aria-label="Conectar-se a agência virtual"]');
                 const rnCard = page.locator('mat-card:has-text("Rio Grande do Norte")');
-                const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
+                const ucSearchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
                 const checkOla = page.locator('text=Olá,').first();
+                const checkSair = page.locator('button:has-text("Sair"), a:has-text("Sair")').first();
 
-                if (url.includes('/home') || await searchInput.isVisible() || await checkOla.isVisible()) {
+                // Safe login check: strictly waits for greeting or logout button
+                if (await checkOla.isVisible() || await checkSair.isVisible()) {
                     console.log('ACESSO REALIZADO!');
                     loggedIn = true;
                     break;
