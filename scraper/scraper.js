@@ -8,24 +8,52 @@ require('dotenv').config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 async function run() {
-    console.log('Iniciando Faturista (Modo Calendário)...');
+    console.log('Iniciando Faturista (Modo CRM/Calendário)...');
     
-    // 1. Identifica o dia atual ou os dias informados via variável de ambiente
-    const manualDays = process.env.TARGET_DAYS ? process.env.TARGET_DAYS.split(',').map(d => parseInt(d.trim())) : [];
-    const todayDay = new Date().getDate();
-    const targetedDays = manualDays.length > 0 ? manualDays : [todayDay];
-    
-    console.log(manualDays.length > 0 ? `[Faturista] MODO MANUAL: Processando dias ${manualDays.join(', ')}` : `Dia do Calendário: ${todayDay}`);
+    // 1. Identifica o dia atual, mês ref, ou os dias informados via variável de ambiente
+    let targetedDays = [];
+    let currentMesRef = "";
+    const now = new Date();
 
-    // 2. Busca UCs da Neoenergia cujo dia de leitura é hoje ou já passou no mês corrente
-    // E que ainda não possuem a fatura baixada para o mês de referência atual.
+    if (process.env.TARGET_DAYS) {
+        const targetStr = process.env.TARGET_DAYS.trim();
+        // Regex para YYYY-MM-DD (Modo Dia ou Semana via CRM)
+        if (targetStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const parts = targetStr.split('-');
+            const year = parts[0];
+            const month = parts[1];
+            const day = parseInt(parts[2], 10);
+            
+            targetedDays = [day];
+            currentMesRef = `${month}/${year}`;
+        } 
+        // Regex para YYYY-MM (Modo Mês via CRM)
+        else if (targetStr.match(/^\d{4}-\d{2}$/)) {
+            const parts = targetStr.split('-');
+            const year = parts[0];
+            const month = parts[1];
+            
+            // Fica vazio para buscar todos os dias do mês
+            targetedDays = [];
+            currentMesRef = `${month}/${year}`;
+        }
+        // Fallback: Modo manual antigo (ex: "5, 12, 18")
+        else {
+            targetedDays = targetStr.split(',').map(d => parseInt(d.trim()));
+            currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+        }
+    } else {
+        // Disparo Automático (Cron Diário)
+        targetedDays = [now.getDate()];
+        currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    }
+
+    console.log(`[Faturista] REF: ${currentMesRef} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
+
+    // 2. Busca UCs da Neoenergia
     console.log('Pesquisando UCs aptas via código (Supabase)...');
     
-    // Calcula o mês de referência atual (ex: "03/2026")
-    const now = new Date();
-    const currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-    
-    const { data: allUcs, error: ucError } = await supabase
+    let query = supabase
         .from('consumer_units')
         .select(`
             id, 
@@ -50,8 +78,13 @@ async function run() {
                 portal_credentials
             )
         `)
-        .eq('concessionaria', 'Neoenergia Cosern')
-        .in('dia_leitura', targetedDays); 
+        .eq('concessionaria', 'Neoenergia Cosern');
+
+    if (targetedDays.length > 0) {
+        query = query.in('dia_leitura', targetedDays);
+    }
+
+    const { data: allUcs, error: ucError } = await query;
 
     if (ucError) {
         console.error('Erro ao buscar UCs:', ucError.message);
