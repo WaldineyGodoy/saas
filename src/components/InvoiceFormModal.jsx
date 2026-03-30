@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, mergePdf } from '../lib/api';
+import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -25,6 +25,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         iluminacao_publica: '',
         tarifa_minima: '',
         outros_lancamentos: '',
+        data_leitura: '',
         status: 'a_vencer',
 
         // Calculated/Display fields
@@ -38,6 +39,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [selectedUc, setSelectedUc] = useState(null);
     const [localInvoiceId, setLocalInvoiceId] = useState(invoice?.id || null);
     const [loading, setLoading] = useState(false);
+    const [isParsing, setIsParsing] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [duplicateInfo, setDuplicateInfo] = useState(null); // { existing, type: 'block' | 'ask' }
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -74,6 +76,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 valor_a_pagar: formatCurrency(invoice.valor_a_pagar),
                 economia_reais: formatCurrency(invoice.economia_reais),
                 consumo_reais: invoice.consumo_reais ? formatCurrency(invoice.consumo_reais) : '',
+                data_leitura: invoice.data_leitura ? invoice.data_leitura.split('T')[0] : '',
                 status: invoice.status
             });
             // Find UC to set tariff info
@@ -396,6 +399,48 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         );
     };
 
+    const handlePdfUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsParsing(true);
+        try {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const base64 = reader.result;
+                try {
+                    const data = await parseInvoice(base64);
+                    
+                    setFormData(prev => {
+                        const newFormData = { ...prev };
+                        if (data.consumo_kwh) newFormData.consumo_kwh = data.consumo_kwh;
+                        if (data.mes_referencia) newFormData.mes_referencia = data.mes_referencia;
+                        if (data.vencimento) newFormData.vencimento = data.vencimento;
+                        if (data.data_leitura) newFormData.data_leitura = data.data_leitura;
+                        if (data.iluminacao_publica) newFormData.iluminacao_publica = formatCurrency(data.iluminacao_publica);
+                        if (data.outros_lancamentos) newFormData.outros_lancamentos = formatCurrency(data.outros_lancamentos);
+                        
+                        // Fallback for valor_a_pagar if provided by PDF but math is complex
+                        // Actually, the useEffect will recalculate but we can force it if needed
+                        return newFormData;
+                    });
+
+                    showAlert('Dados extraídos com sucesso!', 'success');
+                } catch (err) {
+                    console.error('OCR Error:', err);
+                    showAlert('Falha na leitura automática: ' + err.message, 'error');
+                } finally {
+                    setIsParsing(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error(error);
+            setIsParsing(false);
+            showAlert('Erro ao carregar arquivo.', 'error');
+        }
+    };
+
     const handleEmission = async () => {
         const targetId = localInvoiceId || invoice?.id;
         if (!targetId) {
@@ -444,6 +489,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 iluminacao_publica: parseCurrency(formData.iluminacao_publica),
                 tarifa_minima: parseCurrency(formData.tarifa_minima),
                 outros_lancamentos: parseCurrency(formData.outros_lancamentos),
+                data_leitura: formData.data_leitura || null,
                 valor_a_pagar: parseCurrency(formData.valor_a_pagar),
                 economia_reais: parseCurrency(formData.economia_reais),
                 status: formData.status
@@ -567,21 +613,54 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                 <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
 
-                    {/* UC Selection */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Trocar Unidade Consumidora</label>
-                        <select
-                            required
-                            value={formData.uc_id}
-                            onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
-                            disabled={!!(invoice || localInvoiceId)}
-                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.95rem', background: 'white' }}
-                        >
-                            <option value="">Selecione a UC...</option>
-                            {ucs && ucs.map(uc => (
-                                <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
-                            ))}
-                        </select>
+                    {/* UC Selection & PDF Import */}
+                    <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
+                            <select
+                                required
+                                value={formData.uc_id}
+                                onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
+                                disabled={!!(invoice || localInvoiceId)}
+                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.95rem', background: 'white' }}
+                            >
+                                <option value="">Selecione a UC...</option>
+                                {ucs && ucs.map(uc => (
+                                    <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {!invoice && !localInvoiceId && (
+                            <div>
+                                <label htmlFor="pdf-upload" style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.7rem 1.2rem',
+                                    background: isParsing ? '#f1f5f9' : '#ebf5ff',
+                                    color: isParsing ? '#94a3b8' : '#2563eb',
+                                    borderRadius: '6px',
+                                    cursor: isParsing ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 'bold',
+                                    border: '1px dashed #2563eb',
+                                    transition: 'all 0.2s',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                                    {isParsing ? 'Processando...' : 'Lançamento via PDF'}
+                                </label>
+                                <input 
+                                    id="pdf-upload"
+                                    type="file" 
+                                    accept="application/pdf"
+                                    onChange={handlePdfUpload}
+                                    disabled={isParsing}
+                                    style={{ display: 'none' }} 
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -596,6 +675,11 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                             </div>
+                        </div>
+                        {/* Reading Date */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Data da Leitura</label>
+                            <input type="date" value={formData.data_leitura} onChange={e => setFormData({ ...formData, data_leitura: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
                         </div>
                         {/* Due Date */}
                         <div>

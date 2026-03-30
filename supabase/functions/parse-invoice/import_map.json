@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "pdf-text": "https://deno.land/x/pdf_text@v1.0.0/mod.ts"
+  }
+}

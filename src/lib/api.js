@@ -298,3 +298,24 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf')
         throw error;
     }
 };
+
+/**
+ * Chama Edge Function para extrair dados de um PDF de fatura
+ * @param {string} pdfBase64 
+ * @returns {Promise<Object>}
+ */
+export const parseInvoice = async (pdfBase64) => {
+    const { data, error } = await supabase.functions.invoke('parse-invoice', {
+        body: { pdfBase64 }
+    });
+
+    if (error) {
+        let message = error.message;
+        try {
+            const body = await error.context?.json();
+            if (body?.error) message = body.error;
+        } catch (e) { }
+        throw new Error(message);
+    }
+    return data;
+};

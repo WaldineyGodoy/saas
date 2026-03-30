@@ -267,45 +267,50 @@ async function run() {
                                     
                                     const publicUrl = await uploadToSupabase(localPath, uc.numero_uc, fileName);
                                     
-                                    // Scanner do PDF para extrair kWh e CIP
-                                    const { consumoKwh, cipValor } = await parseInvoicePdf(localPath);
+                                        // Scanner do PDF para extrair kWh e CIP
+                                        const pdfData = await parseInvoicePdf(localPath);
 
-                                    const mesReferenciaBase = parseMesRef(mesRefStr.trim());
-                                    if (mesReferenciaBase) {
-                                        // Regras de Criação de Fatura Automática
-                                        const [month, year] = mesReferenciaBase.split('/').map(Number);
-                                        
-                                        // Vencimento: Dia do vencimento no mês seguinte
-                                        let nextMonth = month + 1;
-                                        let nextYear = year;
-                                        if (nextMonth > 12) { nextMonth = 1; nextYear++; }
-                                        const vencimentoDate = new Date(nextYear, nextMonth - 1, uc.dia_vencimento || 10);
-                                        const vencimentoStr = vencimentoDate.toISOString().split('T')[0];
+                                        const mesReferenciaBase = pdfData.mesReferencia || parseMesRef(mesRefStr.trim());
+                                        if (mesReferenciaBase) {
+                                            // Regras de Criação de Fatura Automática
+                                            const [month, year] = mesReferenciaBase.split('/').map(Number);
+                                            
+                                            // Vencimento: Usa o do PDF se houver, senão calcula
+                                            let vencimentoStr = pdfData.vencimento;
+                                            if (!vencimentoStr) {
+                                                let nextMonth = month + 1;
+                                                let nextYear = year;
+                                                if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+                                                const vencimentoDate = new Date(nextYear, nextMonth - 1, uc.dia_vencimento || 10);
+                                                vencimentoStr = vencimentoDate.toISOString().split('T')[0];
+                                            }
 
-                                        // Regra: Consumo Mínimo por Tipo de Ligação
-                                        const kwhMinimo = uc.tipo_ligacao === 'trifasico' ? 100 : (uc.tipo_ligacao === 'bifasico' ? 50 : 30);
-                                        const tarifa = Number(uc.tarifa_concessionaria) || 0;
-                                        const valorTarifaMinima = kwhMinimo * tarifa;
+                                            // Regra: Consumo Mínimo por Tipo de Ligação (Fallback se extração falhar)
+                                            const kwhMinimo = uc.tipo_ligacao === 'trifasico' ? 100 : (uc.tipo_ligacao === 'bifasico' ? 50 : 30);
+                                            const tarifa = Number(uc.tarifa_concessionaria) || 0;
+                                            const valorTarifaMinima = kwhMinimo * tarifa;
 
-                                        // Upsert no CRM
-                                        await supabase.from('invoices').upsert({ 
-                                            uc_id: uc.id, 
-                                            mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
-                                            vencimento: vencimentoStr,
-                                            tipo_ligacao: uc.tipo_ligacao,
-                                            tarifa_concessionaria: tarifa,
-                                            tarifa_minima: valorTarifaMinima,
-                                            consumo_kwh: consumoKwh || 0, 
-                                            iluminacao_publica: cipValor || 0,
-                                            consumo_reais: (consumoKwh || kwhMinimo) * tarifa, 
-                                            valor_a_pagar: ((consumoKwh || kwhMinimo) * tarifa) + (cipValor || 0), 
-                                            desconto_assinante: Number(uc.desconto_assinante) || 0,
-                                            status: 'a_vencer',
-                                            concessionaria_pdf_url: publicUrl 
-                                        }, { onConflict: 'uc_id,mes_referencia' });
-                                        
-                                        foundBill = true;
-                                    }
+                                            // Upsert no CRM
+                                            await supabase.from('invoices').upsert({ 
+                                                uc_id: uc.id, 
+                                                mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                                vencimento: vencimentoStr,
+                                                data_leitura: pdfData.dataLeitura,
+                                                tipo_ligacao: uc.tipo_ligacao,
+                                                tarifa_concessionaria: tarifa,
+                                                tarifa_minima: valorTarifaMinima,
+                                                consumo_kwh: pdfData.consumoKwh || 0, 
+                                                iluminacao_publica: pdfData.cipValor || 0,
+                                                outros_lancamentos: pdfData.outrosLancamentos || 0,
+                                                consumo_reais: (pdfData.consumoKwh || kwhMinimo) * tarifa, 
+                                                valor_a_pagar: pdfData.valorTotal || (((pdfData.consumoKwh || kwhMinimo) * tarifa) + (pdfData.cipValor || 0)), 
+                                                desconto_assinante: Number(uc.desconto_assinante) || 0,
+                                                status: 'a_vencer',
+                                                concessionaria_pdf_url: publicUrl 
+                                            }, { onConflict: 'uc_id,mes_referencia' });
+                                            
+                                            foundBill = true;
+                                        }
                                 }
                                 await header.click();
                             }
@@ -358,26 +363,44 @@ async function parseInvoicePdf(filePath) {
         const cipMatch = text.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d,.]+)/i) ||
                          text.match(/Ilum\.?\s*P[uú]bl\.?[^\d]*([\d,.]+)/i);
 
+        const refMonthMatch = text.match(/Mês\s*Referência[:\s]*(\w{3}\/\d{2,4})|REF[:\s]*(\w{3}\/\d{2,4})/i);
+        const dueDateMatch = text.match(/Vencimento[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
+        const totalAmountMatch = text.match(/Total\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)|Valor\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)/i);
+        const readingDateMatch = text.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
+        const othersMatch = text.match(/(?:Outros\s*Lançamentos|Adicionais)[:\s]*R\$?\s*([\d,.]+)/i);
+
         let consumoKwh = 0;
         if (consumptionMatch) {
             consumoKwh = parseInt(consumptionMatch[1].replace(/\D/g, ''));
         }
 
-        let cipValor = 0;
-        if (cipMatch) {
-            const rawCip = cipMatch[1];
-            // Se tiver vírgula e ponto (ex: 1.234,56 ou 23,45)
-            if (rawCip.includes(',') && rawCip.includes('.')) {
-                cipValor = parseFloat(rawCip.replace(/\./g, '').replace(',', '.'));
-            } else if (rawCip.includes(',')) {
-                cipValor = parseFloat(rawCip.replace(',', '.'));
-            } else {
-                cipValor = parseFloat(rawCip);
-            }
-        }
+        const parseValue = (raw) => {
+            if (!raw) return 0;
+            if (raw.includes(',') && raw.includes('.')) return parseFloat(raw.replace(/\./g, '').replace(',', '.'));
+            if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
+            return parseFloat(raw);
+        };
 
-        console.log(`      [Scanner PDF] Extração Completa: Consumo=${consumoKwh} kWh, CIP=R$ ${cipValor}`);
-        return { consumoKwh, cipValor };
+        const formatDate = (raw) => {
+            if (!raw) return null;
+            const parts = raw.split('/');
+            if (parts.length < 2) return null;
+            const year = parts[2]?.length === 2 ? `20${parts[2]}` : parts[2];
+            return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        };
+
+        let result = {
+            consumoKwh,
+            cipValor: parseValue(cipMatch ? cipMatch[1] : null),
+            mesReferencia: refMonthMatch ? parseMesRef(refMonthMatch[1] || refMonthMatch[2]) : null,
+            vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
+            valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null),
+            dataLeitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
+            outrosLancamentos: parseValue(othersMatch ? othersMatch[1] : null)
+        };
+
+        console.log(`      [Scanner PDF] Extração: MesRef=${result.mesReferencia}, Consumo=${result.consumoKwh} kWh, CIP=R$ ${result.cipValor}, Venc=${result.vencimento}, Total=R$ ${result.valorTotal}`);
+        return result;
     } catch (err) {
         console.error('      [Scanner PDF] Erro ao processar arquivo:', err.message);
         return { consumoKwh: 0, cipValor: 0 };
