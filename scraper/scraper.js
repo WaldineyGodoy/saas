@@ -202,9 +202,9 @@ async function run() {
                 await page.waitForTimeout(3000);
                 const url = page.url();
                 
-                const userField = page.locator('input#userId');
-                const passField = page.locator('input#password');
-                const enterBtn = page.locator('button:has-text("ENTRAR")');
+                const userField = page.locator('input#userId, input[name="username"], input[name="j_username"], input[name="cpfCnpj"], mat-form-field:has-text("CPF") input, mat-form-field:has-text("CNPJ") input, input[formcontrolname="login"], input[formcontrolname="usuario"]').first();
+                const passField = page.locator('input#password, input[name="password"], input[name="j_password"], mat-form-field:has-text("Senha") input, input[type="password"]').first();
+                const enterBtn = page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).first();
                 const portalAccessBtn = page.locator('button[aria-label="Conectar-se a agência virtual"]');
                 const rnCard = page.locator('mat-card:has-text("Rio Grande do Norte")');
                 const ucSearchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
@@ -271,11 +271,11 @@ async function run() {
                     await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(() => {});
                     await page.waitForTimeout(3000);
 
-                    const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId').filter({ visible: true }).first();
+                    const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input').filter({ visible: true }).first();
                     if (await userFormField.isVisible()) {
                         await userFormField.fill(creds.login.replace(/\D/g, ''));
-                        await page.locator('input#password').fill(creds.password);
-                        await page.locator('button').filter({ hasText: /^ENTRAR$/ }).filter({ visible: true }).first().click();
+                        await page.locator('input#password, input[type="password"]').first().fill(creds.password);
+                        await page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).filter({ visible: true }).first().click();
                         await page.waitForTimeout(5000);
                     }
 
