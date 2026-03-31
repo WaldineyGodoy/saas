@@ -10,6 +10,10 @@ import html2canvas from 'html2canvas';
 import { useRef } from 'react';
 import './InvoicesModal.css';
 import { Download, Loader2, Info } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+// Explicitly load the worker for pdfjs
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const { profile } = useAuth();
@@ -396,13 +400,50 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     
                     setFormData(prev => {
                         const newFormData = { ...prev };
-                        if (data.consumo_kwh) newFormData.consumo_kwh = data.consumo_kwh;
-                        if (data.consumo_compensado) newFormData.consumo_compensado = data.consumo_compensado;
+                        // Capture results from Edge Function with safety checks for 0
+                        if (data.consumo_kwh !== undefined) newFormData.consumo_kwh = data.consumo_kwh;
+                        if (data.consumo_compensado !== undefined) newFormData.consumo_compensado = data.consumo_compensado;
                         if (data.mes_referencia) newFormData.mes_referencia = data.mes_referencia;
                         if (data.vencimento) newFormData.vencimento = data.vencimento;
                         if (data.data_leitura) newFormData.data_leitura = data.data_leitura;
                         if (data.iluminacao_publica) newFormData.iluminacao_publica = formatCurrency(data.iluminacao_publica);
                         if (data.outros_lancamentos) newFormData.outros_lancamentos = formatCurrency(data.outros_lancamentos);
+
+                        // FALLBACK: Client-side extraction for Consumo Compensado if not found by Edge Function
+                        if (newFormData.consumo_compensado === 0 || !newFormData.consumo_compensado) {
+                            try {
+                                const pdf = await pdfjsLib.getDocument({ data: atob(base64) }).promise;
+                                let fullText = "";
+                                for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
+                                    const page = await pdf.getPage(i);
+                                    const textContent = await page.getTextContent();
+                                    fullText += textContent.items.map(s => s.str).join(" ") + "\n";
+                                }
+
+                                const cleanText = fullText.replace(/\s+/g, ' ');
+                                const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
+                                
+                                // Consumo Compensado - Regra: Somar lançamentos -TE (comercial)
+                                const compensadoMatches = cleanText.match(/G\dComp\..*?\-TE\s+kWh\s+([\d,.]+)-/gi);
+                                let totalCompensado = 0;
+                                if (compensadoMatches) {
+                                    compensadoMatches.forEach(match => {
+                                        const valMatch = match.match(/([\d,.]+)-/);
+                                        if (valMatch) totalCompensado += parseValue(valMatch[1]);
+                                    });
+                                } else {
+                                    const compensadoMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado).*?([\d,.]+)\s*kWh/i);
+                                    if (compensadoMatch) totalCompensado = parseValue(compensadoMatch[1]);
+                                }
+
+                                if (totalCompensado > 0) {
+                                    newFormData.consumo_compensado = totalCompensado;
+                                    console.log('Extração local de Consumo Compensado:', totalCompensado);
+                                }
+                            } catch (error) {
+                                console.warn('Erro na extração local de backup:', error);
+                            }
+                        }
                         
                         // Fallback for valor_a_pagar if provided by PDF but math is complex
                         // Actually, the useEffect will recalculate but we can force it if needed
