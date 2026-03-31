@@ -579,8 +579,8 @@ export default function ConsumerUnitList() {
                 </div>
             </div>
 
+            {/* Legenda de Cores */}
             {viewMode === 'calendar' && (
-                {/* Legenda de Cores */}
                 <div style={{
                     marginBottom: '1.5rem',
                     padding: '1.5rem',
