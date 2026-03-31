@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
-import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, FileSearch, PlusCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, FileSearch, PlusCircle, Upload } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import UCInvoicesModal from './UCInvoicesModal';
 import InvoiceFormModal from './InvoiceFormModal';
+import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'all' }) {
     const { showAlert, showConfirm } = useUI();
@@ -18,6 +19,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showPassword, setShowPassword] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
     const [showIssueInvoiceModal, setShowIssueInvoiceModal] = useState(false);
+    const [showManualUploadModal, setShowManualUploadModal] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -580,9 +582,32 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
+                                    <select
+                                        value={formData.tipo_ligacao}
+                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                    >
+                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Leitura</label>
+                                    <select
+                                        value={formData.dia_leitura}
+                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                    >
+                                        <option value="">Selecione o dia...</option>
+                                        {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'stretch' }}>
                                 <div style={{ 
-                                    gridColumn: 'span 2', 
                                     background: '#f0fdf4', 
                                     padding: '1rem', 
                                     borderRadius: '12px', 
@@ -676,29 +701,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
-                                        <select
-                                            value={formData.tipo_ligacao}
-                                            onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
-                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                        >
-                                            {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Leitura</label>
-                                        <select
-                                            value={formData.dia_leitura}
-                                            onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
-                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                        >
-                                            <option value="">Selecione o dia...</option>
-                                            {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
                             </div>
                         </CollapsibleSection>
 
@@ -740,6 +742,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}
                                                 >
                                                     <FileSearch size={14} /> Visualizar
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowManualUploadModal(true)}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', color: '#166534', fontWeight: 600 }}
+                                                >
+                                                    <Upload size={14} /> Upload Fatura
                                                 </button>
                                                 <button
                                                     type="button"
@@ -1044,6 +1053,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     onSave={() => {
                         setShowIssueInvoiceModal(false);
                         setShowInvoicesModal(true);
+                    }}
+                />
+            )}
+            {showManualUploadModal && (
+                <ManualInvoiceUploadModal
+                    uc={consumerUnit} // full consumer unit object needs to match
+                    onClose={() => setShowManualUploadModal(false)}
+                    onSuccess={() => {
+                        setFormData(prev => ({ ...prev, last_scraping_status: 'success' }));
                     }}
                 />
             )}
