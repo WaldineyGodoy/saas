@@ -255,6 +255,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 tarifa_concessionaria: valorTarifa,
                 tarifa_minima: kwhMinimo * valorTarifa,
                 consumo_kwh: extractedData.consumoKwh || 0,
+                consumo_compensado: extractedData.consumoCompensado || 0,
                 iluminacao_publica: extractedData.cipValor || 0,
                 outros_lancamentos: extractedData.outrosLancamentos || 0,
                 consumo_reais: (extractedData.consumoKwh || kwhMinimo) * valorTarifa,
@@ -299,7 +300,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 <div style={{ padding: '1.2rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
                     <div>
                         <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Upload size={18} /> Upload Manual de Fatura
+                            <Upload size={18} /> Conta de Energia Concessionária
                         </h3>
                         <p style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {uc.numero_uc}</p>
                     </div>
@@ -340,8 +341,8 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                                 <Upload size={32} color="#94a3b8" />
-                                <span style={{ fontWeight: 600, color: '#475569' }}>Selecionar arquivo PDF da fatura</span>
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Apenas PDFs da Concessionária</span>
+                                <span style={{ fontWeight: 600, color: '#475569' }}>Selecionar PDF da Conta Concessionária</span>
+                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Extração automática de consumo e valores</span>
                             </div>
                         )}
                     </div>
@@ -482,7 +483,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                         }}
                     >
                         {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-                        {uploading ? 'Processando...' : 'Confirmar e Subir Fatura'}
+                        {uploading ? 'Processando...' : 'Confirmar e Registrar Conta'}
                     </button>
                 </div>
             </div>

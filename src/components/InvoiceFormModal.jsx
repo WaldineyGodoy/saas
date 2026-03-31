@@ -23,7 +23,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         vencimento: '',
         consumo_kwh: '',
         iluminacao_publica: '',
-        tarifa_minima: '',
+        tarifa_minima_excedentes: '',
         outros_lancamentos: '',
         data_leitura: '',
         status: 'a_vencer',
@@ -71,7 +71,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 vencimento: invoice.vencimento ? invoice.vencimento.split('T')[0] : '',
                 consumo_kwh: invoice.consumo_kwh,
                 iluminacao_publica: invoice.iluminacao_publica ? formatCurrency(invoice.iluminacao_publica) : '',
-                tarifa_minima: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
+                tarifa_minima_excedentes: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
                 outros_lancamentos: invoice.outros_lancamentos ? formatCurrency(invoice.outros_lancamentos) : '',
                 valor_a_pagar: formatCurrency(invoice.valor_a_pagar),
                 economia_reais: formatCurrency(invoice.economia_reais),
@@ -121,51 +121,41 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     useEffect(() => {
         // Only calculate if we have Consumption and a selected UC with tariff
         if (formData.consumo_kwh && selectedUc) {
-            const consumo = Number(formData.consumo_kwh);
+            const consumo = Number(formData.consumo_kwh) || 0;
+            const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
             const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
             const descontoPercent = Number(selectedUc.desconto_assinante) || 0;
             const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
 
-            // Rule for Minimum Consumption (Cost of Availability)
-            const tipoLigacao = selectedUc.tipo_ligacao || 'monofasico';
-            const kwhMinimo = tipoLigacao === 'trifasico' ? 100 : (tipoLigacao === 'bifasico' ? 50 : 30);
+            // Nova Fórmula conforme solicitação:
+            // Tarifa Mínima e Excedentes R$ = (Consumo Kwh - Consumo Compensado kwh) * Valor da Tarifa
+            const tarifaMinimaExcedentesReais = (consumo - rawConsumoCompensado) * rawTarifa;
 
-            // Consumo Compensado = Consumo - Mínimo (cannot be negative)
-            const consumoCompensado = Math.max(0, consumo - kwhMinimo);
+            // Energia Compensada R$ = Consumo Compensado kwh * Valor da Tarifa * (1 - Desconto Assinante)
+            const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
 
-            // Tarifa Mínima R$ = Mínimo * Tarifa
-            const tarifaMinimaReais = kwhMinimo * rawTarifa;
-
-            // Energia Compensada R$ = Consumo Compensado * Tarifa * (1 - Desconto)
-            // Note: rawTarifa * (1 - multiplier) is the effective rate after discount
-            const energiaCompensadaReais = consumoCompensado * rawTarifa * (1 - multiplier);
-
-            // Economia Gerada (for display/DB): (Consumo Compensado * Tarifa) * Desconto
-            const economia = (consumoCompensado * rawTarifa) * multiplier;
-
-            // Consumo Bruto (just for summary display): (Consumo * Tarifa)
-            // Consumo Líquido (Consumo R$ field): ConsumoBruto - Economia
+            // Economia Gerada R$ = Consumo Compensado kwh * Valor da Tarifa * Desconto Assinante
+            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
 
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
 
-            // Total = Energia Compensada + Tarifa Mínima + IP + Outros
-            const total = energiaCompensadaReais + tarifaMinimaReais + ip + outros;
+            // Total = Energia Compensada + Tarifa Mínima e Excedentes + IP + Outros
+            const total = energiaCompensadaReais + tarifaMinimaExcedentesReais + ip + outros;
 
             setFormData(prev => ({
                 ...prev,
-                consumo_compensado: consumoCompensado,
-                tarifa_minima: formatCurrency(tarifaMinimaReais),
+                tarifa_minima_excedentes: formatCurrency(tarifaMinimaExcedentesReais),
                 energia_compensada_reais: formatCurrency(energiaCompensadaReais),
-                economia_reais: formatCurrency(economia),
-                consumo_reais: formatCurrency(energiaCompensadaReais + tarifaMinimaReais), // Matches total energy cost
+                economia_reais: formatCurrency(economiaReais),
+                consumo_reais: formatCurrency(energiaCompensadaReais + tarifaMinimaExcedentesReais),
                 valor_a_pagar: formatCurrency(total)
             }));
         }
     }, [
         formData.consumo_kwh,
+        formData.consumo_compensado,
         formData.iluminacao_publica,
-        // formData.tarifa_minima, // Removed to prevent loop since we automate it
         formData.outros_lancamentos,
         selectedUc
     ]);
@@ -352,14 +342,23 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             </div>
                         </div>
 
-                        <div className="detail-section metrics">
+                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
+
                             <div className="metric-line">
-                                <span>Consumo Total ({inv.consumo_kwh} kWh):</span>
-                                <span>{formatCurrency(inv.consumo_reais)}</span>
+                                <span>+ Energia Compensada Líquida:</span>
+                                <span>{formData.energia_compensada_reais}</span>
                             </div>
-                            <div className="metric-line secondary">
-                                <span>Valor da Tarifa:</span>
-                                <span>R$ {(Number(selectedUc?.tarifa_concessionaria) || 0).toFixed(4)}</span>
+                            <div className="metric-line">
+                                <span>+ Iluminação Pública:</span>
+                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Tarifa Mínima e Excedentes:</span>
+                                <span>{formatCurrency(inv.tarifa_minima)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Outros Lançamentos:</span>
+                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
                             </div>
 
                             <div className="economy-box">
@@ -373,20 +372,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 </div>
                             </div>
 
-                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
-
-                            <div className="metric-line">
-                                <span>+ Iluminação Pública:</span>
-                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Tarifa Mínima:</span>
-                                <span>{formatCurrency(inv.tarifa_minima)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Outros Lançamentos:</span>
-                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
-                            </div>
 
                             <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
                                 <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
@@ -487,8 +472,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 consumo_kwh: Number(formData.consumo_kwh),
                 consumo_reais: parseCurrency(formData.consumo_reais),
                 iluminacao_publica: parseCurrency(formData.iluminacao_publica),
-                tarifa_minima: parseCurrency(formData.tarifa_minima),
+                tarifa_minima: parseCurrency(formData.tarifa_minima_excedentes),
                 outros_lancamentos: parseCurrency(formData.outros_lancamentos),
+                consumo_compensado: Number(formData.consumo_compensado),
+
                 data_leitura: formData.data_leitura || null,
                 valor_a_pagar: parseCurrency(formData.valor_a_pagar),
                 economia_reais: parseCurrency(formData.economia_reais),
@@ -605,8 +592,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         </div>
                     )}
                     <div>
-                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{(invoice || localInvoiceId) ? 'Editar Fatura' : 'Nova Fatura'}</h3>
-                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Preencha os dados de consumo e valores</p>
+                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{(invoice || localInvoiceId) ? 'Editar Fatura' : 'Gerar Fatura'}</h3>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Após processamento da Conta de Energia Concessionária</p>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                 </div>
@@ -715,15 +702,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Consumo Compensado (kWh)</label>
-                                <input type="number" readOnly value={formData.consumo_compensado} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc', color: '#64748b' }} />
+                                <input type="number" step="any" value={formData.consumo_compensado} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
                             </div>
 
                             <h4 style={{ color: '#334155', fontWeight: 'bold', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><DollarSign size={18} /> Valores de energia e Adicionais</h4>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Iluminação Pública (R$)</label>
-                                <input type="text" value={formData.iluminacao_publica} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Energia Compensada (R$)</label>
@@ -731,9 +713,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Tarifa Mínima (R$)</label>
-                                <input type="text" readOnly value={formData.tarifa_minima} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc' }} />
-                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.2rem' }}>Calculado automaticamente (30/50/100 kWh)</p>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Iluminação Pública (R$)</label>
+                                <input type="text" value={formData.iluminacao_publica} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Tarifa Mínima e Excedentes (R$)</label>
+                                <input type="text" readOnly value={formData.tarifa_minima_excedentes} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc' }} />
+                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.2rem' }}>Calculado: (Consumo - Compensado) * Tarifa</p>
                             </div>
 
                             <div>
