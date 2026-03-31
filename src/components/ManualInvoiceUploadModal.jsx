@@ -141,6 +141,13 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 extractedReadDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
             }
 
+            // Linha digitável (Barcode) e Pix
+            const regexLinhaDigitavel = cleanText.match(/(\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d|\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{1}[\s.]?\d{14}|\d{44,48})/);
+            const regexPix = cleanText.match(/(000201[\w\d]{30,})/);
+
+            const linhaDigitavelText = regexLinhaDigitavel ? regexLinhaDigitavel[1].replace(/[\s.-]/g, '') : '';
+            const pixStringText = regexPix ? regexPix[1] : '';
+
             const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
             const parsedCompensado = parseValue(compensadoMatch ? compensadoMatch[1] : 0);
 
@@ -154,6 +161,8 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 consumoCompensado: parseInt(parsedCompensado) || 0,
                 cipValor: parseValue(cipMatch ? cipMatch[1] : 0) || 0,
                 outrosLancamentos: somaOutros,
+                linhaDigitavel: linhaDigitavelText,
+                pixString: pixStringText,
             });
 
             if (!parsedUc) {
@@ -222,7 +231,9 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 valor_a_pagar: extractedData.valorTotal || 0,
                 desconto_assinante: Number(uc.desconto_assinante) || 0,
                 status: 'a_vencer',
-                concessionaria_pdf_url: publicUrl
+                concessionaria_pdf_url: publicUrl,
+                linha_digitavel: extractedData.linhaDigitavel || null,
+                pix_string: extractedData.pixString || null
             };
 
             const { error: dbError } = await supabase
@@ -364,11 +375,6 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                 </div>
 
                                 <div>
-                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Valor Total a Pagar</label>
-                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.1rem' }}>{formatCurrency(extractedData.valorTotal)}</div>
-                                </div>
-
-                                <div>
                                     <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Consumo (kWh)</label>
                                     <div style={{ fontWeight: 600, color: '#334155' }}>{extractedData.consumoKwh} kWh</div>
                                 </div>
@@ -379,13 +385,46 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                 </div>
 
                                 <div>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Multas / Juros / Outros</label>
+                                    <div style={{ fontWeight: 600, color: '#ef4444' }}>{formatCurrency(extractedData.outrosLancamentos)}</div>
+                                </div>
+
+                                <div>
                                     <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>CIP (Ilum. Pública)</label>
                                     <div style={{ fontWeight: 600, color: '#334155' }}>{formatCurrency(extractedData.cipValor)}</div>
                                 </div>
 
                                 <div>
-                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Multas / Juros / Outros</label>
-                                    <div style={{ fontWeight: 600, color: '#ef4444' }}>{formatCurrency(extractedData.outrosLancamentos)}</div>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Valor Total a Pagar</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={extractedData.valorTotal} 
+                                        onChange={e => setExtractedData({...extractedData, valorTotal: parseFloat(e.target.value) || 0})}
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none', fontWeight: 700, color: '#0f172a' }}
+                                    />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Linha Digitável (Código de Barras)</label>
+                                    <input 
+                                        type="text" 
+                                        value={extractedData.linhaDigitavel} 
+                                        onChange={e => setExtractedData({...extractedData, linhaDigitavel: e.target.value})}
+                                        placeholder="00000000000 0 00000000000 0..."
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                                    />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Código PIX Copia e Cola</label>
+                                    <textarea 
+                                        value={extractedData.pixString} 
+                                        onChange={e => setExtractedData({...extractedData, pixString: e.target.value})}
+                                        placeholder="00020126..."
+                                        rows={3}
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none', fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical' }}
+                                    />
                                 </div>
                             </div>
                         </div>
