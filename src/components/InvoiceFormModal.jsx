@@ -341,7 +341,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 </span>
                             </div>
                         </div>
-
+                        <div className="detail-section metrics">
                             <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
 
                             <div className="metric-line">
@@ -371,7 +371,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     <span>{selectedUc?.desconto_assinante || 0}%</span>
                                 </div>
                             </div>
-
 
                             <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
                                 <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
