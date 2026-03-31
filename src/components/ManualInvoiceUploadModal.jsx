@@ -74,30 +74,32 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                             cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
                             cleanText.match(/(\d{10})/); // Fallback to any 10 digit number
 
-            const refMonthMatch = cleanText.match(/M[eê]s(?:\s*de)?\s*Refer[eê]ncia[:\s]*(\w{3}\/\d{2,4})|REF[:\s]*(\w{3}\/\d{2,4})/i) || 
-                                  cleanText.match(/Refer[eê]ncia[:\s]*(\w{3}\/\d{2,4})/i) ||
-                                  cleanText.match(/(\d{2}\/\d{4})/);
+            // Month Format: REF:MÊS/ANO 03/2026 or Mês de Referência 03/2026
+            const explicitRefMatch = cleanText.match(/(?:REF[:\s]*M[EÊ]S.*?ANO|M[eê]s(?:\s*de)?\s*Refer[eê]ncia)[^\d]*(0[1-9]|1[0-2])\/(20\d{2})/i) ||
+                                     cleanText.match(/(?:REF[:\s]*M[EÊ]S.*?ANO|M[eê]s(?:\s*de)?\s*Refer[eê]ncia)[^\w]*([A-Z]{3}\/\d{4})/i);
+            const refMonthMatch = explicitRefMatch || cleanText.match(/(0[1-9]|1[0-2])\/(20[2-9]\d)/); // Strict fallback format
 
-            const dueDateMatch = cleanText.match(/Vencimento[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-            const totalAmountMatch = cleanText.match(/(?:Total\s*a\s*Pagar|Valor\s*a\s*Pagar|TOTAL)[^\d]+?(\d{1,3}(?:\.\d{3})*,\d{2})/i) ||
-                                     cleanText.match(/R\$\s*([\d,.]+)/i);
+            const dueDateMatch = cleanText.match(/Vencimento.*?\s(\d{2}\/\d{2}\/\d{2,4})/i) || cleanText.match(/VENCIMENTO.*?\b(\d{2}\/\d{2}\/\d{2,4})\b/i);
+            const totalAmountMatch = cleanText.match(/(?:TOTAL A PAGAR R\$|Total\s*a\s*Pagar|Valor\s*a\s*Pagar|TOTAL)[^\d]+?([\d.]+(?:,\d{2}))/i) ||
+                                     cleanText.match(/R\$\s*([\d.]+(?:,\d{2}))/i);
             
-            // Consumo (Ativa) TE
-            const consumptionMatch = cleanText.match(/(?:Energia Ativa.*?TE|TE\s*-\s*Energia|Consumo.*?TE|Energia Ativa)[^\d]+?(\d{1,6})\s*kWh/i) ||
-                                     cleanText.match(/(\d+)\s*kWh/i);
+            // Consumo (Ativa) TE -> Format 'Consumo-TE kWh 3.230,00'
+            const consumptionMatch = cleanText.match(/Consumo-TE.*?kWh\s*([\d.]+(?:,\d+)?)/i) || 
+                                     cleanText.match(/(?:Energia Ativa.*?TE|TE\s*-\s*Energia|Consumo.*?TE|Energia Ativa).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
             
-            // Consumo Compensado
-            const compensadoMatch = cleanText.match(/(?:Energia.*?Injetada|Energia.*?Compensada|Injetada)[^\d]+?(\d{1,6})\s*kWh/i);
+            // Consumo Compensado -> Format 'G2Comp.oUC-nM-TE kWh 3.230,00-'
+            const compensadoMatch = cleanText.match(/Comp.*?oUC.*?(?:TE|TUSD).*?kWh\s*([\d.]+(?:,\d+)?)/i) ||
+                                    cleanText.match(/(?:Energia.*?Injetada|Energia.*?Compensada|Injetada).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
 
-            // CIP
-            const cipMatch = cleanText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.|Ilum[inaçã]+o\s*P[uú]bl[ica]+)[^\d]*?([\d,.]+)/i);
+            // CIP -> Format 'Ilum. Púb. Municipal 360,58'
+            const cipMatch = cleanText.match(/(?:Ilum\.?\s*P[uú]b\.?\s*Municipal|CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d.]+(?:,\d{2}))/i);
 
             // Outros Lancamentos (Multas, Juros, etc)
-            const multasMatch = cleanText.match(/(?:Multa|Juros(?:.*Mora)?|Atualiza[çc][ãa]o Monet[áa]ria)[^\d]+?([\d,.]+)/ig);
+            const multasMatch = cleanText.match(/(?:Multa|Juros(?:.*Mora)?|Atualiza[çc][ãa]o Monet[áa]ria)[^\d]+?([\d.]+(?:,\d{2}))/ig);
             let somaOutros = 0;
             if (multasMatch) {
                 multasMatch.forEach(m => {
-                    const valMatch = m.match(/([\d,.]+)$/);
+                    const valMatch = m.match(/([\d.]+(?:,\d{2}))$/);
                     if (valMatch) somaOutros += parseValue(valMatch[1]);
                 });
             }
@@ -105,7 +107,13 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             const parsedUc = ucMatch ? ucMatch[1] : '';
             const isUcMatch = parsedUc === uc.numero_uc;
 
-            let extractedMesRef = refMonthMatch ? (refMonthMatch[1] || refMonthMatch[2] || refMonthMatch[3]) : '';
+            let extractedMesRef = '';
+            if (explicitRefMatch) {
+                extractedMesRef = `${explicitRefMatch[1]}/${explicitRefMatch[2]}`;
+            } else if (refMonthMatch) {
+                extractedMesRef = refMonthMatch[0];
+            }
+
             if (extractedMesRef && extractedMesRef.includes('/')) {
                 // normalize e.g. 03/2026 or MAR/2026
                 const parts = extractedMesRef.split('/');
@@ -123,13 +131,16 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 extractedDueDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
             }
 
+            const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
+            const parsedCompensado = parseValue(compensadoMatch ? compensadoMatch[1] : 0);
+
             setExtractedData({
                 codigoCliente: parsedUc,
                 mesReferencia: extractedMesRef,
                 vencimento: extractedDueDate,
                 valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null) || 0,
-                consumoKwh: parseInt(consumptionMatch ? consumptionMatch[1] : 0) || 0,
-                consumoCompensado: parseInt(compensadoMatch ? compensadoMatch[1] : 0) || 0,
+                consumoKwh: parseInt(parsedConsumo) || 0,
+                consumoCompensado: parseInt(parsedCompensado) || 0,
                 cipValor: parseValue(cipMatch ? cipMatch[1] : 0) || 0,
                 outrosLancamentos: somaOutros,
             });
