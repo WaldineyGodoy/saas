@@ -279,74 +279,6 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                 );
             })}
 
-            {/* Legenda de Cores */}
-            <div style={{
-                marginTop: '1.5rem',
-                padding: '1.5rem',
-                background: 'white',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1.25rem',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                gridColumn: '1 / -1'
-            }}>
-                <div style={{ 
-                    fontWeight: '800', 
-                    color: '#1e293b', 
-                    fontSize: '0.8rem', 
-                    textTransform: 'uppercase', 
-                    letterSpacing: '0.05em',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                }}>
-                    <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
-                    Legenda de Status (Extração de Faturas)
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eab308', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada no portal</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou sem credenciais</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#cbd5e1', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento ou sem status</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eff6ff', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <svg width="12" height="12" viewBox="0 0 96 96" fill="#3b82f6" title="Exemplo de carregamento">
-                                <g><g><path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M89.282,56.138c0,0-3.007-1.649-3.007-8.138c0-6.487,3.007-8.139,3.007-8.139c4.467-2.45,7.424-6.548,6.57-9.104c-0.853-2.557-8.015-7.62-12.905-6.195c0,0-3.294,0.959-7.882-3.627c-4.588-4.588-3.629-7.882-3.629-7.882c1.425-4.892,0.646-9.871-1.731-11.066c-2.378-1.195-11.116,0.264-13.567,4.73c0,0-1.649,3.007-8.138,3.007c-6.487,0-8.139-3.007-8.139-3.007c-2.45-4.467-6.548-7.423-9.104-6.571C28.201,1,23.138,8.162,24.562,13.053c0,0,0.961,3.294-3.628,7.882c-4.587,4.587-7.881,3.627-7.881,3.627c-4.891-1.425-9.871-0.646-11.066,1.731C0.792,28.673,2.25,37.411,6.718,39.861c0,0,3.006,1.651,3.006,8.139c0,6.488-3.006,8.138-3.006,8.138c-4.467,2.451-7.424,6.549-6.571,9.104c0.853,2.557,8.016,7.619,12.907,6.194c0,0,3.294-0.959,7.881,3.629c4.589,4.588,3.628,7.882,3.628,7.882c-1.425,4.891-0.646,9.871,1.731,11.066c2.379,1.195,11.117-0.265,13.567-4.731c0,0,1.651-3.007,8.139-3.007c6.488,0,8.138,3.007,8.138,3.007c2.451,4.467,6.549,7.424,9.104,6.571c2.557-0.854,7.619-8.016,6.194-12.906c0,0-0.959-3.294,3.629-7.882s7.882-3.629,7.882-3.629c4.891,1.425,9.871,0.646,11.066-1.73C95.209,67.326,93.749,58.589,89.282,56.138z M48.001,75C33.09,75,21,62.912,21,48.001S33.09,21,48.001,21S75,33.09,75,48.001S62.912,75,48.001,75z M48,33c-8.283,0-15,6.717-15,15c0,8.284,6.717,15,15,15c8.284,0,15-6.716,15-15C63,39.717,56.284,33,48,33z" /></g></g>
-                            </svg>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Processando</span>
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Agente extraindo fatura atual</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
@@ -646,6 +578,77 @@ export default function ConsumerUnitList() {
                     </div>
                 </div>
             </div>
+
+            {viewMode === 'calendar' && (
+                {/* Legenda de Cores */}
+                <div style={{
+                    marginBottom: '1.5rem',
+                    padding: '1.5rem',
+                    background: 'white',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1.25rem',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                }}>
+                    <div style={{ 
+                        fontWeight: '800', 
+                        color: '#1e293b', 
+                        fontSize: '0.8rem', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                    }}>
+                        <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
+                        Legenda de Status (Extração de Faturas)
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eab308', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada no portal</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou sem credenciais</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#cbd5e1', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento ou sem status</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eff6ff', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg width="12" height="12" viewBox="0 0 96 96" fill="#3b82f6" title="Exemplo de carregamento" style={{ animation: 'spin 1.5s infinite linear' }}>
+                                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                                    <g><g><path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M89.282,56.138c0,0-3.007-1.649-3.007-8.138c0-6.487,3.007-8.139,3.007-8.139c4.467-2.45,7.424-6.548,6.57-9.104c-0.853-2.557-8.015-7.62-12.905-6.195c0,0-3.294,0.959-7.882-3.627c-4.588-4.588-3.629-7.882-3.629-7.882c1.425-4.892,0.646-9.871-1.731-11.066c-2.378-1.195-11.116,0.264-13.567,4.73c0,0-1.649,3.007-8.138,3.007c-6.487,0-8.139-3.007-8.139-3.007c-2.45-4.467-6.548-7.423-9.104-6.571C28.201,1,23.138,8.162,24.562,13.053c0,0,0.961,3.294-3.628,7.882c-4.587,4.587-7.881,3.627-7.881,3.627c-4.891-1.425-9.871-0.646-11.066,1.731C0.792,28.673,2.25,37.411,6.718,39.861c0,0,3.006,1.651,3.006,8.139c0,6.488-3.006,8.138-3.006,8.138c-4.467,2.451-7.424,6.549-6.571,9.104c0.853,2.557,8.016,7.619,12.907,6.194c0,0,3.294-0.959,7.881,3.629c4.589,4.588,3.628,7.882,3.628,7.882c-1.425,4.891-0.646,9.871,1.731,11.066c2.379,1.195,11.117-0.265,13.567-4.731c0,0,1.651-3.007,8.139-3.007c6.488,0,8.138,3.007,8.138,3.007c2.451,4.467,6.549,7.424,9.104,6.571c2.557-0.854,7.619-8.016,6.194-12.906c0,0-0.959-3.294,3.629-7.882s7.882-3.629,7.882-3.629c4.891,1.425,9.871,0.646,11.066-1.73C95.209,67.326,93.749,58.589,89.282,56.138z M48.001,75C33.09,75,21,62.912,21,48.001S33.09,21,48.001,21S75,33.09,75,48.001S62.912,75,48.001,75z M48,33c-8.283,0-15,6.717-15,15c0,8.284,6.717,15,15,15c8.284,0,15-6.716,15-15C63,39.717,56.284,33,48,33z" /></g></g>
+                                </svg>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Processando</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Agente extraindo fatura atual</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
