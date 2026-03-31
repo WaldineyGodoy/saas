@@ -21,6 +21,7 @@ export default function InvoiceListManager() {
     const [generatingId, setGeneratingId] = useState(null);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
+    const [payingId, setPayingId] = useState(null);
 
     const filteredInvoices = invoices.filter(inv => {
         if (statusFilter && inv.status !== statusFilter) return false;
@@ -121,6 +122,47 @@ export default function InvoiceListManager() {
             showAlert('Erro ao gerar boleto: ' + error.message, 'error');
         } finally {
             setGeneratingId(null);
+        }
+    };
+
+    const handlePayBill = async (inv) => {
+        const utilityValue = (Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0);
+        
+        const confirm = await showConfirm(`Deseja pagar a conta de energia da concessionária no valor de ${formatCurrency(utilityValue)}?`);
+        if (!confirm) return;
+
+        setPayingId(inv.id);
+        try {
+            const { data, error } = await supabase.functions.invoke('pay-asaas-bill', {
+                body: {
+                    identification: inv.linha_digitavel,
+                    value: utilityValue,
+                    description: `Pagamendo Conta Energia - ${inv.consumer_units?.titular_conta || 'UC'}`,
+                    scheduleDate: null
+                }
+            });
+
+            if (error) throw error;
+
+            if (data?.data?.id || data?.success) {
+                // Marcar como pago no CRM
+                const { error: updateError } = await supabase
+                    .from('invoices')
+                    .update({ status: 'pago' })
+                    .eq('id', inv.id);
+                
+                if (updateError) throw updateError;
+
+                showAlert('Pagamento agendado e fatura marcada como paga!', 'success');
+                fetchInvoices();
+            } else {
+                throw new Error(data?.message || 'Falha ao processar pagamento');
+            }
+        } catch (error) {
+            console.error('Erro ao pagar conta:', error);
+            showAlert('Erro ao processar pagamento: ' + error.message, 'error');
+        } finally {
+            setPayingId(null);
         }
     };
 
@@ -388,11 +430,43 @@ export default function InvoiceListManager() {
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{inv.consumer_units?.numero_uc || 'N/A'}</div>
                                                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{inv.consumer_units?.subscribers?.name}</div>
                                             </td>
-                                            <td style={{ padding: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{formatCurrency(inv.valor_a_pagar)}</td>
+                                            <td style={{ padding: '1rem' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatCurrency(inv.valor_a_pagar)}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                                        <span>valor da conta de energia:</span>
+                                                        <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+                                                            {formatCurrency((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))}
+                                                        </span>
+                                                        
+                                                        {inv.status === 'pago' ? (
+                                                            <span style={{ color: '#166534', background: '#dcfce7', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '800' }}>PAGA</span>
+                                                        ) : inv.linha_digitavel ? (
+                                                            <button 
+                                                                onClick={() => handlePayBill(inv)}
+                                                                disabled={payingId === inv.id}
+                                                                style={{ 
+                                                                    background: '#ef4444', 
+                                                                    color: 'white', 
+                                                                    border: 'none', 
+                                                                    padding: '0.2rem 0.6rem', 
+                                                                    borderRadius: '4px', 
+                                                                    fontSize: '0.7rem', 
+                                                                    fontWeight: 'bold', 
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                }}
+                                                            >
+                                                                {payingId === inv.id ? '...' : 'PAGAR'}
+                                                            </button>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            </td>
                                             <td style={{ padding: '1rem', textAlign: 'right' }}>
                                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                                     {inv.asaas_boleto_url && <a href={inv.asaas_boleto_url} target="_blank" rel="noopener noreferrer" style={{ background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '0.4rem 0.8rem', borderRadius: '4px', textDecoration: 'none', fontSize: '0.8rem' }}><FileText size={14} /></a>}
-                                                    <button onClick={() => handleEdit(inv)} style={{ background: 'none', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Editar</button>
+                                                    <button onClick={() => handleEdit(inv)} style={{ background: 'white', border: '1px solid #e2e8f0', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', color: '#475569', fontWeight: '600' }}>Editar</button>
                                                 </div>
                                             </td>
                                         </tr>
