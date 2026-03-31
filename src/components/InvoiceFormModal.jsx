@@ -20,8 +20,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [formData, setFormData] = useState({
         uc_id: '',
         mes_referencia: new Date().toISOString().substring(0, 7), // YYYY-MM
-        vencimento: '',
-        consumo_kwh: '',
+        consumo_compensado: 0,
         iluminacao_publica: '',
         tarifa_minima_excedentes: '',
         outros_lancamentos: '',
@@ -398,6 +397,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     setFormData(prev => {
                         const newFormData = { ...prev };
                         if (data.consumo_kwh) newFormData.consumo_kwh = data.consumo_kwh;
+                        if (data.consumo_compensado) newFormData.consumo_compensado = data.consumo_compensado;
                         if (data.mes_referencia) newFormData.mes_referencia = data.mes_referencia;
                         if (data.vencimento) newFormData.vencimento = data.vencimento;
                         if (data.data_leitura) newFormData.data_leitura = data.data_leitura;
@@ -804,8 +804,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>Consumo Compensado ({formData.consumo_compensado} kWh):</span>
-                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_compensado) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
+                                    <span style={{ color: '#64748b' }}>Consumo Compensado ({formData.consumo_compensado || 0} kWh):</span>
+                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_compensado || 0) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>
                                     <span>Valor da Tarifa:</span>
@@ -835,8 +835,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     <span>{formData.iluminacao_publica || 'R$ 0,00'}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Tarifa Mínima:</span>
-                                    <span>{formData.tarifa_minima || 'R$ 0,00'}</span>
+                                    <span style={{ color: '#64748b' }}>+ Tarifa Mínima e Excedentes:</span>
+                                    <span>{formData.tarifa_minima_excedentes || 'R$ 0,00'}</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                                     <span style={{ color: '#64748b' }}>+ Outros Lançamentos:</span>
