@@ -131,6 +131,16 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 extractedDueDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
             }
 
+            let extractedReadDate = '';
+            const readDateMatch = cleanText.match(/(?:Data\s+da\s+Leitura|Leitura\s+Atual|Apresentada\s+em|Emissão|Pr[oó]xima\s+Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i) ||
+                                  cleanText.match(/Leit\.\s*Atual\s*(\d{2}\/\d{2}\/\d{2,4})/i) ||
+                                  cleanText.match(/(?:Leitura\s*atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2})/i);
+            if (readDateMatch) {
+                const parts = readDateMatch[1].split('/');
+                const yyyy = parts.length === 3 ? (parts[2].length === 2 ? `20${parts[2]}` : parts[2]) : (new Date().getFullYear());
+                extractedReadDate = `${yyyy}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+            }
+
             const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
             const parsedCompensado = parseValue(compensadoMatch ? compensadoMatch[1] : 0);
 
@@ -138,6 +148,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 codigoCliente: parsedUc,
                 mesReferencia: extractedMesRef,
                 vencimento: extractedDueDate,
+                dataLeitura: extractedReadDate,
                 valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null) || 0,
                 consumoKwh: parseInt(parsedConsumo) || 0,
                 consumoCompensado: parseInt(parsedCompensado) || 0,
@@ -201,6 +212,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 uc_id: uc.id,
                 mes_referencia: mesRefFormat,
                 vencimento: extractedData.vencimento || null,
+                data_leitura: extractedData.dataLeitura || null,
                 tarifa_concessionaria: valorTarifa,
                 tarifa_minima: kwhMinimo * valorTarifa,
                 consumo_kwh: extractedData.consumoKwh || 0,
@@ -337,6 +349,16 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                         type="date" 
                                         value={extractedData.vencimento} 
                                         onChange={e => setExtractedData({...extractedData, vencimento: e.target.value})}
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Data da Leitura</label>
+                                    <input 
+                                        type="date" 
+                                        value={extractedData.dataLeitura} 
+                                        onChange={e => setExtractedData({...extractedData, dataLeitura: e.target.value})}
                                         style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                     />
                                 </div>
