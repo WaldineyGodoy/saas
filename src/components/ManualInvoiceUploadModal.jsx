@@ -180,7 +180,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             
             // Upload to Supabase Storage
             const { error: uploadError } = await supabase.storage
-                .from('invoices')
+                .from('energy-bills')
                 .upload(storagePath, file, {
                     contentType: 'application/pdf',
                     upsert: true
@@ -190,7 +190,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
 
             // Get Public URL
             const { data: { publicUrl } } = supabase.storage
-                .from('invoices')
+                .from('energy-bills')
                 .getPublicUrl(storagePath);
 
             // Upsert invoice data
