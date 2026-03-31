@@ -73,14 +73,15 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento ? invoice.vencimento.split('T')[0] : '',
                 consumo_kwh: invoice.consumo_kwh,
+                consumo_compensado: invoice.consumo_compensado || 0,
                 iluminacao_publica: invoice.iluminacao_publica ? formatCurrency(invoice.iluminacao_publica) : '',
                 tarifa_minima_excedentes: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
                 outros_lancamentos: invoice.outros_lancamentos ? formatCurrency(invoice.outros_lancamentos) : '',
-                valor_a_pagar: formatCurrency(invoice.valor_a_pagar),
-                economia_reais: formatCurrency(invoice.economia_reais),
+                valor_a_pagar: formatCurrency(invoice.valor_a_pagar || 0),
+                economia_reais: formatCurrency(invoice.economia_reais || 0),
                 consumo_reais: invoice.consumo_reais ? formatCurrency(invoice.consumo_reais) : '',
                 data_leitura: invoice.data_leitura ? invoice.data_leitura.split('T')[0] : '',
-                status: invoice.status
+                status: invoice.status || 'a_vencer'
             });
             // Find UC to set tariff info
             if (ucs) {
