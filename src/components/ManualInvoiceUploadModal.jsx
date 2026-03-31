@@ -69,6 +69,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
 
             // Neoenergia Patterns
             const cleanText = fullText.replace(/\s+/g, ' '); // normalize spaces
+            console.log("PDF TEXT (DEBUG):", cleanText);
 
             const ucMatch = cleanText.match(/(?:Conta Contrato|C[óo]digo do Cliente|Instala[çc][ãa]o)[:\s]*(\d{9,11})/i) ||
                             cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
@@ -94,13 +95,17 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             // CIP -> Format 'Ilum. Púb. Municipal 360,58'
             const cipMatch = cleanText.match(/(?:Ilum\.?\s*P[uú]b\.?\s*Municipal|CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d.]+(?:,\d{2}))/i);
 
-            // Outros Lancamentos (Multas, Juros, etc)
-            const multasMatch = cleanText.match(/(?:Multa|Juros(?:.*Mora)?|Atualiza[çc][ãa]o Monet[áa]ria)[^\d]+?([\d.]+(?:,\d{2}))/ig);
+            // Outros Lancamentos (Multas, Juros, etc) - Support for Multa-NF, Juros-NF
+            const multasMatch = cleanText.match(/(?:Multa|Juros|Multa-NF|Juros-NF|Mora|Atualiza[çc][ãa]o Monet[áa]ria|Encargos)[^\d]*?([\d.]+,[\d]{2})/gi);
             let somaOutros = 0;
             if (multasMatch) {
                 multasMatch.forEach(m => {
-                    const valMatch = m.match(/([\d.]+(?:,\d{2}))$/);
-                    if (valMatch) somaOutros += parseValue(valMatch[1]);
+                    const valMatch = m.match(/([\d.]+,[\d]{2})/);
+                    if (valMatch) {
+                        const val = parseValue(valMatch[1]);
+                        console.log(`Found charge: ${m} -> ${val}`);
+                        somaOutros += val;
+                    }
                 });
             }
 
@@ -142,10 +147,23 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             }
 
             // Linha digitável (Barcode) e Pix
+            // Try normalized text (no spaces) for 48 digit utility barcodes (starts with 8)
+            const textNoSpace = cleanText.replace(/[\s\.\-]/g, '');
+            const barcodeMatch48 = textNoSpace.match(/8\d{47}/);
+            const barcodeMatch47 = textNoSpace.match(/\d{47}/);
+            
             const regexLinhaDigitavel = cleanText.match(/(\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d\s\d{11}\s?\-\s?\d|\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{5}[\s.]?\d{1}[\s.]?\d{14}|\d{44,48})/);
             const regexPix = cleanText.match(/(000201[\w\d]{30,})/);
 
-            const linhaDigitavelText = regexLinhaDigitavel ? regexLinhaDigitavel[1].replace(/[\s.-]/g, '') : '';
+            let linhaDigitavelText = '';
+            if (barcodeMatch48) {
+                linhaDigitavelText = barcodeMatch48[0];
+            } else if (regexLinhaDigitavel) {
+                linhaDigitavelText = regexLinhaDigitavel[1].replace(/[\s.-]/g, '');
+            } else if (barcodeMatch47) {
+                linhaDigitavelText = barcodeMatch47[0];
+            }
+
             const pixStringText = regexPix ? regexPix[1] : '';
 
             const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
