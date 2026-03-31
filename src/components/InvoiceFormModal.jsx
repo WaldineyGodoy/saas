@@ -854,17 +854,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     <span>R$ {Number(selectedUc?.tarifa_concessionaria || 0).toFixed(4).replace('.', ',')}</span>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', background: '#dcfce7', padding: '0.6rem', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534' }}>
-                                        <span style={{ fontWeight: 600 }}>Economia Gerada:</span>
-                                        <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#15803d' }}>
-                                        <span>Desconto Aplicado:</span>
-                                        <span>{selectedUc?.desconto_assinante || 0}%</span>
-                                    </div>
-                                </div>
-
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '0.2rem' }}>
                                     <span style={{ color: '#64748b', fontWeight: 600 }}>Energia Compensada Líquida:</span>
                                     <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
@@ -883,6 +872,17 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                                     <span style={{ color: '#64748b' }}>+ Outros Lançamentos:</span>
                                     <span>{formData.outros_lancamentos || 'R$ 0,00'}</span>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', background: '#dcfce7', padding: '0.6rem', borderRadius: '6px', border: '1px solid #bbf7d0', margin: '0.5rem 0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534' }}>
+                                        <span style={{ fontWeight: 600 }}>Economia Gerada:</span>
+                                        <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#15803d' }}>
+                                        <span>Desconto Aplicado:</span>
+                                        <span>{selectedUc?.desconto_assinante || 0}%</span>
+                                    </div>
                                 </div>
 
                                 <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>

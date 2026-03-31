@@ -267,9 +267,11 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 pix_string: extractedData.pixString || null
             };
 
-            const { error: dbError } = await supabase
+            const { data: newInvoice, error: dbError } = await supabase
                 .from('invoices')
-                .upsert(payload, { onConflict: 'uc_id,mes_referencia' });
+                .upsert(payload, { onConflict: 'uc_id,mes_referencia' })
+                .select()
+                .single();
 
             if (dbError) throw dbError;
 
@@ -282,7 +284,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             if (ucError) throw ucError;
 
             showAlert('Fatura enviada e registrada com sucesso!', 'success');
-            if (onSuccess) onSuccess();
+            if (onSuccess) onSuccess(newInvoice);
             onClose();
 
         } catch (error) {

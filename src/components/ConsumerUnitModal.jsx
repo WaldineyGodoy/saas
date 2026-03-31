@@ -20,6 +20,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
     const [showIssueInvoiceModal, setShowIssueInvoiceModal] = useState(false);
     const [showManualUploadModal, setShowManualUploadModal] = useState(false);
+    const [invoiceToEdit, setInvoiceToEdit] = useState(null);
+    const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -1060,8 +1062,27 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 <ManualInvoiceUploadModal
                     uc={consumerUnit} // full consumer unit object needs to match
                     onClose={() => setShowManualUploadModal(false)}
-                    onSuccess={() => {
+                    onSuccess={(newInvoice) => {
                         setFormData(prev => ({ ...prev, last_scraping_status: 'success' }));
+                        setShowManualUploadModal(false);
+                        setInvoiceToEdit(newInvoice);
+                        setShowInvoiceForm(true);
+                    }}
+                />
+            )}
+
+            {showInvoiceForm && (
+                <InvoiceFormModal
+                    invoice={invoiceToEdit}
+                    ucs={[consumerUnit]}
+                    onClose={() => {
+                        setShowInvoiceForm(false);
+                        setInvoiceToEdit(null);
+                    }}
+                    onSave={() => {
+                        setShowInvoiceForm(false);
+                        setInvoiceToEdit(null);
+                        setShowInvoicesModal(true);
                     }}
                 />
             )}
