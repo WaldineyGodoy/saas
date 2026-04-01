@@ -90,7 +90,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             
             // Consumo Compensado -> Format 'G2Comp.oUC-nM-TE kWh 3.230,00-'
             const compensadoMatch = cleanText.match(/Comp.*?oUC.*?(?:TE|TUSD).*?kWh\s*([\d.]+(?:,\d+)?)/i) ||
-                                    cleanText.match(/(?:Energia.*?Injetada|Energia.*?Compensada|Injetada).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
+                                    cleanText.match(/(?:Energia.*?Compensada|Compensada).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
 
             // CIP -> Format 'Ilum. Púb. Municipal 360,58'
             const cipMatch = cleanText.match(/(?:Ilum\.?\s*P[uú]b\.?\s*Municipal|CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d.]+(?:,\d{2}))/i);
@@ -253,7 +253,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 vencimento: extractedData.vencimento || null,
                 data_leitura: extractedData.dataLeitura || null,
                 tarifa_concessionaria: valorTarifa,
-                tarifa_minima: kwhMinimo * valorTarifa,
+                tarifa_minima: Math.max(0, ((extractedData.consumoKwh || 0) - (extractedData.consumoCompensado || 0)) * valorTarifa),
                 consumo_kwh: extractedData.consumoKwh || 0,
                 consumo_compensado: extractedData.consumoCompensado || 0,
                 iluminacao_publica: extractedData.cipValor || 0,
@@ -428,7 +428,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                 </div>
 
                                 <div>
-                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Valor Total a Pagar</label>
+                                                                         <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Valor Total da Conta de Energia</label>
                                     <input 
                                         type="number" 
                                         step="0.01"

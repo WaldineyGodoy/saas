@@ -35,7 +35,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         valor_a_pagar: '',
         economia_reais: '',
         consumo_reais: '', // energy cost before taxes/extras
-        consumo_compensado: 0, // kWh
         energia_compensada_reais: '' // R$
     });
 
@@ -121,10 +120,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         }
     };
 
-    // Calculations
     useEffect(() => {
-        // Only calculate if we have Consumption and a selected UC with tariff
-        if (formData.consumo_kwh && selectedUc) {
+        // Just check if we have a selected UC since we can calculate even with zeroed values
+        if (selectedUc) {
             const consumo = Number(formData.consumo_kwh) || 0;
             const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
             const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
@@ -133,7 +131,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
             // Nova Fórmula conforme solicitação:
             // Tarifa Mínima e Excedentes R$ = (Consumo Kwh - Consumo Compensado kwh) * Valor da Tarifa
-            const tarifaMinimaExcedentesReais = (consumo - rawConsumoCompensado) * rawTarifa;
+            const tarifaMinimaExcedentesReais = Math.max(0, (consumo - rawConsumoCompensado) * rawTarifa);
 
             // Energia Compensada R$ = Consumo Compensado kwh * Valor da Tarifa * (1 - Desconto Assinante)
             const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
@@ -855,7 +853,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '0.2rem' }}>
-                                    <span style={{ color: '#64748b', fontWeight: 600 }}>Energia Compensada Líquida:</span>
+                                    <span style={{ color: '#64748b', fontWeight: 600 }}>Custo da Energia Compensada (Líquida):</span>
                                     <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
                                 </div>
 
@@ -895,7 +893,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         borderRadius: '12px',
                                         textAlign: 'right'
                                     }}>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total a Pagar</label>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Valor Total da Fatura CRM</label>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#14532d' }}>
                                             {formData.valor_a_pagar || 'R$ 0,00'}
                                         </div>
