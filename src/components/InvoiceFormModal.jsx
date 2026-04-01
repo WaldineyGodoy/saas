@@ -394,7 +394,23 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                             <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
                                 <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
-                                <div className="total-value">{formatCurrency(inv.valor_a_pagar)}</div>
+                                <div className="total-value">
+                                    {(() => {
+                                        const rawConsumo = Number(inv.consumo_kwh) || 0;
+                                        const rawCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const descontoPercent = Number(uc?.desconto_assinante) || 0;
+                                        const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                        
+                                        const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
+                                        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+                                        const ip = Number(inv.iluminacao_publica) || 0;
+                                        const outros = Number(inv.outros_lancamentos) || 0;
+                                        
+                                        const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+                                        return formatCurrency(totalCalculado);
+                                    })()}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -522,20 +538,34 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         setLoading(true);
 
         try {
+            // Recalculate values for payload to be safe
+            const rawConsumo = Number(formData.consumo_kwh) || 0;
+            const rawCompensado = Number(formData.consumo_compensado) || 0;
+            const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
+            const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
+            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+            
+            const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
+            const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+            const economiaReais = rawCompensado * rawTarifa * multiplier;
+            const ip = parseCurrency(formData.iluminacao_publica);
+            const outros = parseCurrency(formData.outros_lancamentos);
+            const totalToSave = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+
             const payload = {
                 uc_id: formData.uc_id,
                 mes_referencia: `${formData.mes_referencia}-01`,
                 vencimento: formData.vencimento,
                 consumo_kwh: Number(formData.consumo_kwh),
-                consumo_reais: parseCurrency(formData.consumo_reais),
-                iluminacao_publica: parseCurrency(formData.iluminacao_publica),
-                tarifa_minima: parseCurrency(formData.tarifa_minima_excedentes),
-                outros_lancamentos: parseCurrency(formData.outros_lancamentos),
+                consumo_reais: compensadaLiquida + tarifaMinimaExcedentes,
+                iluminacao_publica: ip,
+                tarifa_minima: tarifaMinimaExcedentes,
+                outros_lancamentos: outros,
                 consumo_compensado: Number(formData.consumo_compensado),
 
                 data_leitura: formData.data_leitura || null,
-                valor_a_pagar: parseCurrency(formData.valor_a_pagar),
-                economia_reais: parseCurrency(formData.economia_reais),
+                valor_a_pagar: totalToSave,
+                economia_reais: economiaReais,
                 status: formData.status
             };
 
@@ -931,7 +961,21 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     }}>
                                         <label style={{ display: 'block', fontSize: '0.75rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Valor Total da Fatura CRM</label>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#14532d' }}>
-                                            {formData.valor_a_pagar || 'R$ 0,00'}
+                                            {(() => {
+                                                const rawConsumo = Number(formData.consumo_kwh) || 0;
+                                                const rawCompensado = Number(formData.consumo_compensado) || 0;
+                                                const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
+                                                const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
+                                                const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                                
+                                                const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
+                                                const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+                                                const ip = parseCurrency(formData.iluminacao_publica);
+                                                const outros = parseCurrency(formData.outros_lancamentos);
+                                                
+                                                const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+                                                return formatCurrency(totalCalculado);
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
