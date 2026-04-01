@@ -518,9 +518,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </CollapsibleSection>
 
                         <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={defaultSection === 'all'}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr 1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'end' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
                                     <input
                                         required
                                         value={formData.numero_uc}
@@ -530,7 +530,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Identificação da Fatura</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Identificação da Fatura</label>
                                     <input
                                         required
                                         value={formData.titular_conta}
@@ -540,7 +540,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante (Titular)</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Assinante (Titular)</label>
                                     <select
                                         value={formData.titular_fatura_id}
                                         onChange={e => {
@@ -560,8 +560,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         ))}
                                     </select>
                                 </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.2fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'end' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ do Titular</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>CPF/CNPJ do Titular</label>
                                     <input
                                         value={formData.cpf_cnpj_fatura}
                                         onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
@@ -570,7 +573,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo da UC</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Tipo da UC</label>
                                     <select
                                         value={formData.tipo_unidade}
                                         onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
@@ -579,11 +582,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
                                 </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Tipo de Ligação</label>
                                     <select
                                         value={formData.tipo_ligacao}
                                         onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
@@ -593,7 +593,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     </select>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Leitura</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Dia de Leitura</label>
                                     <select
                                         value={formData.dia_leitura}
                                         onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
@@ -621,28 +621,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
                                             <label style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>Concessionária de Energia</label>
                                         </div>
-                                        <button
-                                            type="button"
-                                            disabled={!formData.titular_fatura_id}
-                                            onClick={() => setShowCredentialsModal(true)}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.4rem',
-                                                padding: '0.35rem 0.8rem',
-                                                background: formData.titular_fatura_id ? '#fff' : '#f1f5f9',
-                                                color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
-                                                borderRadius: '6px',
-                                                border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
-                                                fontSize: '0.75rem',
-                                                fontWeight: 600,
-                                                cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                        >
-                                            <Key size={12} /> Portal
-                                        </button>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
                                         <select
@@ -666,7 +644,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 border: `1px solid ${
                                                     formData.last_scraping_status === 'success' ? '#86efac' : 
                                                     formData.last_scraping_status === 'not_available' ? '#fde047' : '#fca5a5'
-                                                }`
+                                                }`,
+                                                minWidth: '150px'
                                             }}>
                                                 <div style={{ 
                                                     width: '8px', 
@@ -694,6 +673,32 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </div>
                                         )}
                                     </div>
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.5rem' }}>
+                                         <button
+                                            type="button"
+                                            disabled={!formData.titular_fatura_id}
+                                            onClick={() => setShowCredentialsModal(true)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.35rem 0.8rem',
+                                                background: formData.titular_fatura_id ? '#fff' : '#f1f5f9',
+                                                color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
+                                                borderRadius: '6px',
+                                                border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                width: '150px',
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                            <Key size={12} /> Portal
+                                        </button>
+                                    </div>
                                     {formData.last_scraping_status === 'error' && formData.last_scraping_error && (
                                         <div style={{ fontSize: '0.7rem', color: '#991b1b', background: '#fff', padding: '0.4rem', borderRadius: '4px', border: '1px solid #fee2e2', marginTop: '0.25rem' }}>
                                             <strong>Erro:</strong> {formData.last_scraping_error}
@@ -718,13 +723,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 </select>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.5fr) 1.5fr', gap: '1.5rem', alignItems: 'end', marginTop: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Modalidade</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.2fr) 1fr 2fr', gap: '1rem', alignItems: 'stretch', marginTop: '1rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Modalidade</label>
                                     <select
                                         value={formData.modalidade}
                                         onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', background: '#fff' }}
                                     >
                                         {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
@@ -737,10 +742,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     border: '1px solid #bfdbfe',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: '0.4rem'
+                                    justifyContent: 'center',
+                                    gap: '0.6rem'
                                 }}>
-                                    <label style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 600 }}>Saldo Remanescente</label>
-                                    <div style={{ display: 'flex', gap: '1.25rem' }}>
+                                    <label style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Saldo Remanescente</label>
+                                    <div style={{ display: 'flex', gap: '1.25rem', justifyContent: 'center' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#1e40af', fontWeight: 500 }}>
                                             <input
                                                 type="radio"
@@ -763,69 +769,70 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </label>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Quadrante de Ações */}
-                            {consumerUnit?.id && (
-                                <div style={{ 
-                                    marginTop: '1.5rem', 
-                                    display: 'flex', 
-                                    gap: '1rem', 
-                                    justifyContent: 'flex-start',
-                                    padding: '1rem',
-                                    background: '#f8fafc',
-                                    borderRadius: '12px',
-                                    border: '1px solid #e2e8f0'
-                                }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowInvoicesModal(true)}
-                                        style={{ 
-                                            flex: 1,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                            padding: '0.75rem', background: '#fff', border: '1px solid #cbd5e1', 
-                                            borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: '#475569', fontWeight: 600,
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.background = '#f1f5f9'}
-                                        onMouseOut={e => e.currentTarget.style.background = '#fff'}
-                                    >
-                                        <FileSearch size={18} /> Visualizar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowManualUploadModal(true)}
-                                        style={{ 
-                                            flex: 1,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                            padding: '0.75rem', background: '#22c55e', border: 'none', 
-                                            borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.background = '#16a34a'}
-                                        onMouseOut={e => e.currentTarget.style.background = '#22c55e'}
-                                    >
-                                        <Upload size={18} /> Upload Fatura
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowIssueInvoiceModal(true)}
-                                        style={{ 
-                                            flex: 1,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                            padding: '0.75rem', background: '#3b82f6', border: 'none', 
-                                            borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
-                                        onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
-                                    >
-                                        <PlusCircle size={18} /> Emitir Fatura
-                                    </button>
-                                </div>
-                            )}
+                                {/* Quadrante de Ações */}
+                                {consumerUnit?.id ? (
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        gap: '0.75rem', 
+                                        padding: '0.75rem',
+                                        background: '#f8fafc',
+                                        borderRadius: '12px',
+                                        border: '1px solid #e2e8f0',
+                                        alignItems: 'center'
+                                    }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowInvoicesModal(true)}
+                                            style={{ 
+                                                flex: 1, height: '100%',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                                                padding: '0.6rem', background: '#fff', border: '1px solid #cbd5e1', 
+                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: '#475569', fontWeight: 600,
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.background = '#f1f5f9'}
+                                            onMouseOut={e => e.currentTarget.style.background = '#fff'}
+                                        >
+                                            <FileSearch size={18} /> Visualizar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowManualUploadModal(true)}
+                                            style={{ 
+                                                flex: 1, height: '100%',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                                                padding: '0.6rem', background: '#22c55e', border: 'none', 
+                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)'
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.background = '#16a34a'}
+                                            onMouseOut={e => e.currentTarget.style.background = '#22c55e'}
+                                        >
+                                            <Upload size={18} /> Upload Fatura
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowIssueInvoiceModal(true)}
+                                            style={{ 
+                                                flex: 1, height: '100%',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
+                                                padding: '0.6rem', background: '#3b82f6', border: 'none', 
+                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
+                                            onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
+                                        >
+                                            <PlusCircle size={18} /> Emitir Fatura
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ flex: 1 }}></div>
+                                )}
+                            </div>
 
                             <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #bae6fd', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
                                 <div style={{ gridColumn: '1 / -1', fontSize: '0.95rem', fontWeight: 600, color: '#0369a1', marginBottom: '0.25rem' }}>Componentes Tarifários</div>
