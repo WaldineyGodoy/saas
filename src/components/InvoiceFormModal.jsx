@@ -347,8 +347,17 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
 
                             <div className="metric-line">
-                                <span>+ Energia Compensada Líquida:</span>
-                                <span>{formData.energia_compensada_reais}</span>
+                                <span>+ Custo da Energia Compensada (Líquida):</span>
+                                <span>
+                                    {(() => {
+                                        const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const descontoPercent = Number(uc?.desconto_assinante) || 0;
+                                        const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                        const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
+                                        return formatCurrency(energiaCompensadaReais);
+                                    })()}
+                                </span>
                             </div>
                             <div className="metric-line">
                                 <span>+ Iluminação Pública:</span>
@@ -366,11 +375,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             <div className="economy-box">
                                 <div className="metric-line economy">
                                     <span>Economia Gerada:</span>
-                                    <span>- {formatCurrency(inv.economia_reais)}</span>
+                                    <span>
+                                        - {(() => {
+                                            const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                            const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                            const descontoPercent = Number(uc?.desconto_assinante) || 0;
+                                            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
+                                            return formatCurrency(economiaReais);
+                                        })()}
+                                    </span>
                                 </div>
                                 <div className="metric-line discount">
                                     <span>Desconto Aplicado:</span>
-                                    <span>{selectedUc?.desconto_assinante || 0}%</span>
+                                    <span>{uc?.desconto_assinante || 0}%</span>
                                 </div>
                             </div>
 
@@ -854,7 +872,16 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '0.2rem' }}>
                                     <span style={{ color: '#64748b', fontWeight: 600 }}>Custo da Energia Compensada (Líquida):</span>
-                                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>{formData.energia_compensada_reais || 'R$ 0,00'}</span>
+                                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>
+                                        {(() => {
+                                            const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
+                                            const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
+                                            const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
+                                            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                            const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
+                                            return formatCurrency(energiaCompensadaReais);
+                                        })()}
+                                    </span>
                                 </div>
 
                                 <div style={{ height: '1px', background: '#cbd5e1', margin: '0.5rem 0' }}></div>
@@ -875,7 +902,16 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', background: '#dcfce7', padding: '0.6rem', borderRadius: '6px', border: '1px solid #bbf7d0', margin: '0.5rem 0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534' }}>
                                         <span style={{ fontWeight: 600 }}>Economia Gerada:</span>
-                                        <span style={{ fontWeight: 'bold' }}>- {formData.economia_reais || 'R$ 0,00'}</span>
+                                        <span style={{ fontWeight: 'bold' }}>
+                                            - {(() => {
+                                                const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
+                                                const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
+                                                const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
+                                                const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                                const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
+                                                return formatCurrency(economiaReais);
+                                            })()}
+                                        </span>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#15803d' }}>
                                         <span>Desconto Aplicado:</span>
