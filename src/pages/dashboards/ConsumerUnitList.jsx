@@ -549,7 +549,7 @@ export default function ConsumerUnitList() {
                                 onMouseEnter={() => setShowTooltip(true)}
                                 onMouseLeave={() => setShowTooltip(false)}
                             >
-                                <CalendarIcon size={18} /> Calendário
+                                <CalendarIcon size={18} /> Calendário de Leituras
                             </button>
                             {showTooltip && (
                                 <div style={{
@@ -571,7 +571,7 @@ export default function ConsumerUnitList() {
                                     border: '1px solid rgba(255,255,255,0.1)'
                                 }}>
                                     <Info size={16} style={{ color: '#3b82f6' }} />
-                                    Calendário agrupa as UCs por dia de leitura.
+                                    Calendário de Leituras agrupa as UCs por dia de leitura.
                                 </div>
                             )}
                         </div>
@@ -634,18 +634,7 @@ export default function ConsumerUnitList() {
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento ou sem status</span>
                             </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eff6ff', border: '1px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg width="12" height="12" viewBox="0 0 96 96" fill="#3b82f6" title="Exemplo de carregamento" style={{ animation: 'spin 1.5s infinite linear' }}>
-                                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                                    <g><g><path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M89.282,56.138c0,0-3.007-1.649-3.007-8.138c0-6.487,3.007-8.139,3.007-8.139c4.467-2.45,7.424-6.548,6.57-9.104c-0.853-2.557-8.015-7.62-12.905-6.195c0,0-3.294,0.959-7.882-3.627c-4.588-4.588-3.629-7.882-3.629-7.882c1.425-4.892,0.646-9.871-1.731-11.066c-2.378-1.195-11.116,0.264-13.567,4.73c0,0-1.649,3.007-8.138,3.007c-6.487,0-8.139-3.007-8.139-3.007c-2.45-4.467-6.548-7.423-9.104-6.571C28.201,1,23.138,8.162,24.562,13.053c0,0,0.961,3.294-3.628,7.882c-4.587,4.587-7.881,3.627-7.881,3.627c-4.891-1.425-9.871-0.646-11.066,1.731C0.792,28.673,2.25,37.411,6.718,39.861c0,0,3.006,1.651,3.006,8.139c0,6.488-3.006,8.138-3.006,8.138c-4.467,2.451-7.424,6.549-6.571,9.104c0.853,2.557,8.016,7.619,12.907,6.194c0,0,3.294-0.959,7.881,3.629c4.589,4.588,3.628,7.882,3.628,7.882c-1.425,4.891-0.646,9.871,1.731,11.066c2.379,1.195,11.117-0.265,13.567-4.731c0,0,1.651-3.007,8.139-3.007c6.488,0,8.138,3.007,8.138,3.007c2.451,4.467,6.549,7.424,9.104,6.571c2.557-0.854,7.619-8.016,6.194-12.906c0,0-0.959-3.294,3.629-7.882s7.882-3.629,7.882-3.629c4.891,1.425,9.871,0.646,11.066-1.73C95.209,67.326,93.749,58.589,89.282,56.138z M48.001,75C33.09,75,21,62.912,21,48.001S33.09,21,48.001,21S75,33.09,75,48.001S62.912,75,48.001,75z M48,33c-8.283,0-15,6.717-15,15c0,8.284,6.717,15,15,15c8.284,0,15-6.716,15-15C63,39.717,56.284,33,48,33z" /></g></g>
-                                </svg>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Processando</span>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Agente extraindo fatura atual</span>
-                            </div>
-                        </div>
+
                     </div>
                 </div>
             )}
