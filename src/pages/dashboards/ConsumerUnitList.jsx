@@ -141,13 +141,58 @@ function KanbanColumn({ status, label, color, units, onCardClick }) {
     );
 }
 
-function CalendarView({ units, onCardClick, searchTerm }) {
+function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusFilter, onCardClick }) {
+    const today = new Date();
+    const currentYearNum = today.getFullYear();
+    const currentMonthNum = today.getMonth() + 1;
+    const currentDayNum = today.getDate();
+
+    const [filterYear, filterMonth] = (monthFilter || '').split('-').map(Number);
+    const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
+    const isPastMonth = filterYear < currentYearNum || (filterYear === currentYearNum && filterMonth < currentMonthNum);
+
     const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-    const groupedUnits = units.reduce((acc, unit) => {
+    // 1. Filtrar apenas Ativas para o Calendário (conforme solicitado pelo usuário)
+    const activeUnits = units.filter(u => u.status === 'ativo');
+
+    // 2. Agrupar e Calcular Status
+    const groupedUnits = activeUnits.reduce((acc, unit) => {
         const day = unit.dia_leitura || 0;
+        
+        // Determinar Status da Leitura para o mês selecionado
+        const hasInvoice = invoices.some(inv => inv.uc_id === unit.id);
+        let status = 'pending';
+        
+        if (hasInvoice) {
+            status = 'success';
+        } else if (unit.last_scraping_status === 'processing') {
+            status = 'processing';
+        } else if (isCurrentMonth) {
+            if (day > currentDayNum) {
+                status = 'not_available'; // Futuro no ciclo atual
+            } else {
+                status = 'error'; // Passou da data e não tem fatura
+            }
+        } else if (isPastMonth) {
+            status = 'not_available'; // Passado sem fatura
+        }
+
+        // Aplicar Filtro de Status de Leitura se selecionado
+        if (readingStatusFilter && status !== readingStatusFilter) return acc;
+
+        // Aplicar busca por texto
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                unit.numero_uc?.toLowerCase().includes(lower) ||
+                unit.subscriber?.name?.toLowerCase().includes(lower) ||
+                unit.concessionaria?.toLowerCase().includes(lower);
+            if (!matchesSearch) return acc;
+        }
+
         if (!acc[day]) acc[day] = [];
-        acc[day].push(unit);
+        acc[day].push({ ...unit, displayStatus: status });
         return acc;
     }, {});
 
@@ -159,15 +204,7 @@ function CalendarView({ units, onCardClick, searchTerm }) {
             padding: '1rem'
         }}>
             {days.map(day => {
-                const dayUnits = (groupedUnits[day] || []).filter(u => {
-                    if (!searchTerm) return true;
-                    const lower = searchTerm.toLowerCase();
-                    return (
-                        u.numero_uc?.toLowerCase().includes(lower) ||
-                        u.subscriber?.name?.toLowerCase().includes(lower) ||
-                        u.concessionaria?.toLowerCase().includes(lower)
-                    );
-                });
+                const dayUnits = groupedUnits[day] || [];
 
                 return (
                     <div key={day} style={{
@@ -192,7 +229,7 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
-                                {dayUnits.some(u => u.last_scraping_status === 'processing') && (
+                                {dayUnits.some(u => u.displayStatus === 'processing') && (
                                     <svg width="18" height="18" viewBox="0 0 96 96" fill="#3b82f6" style={{ animation: 'spin 1.5s infinite linear' }} title="Processando extração...">
                                         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                                         <g><g><path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M89.282,56.138c0,0-3.007-1.649-3.007-8.138c0-6.487,3.007-8.139,3.007-8.139c4.467-2.45,7.424-6.548,6.57-9.104c-0.853-2.557-8.015-7.62-12.905-6.195c0,0-3.294,0.959-7.882-3.627c-4.588-4.588-3.629-7.882-3.629-7.882c1.425-4.892,0.646-9.871-1.731-11.066c-2.378-1.195-11.116,0.264-13.567,4.73c0,0-1.649,3.007-8.138,3.007c-6.487,0-8.139-3.007-8.139-3.007c-2.45-4.467-6.548-7.423-9.104-6.571C28.201,1,23.138,8.162,24.562,13.053c0,0,0.961,3.294-3.628,7.882c-4.587,4.587-7.881,3.627-7.881,3.627c-4.891-1.425-9.871-0.646-11.066,1.731C0.792,28.673,2.25,37.411,6.718,39.861c0,0,3.006,1.651,3.006,8.139c0,6.488-3.006,8.138-3.006,8.138c-4.467,2.451-7.424,6.549-6.571,9.104c0.853,2.557,8.016,7.619,12.907,6.194c0,0,3.294-0.959,7.881,3.629c4.589,4.588,3.628,7.882,3.628,7.882c-1.425,4.891-0.646,9.871,1.731,11.066c2.379,1.195,11.117-0.265,13.567-4.731c0,0,1.651-3.007,8.139-3.007c6.488,0,8.138,3.007,8.138,3.007c2.451,4.467,6.549,7.424,9.104,6.571c2.557-0.854,7.619-8.016,6.194-12.906c0,0-0.959-3.294,3.629-7.882s7.882-3.629,7.882-3.629c4.891,1.425,9.871,0.646,11.066-1.73C95.209,67.326,93.749,58.589,89.282,56.138z M48.001,75C33.09,75,21,62.912,21,48.001S33.09,21,48.001,21S75,33.09,75,48.001S62.912,75,48.001,75z M48,33c-8.283,0-15,6.717-15,15c0,8.284,6.717,15,15,15c8.284,0,15-6.716,15-15C63,39.717,56.284,33,48,33z" /></g></g>
@@ -214,16 +251,15 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                                         style={{
                                             padding: '0.6rem',
                                             borderRadius: '8px',
-                                            background: uc.last_scraping_status === 'success' ? '#f0fdf4' : 
-                                                        uc.last_scraping_status === 'processing' ? '#eff6ff' :
-                                                        uc.last_scraping_status === 'not_available' ? '#fefce8' : 
-                                                        uc.last_scraping_status === 'error' ? '#fef2f2' : '#f8fafc',
+                                            background: uc.displayStatus === 'success' ? '#f0fdf4' : 
+                                                        uc.displayStatus === 'processing' ? '#eff6ff' :
+                                                        uc.displayStatus === 'not_available' ? '#fefce8' : 
+                                                        uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                             borderLeft: `5px solid ${
-                                                uc.last_scraping_status === 'success' ? '#22c55e' : 
-                                                uc.last_scraping_status === 'processing' ? '#3b82f6' :
-                                                uc.last_scraping_status === 'not_available' ? '#eab308' : 
-                                                uc.last_scraping_status === 'error' ? '#ef4444' : 
-                                                (KANBAN_STATUSES.find(s => s.status === uc.status)?.color || '#cbd5e1')
+                                                uc.displayStatus === 'success' ? '#22c55e' : 
+                                                uc.displayStatus === 'processing' ? '#3b82f6' :
+                                                uc.displayStatus === 'not_available' ? '#eab308' : 
+                                                uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                             }`,
                                             cursor: 'pointer',
                                             fontSize: '0.8rem',
@@ -240,28 +276,23 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                                             e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
                                         }}
                                         title={(() => {
-                                            if (uc.last_scraping_status === 'processing') return 'Processando...';
-                                            const hasCreds = (uc.subscriber?.portal_credentials?.login && uc.subscriber?.portal_credentials?.password) ||
-                                                             (uc.titular_fatura?.portal_credentials?.login && uc.titular_fatura?.portal_credentials?.password);
-                                            
-                                            if (hasCreds && uc.last_scraping_error?.includes('Credenciais')) {
-                                                return '';
-                                            }
-                                            return uc.last_scraping_error || '';
+                                            if (uc.displayStatus === 'processing') return 'Processando...';
+                                            if (uc.displayStatus === 'error') return uc.last_scraping_error || 'Erro na extração';
+                                            return '';
                                         })()}
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
                                                 {uc.subscriber?.name || 'S/ Assinante'}
                                             </div>
-                                            {uc.last_scraping_status && uc.last_scraping_status !== 'processing' && (
+                                            {uc.displayStatus && uc.displayStatus !== 'processing' && (
                                                 <div style={{ 
                                                     width: '8px', 
                                                     height: '8px', 
                                                     borderRadius: '50%', 
-                                                    background: uc.last_scraping_status === 'success' ? '#22c55e' : 
-                                                                uc.last_scraping_status === 'not_available' ? '#eab308' : 
-                                                                uc.last_scraping_status === 'error' ? '#ef4444' : '#cbd5e1'
+                                                    background: uc.displayStatus === 'success' ? '#22c55e' : 
+                                                                uc.displayStatus === 'not_available' ? '#eab308' : 
+                                                                uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                                 }}></div>
                                             )}
                                         </div>
@@ -278,7 +309,6 @@ function CalendarView({ units, onCardClick, searchTerm }) {
                     </div>
                 );
             })}
-
         </div>
     );
 }
@@ -293,6 +323,12 @@ export default function ConsumerUnitList() {
     const [activeId, setActiveId] = useState(null);
     const [showTooltip, setShowTooltip] = useState(false);
     const [isScraperModalOpen, setIsScraperModalOpen] = useState(false);
+    
+    // Filtros do Calendário e Extrações
+    const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [readingStatusFilter, setReadingStatusFilter] = useState('');
+    const [invoicesForMonth, setInvoicesForMonth] = useState([]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -316,12 +352,13 @@ export default function ConsumerUnitList() {
 
     useEffect(() => {
         fetchUnits();
-    }, []);
+    }, [monthFilter]);
 
     const fetchUnits = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            // 1. Buscar Unidades Consumidoras
+            const { data: unitsData, error: unitsError } = await supabase
                 .from('consumer_units')
                 .select(`
                     *,
@@ -330,10 +367,25 @@ export default function ConsumerUnitList() {
                 `)
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setUnits(data || []);
+            if (unitsError) throw unitsError;
+            setUnits(unitsData || []);
+
+            // 2. Buscar Faturas do Ano Selecionado (para estatísticas acumuladas)
+            const [year] = monthFilter.split('-');
+            const yearStart = `${year}-01-01`;
+            const yearEnd = `${year}-12-31`;
+            
+            const { data: invData, error: invError } = await supabase
+                .from('invoices')
+                .select('uc_id, status, mes_referencia')
+                .gte('mes_referencia', yearStart)
+                .lte('mes_referencia', yearEnd);
+            
+            if (invError) throw invError;
+            setInvoicesForMonth(invData || []);
+
         } catch (error) {
-            console.error('Error fetching UCs:', error);
+            console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
         }
@@ -347,6 +399,10 @@ export default function ConsumerUnitList() {
     const handleDelete = (id) => {
         setUnits(units.filter(u => u.id !== id));
         setIsModalOpen(false);
+    };
+
+    const handleDragStart = (event) => {
+        setActiveId(event.active.id);
     };
 
     const handleDragOver = (event) => {
@@ -373,10 +429,6 @@ export default function ConsumerUnitList() {
                 u.id === activeId ? { ...u, status: overContainer } : u
             ));
         }
-    };
-
-    const handleDragStart = (event) => {
-        setActiveId(event.active.id);
     };
 
     const handleDragEnd = async (event) => {
@@ -417,6 +469,67 @@ export default function ConsumerUnitList() {
             fetchUnits(); // Rollback to actual data
         }
     };
+
+    const getStats = () => {
+        const today = new Date();
+        const currentYearNum = today.getFullYear();
+        const currentMonthNum = today.getMonth() + 1;
+        const currentDayNum = today.getDate();
+
+        const [filterYear, filterMonth] = monthFilter.split('-').map(Number);
+        const isCurrentMonthSelected = filterYear === currentYearNum && filterMonth === currentMonthNum;
+        
+        const stats = {
+            month: { success: 0, error: 0, not_available: 0, processing: 0 },
+            year: { success: 0, error: 0, not_available: 0 }
+        };
+
+        const activeUnits = units.filter(u => u.status === 'ativo');
+
+        activeUnits.forEach(unit => {
+            const day = unit.dia_leitura || 0;
+            
+            // Cálculo do Mês Selecionado
+            const monthRef = `${monthFilter}-01`;
+            const hasMonthInvoice = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
+            
+            let monthStatus = 'pending';
+            if (hasMonthInvoice) monthStatus = 'success';
+            else if (unit.last_scraping_status === 'processing' && isCurrentMonthSelected) monthStatus = 'processing';
+            else if (isCurrentMonthSelected) {
+                if (day > currentDayNum) monthStatus = 'not_available';
+                else monthStatus = 'error';
+            } else if (filterYear < currentYearNum || (filterYear === currentYearNum && filterMonth < currentMonthNum)) {
+                monthStatus = 'not_available';
+            }
+            if (stats.month[monthStatus] !== undefined) stats.month[monthStatus]++;
+
+            // Cálculo do Ano Accumulado (até o mês selecionado)
+            for (let m = 1; m <= filterMonth; m++) {
+                const mStr = String(m).padStart(2, '0');
+                const mRef = `${filterYear}-${mStr}-01`;
+                const hasInv = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === mRef);
+                
+                if (hasInv) {
+                    stats.year.success++;
+                } else {
+                    const isMCurrent = filterYear === currentYearNum && m === currentMonthNum;
+                    const isMPast = filterYear < currentYearNum || (filterYear === currentYearNum && m < currentMonthNum);
+                    
+                    if (isMCurrent) {
+                        if (day <= currentDayNum) stats.year.error++;
+                        else stats.year.not_available++;
+                    } else if (isMPast) {
+                        stats.year.error++; // Leitura perdida em mês passado
+                    }
+                }
+            }
+        });
+        
+        return stats;
+    };
+
+    const stats = getStats();
 
     return (
         <div style={{ padding: '1.5rem' }}>
@@ -486,6 +599,72 @@ export default function ConsumerUnitList() {
                             }}
                         />
                     </div>
+
+                    {viewMode === 'calendar' && (
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <div style={{ position: 'relative' }}>
+                                <button 
+                                    onClick={() => setShowMonthPicker(!showMonthPicker)} 
+                                    style={{ 
+                                        padding: '0.75rem 1rem', 
+                                        border: '1px solid #e2e8f0', 
+                                        borderRadius: '10px', 
+                                        cursor: 'pointer', 
+                                        background: 'white', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.5rem', 
+                                        minWidth: '160px',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '600',
+                                        color: '#334155'
+                                    }}
+                                >
+                                    <CalendarIcon size={16} style={{ color: 'var(--color-blue)' }} />
+                                    <span>{new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                </button>
+                                {showMonthPicker && (
+                                    <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) - 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
+                                            <span style={{ fontWeight: 'bold' }}>{monthFilter.split('-')[0]}</span>
+                                            <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) + 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                                            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
+                                                const mVal = String(idx + 1).padStart(2, '0');
+                                                const currentYear = monthFilter.split('-')[0];
+                                                const isSelected = monthFilter === `${currentYear}-${mVal}`;
+                                                return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <select 
+                                value={readingStatusFilter} 
+                                onChange={e => setReadingStatusFilter(e.target.value)}
+                                style={{ 
+                                    padding: '0.75rem 1rem', 
+                                    border: '1px solid #e2e8f0', 
+                                    borderRadius: '10px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    color: '#334155',
+                                    background: 'white',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="">Todos os Status</option>
+                                <option value="success">Sucesso</option>
+                                <option value="not_available">Não Disponível</option>
+                                <option value="error">Erro / Atenção</option>
+                                <option value="processing">Processando</option>
+                            </select>
+                        </div>
+                    )}
 
                     <div className="btn-group" style={{
                         display: 'flex',
@@ -605,36 +784,55 @@ export default function ConsumerUnitList() {
                         <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
                         Legenda de Status (Extração de Faturas)
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        Mês: {stats.month.success} | Ano: {stats.year.success}
+                                    </span>
+                                </div>
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eab308', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada no portal</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#fefce8', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        Mês: {stats.month.not_available} | Ano: {stats.year.not_available}
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada ou ciclo futuro</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou sem credenciais</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        Mês: {stats.month.error} | Ano: {stats.year.error}
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou leitura atrasada</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#cbd5e1', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento ou sem status</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        Mês: {stats.month.processing}
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento</span>
                             </div>
                         </div>
-
                     </div>
                 </div>
             )}
@@ -752,9 +950,12 @@ export default function ConsumerUnitList() {
                     ) : (
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
                             <CalendarView
-                                units={filteredUnits}
-                                onCardClick={(uc) => { setEditingUnit(uc); setIsModalOpen(true); }}
+                                units={units}
+                                invoices={invoicesForMonth}
+                                monthFilter={monthFilter}
                                 searchTerm={searchTerm}
+                                readingStatusFilter={readingStatusFilter}
+                                onCardClick={(uc) => { setEditingUnit(uc); setIsModalOpen(true); }}
                             />
                         </div>
                     )}
