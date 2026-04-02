@@ -161,7 +161,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const day = unit.dia_leitura || 0;
         
         // Determinar Status da Leitura para o mês selecionado
-        const hasInvoice = invoices.some(inv => inv.uc_id === unit.id);
+        const monthRef = `${monthFilter}-01`;
+        const hasInvoice = invoices.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
         let status = 'pending';
         
         if (hasInvoice) {
@@ -791,7 +792,7 @@ export default function ConsumerUnitList() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
                                     <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.success} | Ano: {stats.year.success}
+                                        Mês: {stats.month.success} | Faturas no Ano: {stats.year.success}
                                     </span>
                                 </div>
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
@@ -803,7 +804,7 @@ export default function ConsumerUnitList() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
                                     <span style={{ fontSize: '0.65rem', background: '#fefce8', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.not_available} | Ano: {stats.year.not_available}
+                                        Mês: {stats.month.not_available} | Previstas no Ano: {stats.year.not_available}
                                     </span>
                                 </div>
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada ou ciclo futuro</span>
@@ -815,7 +816,7 @@ export default function ConsumerUnitList() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
                                     <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.error} | Ano: {stats.year.error}
+                                        Mês: {stats.month.error} | Faturas Ausentes no Ano: {stats.year.error}
                                     </span>
                                 </div>
                                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou leitura atrasada</span>
