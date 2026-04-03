@@ -62,7 +62,7 @@ export default function InvoiceListManager() {
                         numero_uc,
                         titular_conta,
                         concessionaria,
-                        modalidade_consumo,
+                        modalidade,
                         status,
                         subscribers!consumer_units_subscriber_id_fkey(name)
                     )
@@ -371,7 +371,7 @@ export default function InvoiceListManager() {
         // Filtra faturas: apenas UCs ativas e modalidade Auto Consumo Remoto
         const filteredEnergyInvoices = invoices.filter(inv => 
             inv.consumer_units?.status === 'ativo' && 
-            inv.consumer_units?.modalidade_consumo === 'auto_consumo_remoto'
+            inv.consumer_units?.modalidade === 'auto_consumo_remoto'
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
@@ -742,7 +742,7 @@ export default function InvoiceListManager() {
                                                                 border: '1px solid #bbf7d0',
                                                                 display: 'block'
                                                             }}>PAGA</span>
-                                                        ) : (inv.linha_digitavel && inv.consumer_units?.modalidade_consumo === 'auto_consumo_remoto') ? (
+                                                        ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
                                                             <button 
                                                                 onClick={() => handlePayBill(inv)}
                                                                 disabled={payingId === inv.id}
