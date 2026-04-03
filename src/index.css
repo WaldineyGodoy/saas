@@ -221,7 +221,8 @@ textarea {
 /* Layout Specifics */
 .dashboard-container {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   position: relative;
 }
 
@@ -232,8 +233,10 @@ textarea {
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease-in-out;
   flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  transition: transform 0.3s ease-in-out;
 }
 
 .main-content {
@@ -241,7 +244,8 @@ textarea {
   padding: 2rem;
   background-color: var(--color-bg-light);
   overflow-y: auto;
-  width: 100%;
+  overflow-x: hidden;
+  height: 100%;
 }
 
 /* Mobile */
