@@ -340,22 +340,135 @@ export default function InvoiceListManager() {
             return acc;
         }, {});
 
+        const stats = invoices.reduce((acc, inv) => {
+            if (inv.status === 'pago') acc.pago++;
+            else if (inv.status === 'atrasado') acc.atrasado++;
+            else if (inv.status === 'a_vencer') acc.a_vencer++;
+            return acc;
+        }, { pago: 0, atrasado: 0, a_vencer: 0 });
+
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '1.5rem', padding: '1rem' }}>
+            <div style={{ padding: '1rem' }}>
+                {/* Legenda de Status */}
+                <div style={{
+                    marginBottom: '2rem',
+                    padding: '1.5rem',
+                    background: 'white',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1.25rem',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                }}>
+                    <div style={{ 
+                        fontWeight: '800', 
+                        color: '#1e293b', 
+                        fontSize: '0.8rem', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                    }}>
+                        <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
+                        Legenda de Status Financeiro (Contas de Energia)
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pagos</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        {stats.pago} faturas
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura quitada no CRM</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Atrasadas</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        {stats.atrasado} faturas
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: '700' }}>Vencimento expirado</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#3b82f6', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>A Vencer</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        {stats.a_vencer} faturas
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Dentro do prazo de vencimento</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' }}>
                 {days.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
                     
+                    const hasAtrasado = dayInvoices.some(inv => inv.status === 'atrasado');
+                    const allPago = dayInvoices.length > 0 && dayInvoices.every(inv => inv.status === 'pago');
+                    const hasAVencer = dayInvoices.some(inv => inv.status === 'a_vencer');
+
+                    const headerBg = dayInvoices.length === 0 ? '#f8fafc' : 
+                                    hasAtrasado ? '#fef2f2' : 
+                                    allPago ? '#f0fdf4' : 
+                                    hasAVencer ? '#fffbeb' : '#f8fafc';
+                    
+                    const headerBorder = dayInvoices.length === 0 ? '#e2e8f0' : 
+                                       hasAtrasado ? '#fecaca' : 
+                                       allPago ? '#bbf7d0' : 
+                                       hasAVencer ? '#fef08a' : '#e2e8f0';
+
+                    const headerTextColor = dayInvoices.length === 0 ? '#64748b' : 
+                                          hasAtrasado ? '#991b1b' : 
+                                          allPago ? '#166534' : 
+                                          hasAVencer ? '#92400e' : '#1e293b';
+
                     return (
-                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '260px', height: '260px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
-                            <div style={{ padding: '0.75rem 0.75rem', borderBottom: '1px solid #fecaca', background: '#fff1f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '280px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
+                            <div style={{ 
+                                padding: '0.75rem 0.75rem', 
+                                borderBottom: `1px solid ${headerBorder}`, 
+                                background: headerBg, 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center' 
+                            }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                    <span style={{ fontWeight: '800', color: '#b91c1c', fontSize: '0.85rem' }}>Vencimento {day}</span>
+                                    <span style={{ fontWeight: '800', color: headerTextColor, fontSize: '0.85rem' }}>Vencimento {day}</span>
                                 </div>
-                                {dayInvoices.length > 0 && (
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>
-                                        {dayInvoices.length} faturas
-                                    </span>
-                                )}
+                                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                    {[
+                                        { key: 'pago', bg: '#dcfce7', color: '#166534' },
+                                        { key: 'a_vencer', bg: '#fef9c3', color: '#92400e' },
+                                        { key: 'atrasado', bg: '#fee2e2', color: '#991b1b' }
+                                    ].map(s => {
+                                        const count = dayInvoices.filter(inv => inv.status === s.key).length;
+                                        if (count === 0) return null;
+                                        return (
+                                            <span key={s.key} style={{ 
+                                                fontSize: '0.7rem', color: s.color, background: s.bg, 
+                                                padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
+                                                border: `1px solid ${s.color}20`
+                                            }}>
+                                                {count}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
                             </div>
                             <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
                                 {dayInvoices.length === 0 ? (
@@ -365,7 +478,7 @@ export default function InvoiceListManager() {
                                         const statusData = {
                                             'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
                                             'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
-                                            'a_vencer': { color: '#3b82f6', label: 'A Vencer', bg: '#eff6ff' }
+                                            'a_vencer': { color: '#92400e', label: 'A Vencer', bg: '#fef9c3' }
                                         };
                                         const s = statusData[inv.status] || { color: '#64748b', label: inv.status, bg: '#f1f5f9' };
                                         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -411,8 +524,10 @@ export default function InvoiceListManager() {
                     );
                 })}
             </div>
+        </div>
         );
     };
+
 
 
     return (
