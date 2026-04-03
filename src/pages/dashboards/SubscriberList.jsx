@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import SubscriberModal from '../../components/SubscriberModal';
-import { CreditCard, X, Eye, Pencil } from 'lucide-react';
+import { CreditCard, X, Eye, Pencil, RefreshCw, CheckCircle, AlertCircle, Clock, Calendar } from 'lucide-react';
+import { createAsaasCharge } from '../../lib/api';
 import {
     DndContext,
     PointerSensor,
@@ -32,6 +33,8 @@ export default function SubscriberList() {
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState(null);
     const [activeId, setActiveId] = useState(null);
+    const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
+    const [subStats, setSubStats] = useState({});
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -130,16 +133,94 @@ export default function SubscriberList() {
             const { data, error } = await supabase
                 .from('subscribers')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('name', { ascending: true });
 
             if (error) throw error;
             setSubscribers(data || []);
+            // Buscar estatísticas após carregar assinantes
+            if (data && data.length > 0) {
+                fetchStats(data, monthFilter);
+            }
         } catch (error) {
             console.error('Error fetching subscribers:', error);
         } finally {
             setLoading(false);
         }
     };
+
+    const fetchStats = async (subs, month) => {
+        try {
+            const subIds = subs.map(s => s.id);
+
+            // 1. Buscar Todas as Faturas Pendentes/Vencidas (para Total Global)
+            const { data: allInvoices } = await supabase
+                .from('invoices')
+                .select('id, uc_id, valor_a_pagar, status, mes_referencia, consumer_units(subscriber_id)')
+                .in('status', ['pendente', 'vencido']);
+
+            // 2. Buscar Unidades Consumidoras (para Indicador de Leitura)
+            const { data: units } = await supabase
+                .from('consumer_units')
+                .select('id, subscriber_id, last_scraping_status, dia_leitura')
+                .in('subscriber_id', subIds);
+
+            // 3. Buscar Faturas Consolidadas do Mês Selecionado (para Cor do Boleto)
+            const { data: consolidated } = await supabase
+                .from('consolidated_invoices')
+                .select('id, subscriber_id, status, asaas_boleto_url, created_at')
+                .in('subscriber_id', subIds);
+
+            // Filtrar consolidados do mês (baseado no created_at ou logicamente correlacionado)
+            // Como não temos mes_referencia em consolidated_invoices, usaremos o mês de criação
+            const consolidatedThisMonth = consolidated?.filter(c => c.created_at.startsWith(month)) || [];
+
+            const stats = {};
+            subs.forEach(sub => {
+                const subInvoices = allInvoices?.filter(inv => inv.consumer_units?.subscriber_id === sub.id) || [];
+                const subUnits = units?.filter(u => u.subscriber_id === sub.id) || [];
+                const subConsolidated = consolidatedThisMonth.find(c => c.subscriber_id === sub.id);
+
+                // Total Global (Todas as faturas pendentes/vencidas)
+                const totalGlobal = subInvoices.reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
+
+                // Total no Mês Selecionado
+                const invoicesMonth = subInvoices.filter(inv => inv.mes_referencia?.startsWith(month));
+                const totalMonth = invoicesMonth.reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
+
+                // Indicador de Leitura (UCs com fatura no mês ou scraping status success)
+                const readingTotal = subUnits.length;
+                const readingScanned = subUnits.filter(u => {
+                    const hasInv = invoicesMonth.some(inv => inv.uc_id === u.id);
+                    return hasInv || u.last_scraping_status === 'success';
+                }).length;
+
+                // Cor do Ícone de Boleto
+                let boletoColor = '#94a3b8'; // Default Gray
+                if (totalMonth > 0) {
+                    if (!subConsolidated) {
+                        boletoColor = '#ef4444'; // Vermelho (Pendente emissão)
+                    } else if (subConsolidated.status === 'PAID') {
+                        boletoColor = '#10b981'; // Verde (Pago)
+                    } else {
+                        boletoColor = '#3b82f6'; // Azul (Emitido/Pendente)
+                    }
+                } else if (totalGlobal > 0 && subConsolidated) {
+                    // Caso tenha boleto emitido mas não seja do mês atual (histórico)
+                    boletoColor = subConsolidated.status === 'PAID' ? '#10b981' : '#3b82f6';
+                }
+
+                stats[sub.id] = { totalGlobal, totalMonth, readingTotal, readingScanned, boletoColor };
+            });
+
+            setSubStats(stats);
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchSubscribers();
+    }, [monthFilter]);
 
     const handleSave = (savedSub) => {
         const exists = subscribers.find(s => s.id === savedSub.id);
@@ -275,6 +356,17 @@ export default function SubscriberList() {
 
     return (
         <div>
+            <style>
+                {`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                .spin {
+                    animation: spin 1s linear infinite;
+                }
+                `}
+            </style>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Gestão de Assinantes</h2>
                 <button
@@ -287,7 +379,7 @@ export default function SubscriberList() {
 
             {/* Controls Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', flex: 1 }}>
+                <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
                     <input
                         type="text"
                         placeholder="Buscar por nome, email, telefone ou CPF..."
@@ -298,6 +390,18 @@ export default function SubscriberList() {
                             border: '1px solid #ddd', borderRadius: '4px'
                         }}
                     />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', padding: '0.2rem 0.8rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        <Calendar size={16} color="#64748b" />
+                        <input
+                            type="month"
+                            value={monthFilter}
+                            onChange={(e) => setMonthFilter(e.target.value)}
+                            style={{
+                                border: 'none', background: 'transparent', padding: '0.4rem', 
+                                outline: 'none', color: '#475569', fontWeight: 600, fontSize: '0.9rem'
+                            }}
+                        />
+                    </div>
                     <div style={{ display: 'flex', border: '1px solid #ccc', borderRadius: '4px', overflow: 'hidden' }}>
                         <button
                             onClick={() => setViewMode('list')}
@@ -333,68 +437,104 @@ export default function SubscriberList() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '1rem', color: '#64748b' }}>Nome/CPF</th>
-                                            <th style={{ padding: '1rem', color: '#64748b' }}>Contato</th>
-                                            <th style={{ padding: '1rem', color: '#64748b' }}>Status</th>
-                                            <th style={{ padding: '1rem', color: '#64748b' }}>Cidade</th>
-                                            <th style={{ padding: '1rem', color: '#64748b' }}>Ações</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nome / CPF / Contato</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Total no Mês</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Total a Pagar</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Status</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Leitura</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredSubscribers.map(sub => (
-                                            <tr key={sub.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '1rem' }}>
-                                                    <div style={{ fontWeight: 'bold' }}>{sub.name}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#666' }}>{sub.cpf_cnpj}</div>
-                                                </td>
-                                                <td style={{ padding: '1rem' }}>
-                                                    <div style={{ fontSize: '0.9rem' }}>{sub.email}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#666' }}>{sub.phone}</div>
-                                                </td>
-                                                <td style={{ padding: '1rem' }}>
-                                                    <span style={{
-                                                        padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.85rem',
-                                                        background: sub.status?.includes('ativo') ? '#dcfce7' :
-                                                            sub.status?.includes('cancelado') ? '#fee2e2' : '#dbeafe',
-                                                        color: sub.status?.includes('ativo') ? '#166534' :
-                                                            sub.status?.includes('cancelado') ? '#dc2626' : '#1e40af'
-                                                    }}>
-                                                        {sub.status?.toUpperCase().replace('_', ' ')}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '1rem' }}>{sub.cidade ? `${sub.cidade}/${sub.uf}` : '-'}</td>
-                                                <td style={{ padding: '1rem' }}>
-                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button
-                                                            onClick={() => handleEmission(sub)}
-                                                            disabled={generatingId === sub.id}
-                                                            title="Emitir Boleto Consolidado"
-                                                            style={{
-                                                                background: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5',
-                                                                padding: '0.4rem 0.6rem', borderRadius: '4px', cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                            }}
-                                                        >
-                                                            {generatingId === sub.id ? '...' : <CreditCard size={14} />}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
-                                                            title="Visualizar Assinante"
-                                                            style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                        >
-                                                            <Eye size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
-                                                            title="Editar Assinante"
-                                                            style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                        >
-                                                            <Pencil size={16} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {filteredSubscribers.map(sub => {
+                                            const stats = subStats[sub.id] || { totalMonth: 0, totalGlobal: 0, readingTotal: 0, readingScanned: 0, boletoColor: '#94a3b8' };
+                                            
+                                            return (
+                                                <tr key={sub.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '1rem' }}>
+                                                        <div style={{ fontWeight: 800, color: '#1e293b', fontSize: '0.95rem' }}>{sub.name}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>{sub.cpf_cnpj}</div>
+                                                        <div style={{ mt: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{sub.email}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{sub.phone}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: 700, color: stats.totalMonth > 0 ? '#ef4444' : '#64748b' }}>
+                                                            {stats.totalMonth.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: 700, color: '#1e293b' }}>
+                                                            {stats.totalGlobal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <span style={{
+                                                            padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 900,
+                                                            background: `${statusColors[sub.status] || '#64748b'}15`,
+                                                            color: statusColors[sub.status] || '#64748b',
+                                                            border: `1px solid ${statusColors[sub.status] || '#64748b'}30`,
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {sub.status?.replace('_', ' ')}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <div style={{ 
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem', 
+                                                            padding: '0.2rem 0.5rem', borderRadius: '6px', 
+                                                            background: stats.readingScanned === stats.readingTotal && stats.readingTotal > 0 ? '#f0fdf4' : '#f8fafc',
+                                                            border: '1px solid #e2e8f0'
+                                                        }}>
+                                                            {stats.readingScanned === stats.readingTotal && stats.readingTotal > 0 ? (
+                                                                <CheckCircle size={14} color="#10b981" />
+                                                            ) : (
+                                                                <RefreshCw size={14} color="#94a3b8" />
+                                                            )}
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>
+                                                                {stats.readingScanned}/{stats.readingTotal}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '1rem' }}>
+                                                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                                                            <button
+                                                                onClick={() => handleEmission(sub)}
+                                                                disabled={generatingId === sub.id}
+                                                                title="Emitir Boleto Consolidado"
+                                                                style={{
+                                                                    background: `${stats.boletoColor}15`, 
+                                                                    color: stats.boletoColor, 
+                                                                    border: `1px solid ${stats.boletoColor}30`,
+                                                                    padding: '0.5rem', borderRadius: '6px', cursor: 'pointer',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    transition: 'all 0.2s'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.background = `${stats.boletoColor}30`}
+                                                                onMouseLeave={e => e.currentTarget.style.background = `${stats.boletoColor}15`}
+                                                            >
+                                                                {generatingId === sub.id ? <RefreshCw size={14} className="spin" /> : <CreditCard size={14} />}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
+                                                                title="Visualizar Assinante"
+                                                                style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                            >
+                                                                <Eye size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setEditingSubscriber(sub); setIsModalOpen(true); }}
+                                                                title="Editar Assinante"
+                                                                style={{ border: '1px solid #e2e8f0', background: 'white', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             )}

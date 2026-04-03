@@ -4,6 +4,61 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-03] - Modernização da Listagem de Assinantes (Dashboard)
+
+### Atualizações Registradas:
+1. **Filtro Temporal Dinâmico**:
+    - Introdução de um **Seletor de Mês (Calendário)** no topo da lista para controle de indicadores mensais.
+2. **Reestruturação da Tabela**:
+    - **Densidade de Dados**: Agrupamento de Nome, CPF, Email e Telefone em uma única coluna vertical, otimizando o espaço horizontal.
+    - **Remoção de Redundância**: Exclusão da coluna "Cidade" para focar em métricas operacionais e financeiras.
+3. **Novos Indicadores de Performance**:
+    - **Financeiro Mensal**: Coluna "Total no Mês" com soma automática de faturas do período selecionado.
+    - **Financeiro Global**: Coluna "Total a Pagar" refletindo o saldo devedor histórico completo.
+    - **Operacional (Leitura)**: Coluna "Leitura" exibindo o progresso de coleta de faturas das UCs (Ex: 2/5 lidas).
+4. **Inteligência Visual nas Ações**:
+    - **Status do Boleto (Ícone CreditCard)**:
+        - 🔴 **Vermelho**: Inadimplência no mês sem boleto emitido.
+        - 🔵 **Azul**: Boleto consolidado emitido e aguardando pagamento.
+        - 🟢 **Verde**: Faturas do mês quitadas.
+    - **Feedback de Processamento**: Adição de animação (*spin*) e ícones de confirmação (`CheckCircle`) para processos em tempo real.
+
+---
+
+## [2026-04-03] - Automação de Notificações de Fatura
+
+### Atualizações Registradas:
+1. **Sistema de E-mail (Resend)**:
+    - Integração de e-mails transacionais via Edge Functions.
+    - Gatilhos: Emissão Consolidada e Download de Fatura.
+2. **Roteamento de Segurança (Sandbox)**:
+    - Implementação de desvio automático para e-mail administrativo em ambiente de teste.
+3. **PDF Inteligente**:
+    - Geração de PDF composto (Demonstrativo B2W + Boleto Asaas em um único anexo).
+4. **Logs de Envio**:
+    - Registro obrigatório na tabela `crm_history` com a ação `email_sent`.
+
+---
+
+## [2026-04-03] - Modernização da Interface de Assinantes (SubscriberModal)
+
+### Atualizações Registradas:
+1. **Navegação por Abas**:
+    - Substituição do layout de seções colapsáveis por um **Menu Superior em Abas** (Dados Cadastrais, Endereço, Unidades Consumidoras, Faturas).
+    - Introdução de ícones coloridos para cada aba.
+2. **Otimização da Aba de Faturas**:
+    - **Reorganização Visual**: Botões de ação (Emitir Fatura Consolidada) e filtro de data movidos para a esquerda; resumo financeiro para a direita.
+    - **Gestão Financeira**: Introdução do box **"Total a Pagar" (Saldo Global Devedor)** que soma todas as faturas pendentes, e renomeação do box mensal para "Total a Pagar no Mês".
+    - **Seletor de Data**: Implementação de seletor Mês/Ano com opção de "Todas as Datas".
+3. **Melhoria nos Cards de UC**:
+    - **Status Colorido**: Unidades exibem status com cores específicas (Verde, Laranja, Vermelho, Cinza) e fundos tonais.
+    - **Indicadores de Leitura**: Exibição do dia de leitura e status por ícones + texto (✅ Sucesso, 🌀 Lendo, ⚠️ Erro, 🕒 Pendente).
+    - **Lógica Temporal**: Detecção automática de faturas no mês atual para marcar sucesso na leitura.
+4. **Ajustes de Layout (Sticky UI)**:
+    - Fixação de cabeçalhos e filtros (`sticky`) para garantir visibilidade durante o scroll longo da modal.
+
+---
+
 ## [2026-04-03] - Consolidação da Gestão de Assinantes
 
 ### Atualizações Registradas:
