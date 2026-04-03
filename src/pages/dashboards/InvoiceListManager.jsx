@@ -226,7 +226,7 @@ export default function InvoiceListManager() {
         return (
             <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(7, 1fr)', 
+                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
                 gap: '1rem', 
                 padding: '1rem' 
             }}>
@@ -244,7 +244,7 @@ export default function InvoiceListManager() {
                     </div>
                 ))}
                 {Array.from({ length: startOffset }).map((_, i) => (
-                    <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0' }} />
+                    <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '260px' }} />
                 ))}
                 {calendarDays.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
@@ -451,7 +451,7 @@ export default function InvoiceListManager() {
 
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(7, 1fr)', 
+                    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
                     gap: '1rem' 
                 }}>
                     {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
@@ -468,7 +468,7 @@ export default function InvoiceListManager() {
                         </div>
                     ))}
                     {Array.from({ length: startOffset }).map((_, i) => (
-                        <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0' }} />
+                        <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '280px' }} />
                     ))}
                     {calendarDays.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];

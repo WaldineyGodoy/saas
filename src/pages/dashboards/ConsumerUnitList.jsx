@@ -218,7 +218,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     return (
         <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
             gap: '1rem',
             padding: '1rem'
         }}>
@@ -236,7 +236,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                 </div>
             ))}
             {Array.from({ length: startOffset }).map((_, i) => (
-                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0' }} />
+                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0', minHeight: '180px' }} />
             ))}
             {calendarDays.map(day => {
                 const dayUnits = groupedUnits[day] || [];
@@ -250,6 +250,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                         flexDirection: 'column',
                         boxShadow: 'var(--shadow-sm)',
                         transition: 'transform 0.2s',
+                        overflow: 'hidden'
                     }}>
                         <div style={{
                             padding: '0.6rem 1rem',
@@ -305,10 +306,25 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                         }`,
                                         cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                     }}>
-                                        <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <div style={{ 
+                                            fontWeight: 'bold', 
+                                            color: '#0f172a', 
+                                            whiteSpace: 'nowrap', 
+                                            overflow: 'hidden', 
+                                            textOverflow: 'ellipsis' 
+                                        }}>
                                             {uc.subscriber?.name || 'S/ Assinante'}
                                         </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem' }}>UC: {uc.numero_uc}</div>
+                                        <div style={{ 
+                                            fontSize: '0.7rem', 
+                                            color: '#64748b', 
+                                            marginTop: '0.2rem',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                        }}>
+                                            UC: {uc.numero_uc}
+                                        </div>
                                     </div>
                                 ))
                             )}
