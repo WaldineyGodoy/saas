@@ -170,8 +170,11 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const day = unit.dia_leitura || 0;
         
         // Determinar Status da Leitura para o mês selecionado
-        const monthRef = `${monthFilter}-01`;
-        const hasInvoice = invoices.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
+        const hasInvoice = invoices.some(inv => 
+            inv.uc_id === unit.id && 
+            inv.mes_referencia === monthRef && 
+            inv.status !== 'cancelado'
+        );
         if (hasInvoice) {
             status = 'success';
         } else if (unit.last_scraping_status === 'processing') {
@@ -510,7 +513,11 @@ export default function ConsumerUnitList() {
             
             // Cálculo do Mês Selecionado
             const monthRef = `${monthFilter}-01`;
-            const hasMonthInvoice = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
+            const hasMonthInvoice = invoicesForMonth.some(inv => 
+                inv.uc_id === unit.id && 
+                inv.mes_referencia === monthRef && 
+                inv.status !== 'cancelado'
+            );
             
             let monthStatus = 'pending';
             
@@ -546,7 +553,11 @@ export default function ConsumerUnitList() {
                     continue;
                 }
 
-                const hasInv = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === mRef);
+                const hasInv = invoicesForMonth.some(inv => 
+                    inv.uc_id === unit.id && 
+                    inv.mes_referencia === mRef && 
+                    inv.status !== 'cancelado'
+                );
                 
                 if (hasInv) {
                     stats.year.success++;
