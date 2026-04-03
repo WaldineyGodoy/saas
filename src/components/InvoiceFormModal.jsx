@@ -61,7 +61,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const parseCurrency = (str) => {
         if (!str) return 0;
         if (typeof str === 'number') return str;
-        return Number(str.replace(/\D/g, '')) / 100;
+        const isNegative = str.includes('-');
+        const digits = str.replace(/\D/g, '');
+        const value = Number(digits) / 100;
+        return isNegative ? -value : value;
     };
 
     // Load Invoice Data
@@ -189,8 +192,11 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
 
     const handleCurrencyChange = (field, value) => {
+        const isNegative = value.includes('-');
         const digits = value.replace(/\D/g, '');
-        const number = Number(digits) / 100;
+        let number = Number(digits) / 100;
+        if (isNegative) number = -number;
+        
         const formatted = number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         setFormData(prev => ({ ...prev, [field]: formatted }));
     };
