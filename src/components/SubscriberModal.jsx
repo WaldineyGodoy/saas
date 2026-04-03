@@ -1078,17 +1078,26 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 return colors[status] || '#94a3b8';
                                             };
 
-                                            // Helper para status da leitura
-                                            const getReadingStatus = (status) => {
-                                                switch (status) {
+                                            // Lógica de Status da Leitura (Priorizando o mês atual como padrão)
+                                            const currentMonthStr = new Date().toISOString().substring(0, 7);
+                                            const hasInvoiceThisMonth = invoices.some(inv => 
+                                                inv.uc_id === uc.id && 
+                                                inv.mes_referencia?.startsWith(currentMonthStr) &&
+                                                inv.status !== 'cancelado'
+                                            );
+
+                                            const getReadingStatus = () => {
+                                                if (hasInvoiceThisMonth) return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
+                                                
+                                                switch (uc.last_scraping_status) {
                                                     case 'success': return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
                                                     case 'error': return { icon: <AlertCircle size={14} />, color: '#ef4444', label: 'Erro' };
-                                                    case 'processing': return { icon: <RefreshCw size={14} className="spin" />, color: '#3b82f6', label: 'Processando' };
+                                                    case 'processing': return { icon: <RefreshCw size={14} className="spin" />, color: '#3b82f6', label: 'Lendo...' };
                                                     default: return { icon: <Clock size={14} />, color: '#94a3b8', label: 'Pendente' };
                                                 }
                                             };
 
-                                            const readingStatus = getReadingStatus(uc.last_scraping_status);
+                                            const rStatus = getReadingStatus();
 
                                             return (
                                                 <div key={uc.id} style={{ 
@@ -1129,12 +1138,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                         <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
                                                             {uc.concessionaria}
                                                         </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: readingStatus.color }}>
-                                                                {readingStatus.icon}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <div style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                gap: '0.3rem', 
+                                                                color: rStatus.color,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 700,
+                                                                background: `${rStatus.color}10`,
+                                                                padding: '0.2rem 0.5rem',
+                                                                borderRadius: '6px'
+                                                            }}>
+                                                                {rStatus.icon}
+                                                                <span>{rStatus.label}</span>
                                                             </div>
                                                             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
-                                                                Dia de Leitura: <span style={{ color: 'var(--color-blue)' }}>{uc.dia_leitura || '--'}</span>
+                                                                Leitura: <span style={{ color: 'var(--color-blue)' }}>{uc.dia_leitura || '--'}</span>
                                                             </div>
                                                         </div>
                                                     </div>
