@@ -38,6 +38,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [showConsolidationHelp, setShowConsolidationHelp] = useState(false);
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [activeTab, setActiveTab] = useState('dados'); // 'dados' | 'endereco' | 'ucs' | 'faturas'
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
 
@@ -812,10 +813,65 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     </div>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
-                    <form onSubmit={handleSubmit}>
+                {/* Tabs Menu */}
+                <div style={{
+                    display: 'flex',
+                    background: 'white',
+                    padding: '0 2rem',
+                    borderBottom: '1px solid #e2e8f0',
+                    gap: '2rem'
+                }}>
+                    {[
+                        { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
+                        { id: 'endereco', label: 'Endereço', icon: Home, color: '#f59e0b', bg: '#fff7ed' },
+                        { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
+                        { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' }
+                    ].map(tab => {
+                        const isActive = activeTab === tab.id;
+                        const Icon = tab.icon;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.6rem',
+                                    padding: '1rem 0',
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    color: isActive ? tab.color : '#64748b',
+                                    borderBottom: `3px solid ${isActive ? tab.color : 'transparent'}`,
+                                    transition: 'all 0.2s',
+                                    fontSize: '0.9rem',
+                                    fontWeight: isActive ? 700 : 500,
+                                    position: 'relative'
+                                }}
+                            >
+                                <div style={{
+                                    padding: '0.4rem',
+                                    borderRadius: '8px',
+                                    background: isActive ? tab.bg : 'transparent',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}>
+                                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                                </div>
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
 
-                        <CollapsibleSection title="Dados Cadastrais" icon={User} defaultOpen={true}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
+                    <form onSubmit={handleSubmit}>
+                        {activeTab === 'dados' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingBottom: '1rem' }}>
+
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Status</label>
                                 <select
@@ -907,9 +963,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                 />
                             </div>
-                        </CollapsibleSection>
+                            </div>
+                        )}
 
-                        <CollapsibleSection title="Endereço" icon={Home} defaultOpen={false}>
+                        {activeTab === 'endereco' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingBottom: '1rem' }}>
                             <div style={{ flex: 1 }}>
                                 <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP (Busca)</label>
                                 <input
@@ -963,9 +1021,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                 />
                             </div>
-                        </CollapsibleSection>
+                            </div>
+                        )}
 
-                        <CollapsibleSection title="Unidades Consumidoras (UCs)" icon={Zap} defaultOpen={false} noGrid={true}>
+                        {activeTab === 'ucs' && (
+                            <div style={{ paddingBottom: '1rem' }}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                                     {subscriber?.id && (
@@ -1038,9 +1098,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                 )}
                             </div>
-                        </CollapsibleSection>
+                            </div>
+                        )}
 
-                        <CollapsibleSection title="Faturas" icon={CreditCard} defaultOpen={true} noGrid={true}>
+                        {activeTab === 'faturas' && (
+                            <div style={{ paddingBottom: '1rem' }}>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
@@ -1400,7 +1462,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                 )}
                             </div>
-                        </CollapsibleSection>
+                            </div>
+                        )}
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
