@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar as CalendarIcon, List, Layout, Info, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, List, Layout, Info, Download, CreditCard } from 'lucide-react';
+
+import { useBranding } from '../../contexts/BrandingContext';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import ScraperTriggerModal from '../../components/ScraperTriggerModal';
+import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
+
+
 import {
     DndContext,
     PointerSensor,
@@ -149,11 +154,10 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
 
     const [filterYear, filterMonth] = (monthFilter || '').split('-').map(Number);
     const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
-    const isPastMonth = filterYear < currentYearNum || (filterYear === currentYearNum && filterMonth < currentMonthNum);
 
     const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-    // 1. Filtrar apenas Ativas para o Calendário (conforme solicitado pelo usuário)
+    // 1. Filtrar apenas Ativas para o Calendário
     const activeUnits = units.filter(u => u.status === 'ativo');
 
     // 2. Agrupar e Calcular Status
@@ -162,20 +166,19 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const unitYear = unitDate.getFullYear();
         const unitMonth = unitDate.getMonth() + 1;
         
-        // Verificar se a UC já existia no mês/ano filtrado
         if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
             return acc;
         }
 
         const day = unit.dia_leitura || 0;
-        
-        // Determinar Status da Leitura para o mês selecionado
         const monthRef = `${monthFilter}-01`;
         const hasInvoice = invoices.some(inv => 
             inv.uc_id === unit.id && 
             inv.mes_referencia === monthRef && 
             inv.status !== 'cancelado'
         );
+
+        let status = 'pending';
         if (hasInvoice) {
             status = 'success';
         } else if (unit.last_scraping_status === 'processing') {
@@ -194,10 +197,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             }
         }
 
-        // Aplicar Filtro de Status de Leitura se selecionado
         if (readingStatusFilter && status !== readingStatusFilter) return acc;
 
-        // Aplicar busca por texto
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             const matchesSearch = 
@@ -221,7 +222,6 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         }}>
             {days.map(day => {
                 const dayUnits = groupedUnits[day] || [];
-
                 return (
                     <div key={day} style={{
                         background: 'white',
@@ -232,7 +232,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                         flexDirection: 'column',
                         boxShadow: 'var(--shadow-sm)',
                         transition: 'transform 0.2s',
-                    }} onMouseOver={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'} onMouseOut={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}>
+                    }}>
                         <div style={{
                             padding: '0.6rem 1rem',
                             borderBottom: '1px solid var(--color-border)',
@@ -244,13 +244,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                             borderTopRightRadius: 'var(--radius-md)'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Dia {day}</span>
-                                {dayUnits.some(u => u.displayStatus === 'processing') && (
-                                    <svg width="18" height="18" viewBox="0 0 96 96" fill="#3b82f6" style={{ animation: 'spin 1.5s infinite linear' }} title="Processando extração...">
-                                        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                                        <g><g><path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M89.282,56.138c0,0-3.007-1.649-3.007-8.138c0-6.487,3.007-8.139,3.007-8.139c4.467-2.45,7.424-6.548,6.57-9.104c-0.853-2.557-8.015-7.62-12.905-6.195c0,0-3.294,0.959-7.882-3.627c-4.588-4.588-3.629-7.882-3.629-7.882c1.425-4.892,0.646-9.871-1.731-11.066c-2.378-1.195-11.116,0.264-13.567,4.73c0,0-1.649,3.007-8.138,3.007c-6.487,0-8.139-3.007-8.139-3.007c-2.45-4.467-6.548-7.423-9.104-6.571C28.201,1,23.138,8.162,24.562,13.053c0,0,0.961,3.294-3.628,7.882c-4.587,4.587-7.881,3.627-7.881,3.627c-4.891-1.425-9.871-0.646-11.066,1.731C0.792,28.673,2.25,37.411,6.718,39.861c0,0,3.006,1.651,3.006,8.139c0,6.488-3.006,8.138-3.006,8.138c-4.467,2.451-7.424,6.549-6.571,9.104c0.853,2.557,8.016,7.619,12.907,6.194c0,0,3.294-0.959,7.881,3.629c4.589,4.588,3.628,7.882,3.628,7.882c-1.425,4.891-0.646,9.871,1.731,11.066c2.379,1.195,11.117-0.265,13.567-4.731c0,0,1.651-3.007,8.139-3.007c6.488,0,8.138,3.007,8.138,3.007c2.451,4.467,6.549,7.424,9.104,6.571c2.557-0.854,7.619-8.016,6.194-12.906c0,0-0.959-3.294,3.629-7.882s7.882-3.629,7.882-3.629c4.891,1.425,9.871,0.646,11.066-1.73C95.209,67.326,93.749,58.589,89.282,56.138z M48.001,75C33.09,75,21,62.912,21,48.001S33.09,21,48.001,21S75,33.09,75,48.001S62.912,75,48.001,75z M48,33c-8.283,0-15,6.717-15,15c0,8.284,6.717,15,15,15c8.284,0,15-6.716,15-15C63,39.717,56.284,33,48,33z" /></g></g>
-                                    </svg>
-                                )}
+                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Leitura Dia {day}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                                 {[
@@ -264,25 +258,14 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                     if (count === 0) return null;
                                     return (
                                         <span key={status.key} style={{ 
-                                            fontSize: '0.7rem', 
-                                            color: status.color, 
-                                            background: status.bg, 
-                                            padding: '0.15rem 0.4rem', 
-                                            borderRadius: '6px', 
-                                            fontWeight: '800',
-                                            minWidth: '1.2rem',
-                                            textAlign: 'center',
-                                            border: `1px solid ${status.color}20`
+                                            fontSize: '0.7rem', color: status.color, background: status.bg, 
+                                            padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
+                                            minWidth: '1.2rem', textAlign: 'center', border: `1px solid ${status.color}20`
                                         }}>
                                             {count}
                                         </span>
                                     );
                                 })}
-                                {dayUnits.length > 0 && (
-                                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '0.2rem', fontWeight: '500' }}>
-                                        Total: {dayUnits.length}
-                                    </span>
-                                )}
                             </div>
                         </div>
                         <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
@@ -290,66 +273,24 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                 <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
                             ) : (
                                 dayUnits.map(uc => (
-                                    <div
-                                        key={uc.id}
-                                        onClick={() => onCardClick(uc)}
-                                        style={{
-                                            padding: '0.6rem',
-                                            borderRadius: '8px',
-                                            background: uc.displayStatus === 'success' ? '#f0fdf4' : 
-                                                        uc.displayStatus === 'processing' ? '#eff6ff' :
-                                                        uc.displayStatus === 'not_available' ? '#f8fafc' : 
-                                                        uc.displayStatus === 'pending' ? '#fff7ed' :
-                                                        uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
-                                            borderLeft: `5px solid ${
-                                                uc.displayStatus === 'success' ? '#22c55e' : 
-                                                uc.displayStatus === 'processing' ? '#3b82f6' :
-                                                uc.displayStatus === 'not_available' ? '#cbd5e1' : 
-                                                uc.displayStatus === 'pending' ? '#f97316' :
-                                                uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
-                                            }`,
-                                            cursor: 'pointer',
-                                            fontSize: '0.8rem',
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                            position: 'relative'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
-                                        }}
-                                        onMouseOut={e => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-                                        }}
-                                        title={(() => {
-                                            if (uc.displayStatus === 'processing') return 'Processando...';
-                                            if (uc.displayStatus === 'error') return uc.last_scraping_error || 'Erro na extração';
-                                            return '';
-                                        })()}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-                                                {uc.subscriber?.name || 'S/ Assinante'}
-                                            </div>
-                                            {uc.displayStatus && uc.displayStatus !== 'processing' && (
-                                                <div style={{ 
-                                                    width: '8px', 
-                                                    height: '8px', 
-                                                    borderRadius: '50%', 
-                                                    background: uc.displayStatus === 'success' ? '#22c55e' : 
-                                                                uc.displayStatus === 'not_available' ? '#94a3b8' : 
-                                                                uc.displayStatus === 'pending' ? '#f97316' :
-                                                                uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
-                                                }}></div>
-                                            )}
+                                    <div key={uc.id} onClick={() => onCardClick(uc)} style={{
+                                        padding: '0.6rem', borderRadius: '8px',
+                                        background: uc.displayStatus === 'success' ? '#f0fdf4' : 
+                                                    uc.displayStatus === 'processing' ? '#eff6ff' :
+                                                    uc.displayStatus === 'pending' ? '#fff7ed' :
+                                                    uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
+                                        borderLeft: `5px solid ${
+                                            uc.displayStatus === 'success' ? '#22c55e' : 
+                                            uc.displayStatus === 'processing' ? '#3b82f6' :
+                                            uc.displayStatus === 'pending' ? '#f97316' :
+                                            uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
+                                        }`,
+                                        cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                    }}>
+                                        <div style={{ fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {uc.subscriber?.name || 'S/ Assinante'}
                                         </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>UC: {uc.numero_uc}</span>
-                                            <span style={{ fontStyle: 'italic', fontSize: '0.65rem', background: 'rgba(0,0,0,0.05)', padding: '0 0.3rem', borderRadius: '4px' }}>
-                                                {uc.concessionaria?.split(' ')[0]}
-                                            </span>
-                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem' }}>UC: {uc.numero_uc}</div>
                                     </div>
                                 ))
                             )}
@@ -361,8 +302,110 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     );
 }
 
+function EnergyCalendarView({ units, invoices, monthFilter, searchTerm, onInvoiceClick }) {
+    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+    const monthRef = `${monthFilter}-01`;
+
+    const formatCurrency = (val) => {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+    };
+
+    const statusMap = {
+        pago: { label: 'Pago', color: '#22c55e', bg: '#dcfce7' },
+        a_vencer: { label: 'A Vencer', color: '#3b82f6', bg: '#eff6ff' },
+        atrasado: { label: 'Atrasado', color: '#ef4444', bg: '#fee2e2' },
+        cancelado: { label: 'Cancelado', color: '#64748b', bg: '#f1f5f9' }
+    };
+
+    const daysWithInvoices = days.reduce((acc, day) => {
+        const dayInvoices = invoices.filter(inv => {
+            if (inv.mes_referencia !== monthRef) return false;
+            if (!inv.vencimento) return false;
+            const dueDay = new Date(inv.vencimento + 'T12:00:00').getUTCDate();
+            if (dueDay !== day) return false;
+
+            if (searchTerm) {
+                const lower = searchTerm.toLowerCase();
+                const uc = units.find(u => u.id === inv.uc_id);
+                return (
+                    uc?.numero_uc?.toLowerCase().includes(lower) ||
+                    uc?.subscriber?.name?.toLowerCase().includes(lower) ||
+                    uc?.concessionaria?.toLowerCase().includes(lower)
+                );
+            }
+            return true;
+        });
+
+        if (dayInvoices.length > 0) {
+            acc[day] = dayInvoices;
+        }
+        return acc;
+    }, {});
+
+    return (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: '1.5rem',
+            padding: '1rem'
+        }}>
+            {days.map(day => {
+                const dayInvoices = daysWithInvoices[day] || [];
+                return (
+                    <div key={day} style={{
+                        background: 'white', borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)', minHeight: '180px',
+                        display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)'
+                    }}>
+                        <div style={{
+                            padding: '0.6rem 1rem', borderBottom: '1px solid var(--color-border)',
+                            background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            borderTopLeftRadius: 'var(--radius-md)', borderTopRightRadius: 'var(--radius-md)'
+                        }}>
+                            <span style={{ fontWeight: 800, color: '#b91c1c', fontSize: '0.95rem' }}>Vencimento {day}</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>{dayInvoices.length} faturas</span>
+                        </div>
+                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '300px' }}>
+                            {dayInvoices.length === 0 ? (
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem vencimentos</div>
+                            ) : (
+                                dayInvoices.map(inv => {
+                                    const uc = units.find(u => u.id === inv.uc_id);
+                                    const status = statusMap[inv.status] || { label: inv.status, color: '#64748b', bg: '#f1f5f9' };
+                                    return (
+                                        <div key={inv.id} onClick={() => onInvoiceClick(inv, uc)} style={{
+                                            padding: '0.75rem', borderRadius: '10px', background: 'white',
+                                            border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s',
+                                            display: 'flex', flexDirection: 'column', gap: '0.4rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                        }} onMouseOver={e => e.currentTarget.style.borderColor = '#3b82f6'}>
+                                            <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
+                                                {uc?.subscriber?.name || 'S/ Assinante'}
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>UC: {uc?.numero_uc}</span>
+                                                <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: status.bg, color: status.color }}>
+                                                    {status.label}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', marginTop: '0.2rem', textAlign: 'right' }}>
+                                                {formatCurrency(inv.valor_a_pagar)}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function ConsumerUnitList() {
+    const { branding } = useBranding();
     const [units, setUnits] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState('kanban');
@@ -377,6 +420,12 @@ export default function ConsumerUnitList() {
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [readingStatusFilter, setReadingStatusFilter] = useState('');
     const [invoicesForMonth, setInvoicesForMonth] = useState([]);
+    
+    // Estados do Calendário de Energia
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    const [selectedUcForInvoice, setSelectedUcForInvoice] = useState(null);
+    const [isInvoiceSummaryOpen, setIsInvoiceSummaryOpen] = useState(false);
+
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -418,19 +467,25 @@ export default function ConsumerUnitList() {
             if (unitsError) throw unitsError;
             setUnits(unitsData || []);
 
-            // 2. Buscar Faturas do Ano Selecionado (para estatísticas acumuladas)
+            // 2. Buscar Faturas do Ano Selecionado (com todos os campos financeiros)
             const [year] = monthFilter.split('-');
             const yearStart = `${year}-01-01`;
             const yearEnd = `${year}-12-31`;
             
             const { data: invData, error: invError } = await supabase
                 .from('invoices')
-                .select('uc_id, status, mes_referencia')
+                .select(`
+                    id, uc_id, status, mes_referencia, valor_a_pagar, vencimento, 
+                    concessionaria_pdf_url, linha_digitavel, asaas_payment_id, asaas_boleto_url,
+                    consumo_kwh, consumo_compensado, iluminacao_publica, tarifa_minima, 
+                    outros_lancamentos, consumo_reais, economia_reais
+                `)
                 .gte('mes_referencia', yearStart)
                 .lte('mes_referencia', yearEnd);
             
             if (invError) throw invError;
             setInvoicesForMonth(invData || []);
+
 
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -811,8 +866,28 @@ export default function ConsumerUnitList() {
                                 onMouseLeave={() => setShowTooltip(false)}
                             >
                                 <CalendarIcon size={18} /> Calendário de Leituras
+
+                            </button>
+                            <button
+                                onClick={() => setViewMode('energy_calendar')}
+                                className={`btn ${viewMode === 'energy_calendar' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.6rem 1.2rem',
+                                    background: viewMode === 'energy_calendar' ? 'white' : 'transparent',
+                                    color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b',
+                                    boxShadow: viewMode === 'energy_calendar' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+                                    fontWeight: viewMode === 'energy_calendar' ? '700' : '500'
+                                }}
+                            >
+                                <CreditCard size={18} /> Calendário de Energia
                             </button>
                             {showTooltip && (
+
                                 <div style={{
                                     position: 'absolute',
                                     top: '130%',
@@ -1041,6 +1116,20 @@ export default function ConsumerUnitList() {
                                 ) : null}
                             </DragOverlay>
                         </DndContext>
+                    ) : viewMode === 'energy_calendar' ? (
+                        <div style={{ background: '#fff1f2', borderRadius: '16px', border: '1px solid #fecaca', minHeight: '600px' }}>
+                            <EnergyCalendarView
+                                units={units}
+                                invoices={invoicesForMonth}
+                                monthFilter={monthFilter}
+                                searchTerm={searchTerm}
+                                onInvoiceClick={(invoice, uc) => {
+                                    setSelectedInvoice(invoice);
+                                    setSelectedUcForInvoice(uc);
+                                    setIsInvoiceSummaryOpen(true);
+                                }}
+                            />
+                        </div>
                     ) : (
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
                             <CalendarView
@@ -1055,6 +1144,16 @@ export default function ConsumerUnitList() {
                     )}
                 </div>
             )}
+
+            {isInvoiceSummaryOpen && (
+                <InvoiceSummaryModal
+                    invoice={selectedInvoice}
+                    consumerUnit={selectedUcForInvoice}
+                    onClose={() => setIsInvoiceSummaryOpen(false)}
+                    onPaymentSuccess={() => fetchUnits()}
+                />
+            )}
+
 
             {isModalOpen && (
                 <ConsumerUnitModal
