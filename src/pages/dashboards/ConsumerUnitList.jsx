@@ -265,14 +265,14 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                             borderRadius: '8px',
                                             background: uc.displayStatus === 'success' ? '#f0fdf4' : 
                                                         uc.displayStatus === 'processing' ? '#eff6ff' :
-                                                        uc.displayStatus === 'not_available' ? '#fefce8' : 
-                                                        uc.displayStatus === 'pending' ? '#f8fafc' :
+                                                        uc.displayStatus === 'not_available' ? '#f8fafc' : 
+                                                        uc.displayStatus === 'pending' ? '#fff7ed' :
                                                         uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                             borderLeft: `5px solid ${
                                                 uc.displayStatus === 'success' ? '#22c55e' : 
                                                 uc.displayStatus === 'processing' ? '#3b82f6' :
-                                                uc.displayStatus === 'not_available' ? '#eab308' : 
-                                                uc.displayStatus === 'pending' ? '#94a3b8' :
+                                                uc.displayStatus === 'not_available' ? '#cbd5e1' : 
+                                                uc.displayStatus === 'pending' ? '#f97316' :
                                                 uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                             }`,
                                             cursor: 'pointer',
@@ -305,8 +305,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                                     height: '8px', 
                                                     borderRadius: '50%', 
                                                     background: uc.displayStatus === 'success' ? '#22c55e' : 
-                                                                uc.displayStatus === 'not_available' ? '#eab308' : 
-                                                                uc.displayStatus === 'pending' ? '#94a3b8' :
+                                                                uc.displayStatus === 'not_available' ? '#94a3b8' : 
+                                                                uc.displayStatus === 'pending' ? '#f97316' :
                                                                 uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                                 }}></div>
                                             )}
@@ -839,11 +839,11 @@ export default function ConsumerUnitList() {
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#eab308', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#94a3b8', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#fefce8', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
                                         Mês: {stats.month.not_available} | Previstas no Ano: {stats.year.not_available}
                                     </span>
                                 </div>
@@ -851,15 +851,15 @@ export default function ConsumerUnitList() {
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#94a3b8', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#f97316', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                    <span style={{ fontSize: '0.65rem', background: '#fff7ed', color: '#c2410c', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
                                         Mês: {stats.month.pending} | Ausentes no Ano: {stats.year.pending}
                                     </span>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando leitura ou liberação</span>
+                                <span style={{ fontSize: '0.7rem', color: '#f97316', fontWeight: '700' }}>Ação Necessária: Aguardando leitura</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
