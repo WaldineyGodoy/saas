@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 
@@ -368,6 +368,8 @@ export default function InvoiceListManager() {
                                             'a_vencer': { color: '#3b82f6', label: 'A Vencer', bg: '#eff6ff' }
                                         };
                                         const s = statusData[inv.status] || { color: '#64748b', label: inv.status, bg: '#f1f5f9' };
+                                        const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
 
                                         return (
                                             <div
@@ -393,8 +395,8 @@ export default function InvoiceListManager() {
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <span style={{ fontSize: '0.7rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</span>
-                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: status.bg, color: status.color }}>
-                                                        {status.label}
+                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: s.bg, color: s.color }}>
+                                                        {s.label}
                                                     </span>
                                                 </div>
                                                 <div style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', marginTop: '0.2rem', textAlign: 'right' }}>
