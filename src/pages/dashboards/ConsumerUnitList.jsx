@@ -220,9 +220,11 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             display: 'grid',
             gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
             gap: '1rem',
-            padding: '1rem'
+            padding: '1rem',
+            maxWidth: '1600px',
+            margin: '0 auto'
         }}>
-            {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+            {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
                 <div key={d} style={{ 
                     fontWeight: '800', 
                     textAlign: 'center', 
@@ -263,7 +265,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                             borderTopRightRadius: 'var(--radius-md)'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.95rem' }}>Leitura Dia {day}</span>
+                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Leit. {day}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                                 {[
@@ -591,7 +593,7 @@ export default function ConsumerUnitList() {
     const stats = getStats();
 
     return (
-        <div style={{ padding: '1.5rem' }}>
+        <div style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
                 <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em' }}>
                     Gestão de Unidades Consumidoras

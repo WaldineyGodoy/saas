@@ -230,7 +230,7 @@ export default function InvoiceListManager() {
                 gap: '1rem', 
                 padding: '1rem' 
             }}>
-                {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
                     <div key={d} style={{ 
                         fontWeight: '800', 
                         textAlign: 'center', 
@@ -454,7 +454,7 @@ export default function InvoiceListManager() {
                     gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
                     gap: '1rem' 
                 }}>
-                    {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+                    {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
                         <div key={d} style={{ 
                             fontWeight: '800', 
                             textAlign: 'center', 
@@ -502,8 +502,15 @@ export default function InvoiceListManager() {
                                 justifyContent: 'space-between', 
                                 alignItems: 'center' 
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                    <span style={{ fontWeight: '800', color: headerTextColor, fontSize: '0.85rem' }}>Vencimento {day}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', minWidth: 0 }}>
+                                    <span style={{ 
+                                        fontWeight: '800', 
+                                        color: headerTextColor, 
+                                        fontSize: '0.75rem',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        Venc. {day}
+                                    </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                                     {[
@@ -586,7 +593,7 @@ export default function InvoiceListManager() {
 
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <div>
                     <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold' }}>Faturas</h2>
