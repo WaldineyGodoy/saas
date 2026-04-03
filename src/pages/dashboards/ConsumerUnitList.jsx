@@ -192,6 +192,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
 
             if (isFuture) {
                 status = 'not_available';
+            } else if (unit.last_scraping_status === 'success') {
+                status = 'success';
             } else if (unit.last_scraping_status === 'error') {
                 status = 'error';
             } else {
@@ -572,6 +574,8 @@ export default function ConsumerUnitList() {
 
                 if (isFuture) {
                     monthStatus = 'not_available';
+                } else if (unit.last_scraping_status === 'success') {
+                    monthStatus = 'success';
                 } else if (unit.last_scraping_status === 'error') {
                     monthStatus = 'error';
                 } else {
