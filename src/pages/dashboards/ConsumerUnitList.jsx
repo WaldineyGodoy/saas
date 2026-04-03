@@ -172,20 +172,22 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         // Determinar Status da Leitura para o mês selecionado
         const monthRef = `${monthFilter}-01`;
         const hasInvoice = invoices.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
-        let status = 'pending';
-        
         if (hasInvoice) {
             status = 'success';
         } else if (unit.last_scraping_status === 'processing') {
             status = 'processing';
-        } else if (isCurrentMonth) {
-            if (day > currentDayNum) {
-                status = 'not_available'; // Futuro no ciclo atual
+        } else {
+            const isFuture = (filterYear > currentYearNum) || 
+                           (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
+                           (isCurrentMonth && day > currentDayNum);
+
+            if (isFuture) {
+                status = 'not_available';
+            } else if (unit.last_scraping_status === 'error') {
+                status = 'error';
             } else {
-                status = 'error'; // Passou da data e não tem fatura
+                status = 'pending';
             }
-        } else if (isPastMonth) {
-            status = 'not_available'; // Passado sem fatura
         }
 
         // Aplicar Filtro de Status de Leitura se selecionado
@@ -264,11 +266,13 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                             background: uc.displayStatus === 'success' ? '#f0fdf4' : 
                                                         uc.displayStatus === 'processing' ? '#eff6ff' :
                                                         uc.displayStatus === 'not_available' ? '#fefce8' : 
+                                                        uc.displayStatus === 'pending' ? '#f8fafc' :
                                                         uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                             borderLeft: `5px solid ${
                                                 uc.displayStatus === 'success' ? '#22c55e' : 
                                                 uc.displayStatus === 'processing' ? '#3b82f6' :
                                                 uc.displayStatus === 'not_available' ? '#eab308' : 
+                                                uc.displayStatus === 'pending' ? '#94a3b8' :
                                                 uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                             }`,
                                             cursor: 'pointer',
@@ -302,6 +306,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                                     borderRadius: '50%', 
                                                     background: uc.displayStatus === 'success' ? '#22c55e' : 
                                                                 uc.displayStatus === 'not_available' ? '#eab308' : 
+                                                                uc.displayStatus === 'pending' ? '#94a3b8' :
                                                                 uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                                 }}></div>
                                             )}
@@ -490,8 +495,8 @@ export default function ConsumerUnitList() {
         const isCurrentMonthSelected = filterYear === currentYearNum && filterMonth === currentMonthNum;
         
         const stats = {
-            month: { success: 0, error: 0, not_available: 0, processing: 0 },
-            year: { success: 0, error: 0, not_available: 0 }
+            month: { success: 0, error: 0, not_available: 0, processing: 0, pending: 0 },
+            year: { success: 0, error: 0, not_available: 0, pending: 0 }
         };
 
         const activeUnits = units.filter(u => u.status === 'ativo');
@@ -516,11 +521,18 @@ export default function ConsumerUnitList() {
 
             if (hasMonthInvoice) monthStatus = 'success';
             else if (unit.last_scraping_status === 'processing' && isCurrentMonthSelected) monthStatus = 'processing';
-            else if (isCurrentMonthSelected) {
-                if (day > currentDayNum) monthStatus = 'not_available';
-                else monthStatus = 'error';
-            } else if (filterYear < currentYearNum || (filterYear === currentYearNum && filterMonth < currentMonthNum)) {
-                monthStatus = 'not_available';
+            else {
+                const isFuture = (filterYear > currentYearNum) || 
+                               (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
+                               (isCurrentMonthSelected && day > currentDayNum);
+
+                if (isFuture) {
+                    monthStatus = 'not_available';
+                } else if (unit.last_scraping_status === 'error') {
+                    monthStatus = 'error';
+                } else {
+                    monthStatus = 'pending';
+                }
             }
             if (stats.month[monthStatus] !== undefined) stats.month[monthStatus]++;
 
@@ -540,13 +552,15 @@ export default function ConsumerUnitList() {
                     stats.year.success++;
                 } else {
                     const isMCurrent = filterYear === currentYearNum && m === currentMonthNum;
-                    const isMPast = filterYear < currentYearNum || (filterYear === currentYearNum && m < currentMonthNum);
+                    const isMFuture = (filterYear > currentYearNum) || (filterYear === currentYearNum && m > currentMonthNum);
+                    const isFutureReading = isMFuture || (isMCurrent && day > currentDayNum);
                     
-                    if (isMCurrent) {
-                        if (day <= currentDayNum) stats.year.error++;
-                        else stats.year.not_available++;
-                    } else if (isMPast) {
-                        stats.year.error++; // Leitura perdida em mês passado
+                    if (isFutureReading) {
+                        stats.year.not_available++;
+                    } else if (unit.last_scraping_status === 'error') {
+                        stats.year.error++; 
+                    } else {
+                        stats.year.pending++;
                     }
                 }
             }
@@ -686,6 +700,7 @@ export default function ConsumerUnitList() {
                                 <option value="">Todos os Status</option>
                                 <option value="success">Sucesso</option>
                                 <option value="not_available">Não Disponível</option>
+                                <option value="pending">Pendente</option>
                                 <option value="error">Erro / Atenção</option>
                                 <option value="processing">Processando</option>
                             </select>
@@ -832,7 +847,19 @@ export default function ConsumerUnitList() {
                                         Mês: {stats.month.not_available} | Previstas no Ano: {stats.year.not_available}
                                     </span>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Ainda não liberada ou ciclo futuro</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Datas futuras ou ciclo não iniciado</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#94a3b8', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                        Mês: {stats.month.pending} | Ausentes no Ano: {stats.year.pending}
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando leitura ou liberação</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -841,22 +868,22 @@ export default function ConsumerUnitList() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
                                     <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.error} | Faturas Ausentes no Ano: {stats.year.error}
+                                        Mês: {stats.month.error} | Falhas no Ano: {stats.year.error}
                                     </span>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou leitura atrasada</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou erro técnico</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#cbd5e1', border: '1px solid rgba(0,0,0,0.05)' }}></div>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#3b82f6', border: '1px solid rgba(0,0,0,0.05)' }}></div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Processando</span>
+                                    <span style={{ fontSize: '0.65rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
                                         Mês: {stats.month.processing}
                                     </span>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Aguardando processamento</span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Extração em curso pelo agente</span>
                             </div>
                         </div>
                     </div>
