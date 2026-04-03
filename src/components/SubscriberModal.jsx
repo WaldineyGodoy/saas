@@ -39,6 +39,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [activeTab, setActiveTab] = useState('dados'); // 'dados' | 'endereco' | 'ucs' | 'faturas'
+    const [totalUnpaidGlobal, setTotalUnpaidGlobal] = useState(0);
+    const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
 
@@ -166,8 +168,20 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const { data, error } = await query.order('vencimento', { ascending: false });
             if (error) throw error;
-            // Ocultar faturas canceladas conforme solicitado
             setInvoices(data || []);
+
+            // Calcular o total global devedor (independente de filtro)
+            const { data: unpaidSum, error: sumError } = await supabase
+                .from('invoices')
+                .select('valor_a_pagar')
+                .in('uc_id', ucIds)
+                .not('status', 'eq', 'pago')
+                .not('status', 'eq', 'cancelado');
+
+            if (!sumError && unpaidSum) {
+                const total = unpaidSum.reduce((acc, inv) => acc + (inv.valor_a_pagar || 0), 0);
+                setTotalUnpaidGlobal(total);
+            }
         } catch (error) {
             console.error('Error fetching invoices:', error);
         } finally {
@@ -1105,69 +1119,73 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         {activeTab === 'faturas' && (
                             <div style={{ paddingBottom: '1rem' }}>
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Faturamento</span>
-                                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleBillingModeChange('consolidada')}
-                                                style={{
-                                                    padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
-                                                    background: billingMode === 'consolidada' ? 'white' : 'transparent',
-                                                    color: billingMode === 'consolidada' ? 'var(--color-blue)' : '#64748b',
-                                                    boxShadow: billingMode === 'consolidada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    border: 'none', cursor: 'pointer'
-                                                }}
-                                            >Consolidada</button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleBillingModeChange('individualizada')}
-                                                style={{
-                                                    padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
-                                                    background: billingMode === 'individualizada' ? 'white' : 'transparent',
-                                                    color: billingMode === 'individualizada' ? 'var(--color-blue)' : '#64748b',
-                                                    boxShadow: billingMode === 'individualizada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    border: 'none', cursor: 'pointer'
-                                                }}
-                                            >Individualizada</button>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Faturamento</span>
+                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleBillingModeChange('consolidada')}
+                                                    style={{
+                                                        padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
+                                                        background: billingMode === 'consolidada' ? 'white' : 'transparent',
+                                                        color: billingMode === 'consolidada' ? 'var(--color-blue)' : '#64748b',
+                                                        boxShadow: billingMode === 'consolidada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                        border: 'none', cursor: 'pointer'
+                                                    }}
+                                                >Consolidada</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleBillingModeChange('individualizada')}
+                                                    style={{
+                                                        padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.2s',
+                                                        background: billingMode === 'individualizada' ? 'white' : 'transparent',
+                                                        color: billingMode === 'individualizada' ? 'var(--color-blue)' : '#64748b',
+                                                        boxShadow: billingMode === 'individualizada' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                        border: 'none', cursor: 'pointer'
+                                                    }}
+                                                >Individualizada</button>
+                                            </div>
                                         </div>
+
+                                        {billingMode === 'consolidada' && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DIA VENC.:</span>
+                                                <select
+                                                    value={consolidatedDueDay}
+                                                    onChange={(e) => setConsolidatedDueDay(e.target.value)}
+                                                    style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                                >
+                                                    {[1, 5, 10, 15, 20, 25, 30].map(d => <option key={d} value={d}>{d}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {billingMode === 'consolidada' && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DIA VENC.:</span>
-                                            <select
-                                                value={consolidatedDueDay}
-                                                onChange={(e) => setConsolidatedDueDay(e.target.value)}
-                                                style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                            >
-                                                {[1, 5, 10, 15, 20, 25, 30].map(d => <option key={d} value={d}>{d}</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Top Summary & Actions */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    {/* Global Unpaid Total Box */}
                                     <div style={{
+                                        border: '2px solid #ef4444',
+                                        background: '#fef2f2',
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '8px',
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'flex-end',
-                                        background: '#f0fdf4',
-                                        border: '2px solid #22c55e',
-                                        borderRadius: '12px',
-                                        padding: '0.6rem 1.2rem',
-                                        minWidth: '180px'
+                                        minWidth: '150px'
                                     }}>
-                                        <div style={{ color: '#166534', fontWeight: 'bold', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.2rem' }}>
-                                            TOTAL A PAGAR
-                                        </div>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1e293b' }}>
-                                            {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                        </div>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#b91c1c' }}>Total a pagar R$</span>
+                                        <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>
+                                            {totalUnpaidGlobal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </span>
                                     </div>
+                                </div>
 
+                                {/* Top Summary & Actions */}
+                                {/* Top Summary & Actions */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    
+                                    {/* Botões à esquerda conforme solicitado */}
                                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                         {billingMode === 'consolidada' && (
                                             <div style={{ position: 'relative' }}
@@ -1226,32 +1244,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                                                 {showConsolidationHelp && totalToConsolidate === 0 && (
                                                     <div style={{
-                                                        position: 'absolute',
-                                                        bottom: '100%',
-                                                        left: '50%',
-                                                        transform: 'translateX(-50%)',
-                                                        marginBottom: '10px',
-                                                        width: '240px',
-                                                        background: '#1e293b',
-                                                        color: 'white',
-                                                        padding: '1rem',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.8rem',
-                                                        zIndex: 100,
-                                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
-                                                        pointerEvents: 'none'
+                                                        position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '10px',
+                                                        width: '240px', background: '#1e293b', color: 'white', padding: '1rem', borderRadius: '8px',
+                                                        fontSize: '0.8rem', zIndex: 100, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)', pointerEvents: 'none'
                                                     }}>
                                                         <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#fb923c' }}>Consolidação Indisponível</div>
                                                         Todas as faturas visíveis já possuem boletos emitidos individualmente. Para consolidar, cancele os boletos existentes.
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            top: '100%',
-                                                            left: '50%',
-                                                            transform: 'translateX(-50%)',
-                                                            borderWidth: '6px',
-                                                            borderStyle: 'solid',
-                                                            borderColor: '#1e293b transparent transparent transparent'
-                                                        }}></div>
+                                                        <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', borderWidth: '6px', borderStyle: 'solid', borderColor: '#1e293b transparent transparent transparent' }}></div>
                                                     </div>
                                                 )}
                                             </div>
@@ -1279,7 +1278,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             </button>
                                             {showMonthPicker && (
                                                 <div style={{
-                                                    position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem',
+                                                    position: 'absolute', top: '100%', left: 0, marginTop: '0.5rem',
                                                     background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px',
                                                     boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
                                                     padding: '1.2rem', zIndex: 100, width: '280px'
@@ -1320,13 +1319,29 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                             onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
                                                             onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
                                                         >Todas as Datas</button>
-                                                        <button
-                                                            onClick={() => setShowMonthPicker(false)}
-                                                            style={{ padding: '0.6rem 1rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
-                                                        >OK</button>
+                                                        <button onClick={() => setShowMonthPicker(false)} style={{ padding: '0.6rem 1rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>OK</button>
                                                     </div>
                                                 </div>
                                             )}
+                                        </div>
+                                    </div>
+
+                                    {/* Resumo à direita conforme solicitado */}
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'flex-end',
+                                        background: '#f0fdf4',
+                                        border: '2px solid #22c55e',
+                                        borderRadius: '12px',
+                                        padding: '0.6rem 1.2rem',
+                                        minWidth: '180px'
+                                    }}>
+                                        <div style={{ color: '#166534', fontWeight: 'bold', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.2rem' }}>
+                                            TOTAL A PAGAR NO MÊS
+                                        </div>
+                                        <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1e293b' }}>
+                                            {totalVisibleInvoicesValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                         </div>
                                     </div>
                                 </div>
