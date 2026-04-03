@@ -5,7 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -1063,48 +1063,124 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                                 {consumerUnits.length > 0 ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        {consumerUnits.map(uc => (
-                                            <div key={uc.id} style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>UC: {uc.numero_uc}</span>
-                                                    <span style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>{uc.titular_conta}</span>
-                                                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8' }}>{uc.concessionaria} - {uc.status?.replace('_', ' ').toUpperCase()}</span>
+                                        {consumerUnits.map(uc => {
+                                            // Helper para cor do status da UC
+                                            const getUCStatusColor = (status) => {
+                                                const colors = {
+                                                    'ativo': '#10b981',
+                                                    'aguardando_conexao': '#3b82f6',
+                                                    'em_atraso': '#ef4444',
+                                                    'ativacao': '#f59e0b',
+                                                    'em_ativacao': '#f59e0b',
+                                                    'cancelado': '#94a3b8',
+                                                    'cancelado_inadimplente': '#7f1d1d'
+                                                };
+                                                return colors[status] || '#94a3b8';
+                                            };
+
+                                            // Helper para status da leitura
+                                            const getReadingStatus = (status) => {
+                                                switch (status) {
+                                                    case 'success': return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
+                                                    case 'error': return { icon: <AlertCircle size={14} />, color: '#ef4444', label: 'Erro' };
+                                                    case 'processing': return { icon: <RefreshCw size={14} className="spin" />, color: '#3b82f6', label: 'Processando' };
+                                                    default: return { icon: <Clock size={14} />, color: '#94a3b8', label: 'Pendente' };
+                                                }
+                                            };
+
+                                            const readingStatus = getReadingStatus(uc.last_scraping_status);
+
+                                            return (
+                                                <div key={uc.id} style={{ 
+                                                    background: '#ffffff', 
+                                                    padding: '1rem', 
+                                                    borderRadius: '12px', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                    display: 'flex', 
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    position: 'relative'
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: '0.2rem' }}>
+                                                                UC: {uc.numero_uc}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+                                                                {uc.titular_conta}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ 
+                                                            fontSize: '0.65rem', 
+                                                            fontWeight: 900, 
+                                                            color: getUCStatusColor(uc.status),
+                                                            background: `${getUCStatusColor(uc.status)}10`,
+                                                            padding: '0.2rem 0.6rem',
+                                                            borderRadius: '4px',
+                                                            textTransform: 'uppercase',
+                                                            border: `1px solid ${getUCStatusColor(uc.status)}30`
+                                                        }}>
+                                                            {uc.status?.replace('_', ' ')}
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderTop: '1px solid #f1f5f9' }}>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
+                                                            {uc.concessionaria}
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: readingStatus.color }}>
+                                                                {readingStatus.icon}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+                                                                Dia de Leitura: <span style={{ color: 'var(--color-blue)' }}>{uc.dia_leitura || '--'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setPreviewUC(uc);
+                                                                setShowPreviewModal(true);
+                                                            }}
+                                                            style={{ padding: '0.5rem', color: '#94a3b8', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.color = 'var(--color-blue)'}
+                                                            onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                                                            title="Ver Detalhes"
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingUC(uc);
+                                                                setUcModalMode('technical');
+                                                                setShowUcModal(true);
+                                                            }}
+                                                            style={{ padding: '0.5rem', color: '#f59e0b', background: '#fffbeb', borderRadius: '6px', border: '1px solid #fde68a', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = '#fffbeb'}
+                                                            title="Dados Técnicos e Comerciais"
+                                                        >
+                                                            <DollarSign size={16} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleUnlinkUC(uc.id)}
+                                                            style={{ padding: '0.5rem', color: '#ef4444', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fee2e2', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = '#fef2f2'}
+                                                            title="Excluir UC"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setPreviewUC(uc);
-                                                            setShowPreviewModal(true);
-                                                        }}
-                                                        style={{ padding: '0.4rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                        title="Ver Detalhes"
-                                                    >
-                                                        <Eye size={16} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setEditingUC(uc);
-                                                            setUcModalMode('technical');
-                                                            setShowUcModal(true);
-                                                        }}
-                                                        style={{ padding: '0.4rem', color: '#f59e0b', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                        title="Dados Técnicos e Comerciais"
-                                                    >
-                                                        <DollarSign size={16} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleUnlinkUC(uc.id)}
-                                                        style={{ padding: '0.4rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                        title="Desvincular UC"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem', border: '2px dashed #e2e8f0', borderRadius: '8px' }}>
