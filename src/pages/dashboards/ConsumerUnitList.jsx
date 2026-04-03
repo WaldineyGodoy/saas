@@ -252,9 +252,38 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                     </svg>
                                 )}
                             </div>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b', background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
-                                {dayUnits.length}
-                            </span>
+                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                {[
+                                    { key: 'success', bg: '#dcfce7', color: '#166534' },
+                                    { key: 'pending', bg: '#fff7ed', color: '#c2410c' },
+                                    { key: 'error', bg: '#fee2e2', color: '#991b1b' },
+                                    { key: 'processing', bg: '#eff6ff', color: '#1d4ed8' },
+                                    { key: 'not_available', bg: '#f1f5f9', color: '#475569' }
+                                ].map(status => {
+                                    const count = dayUnits.filter(u => u.displayStatus === status.key).length;
+                                    if (count === 0) return null;
+                                    return (
+                                        <span key={status.key} style={{ 
+                                            fontSize: '0.7rem', 
+                                            color: status.color, 
+                                            background: status.bg, 
+                                            padding: '0.15rem 0.4rem', 
+                                            borderRadius: '6px', 
+                                            fontWeight: '800',
+                                            minWidth: '1.2rem',
+                                            textAlign: 'center',
+                                            border: `1px solid ${status.color}20`
+                                        }}>
+                                            {count}
+                                        </span>
+                                    );
+                                })}
+                                {dayUnits.length > 0 && (
+                                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '0.2rem', fontWeight: '500' }}>
+                                        Total: {dayUnits.length}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
                             {dayUnits.length === 0 ? (
