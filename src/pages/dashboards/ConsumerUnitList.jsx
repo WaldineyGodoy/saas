@@ -170,6 +170,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const day = unit.dia_leitura || 0;
         
         // Determinar Status da Leitura para o mês selecionado
+        const monthRef = `${monthFilter}-01`;
         const hasInvoice = invoices.some(inv => 
             inv.uc_id === unit.id && 
             inv.mes_referencia === monthRef && 
