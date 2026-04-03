@@ -3,8 +3,10 @@ import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, Calendar, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
+import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
+
 
 export default function InvoiceListManager() {
     const { showAlert, showConfirm } = useUI();
@@ -22,6 +24,11 @@ export default function InvoiceListManager() {
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
     const [payingId, setPayingId] = useState(null);
+
+    // Estados para o Resumo Financeiro
+    const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
+    const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+
 
     const filteredInvoices = invoices.filter(inv => {
         if (statusFilter && inv.status !== statusFilter) return false;
@@ -197,7 +204,7 @@ export default function InvoiceListManager() {
         );
     };
 
-    const CalendarView = ({ invoices, onEdit }) => {
+    const InvoiceCalendarView = ({ invoices, onEdit }) => {
         const days = Array.from({ length: 31 }, (_, i) => i + 1);
         const groupedInvoices = invoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
@@ -321,6 +328,91 @@ export default function InvoiceListManager() {
         );
     };
 
+    const EnergyCalendarView = ({ invoices, onInvoiceClick }) => {
+        const days = Array.from({ length: 31 }, (_, i) => i + 1);
+        const groupedInvoices = invoices.reduce((acc, inv) => {
+            if (inv.vencimento && inv.status !== 'cancelado') {
+                const date = new Date(inv.vencimento + 'T12:00:00');
+                const day = date.getUTCDate();
+                if (!acc[day]) acc[day] = [];
+                acc[day].push(inv);
+            }
+            return acc;
+        }, {});
+
+        return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '1.5rem', padding: '1rem' }}>
+                {days.map(day => {
+                    const dayInvoices = groupedInvoices[day] || [];
+                    
+                    return (
+                        <div key={day} style={{ background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '260px', height: '260px', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)', transition: 'all 0.2s', overflow: 'hidden' }}>
+                            <div style={{ padding: '0.75rem 0.75rem', borderBottom: '1px solid #fecaca', background: '#fff1f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    <span style={{ fontWeight: '800', color: '#b91c1c', fontSize: '0.85rem' }}>Vencimento {day}</span>
+                                </div>
+                                {dayInvoices.length > 0 && (
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>
+                                        {dayInvoices.length} faturas
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+                                {dayInvoices.length === 0 ? (
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem vencimentos</div>
+                                ) : (
+                                    dayInvoices.map(inv => {
+                                        const statusData = {
+                                            'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
+                                            'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
+                                            'a_vencer': { color: '#3b82f6', label: 'A Vencer', bg: '#eff6ff' }
+                                        };
+                                        const s = statusData[inv.status] || { color: '#64748b', label: inv.status, bg: '#f1f5f9' };
+
+                                        return (
+                                            <div
+                                                key={inv.id}
+                                                onClick={() => onInvoiceClick(inv)}
+                                                style={{
+                                                    padding: '0.75rem',
+                                                    borderRadius: '10px',
+                                                    background: 'white',
+                                                    border: '1px solid #e2e8f0',
+                                                    cursor: 'pointer', 
+                                                    transition: 'all 0.2s',
+                                                    display: 'flex', 
+                                                    flexDirection: 'column', 
+                                                    gap: '0.4rem', 
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseOver={e => e.currentTarget.style.borderColor = '#3b82f6'}
+                                                onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                            >
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
+                                                    {inv.consumer_units?.subscribers?.name || 'S/ Assinante'}
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</span>
+                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: status.bg, color: status.color }}>
+                                                        {status.label}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', marginTop: '0.2rem', textAlign: 'right' }}>
+                                                    {formatCurrency(inv.valor_a_pagar)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+
     return (
         <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -391,13 +483,17 @@ export default function InvoiceListManager() {
                     </button>
                     <div style={{ position: 'relative' }}>
                         <button onClick={() => setViewMode('calendar')} onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)} className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500' }}>
-                            <CalendarIcon size={18} /> Calendário
+                            <CalendarIcon size={18} /> Calendário de Faturas
+                        </button>
+                        <button onClick={() => setViewMode('energy_calendar')} className={`btn ${viewMode === 'energy_calendar' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500' }}>
+                            <CreditCard size={18} /> Calendário de Energia
                         </button>
                         {showTooltip && (
-                            <div style={{ position: 'absolute', top: '130%', right: 0, background: '#1e293b', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem', zIndex: 1000, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.6rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Info size={16} style={{ color: '#3b82f6' }} /> Calendário agrupa as faturas por dia de vencimento.
+                            <div style={{ position: 'absolute', top: '130%', right: '50%', background: '#1e293b', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem', zIndex: 1000, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.6rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <Info size={16} style={{ color: '#3b82f6' }} /> Calendário de faturas operacionais.
                             </div>
                         )}
+
                     </div>
                 </div>
             </div>
@@ -562,9 +658,19 @@ export default function InvoiceListManager() {
                                 );
                             })}
                         </div>
-                    ) : (
+                    ) : viewMode === 'calendar' ? (
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                            <CalendarView invoices={filteredInvoices} onEdit={handleEdit} />
+                            <InvoiceCalendarView invoices={filteredInvoices} onEdit={handleEdit} />
+                        </div>
+                    ) : (
+                        <div style={{ background: '#fff1f2', borderRadius: '16px', border: '1px solid #fecaca' }}>
+                            <EnergyCalendarView 
+                                invoices={filteredInvoices} 
+                                onInvoiceClick={(inv) => {
+                                    setSelectedInvoiceForSummary(inv);
+                                    setIsSummaryModalOpen(true);
+                                }} 
+                            />
                         </div>
                     )}
                 </>
@@ -572,6 +678,15 @@ export default function InvoiceListManager() {
 
             {isModalOpen && <InvoiceFormModal invoice={selectedInvoice} ucs={ucs} onClose={() => setIsModalOpen(false)} onSave={handleSave} />}
             {isHistoryModalOpen && <InvoiceHistoryModal onClose={() => setIsHistoryModalOpen(false)} />}
+            {isSummaryModalOpen && (
+                <InvoiceSummaryModal 
+                    invoice={selectedInvoiceForSummary} 
+                    consumerUnit={selectedInvoiceForSummary?.consumer_units} 
+                    onClose={() => setIsSummaryModalOpen(false)} 
+                    onPaymentSuccess={fetchInvoices}
+                />
+            )}
+
         </div>
     );
 }

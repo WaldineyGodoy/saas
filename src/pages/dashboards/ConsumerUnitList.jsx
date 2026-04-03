@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar as CalendarIcon, List, Layout, Info, Download, CreditCard } from 'lucide-react';
-
-import { useBranding } from '../../contexts/BrandingContext';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import ScraperTriggerModal from '../../components/ScraperTriggerModal';
-import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
+
 
 
 import {
@@ -302,112 +299,11 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     );
 }
 
-function EnergyCalendarView({ units, invoices, monthFilter, searchTerm, onInvoiceClick }) {
-    const days = Array.from({ length: 31 }, (_, i) => i + 1);
-    const monthRef = `${monthFilter}-01`;
-
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
-    };
-
-    const statusMap = {
-        pago: { label: 'Pago', color: '#22c55e', bg: '#dcfce7' },
-        a_vencer: { label: 'A Vencer', color: '#3b82f6', bg: '#eff6ff' },
-        atrasado: { label: 'Atrasado', color: '#ef4444', bg: '#fee2e2' },
-        cancelado: { label: 'Cancelado', color: '#64748b', bg: '#f1f5f9' }
-    };
-
-    const daysWithInvoices = days.reduce((acc, day) => {
-        const dayInvoices = invoices.filter(inv => {
-            if (inv.mes_referencia !== monthRef) return false;
-            if (!inv.vencimento) return false;
-            const dueDay = new Date(inv.vencimento + 'T12:00:00').getUTCDate();
-            if (dueDay !== day) return false;
-
-            if (searchTerm) {
-                const lower = searchTerm.toLowerCase();
-                const uc = units.find(u => u.id === inv.uc_id);
-                return (
-                    uc?.numero_uc?.toLowerCase().includes(lower) ||
-                    uc?.subscriber?.name?.toLowerCase().includes(lower) ||
-                    uc?.concessionaria?.toLowerCase().includes(lower)
-                );
-            }
-            return true;
-        });
-
-        if (dayInvoices.length > 0) {
-            acc[day] = dayInvoices;
-        }
-        return acc;
-    }, {});
-
-    return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: '1.5rem',
-            padding: '1rem'
-        }}>
-            {days.map(day => {
-                const dayInvoices = daysWithInvoices[day] || [];
-                return (
-                    <div key={day} style={{
-                        background: 'white', borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--color-border)', minHeight: '180px',
-                        display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-sm)'
-                    }}>
-                        <div style={{
-                            padding: '0.6rem 1rem', borderBottom: '1px solid var(--color-border)',
-                            background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            borderTopLeftRadius: 'var(--radius-md)', borderTopRightRadius: 'var(--radius-md)'
-                        }}>
-                            <span style={{ fontWeight: 800, color: '#b91c1c', fontSize: '0.95rem' }}>Vencimento {day}</span>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>{dayInvoices.length} faturas</span>
-                        </div>
-                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '300px' }}>
-                            {dayInvoices.length === 0 ? (
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem vencimentos</div>
-                            ) : (
-                                dayInvoices.map(inv => {
-                                    const uc = units.find(u => u.id === inv.uc_id);
-                                    const status = statusMap[inv.status] || { label: inv.status, color: '#64748b', bg: '#f1f5f9' };
-                                    return (
-                                        <div key={inv.id} onClick={() => onInvoiceClick(inv, uc)} style={{
-                                            padding: '0.75rem', borderRadius: '10px', background: 'white',
-                                            border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s',
-                                            display: 'flex', flexDirection: 'column', gap: '0.4rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                        }} onMouseOver={e => e.currentTarget.style.borderColor = '#3b82f6'}>
-                                            <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
-                                                {uc?.subscriber?.name || 'S/ Assinante'}
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>UC: {uc?.numero_uc}</span>
-                                                <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: status.bg, color: status.color }}>
-                                                    {status.label}
-                                                </span>
-                                            </div>
-                                            <div style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', marginTop: '0.2rem', textAlign: 'right' }}>
-                                                {formatCurrency(inv.valor_a_pagar)}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
 export default function ConsumerUnitList() {
-    const { branding } = useBranding();
     const [units, setUnits] = useState([]);
-
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+
     const [viewMode, setViewMode] = useState('kanban');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState(null);
@@ -420,11 +316,7 @@ export default function ConsumerUnitList() {
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [readingStatusFilter, setReadingStatusFilter] = useState('');
     const [invoicesForMonth, setInvoicesForMonth] = useState([]);
-    
-    // Estados do Calendário de Energia
-    const [selectedInvoice, setSelectedInvoice] = useState(null);
-    const [selectedUcForInvoice, setSelectedUcForInvoice] = useState(null);
-    const [isInvoiceSummaryOpen, setIsInvoiceSummaryOpen] = useState(false);
+
 
 
     const sensors = useSensors(
@@ -467,25 +359,19 @@ export default function ConsumerUnitList() {
             if (unitsError) throw unitsError;
             setUnits(unitsData || []);
 
-            // 2. Buscar Faturas do Ano Selecionado (com todos os campos financeiros)
+            // 2. Buscar Faturas do Ano Selecionado
             const [year] = monthFilter.split('-');
             const yearStart = `${year}-01-01`;
             const yearEnd = `${year}-12-31`;
             
             const { data: invData, error: invError } = await supabase
                 .from('invoices')
-                .select(`
-                    id, uc_id, status, mes_referencia, valor_a_pagar, vencimento, 
-                    concessionaria_pdf_url, linha_digitavel, asaas_payment_id, asaas_boleto_url,
-                    consumo_kwh, consumo_compensado, iluminacao_publica, tarifa_minima, 
-                    outros_lancamentos, consumo_reais, economia_reais
-                `)
+                .select('uc_id, status, mes_referencia')
                 .gte('mes_referencia', yearStart)
                 .lte('mes_referencia', yearEnd);
             
             if (invError) throw invError;
             setInvoicesForMonth(invData || []);
-
 
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -866,28 +752,8 @@ export default function ConsumerUnitList() {
                                 onMouseLeave={() => setShowTooltip(false)}
                             >
                                 <CalendarIcon size={18} /> Calendário de Leituras
-
-                            </button>
-                            <button
-                                onClick={() => setViewMode('energy_calendar')}
-                                className={`btn ${viewMode === 'energy_calendar' ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.6rem 1.2rem',
-                                    background: viewMode === 'energy_calendar' ? 'white' : 'transparent',
-                                    color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b',
-                                    boxShadow: viewMode === 'energy_calendar' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
-                                    fontWeight: viewMode === 'energy_calendar' ? '700' : '500'
-                                }}
-                            >
-                                <CreditCard size={18} /> Calendário de Energia
                             </button>
                             {showTooltip && (
-
                                 <div style={{
                                     position: 'absolute',
                                     top: '130%',
@@ -1116,20 +982,6 @@ export default function ConsumerUnitList() {
                                 ) : null}
                             </DragOverlay>
                         </DndContext>
-                    ) : viewMode === 'energy_calendar' ? (
-                        <div style={{ background: '#fff1f2', borderRadius: '16px', border: '1px solid #fecaca', minHeight: '600px' }}>
-                            <EnergyCalendarView
-                                units={units}
-                                invoices={invoicesForMonth}
-                                monthFilter={monthFilter}
-                                searchTerm={searchTerm}
-                                onInvoiceClick={(invoice, uc) => {
-                                    setSelectedInvoice(invoice);
-                                    setSelectedUcForInvoice(uc);
-                                    setIsInvoiceSummaryOpen(true);
-                                }}
-                            />
-                        </div>
                     ) : (
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
                             <CalendarView
@@ -1144,16 +996,6 @@ export default function ConsumerUnitList() {
                     )}
                 </div>
             )}
-
-            {isInvoiceSummaryOpen && (
-                <InvoiceSummaryModal
-                    invoice={selectedInvoice}
-                    consumerUnit={selectedUcForInvoice}
-                    onClose={() => setIsInvoiceSummaryOpen(false)}
-                    onPaymentSuccess={() => fetchUnits()}
-                />
-            )}
-
 
             {isModalOpen && (
                 <ConsumerUnitModal
