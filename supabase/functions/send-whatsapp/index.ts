@@ -21,7 +21,7 @@ serve(async (req) => {
         )
         // END: Service Role usage
 
-        const { text, mediaUrl, phone, instanceName } = await req.json()
+        const { text, mediaUrl, mediaBase64, fileName, phone, instanceName } = await req.json()
 
         if (!text || !phone) {
             throw new Error('Missing required fields: text or phone')
@@ -58,8 +58,14 @@ serve(async (req) => {
         let url = '';
         let body = {};
 
-        if (mediaUrl) {
+        if (mediaUrl || mediaBase64) {
             url = `${baseUrl}/message/sendMedia/${effectiveInstance}`;
+            
+            // Detect if it's a PDF
+            const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
+                          (mediaBase64 && mediaBase64.includes('application/pdf')) ||
+                          (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
+
             body = {
                 number: phone,
                 options: {
@@ -67,9 +73,10 @@ serve(async (req) => {
                     presence: "composing"
                 },
                 mediaMessage: {
-                    mediatype: "image", // simplistic assumption, could contain video
+                    mediatype: isPdf ? "document" : "image",
                     caption: text,
-                    media: mediaUrl
+                    media: mediaBase64 || mediaUrl,
+                    fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png')
                 }
             };
         } else {

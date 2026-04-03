@@ -388,6 +388,29 @@ export default function IntegrationSettings({ serviceName, title, description })
                             />
                             <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Imagem enviada junto com o convite.</p>
                         </div>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Telefone de Teste (WhatsApp)</label>
+                            <input
+                                placeholder="5511999999999"
+                                value={formData.variables.find(v => v.key === 'test_phone')?.value || ''}
+                                onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    setFormData(prev => {
+                                        const exists = prev.variables.some(v => v.key === 'test_phone');
+                                        let newVars;
+                                        if (exists) {
+                                            newVars = prev.variables.map(v => v.key === 'test_phone' ? { ...v, value: val } : v);
+                                        } else {
+                                            newVars = [...prev.variables, { key: 'test_phone', value: val }];
+                                        }
+                                        return { ...prev, variables: newVars };
+                                    });
+                                }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                            />
+                            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Número utilizado para disparos em modo Sandbox.</p>
+                        </div>
                     </>
                 )}
 
@@ -412,7 +435,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         {formData.variables.map((v, index) => {
                             // Hide explicit instance_name from generic list in Evolution API view to avoid redundancy
-                            if (serviceName === 'evolution_api' && (v.key === 'instance_name' || v.key === 'invite_media_url')) return null;
+                            if (serviceName === 'evolution_api' && (v.key === 'instance_name' || v.key === 'invite_media_url' || v.key === 'test_phone')) return null;
 
                             return (
                                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>

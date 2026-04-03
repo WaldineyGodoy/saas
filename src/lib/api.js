@@ -246,13 +246,15 @@ export async function updateAsaasCharge(invoiceId, value, dueDate) {
     }
 }
 
-export const sendWhatsapp = async (phone, text, mediaUrl, instanceName) => {
+export const sendWhatsapp = async (phone, text, mediaUrl = null, mediaBase64 = null, fileName = null, instanceName = null) => {
     try {
         const { data, error } = await supabase.functions.invoke('send-whatsapp', {
             body: {
                 phone: phone ? phone.replace(/\D/g, '') : '',
                 text,
                 mediaUrl,
+                mediaBase64,
+                fileName,
                 instanceName
             }
         });
