@@ -133,7 +133,34 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     useEffect(() => {
         fetchSubscribers();
         fetchUsinas();
-    }, []); // Run once on mount
+    }, []);
+
+    // Assinatura Realtime para a UC específica
+    useEffect(() => {
+        if (!consumerUnit?.id) return;
+
+        const channel = supabase
+            .channel(`uc-edit-${consumerUnit.id}`)
+            .on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'consumer_units',
+                filter: `id=eq.${consumerUnit.id}`
+            }, payload => {
+                console.log('Realtime UC update:', payload);
+                setFormData(prev => ({ 
+                    ...prev, 
+                    last_scraping_status: payload.new.last_scraping_status,
+                    last_scraping_at: payload.new.last_scraping_at,
+                    last_scraping_error: payload.new.last_scraping_error
+                }));
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [consumerUnit?.id]); // Run once on mount
 
     useEffect(() => {
         if (consumerUnit) {

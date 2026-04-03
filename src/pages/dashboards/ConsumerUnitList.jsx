@@ -393,6 +393,20 @@ export default function ConsumerUnitList() {
 
     useEffect(() => {
         fetchUnits();
+
+        const channel = supabase
+            .channel('db-all-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'consumer_units' }, () => {
+                fetchUnits();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+                fetchUnits();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [monthFilter]);
 
     const fetchUnits = async () => {
