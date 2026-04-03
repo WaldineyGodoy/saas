@@ -24,7 +24,9 @@ Módulo para lançamento de faturas mensais e acompanhamento de pagamentos.
 
 | Evento (Trigger) | Ação | Resultado |
 | :--- | :--- | :--- |
-| **Arrastar Card no Kanban** | Update no Banco (Supabase) | Muda o status da UC em tempo real. |
+| **Arrastrar Card no Kanban** | Update no Banco (Supabase) | Muda o status da UC/Assinante em tempo real. |
+| **Alteração de Fatura (Atraso/Pagamento)** | Gatilho `handle_invoice_status_change` | Recalcula status da UC e do **Assinante** vinculado. |
+| **Alteração de Status de UC** | Gatilho `tr_recalculate_subscriber_on_uc_change` | Recalcula status do **Assinante** em tempo real. |
 | **Botão 'Extrair Faturas'** | Dispara Scraper e muda status da UC | Muda a UC no calendário para **Processando (Azul)** até a conclusão. |
 | **Botão 'Pagar' / 'Pagar Agora'** | Supabase Edge Function `pay-asaas-bill` | **Exclusivo para `Auto Consumo Remoto`**. Agenda pagamento da conta de concessionária e marca fatura como 'Paga'. |
 | **Botão 'Gerar Boleto Asaas'** | API `createAsaasCharge` | Cria cobrança no Asaas para o cliente (**Visível para todas as modalidades**). |
@@ -73,6 +75,17 @@ O Calendário de Energia e suas estatísticas de legenda aplicam filtros estrito
 | `sem_geracao` | Sem Geração | `#64748b` (Slate) | Ativa mas sem créditos no mês. |
 | `em_atraso` | Em Atraso | `#f97316` (Laranja) | Fatura pendente. |
 | `cancelado` | Cancelado | `#ef4444` (Vermelho) | Encerrada. |
+
+### Status do Assinante (Kanban Automatizado)
+O status do assinante é gerenciado por automação baseada nas UCs e faturas:
+| Status | Label | Cor Hex | Regra de Automação |
+| :--- | :--- | :--- | :--- |
+| `ativacao` | Ativação | `#0ea5e9` | Estado inicial ou UCs em processo de ativação. |
+| `ativo` | Ativo | `#22c55e` | Possui ao menos uma UC com status `Ativo`. |
+| `ativo_inadimplente` | Ativo Inadimplente | `#f59e0b` | Possui ao menos uma UC com fatura atrasada **> 15 dias**. |
+| `cancelado_inadimplente`| Cancelado Inadimplente| `#b91c1c`| Possui ao menos uma UC com fatura atrasada **> 60 dias**. |
+| `cancelado` | Cancelado | `#ef4444` | **Todas** as UCs vinculadas estão com status `Cancelado`. |
+| `transferido` | Transferido | `#64748b` | Status manual (Protegido contra automação). |
 
 ### Calendário de Leituras (Monitoramento)
 | Status | Cor | Contexto |
