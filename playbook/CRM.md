@@ -9,14 +9,14 @@ Este documento centraliza as regras de negócio, fluxos de trabalho, gatilhos e 
 ### Gestão de Unidades Consumidoras (UCs)
 Módulo para cadastro e acompanhamento técnico/financeiro das unidades integradas.
 - **Vistas**: 
-    - **Lista**: Consulta detalhada e exportação com busca por texto.
+    - **Lista**: Consulta detalhada e exportação com busca por texto. Expandida para `maxWidth: 1600px`.
     - **Kanban**: Gestão do ciclo de vida operacional (Arraste e Solte).
-    - **Calendário**: Monitoramento temporal agrupado pelo **Dia de Leitura (1 a 31)**.
+    - **Calendário de Leituras**: Monitoramento temporal agrupado pelo **Dia de Leitura (1 a 31)**.
 
 ### Gestão de Faturas (Billing)
 Módulo para lançamento de faturas mensais e acompanhamento de pagamentos.
 - **Fluxo**: Recebimento da conta da concessionária -> Lançamento no CRM -> Emissão de boleto Asaas -> Conciliação de pagamento.
-- **Ações**: Nova fatura, Edição, Gerar Boleto Asaas, Pagar Conta via Asaas (Saldo conta).
+- **Ações**: Nova fatura, Edição, Gerar Boleto Asaas, Pagar Conta via Asaas (Restrito).
 
 ---
 
@@ -26,53 +26,66 @@ Módulo para lançamento de faturas mensais e acompanhamento de pagamentos.
 | :--- | :--- | :--- |
 | **Arrastar Card no Kanban** | Update no Banco (Supabase) | Muda o status da UC em tempo real. |
 | **Botão 'Extrair Faturas'** | Dispara Scraper e muda status da UC | Muda a UC no calendário para **Processando (Azul)** até a conclusão. |
-| **Botão 'Pagar Conta'** | Supabase Edge Function `pay-asaas-bill` | Agenda pagamento da conta de concessionária e marca fatura como 'Paga'. |
-| **Botão 'Gerar Boleto Asaas'** | API `createAsaasCharge` | Cria cobrança no Asaas e gera link de boleto para o cliente. |
+| **Botão 'Pagar' / 'Pagar Agora'** | Supabase Edge Function `pay-asaas-bill` | **Exclusivo para `Auto Consumo Remoto`**. Agenda pagamento da conta de concessionária e marca fatura como 'Paga'. |
+| **Botão 'Gerar Boleto Asaas'** | API `createAsaasCharge` | Cria cobrança no Asaas para o cliente (**Visível para todas as modalidades**). |
 
 ---
 
-## 3. Identidade Visual e Simbologia
+## 3. Regras de Negócio e Filtragem
+
+### ⚖️ Responsabilidade de Pagamento
+O CRM diferencia a responsabilidade financeira com base na modalidade da UC:
+- **Auto Consumo Remoto**: A B2W é responsável pelo pagamento da conta de energia. Botões de pagamento ficam **visíveis**.
+- **Geração Compartilhada**: O assinante paga a conta diretamente. Botões de pagamento ficam **ocultos** para evitar duplicidade.
+
+### 🗓️ Filtragem do Calendário de Energia
+O Calendário de Energia e suas estatísticas de legenda aplicam filtros estritos:
+1.  **Status**: Apenas unidades `Ativo`.
+2.  **Modalidade**: Apenas unidades `Auto Consumo Remoto`.
+*Nota: Faturas de outras modalidades são gerenciadas apenas pela lista geral de faturas.*
+
+### 🛡️ Lógica de Existência Temporal
+1.  **Criação de UC**: Uma unidade só aparece no calendário e estatísticas a partir do mês/ano de registro no campo `created_at`.
+
+---
+
+## 4. Padrões de Layout e UX
+
+### 📐 Dimensões e Grid
+- **Largura Máxima**: Telas de listagem e gestão expandidas para `1600px` para melhor aproveitamento de monitores widescreen.
+- **Grid de Calendário**: Padronizado em **7 colunas fixas** (Segunda a Domingo).
+- **Cabeçalho de Dias**: Exibição compacta (SEG, TER, QUA... DOM).
+- **Alinhamento**: Células com `min-height` fixo para garantir alinhamento horizontal em todas as linhas.
+
+### 📝 Tipografia e Texto
+- **Consistência**: Uso de `white-space: nowrap` e `text-overflow: ellipsis` em nomes de assinantes e números de UC para manter a interface limpa e evitar quebras de layout.
+
+---
+
+## 5. Identidade Visual e Simbologia
 
 ### Status da Unidade Consumidora (Kanban)
 | Status | Label | Cor Hex | Significado |
 | :--- | :--- | :--- | :--- |
-| `em_ativacao` | Em Ativação | `#3b82f6` (Azul) | Documentação em análise ou envio à concessionária. |
-| `aguardando_conexao` | Aguardando Conexão | `#eab308` (Ouro) | UC aprovada, aguardando troca de medidor ou conexão. |
-| `ativo` | Ativo | `#22c55e` (Verde) | UC operando normalmente com economia ativa. |
-| `sem_geracao` | Sem Geração | `#64748b` (Slate) | UC ativa mas sem créditos de energia no mês. |
-| `em_atraso` | Em Atraso | `#f97316` (Laranja) | Fatura pendente de pagamento. |
-| `cancelado` | Cancelado | `#ef4444` (Vermelho) | Cancelamento solicitado ou executado. |
-| `cancelado_inadimplente` | Cancelado (Inad.) | `#991b1b` (Vinho) | Cancelamento por falta de pagamento. |
+| `em_ativacao` | Em Ativação | `#3b82f6` (Azul) | Documentação em análise. |
+| `aguardando_conexao` | Aguardando Conexão | `#eab308` (Ouro) | Aprovada, aguardando conexão física. |
+| `ativo` | Ativo | `#22c55e` (Verde) | Operação normal. |
+| `sem_geracao` | Sem Geração | `#64748b` (Slate) | Ativa mas sem créditos no mês. |
+| `em_atraso` | Em Atraso | `#f97316` (Laranja) | Fatura pendente. |
+| `cancelado` | Cancelado | `#ef4444` (Vermelho) | Encerrada. |
 
 ### Calendário de Leituras (Monitoramento)
-O sistema de cores no calendário é dinâmico para o mês selecionado:
-
 | Status | Cor | Contexto |
 | :--- | :--- | :--- |
-| **Sucesso** | 🟢 Verde (`#22c55e`) | Fatura extraída e disponível no sistema. |
-| **Não Disponível** | ⚪ Cinza (`#94a3b8`) | Data de leitura futura (ciclo ainda não iniciado). |
-| **Pendente** | 🟠 Laranja (`#f97316`) | **Data de leitura já passou**, mas a fatura não foi encontrada. |
-| **Erro / Atenção** | 🔴 Vermelho (`#ef4444`) | Falha técnica reportada pelo robô de extração. |
-| **Processando** | 🔵 Azul (`#3b82f6`) | Extração em curso no momento (animação de giro). |
+| **Sucesso** | 🟢 Verde (`#22c55e`) | Fatura extraída e disponível. |
+| **Não Disponível** | ⚪ Cinza (`#94a3b8`) | Ciclo de leitura futuro. |
+| **Pendente** | 🟠 Laranja (`#f97316`) | **Leitura atrasada** (data passou e fatura não encontrada). |
+| **Erro / Atenção** | 🔴 Vermelho (`#ef4444`) | Falha técnica no robô de extração. |
+| **Processando** | 🔵 Azul (`#3b82f6`) | Extração em curso. |
 
 ---
 
-## 4. Regras de Negócio Importantes
-
-### 🛡️ Lógica de Existência Temporal
-Para evitar "falsos positivos" de erro em meses retroativos:
-1.  **Criação de UC**: Uma unidade só aparece no calendário e estatísticas a partir do mês/ano de registro no campo `created_at`.
-2.  **Unidades Inativas**: Apenas unidades com status **Ativo** são exibidas no fluxo de monitoramento de leitura do calendário.
-
-### 📊 Contadores e Estatísticas
-- **No Mês**: Reflete o grid visível para o período selecionado.
-- **No Ano (Acumulado)**: 
-    - **Faturas no Ano**: Soma de leituras com sucesso de Janeiro até o mês selecionado.
-    - **Ausentes no Ano**: Soma de faltas/erros ocorridos em meses passados (respeitando a data de criação da UC).
-
----
-
-## 5. Legendas e Símbolos
-- **Ícone de Engrenagem (Girando)**: Indica processo de extração ativa (Scraping).
-- **Ticket Check**: Boleto Asaas emitido e disponível no CRM e APP.
-- **Ticket Minus**: Aguardando geração de boleto.
+## 6. Legendas e Símbolos
+- **Ícone de Engrenagem**: Extração ativa (Scraping).
+- **Ticket Check**: Boleto Asaas emitido.
+- **Ticket Minus**: Aguardando emissão de boleto.

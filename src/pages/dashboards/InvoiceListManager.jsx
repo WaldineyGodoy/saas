@@ -233,19 +233,32 @@ export default function InvoiceListManager() {
                 gap: '1rem', 
                 padding: '1rem' 
             }}>
-                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                    <div key={d} style={{ 
-                        fontWeight: '800', 
-                        textAlign: 'center', 
-                        padding: '0.5rem', 
-                        color: '#64748b', 
-                        fontSize: '0.75rem', 
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                    }}>
-                        {d}
-                    </div>
-                ))}
+                <div style={{
+                    gridColumn: '1 / -1',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: '1rem',
+                    position: 'sticky',
+                    top: 'calc(var(--sticky-header-height, 120px) + 2rem)',
+                    zIndex: 10,
+                    background: '#f8fafc',
+                    padding: '0.5rem 0',
+                    margin: '-0.5rem 0 0.5rem 0'
+                }}>
+                    {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
+                        <div key={d} style={{ 
+                            fontWeight: '800', 
+                            textAlign: 'center', 
+                            padding: '0.5rem', 
+                            color: '#64748b', 
+                            fontSize: '0.75rem', 
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                        }}>
+                            {d}
+                        </div>
+                    ))}
+                </div>
                 {Array.from({ length: startOffset }).map((_, i) => (
                     <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '260px' }} />
                 ))}
@@ -394,88 +407,39 @@ export default function InvoiceListManager() {
         return (
             <div style={{ padding: '1rem' }}>
                 {/* Legenda de Status */}
-                <div style={{
-                    marginBottom: '2rem',
-                    padding: '1.5rem',
-                    background: 'white',
-                    borderRadius: '16px',
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1.25rem',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                }}>
-                    <div style={{ 
-                        fontWeight: '800', 
-                        color: '#1e293b', 
-                        fontSize: '0.8rem', 
-                        textTransform: 'uppercase', 
-                        letterSpacing: '0.05em',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                    }}>
-                        <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
-                        Legenda de Status Financeiro (Contas de Energia)
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pagos</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        {stats.pago} faturas
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura quitada no CRM</span>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Atrasadas</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        {stats.atrasado} faturas
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: '700' }}>Vencimento expirado</span>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#3b82f6', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>A Vencer</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        {stats.a_vencer} faturas
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Dentro do prazo de vencimento</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
 
                 <div style={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', 
                     gap: '1rem' 
                 }}>
-                    {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                        <div key={d} style={{ 
-                            fontWeight: '800', 
-                            textAlign: 'center', 
-                            padding: '0.5rem', 
-                            color: '#64748b', 
-                            fontSize: '0.75rem', 
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                        }}>
-                            {d}
-                        </div>
-                    ))}
+                    <div style={{
+                        gridColumn: '1 / -1',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: '1rem',
+                        position: 'sticky',
+                        top: 'calc(var(--sticky-header-height, 120px) + 2rem)',
+                        zIndex: 10,
+                        background: '#f8fafc',
+                        padding: '0.5rem 0',
+                        margin: '-0.5rem 0 0.5rem 0'
+                    }}>
+                        {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
+                            <div key={d} style={{ 
+                                fontWeight: '800', 
+                                textAlign: 'center', 
+                                padding: '0.5rem', 
+                                color: '#64748b', 
+                                fontSize: '0.75rem', 
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}>
+                                {d}
+                            </div>
+                        ))}
+                    </div>
                     {Array.from({ length: startOffset }).map((_, i) => (
                         <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0', minHeight: '280px' }} />
                     ))}
@@ -603,87 +567,128 @@ export default function InvoiceListManager() {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <div>
-                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold' }}>Faturas</h2>
-                    <p style={{ color: '#64748b' }}>Gerencie os lançamentos mensais das Unidades Consumidoras</p>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.8rem 1.5rem', borderRadius: '4px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <History size={18} /> Histórico
-                    </button>
-                    <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Plus size={18} /> Nova Fatura
-                    </button>
+                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>Faturas</h2>
+                    <p style={{ color: '#64748b', margin: 0 }}>Gerencie os lançamentos mensais das Unidades Consumidoras</p>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ background: 'white', padding: '0.5rem 1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
-                        <CalendarIcon size={18} />
-                        <span style={{ fontWeight: 'bold' }}>Mês:</span>
+            {/* Cabeçalho Fixo (Filtros + Modos + Ações) */}
+            <div style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 100,
+                background: 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                padding: '1rem 0',
+                margin: '0 -2rem 2rem -2rem',
+                paddingLeft: '2rem',
+                paddingRight: '2rem',
+                borderBottom: '1px solid rgba(226, 232, 240, 0.5)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
+                            <CalendarIcon size={16} />
+                            <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Mês:</span>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <button onClick={() => setShowMonthPicker(!showMonthPicker)} style={{ padding: '0.4rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: '130px', fontSize: '0.85rem' }}>
+                                <span>{monthFilter === 'all' ? 'Qualquer Data' : new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                            </button>
+                            {showMonthPicker && (
+                                <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <button onClick={() => { setMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: monthFilter === 'all' ? 'var(--color-blue)' : 'white', color: monthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Qualquer Data</button>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                                        <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
+                                        <span style={{ fontWeight: 'bold' }}>{monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0]}</span>
+                                        <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
+                                            const mVal = String(idx + 1).padStart(2, '0');
+                                            const currentYear = monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0];
+                                            const isSelected = monthFilter === `${currentYear}-${mVal}`;
+                                            return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
+                            <option value="">Status</option>
+                            <option value="a_vencer">A Vencer</option>
+                            <option value="atrasado">Atrasado</option>
+                            <option value="pago">Pago</option>
+                        </select>
+                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Search size={16} color="#64748b" />
+                            <input placeholder="Buscar UC..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '120px' }} />
+                        </div>
                     </div>
-                    <div style={{ position: 'relative' }}>
-                        <button onClick={() => setShowMonthPicker(!showMonthPicker)} style={{ padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', background: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '140px' }}>
-                            <span>{monthFilter === 'all' ? 'Qualquer Data' : new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                        </button>
-                        {showMonthPicker && (
-                            <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <button onClick={() => { setMonthFilter('all'); setShowMonthPicker(false); }} style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: monthFilter === 'all' ? 'var(--color-blue)' : 'white', color: monthFilter === 'all' ? 'white' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Qualquer Data</button>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                                    <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) - 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                    <span style={{ fontWeight: 'bold' }}>{monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0]}</span>
-                                    <button onClick={() => { const parts = monthFilter === 'all' ? [new Date().getFullYear(), '01'] : monthFilter.split('-'); setMonthFilter(`${Number(parts[0]) + 1}-${parts[1]}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                                    {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
-                                        const mVal = String(idx + 1).padStart(2, '0');
-                                        const currentYear = monthFilter === 'all' ? new Date().getFullYear() : monthFilter.split('-')[0];
-                                        const isSelected = monthFilter === `${currentYear}-${mVal}`;
-                                        return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
-                                    })}
-                                </div>
-                            </div>
-                        )}
+
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>
+                                <List size={16} /> Lista
+                            </button>
+                            <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>
+                                <Layout size={16} /> Kanban
+                            </button>
+                            <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
+                                <CalendarIcon size={16} /> Op.
+                            </button>
+                            <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
+                                <CreditCard size={16} /> Energia
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <History size={16} /> Histórico
+                            </button>
+                            <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Plus size={16} /> Nova Fatura
+                            </button>
+                        </div>
                     </div>
-                    <div style={{ width: '1px', height: '20px', background: '#e2e8f0' }}></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}><span style={{ fontWeight: 'bold' }}>Status:</span></div>
-                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
-                        <option value="">Todos</option>
-                        <option value="a_vencer">A Vencer</option>
-                        <option value="atrasado">Atrasado</option>
-                        <option value="pago">Pago</option>
-                    </select>
-                    <div style={{ width: '1px', height: '20px', background: '#e2e8f0' }}></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}><Search size={18} /></div>
-                    <input placeholder="Buscar por Nome, UC ou ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', minWidth: '220px' }} />
                 </div>
 
-                <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                    <button onClick={() => setViewMode('list')} className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500' }}>
-                        <List size={18} /> Lista
-                    </button>
-                    <button onClick={() => setViewMode('kanban')} className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500' }}>
-                        <Layout size={18} /> Kanban
-                    </button>
-                    <div style={{ position: 'relative' }}>
-                        <button onClick={() => setViewMode('calendar')} onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)} className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500' }}>
-                            <CalendarIcon size={18} /> Calendário de Faturas
-                        </button>
-                        <button onClick={() => setViewMode('energy_calendar')} className={`btn ${viewMode === 'energy_calendar' ? 'btn-primary' : 'btn-secondary'}`} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500' }}>
-                            <CreditCard size={18} /> Calendário de Energia
-                        </button>
-                        {showTooltip && (
-                            <div style={{ position: 'absolute', top: '130%', right: '50%', background: '#1e293b', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '10px', fontSize: '0.85rem', zIndex: 1000, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.6rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Info size={16} style={{ color: '#3b82f6' }} /> Calendário de faturas operacionais.
-                            </div>
-                        )}
-
+                {/* Legenda de Status (Energia) integrada se necessário */}
+                {viewMode === 'energy_calendar' && (
+                    <div style={{
+                        padding: '0.75rem 1rem',
+                        background: 'rgba(255, 255, 255, 0.4)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(226, 232, 240, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '2.5rem'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pagos: {invoices.filter(i => i.status === 'pago').length}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Atrasadas: {invoices.filter(i => i.status === 'atrasado').length}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>A Vencer: {invoices.filter(i => i.status === 'a_vencer').length}</span>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (

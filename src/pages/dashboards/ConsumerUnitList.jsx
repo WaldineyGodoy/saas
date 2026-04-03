@@ -224,19 +224,32 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             maxWidth: '1600px',
             margin: '0 auto'
         }}>
-            {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                <div key={d} style={{ 
-                    fontWeight: '800', 
-                    textAlign: 'center', 
-                    padding: '0.5rem', 
-                    color: '#64748b', 
-                    fontSize: '0.75rem', 
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                }}>
-                    {d}
-                </div>
-            ))}
+            <div style={{
+                gridColumn: '1 / -1',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '1rem',
+                position: 'sticky',
+                top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
+                zIndex: 10,
+                background: '#f8fafc',
+                padding: '0.5rem 0',
+                margin: '-0.5rem 0 0.5rem 0'
+            }}>
+                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
+                    <div key={d} style={{ 
+                        fontWeight: '800', 
+                        textAlign: 'center', 
+                        padding: '0.5rem', 
+                        color: '#64748b', 
+                        fontSize: '0.75rem', 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                    }}>
+                        {d}
+                    </div>
+                ))}
+            </div>
             {Array.from({ length: startOffset }).map((_, i) => (
                 <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0', minHeight: '180px' }} />
             ))}
@@ -594,322 +607,180 @@ export default function ConsumerUnitList() {
 
     return (
         <div style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
-                <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em', margin: 0 }}>
                     Gestão de Unidades Consumidoras
                 </h2>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    {viewMode === 'calendar' && (
-                        <button
-                            onClick={() => setIsScraperModalOpen(true)}
-                            style={{
-                                padding: '0.75rem 1.5rem',
-                                background: '#f59e0b',
-                                color: 'white',
-                                borderRadius: '8px',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                border: 'none',
-                                boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.2)',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem'
-                            }}
-                            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-                        >
-                            <Download size={18} /> Extrair Faturas
-                        </button>
-                    )}
-                    <button
-                        onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
-                        style={{
-                            padding: '0.75rem 1.5rem',
-                            background: 'var(--color-blue)',
-                            color: 'white',
-                            borderRadius: '8px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            border: 'none',
-                            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2)',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-                    >
-                        + Nova UC
-                    </button>
-                </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1.5rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: 1, maxWidth: '450px' }}>
-                        <input
-                            placeholder="Buscar por UC, Assinante, Concessionária..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="input"
-                            style={{
-                                width: '100%',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '10px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                            }}
-                        />
-                    </div>
+            {/* Cabeçalho Fixo (Filtros + Ações + Legenda) */}
+            <div style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 100,
+                background: 'rgba(248, 250, 252, 0.8)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                padding: '1rem 0',
+                margin: '0 -1.5rem 1.5rem -1.5rem',
+                paddingLeft: '1.5rem',
+                paddingRight: '1.5rem',
+                borderBottom: '1px solid rgba(226, 232, 240, 0.5)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', flex: 1, alignItems: 'center' }}>
+                        <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+                            <input
+                                placeholder="Buscar UC, Assinante..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="input"
+                                style={{
+                                    width: '100%',
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                    fontSize: '0.9rem'
+                                }}
+                            />
+                        </div>
 
-                    {viewMode === 'calendar' && (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <div style={{ position: 'relative' }}>
-                                <button 
-                                    onClick={() => setShowMonthPicker(!showMonthPicker)} 
+                        {viewMode === 'calendar' && (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <div style={{ position: 'relative' }}>
+                                    <button 
+                                        onClick={() => setShowMonthPicker(!showMonthPicker)} 
+                                        style={{ 
+                                            padding: '0.6rem 1rem', 
+                                            border: '1px solid #e2e8f0', 
+                                            borderRadius: '10px', 
+                                            cursor: 'pointer', 
+                                            background: 'white', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '0.5rem', 
+                                            fontSize: '0.85rem',
+                                            fontWeight: '600',
+                                            color: '#334155'
+                                        }}
+                                    >
+                                        <CalendarIcon size={14} style={{ color: 'var(--color-blue)' }} />
+                                        <span>{new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                    </button>
+                                    {showMonthPicker && (
+                                        <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                                <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) - 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
+                                                <span style={{ fontWeight: 'bold' }}>{monthFilter.split('-')[0]}</span>
+                                                <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) + 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                                                {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
+                                                    const mVal = String(idx + 1).padStart(2, '0');
+                                                    const currentYear = monthFilter.split('-')[0];
+                                                    const isSelected = monthFilter === `${currentYear}-${mVal}`;
+                                                    return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <select 
+                                    value={readingStatusFilter} 
+                                    onChange={e => setReadingStatusFilter(e.target.value)}
                                     style={{ 
-                                        padding: '0.75rem 1rem', 
+                                        padding: '0.6rem 1rem', 
                                         border: '1px solid #e2e8f0', 
-                                        borderRadius: '10px', 
-                                        cursor: 'pointer', 
-                                        background: 'white', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '0.5rem', 
-                                        minWidth: '160px',
-                                        fontSize: '0.9rem',
+                                        borderRadius: '10px',
+                                        fontSize: '0.85rem',
                                         fontWeight: '600',
-                                        color: '#334155'
+                                        color: '#334155',
+                                        background: 'white',
+                                        cursor: 'pointer'
                                     }}
                                 >
-                                    <CalendarIcon size={16} style={{ color: 'var(--color-blue)' }} />
-                                    <span>{new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                                </button>
-                                {showMonthPicker && (
-                                    <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                            <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) - 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                            <span style={{ fontWeight: 'bold' }}>{monthFilter.split('-')[0]}</span>
-                                            <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) + 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
-                                        </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                                            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
-                                                const mVal = String(idx + 1).padStart(2, '0');
-                                                const currentYear = monthFilter.split('-')[0];
-                                                const isSelected = monthFilter === `${currentYear}-${mVal}`;
-                                                return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
+                                    <option value="">Status</option>
+                                    <option value="success">Sucesso</option>
+                                    <option value="pending">Pendente</option>
+                                    <option value="error">Erro</option>
+                                </select>
                             </div>
+                        )}
+                    </div>
 
-                            <select 
-                                value={readingStatusFilter} 
-                                onChange={e => setReadingStatusFilter(e.target.value)}
-                                style={{ 
-                                    padding: '0.75rem 1rem', 
-                                    border: '1px solid #e2e8f0', 
-                                    borderRadius: '10px',
-                                    fontSize: '0.9rem',
-                                    fontWeight: '600',
-                                    color: '#334155',
-                                    background: 'white',
-                                    outline: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <option value="">Todos os Status</option>
-                                <option value="success">Sucesso</option>
-                                <option value="not_available">Não Disponível</option>
-                                <option value="pending">Pendente</option>
-                                <option value="error">Erro / Atenção</option>
-                                <option value="processing">Processando</option>
-                            </select>
-                        </div>
-                    )}
-
-                    <div className="btn-group" style={{
-                        display: 'flex',
-                        background: '#f1f5f9',
-                        padding: '0.3rem',
-                        borderRadius: '12px',
-                        border: '1px solid #e2e8f0'
-                    }}>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{
-                                borderRadius: '8px',
-                                border: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.6rem 1.2rem',
-                                background: viewMode === 'list' ? 'white' : 'transparent',
-                                color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b',
-                                boxShadow: viewMode === 'list' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
-                                fontWeight: viewMode === 'list' ? '700' : '500'
-                            }}
-                        >
-                            <List size={18} /> Lista
-                        </button>
-                        <button
-                            onClick={() => setViewMode('kanban')}
-                            className={`btn ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{
-                                borderRadius: '8px',
-                                border: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.6rem 1.2rem',
-                                background: viewMode === 'kanban' ? 'white' : 'transparent',
-                                color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b',
-                                boxShadow: viewMode === 'kanban' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
-                                fontWeight: viewMode === 'kanban' ? '700' : '500'
-                            }}
-                        >
-                            <Layout size={18} /> Kanban
-                        </button>
-                        <div style={{ position: 'relative' }}>
-                            <button
-                                onClick={() => setViewMode('calendar')}
-                                className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.6rem 1.2rem',
-                                    background: viewMode === 'calendar' ? 'white' : 'transparent',
-                                    color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b',
-                                    boxShadow: viewMode === 'calendar' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
-                                    fontWeight: viewMode === 'calendar' ? '700' : '500'
-                                }}
-                                onMouseEnter={() => setShowTooltip(true)}
-                                onMouseLeave={() => setShowTooltip(false)}
-                            >
-                                <CalendarIcon size={18} /> Calendário de Leituras
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
+                                <List size={16} /> Lista
                             </button>
-                            {showTooltip && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '130%',
-                                    right: 0,
-                                    background: '#1e293b',
-                                    color: 'white',
-                                    padding: '0.75rem 1.25rem',
-                                    borderRadius: '10px',
-                                    fontSize: '0.85rem',
-                                    zIndex: 1000,
-                                    whiteSpace: 'nowrap',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.6rem',
-                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-                                    pointerEvents: 'none',
-                                    border: '1px solid rgba(255,255,255,0.1)'
-                                }}>
-                                    <Info size={16} style={{ color: '#3b82f6' }} />
-                                    Calendário de Leituras agrupa as UCs por dia de leitura.
-                                </div>
+                            <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'kanban' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
+                                <Layout size={16} /> Kanban
+                            </button>
+                            <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'calendar' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
+                                <CalendarIcon size={16} /> Calendário
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {viewMode === 'calendar' && (
+                                <button
+                                    onClick={() => setIsScraperModalOpen(true)}
+                                    style={{ padding: '0.6rem 1.2rem', background: '#f59e0b', color: 'white', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', border: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s' }}
+                                    onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                >
+                                    <Download size={16} /> Extrair
+                                </button>
                             )}
+                            <button
+                                onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
+                                style={{ padding: '0.6rem 1.2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', border: 'none', fontSize: '0.85rem', transition: 'all 0.2s' }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                            >
+                                + Nova UC
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Legenda de Cores */}
-            {viewMode === 'calendar' && (
-                <div style={{
-                    marginBottom: '1.5rem',
-                    padding: '1.5rem',
-                    background: 'white',
-                    borderRadius: '16px',
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1.25rem',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                }}>
-                    <div style={{ 
-                        fontWeight: '800', 
-                        color: '#1e293b', 
-                        fontSize: '0.8rem', 
-                        textTransform: 'uppercase', 
-                        letterSpacing: '0.05em',
+                {/* Legenda integrada no Sticky Header */}
+                {viewMode === 'calendar' && (
+                    <div style={{
+                        padding: '0.75rem 1rem',
+                        background: 'rgba(255, 255, 255, 0.4)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(226, 232, 240, 0.5)',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.5rem'
+                        justifyContent: 'center',
+                        gap: '2rem'
                     }}>
-                        <div style={{ width: '4px', height: '16px', background: 'var(--color-blue)', borderRadius: '2px' }}></div>
-                        Legenda de Status (Extração de Faturas)
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#22c55e', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Sucesso</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.success} | Faturas no Ano: {stats.year.success}
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Fatura extraída com sucesso</span>
-                            </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Sucesso: {stats.month.success}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#94a3b8', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Não Disponível</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.not_available} | Previstas no Ano: {stats.year.not_available}
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Datas futuras ou ciclo não iniciado</span>
-                            </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f97316' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pendente: {stats.month.pending}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#f97316', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Pendente</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#fff7ed', color: '#c2410c', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.pending} | Ausentes no Ano: {stats.year.pending}
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#f97316', fontWeight: '700' }}>Ação Necessária: Aguardando leitura</span>
-                            </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Erro: {stats.month.error}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#ef4444', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Erro / Atenção</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#991b1b', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.error} | Falhas no Ano: {stats.year.error}
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Falha na extração ou erro técnico</span>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: '#3b82f6', border: '1px solid rgba(0,0,0,0.05)' }}></div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '700' }}>Processando</span>
-                                    <span style={{ fontSize: '0.65rem', background: '#eff6ff', color: '#1d4ed8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '800' }}>
-                                        Mês: {stats.month.processing}
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Extração em curso pelo agente</span>
-                            </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Processando: {stats.month.processing}</span>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
+
+
 
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>

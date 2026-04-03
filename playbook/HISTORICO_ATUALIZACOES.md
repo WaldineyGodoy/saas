@@ -4,6 +4,22 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-03] - Novas Regras de Pagamento e Ajustes de UI
+
+### Atualizações Registradas:
+1. **Regras de Negócio (Faturas)**:
+    - Restrição do botão **"PAGAR"** exclusivamente para a modalidade `Auto Consumo Remoto`.
+    - Ocultação dos botões de pagamento para outras modalidades (evitando duplicidade).
+    - Filtragem do **Calendário de Energia** para exibir apenas faturas de unidades `Ativas` e `Auto Consumo Remoto`.
+2. **Interface e UX**:
+    - Expansão do `maxWidth` das telas de listagem e gestão para **1600px**.
+    - Padronização do grid de calendários em **7 colunas (SEG-DOM)**.
+    - Implementação de consistência de células (`min-height` e `ellipsis`).
+3. **Estabilização**:
+    - Correção do nome da coluna de banco de dados: de `modalidade_consumo` para `modalidade`.
+
+---
+
 ## [2026-04-03] - Detalhamento do Guia de Operação (UCs)
 
 ### Atualizações Registradas:
