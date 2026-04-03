@@ -4,6 +4,22 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-03] - Consolidação da Gestão de Assinantes
+
+### Atualizações Registradas:
+1. **Regras de Status Automatizadas**:
+    - Implementação de gatilhos de inadimplência (15 dias para `Inadimplente`, 60 dias para `Cancelamento Crítico`).
+    - Lógica de reativação automática após pagamento e dependência do status técnico das UCs.
+2. **Funcionalidades de Cobrança**:
+    - Introdução do botão **`CreditCard`** (Boleto Consolidado no Asaas).
+3. **Identidade Visual (Assinantes)**:
+    - Definição da paleta de cores para o Kanban de Assinantes (Azul para Ativação, Verde para Ativo, Âmbar para Inadimplente, Vinho para Crítico, Vermelho para Cancelado e Cinza para Manual/Transferido).
+4. **Padrões de UI**:
+    - Padronização de cards (Nome em Negrito, CPF/CNPJ, Cidade e Data).
+    - Aplicação de `fontSize: 0.8rem` para dados secundários.
+
+---
+
 ## [2026-04-03] - Novas Regras de Pagamento e Ajustes de UI
 
 ### Atualizações Registradas:

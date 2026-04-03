@@ -158,8 +158,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (invoiceMonthFilter !== 'all') {
                 const [year, month] = invoiceMonthFilter.split('-');
                 const startDate = `${year}-${month}-01`;
-                const lastDay = new Date(year, month, 0).getDate();
-                const endDate = `${year}-${month}-${lastDay}`;
+                // Pegar o último dia do mês corretamente
+                const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+                const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
                 query = query.gte('vencimento', startDate).lte('vencimento', endDate);
             }
 
@@ -1260,32 +1261,70 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 type="button"
                                                 onClick={() => setShowMonthPicker(!showMonthPicker)}
                                                 style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                    background: 'white', color: '#475569', border: '1px solid #cbd5e1',
-                                                    padding: '0.6rem 1rem', borderRadius: '8px', cursor: 'pointer',
-                                                    fontWeight: 600
+                                                    display: 'flex', alignItems: 'center', gap: '0.6rem',
+                                                    background: 'white', color: '#1e293b', border: '2px solid #e2e8f0',
+                                                    padding: '0.6rem 1.25rem', borderRadius: '10px', cursor: 'pointer',
+                                                    fontWeight: 700, fontSize: '0.9rem', transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                 }}
+                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-blue)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
                                             >
-                                                <Calendar size={18} /> {invoiceMonthFilter === 'all' ? 'Qualquer Data' : invoiceMonthFilter}
+                                                <Calendar size={18} color="#64748b" />
+                                                {invoiceMonthFilter === 'all' ? 'Todas as Datas' : (() => {
+                                                    const [y, m] = invoiceMonthFilter.split('-');
+                                                    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                                    return `${months[parseInt(m) - 1]} / ${y}`;
+                                                })()}
                                             </button>
                                             {showMonthPicker && (
-                                                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '1rem', zIndex: 10, width: '220px' }}>
-                                                    <input
-                                                        type="month"
-                                                        value={invoiceMonthFilter === 'all' ? '' : invoiceMonthFilter}
-                                                        onChange={e => {
-                                                            setInvoiceMonthFilter(e.target.value);
-                                                            setShowMonthPicker(false);
-                                                        }}
-                                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '0.5rem' }}
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            setInvoiceMonthFilter('all');
-                                                            setShowMonthPicker(false);
-                                                        }}
-                                                        style={{ width: '100%', padding: '0.4rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontSize: '0.8rem', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
-                                                    >Todas as Datas</button>
+                                                <div style={{
+                                                    position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem',
+                                                    background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px',
+                                                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                                                    padding: '1.2rem', zIndex: 100, width: '280px'
+                                                }}>
+                                                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+                                                        <select
+                                                            value={invoiceMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(invoiceMonthFilter.split('-')[1])}
+                                                            onChange={(e) => {
+                                                                const currentYear = invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0];
+                                                                setInvoiceMonthFilter(`${currentYear}-${String(e.target.value).padStart(2, '0')}`);
+                                                            }}
+                                                            style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                                        >
+                                                            {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
+                                                                <option key={m} value={i + 1}>{m}</option>
+                                                            ))}
+                                                        </select>
+                                                        <select
+                                                            value={invoiceMonthFilter === 'all' ? new Date().getFullYear() : invoiceMonthFilter.split('-')[0]}
+                                                            onChange={(e) => {
+                                                                const currentMonth = invoiceMonthFilter === 'all' ? String(new Date().getMonth() + 1).padStart(2, '0') : invoiceMonthFilter.split('-')[1];
+                                                                setInvoiceMonthFilter(`${e.target.value}-${currentMonth}`);
+                                                            }}
+                                                            style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                                        >
+                                                            {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + 2 - i).map(year => (
+                                                                <option key={year} value={year}>{year}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button
+                                                            onClick={() => {
+                                                                setInvoiceMonthFilter('all');
+                                                                setShowMonthPicker(false);
+                                                            }}
+                                                            style={{ flex: 1, padding: '0.6rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontSize: '0.85rem', color: '#475569', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                                        >Todas as Datas</button>
+                                                        <button
+                                                            onClick={() => setShowMonthPicker(false)}
+                                                            style={{ padding: '0.6rem 1rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+                                                        >OK</button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
