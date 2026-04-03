@@ -205,7 +205,14 @@ export default function InvoiceListManager() {
     };
 
     const InvoiceCalendarView = ({ invoices, onEdit }) => {
-        const days = Array.from({ length: 31 }, (_, i) => i + 1);
+        const [year, month] = monthFilter === 'all' 
+            ? [new Date().getFullYear(), new Date().getMonth() + 1] 
+            : monthFilter.split('-').map(Number);
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        const startOffset = (firstDay + 6) % 7; // Segunda = 0
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
         const groupedInvoices = invoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
                 const date = new Date(inv.vencimento);
@@ -217,8 +224,29 @@ export default function InvoiceListManager() {
         }, {});
 
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '1.5rem', padding: '1rem' }}>
-                {days.map(day => {
+            <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(7, 1fr)', 
+                gap: '1rem', 
+                padding: '1rem' 
+            }}>
+                {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+                    <div key={d} style={{ 
+                        fontWeight: '800', 
+                        textAlign: 'center', 
+                        padding: '0.5rem', 
+                        color: '#64748b', 
+                        fontSize: '0.75rem', 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                    }}>
+                        {d}
+                    </div>
+                ))}
+                {Array.from({ length: startOffset }).map((_, i) => (
+                    <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0' }} />
+                ))}
+                {calendarDays.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
                     const totalAmount = dayInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
 
@@ -329,7 +357,14 @@ export default function InvoiceListManager() {
     };
 
     const EnergyCalendarView = ({ invoices, onInvoiceClick }) => {
-        const days = Array.from({ length: 31 }, (_, i) => i + 1);
+        const [year, month] = monthFilter === 'all' 
+            ? [new Date().getFullYear(), new Date().getMonth() + 1] 
+            : monthFilter.split('-').map(Number);
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        const startOffset = (firstDay + 6) % 7; // Segunda = 0
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
         const groupedInvoices = invoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
                 const date = new Date(inv.vencimento + 'T12:00:00');
@@ -414,8 +449,28 @@ export default function InvoiceListManager() {
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' }}>
-                {days.map(day => {
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(7, 1fr)', 
+                    gap: '1rem' 
+                }}>
+                    {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+                        <div key={d} style={{ 
+                            fontWeight: '800', 
+                            textAlign: 'center', 
+                            padding: '0.5rem', 
+                            color: '#64748b', 
+                            fontSize: '0.75rem', 
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                        }}>
+                            {d}
+                        </div>
+                    ))}
+                    {Array.from({ length: startOffset }).map((_, i) => (
+                        <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: '14px', border: '1px dashed #e2e8f0' }} />
+                    ))}
+                    {calendarDays.map(day => {
                     const dayInvoices = groupedInvoices[day] || [];
                     
                     const hasAtrasado = dayInvoices.some(inv => inv.status === 'atrasado');

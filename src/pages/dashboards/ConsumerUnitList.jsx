@@ -154,7 +154,10 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     const [filterYear, filterMonth] = (monthFilter || '').split('-').map(Number);
     const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
 
-    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+    const firstDay = new Date(filterYear, filterMonth - 1, 1).getDay();
+    const startOffset = (firstDay + 6) % 7; // Segunda = 0
+    const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+    const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
     // 1. Filtrar apenas Ativas para o Calendário
     const activeUnits = units.filter(u => u.status === 'ativo');
@@ -215,11 +218,27 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     return (
         <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: '1.5rem',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: '1rem',
             padding: '1rem'
         }}>
-            {days.map(day => {
+            {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map(d => (
+                <div key={d} style={{ 
+                    fontWeight: '800', 
+                    textAlign: 'center', 
+                    padding: '0.5rem', 
+                    color: '#64748b', 
+                    fontSize: '0.75rem', 
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                }}>
+                    {d}
+                </div>
+            ))}
+            {Array.from({ length: startOffset }).map((_, i) => (
+                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0' }} />
+            ))}
+            {calendarDays.map(day => {
                 const dayUnits = groupedUnits[day] || [];
                 return (
                     <div key={day} style={{
