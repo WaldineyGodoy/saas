@@ -272,7 +272,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
             const fileName = `Fatura_${inv.mes_referencia}_Detalhamento.pdf`;
 
-            await mergePdf(summaryBase64, asaasUrl, fileName);
+            await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
             showAlert('PDF gerado com sucesso!', 'success');
 
         } catch (error) {

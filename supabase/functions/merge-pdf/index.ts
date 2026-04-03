@@ -10,14 +10,13 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { summaryBase64, asaasUrl } = await req.json()
+    const { summaryBase64, asaasUrl, energyBillUrl } = await req.json()
 
     if (!summaryBase64 || !asaasUrl) {
       throw new Error('summaryBase64 e asaasUrl são obrigatórios')
     }
 
     // 1. Carregar o PDF do Demonstrativo (enviado pelo frontend em Base64)
-    // Remove o prefixo se existir: data:application/pdf;base64,
     const cleanBase64 = summaryBase64.includes(',') ? summaryBase64.split(',')[1] : summaryBase64
     const summaryBytes = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0))
     const summaryDoc = await PDFDocument.load(summaryBytes)
@@ -26,11 +25,25 @@ serve(async (req) => {
     console.log(`Buscando boleto em: ${asaasUrl}`)
     const asaasRes = await fetch(asaasUrl)
     if (!asaasRes.ok) throw new Error(`Erro ao buscar boleto no Asaas: ${asaasRes.statusText}`)
-
     const asaasBytes = await asaasRes.arrayBuffer()
     const asaasDoc = await PDFDocument.load(asaasBytes)
 
-    // 3. Criar Novo PDF e Mesclar
+    // 3. Buscar o PDF da Conta de Energia (opcional)
+    let energyBillDoc = null
+    if (energyBillUrl) {
+      console.log(`Buscando conta de energia em: ${energyBillUrl}`)
+      try {
+        const energyRes = await fetch(energyBillUrl)
+        if (energyRes.ok) {
+          const energyBytes = await energyRes.arrayBuffer()
+          energyBillDoc = await PDFDocument.load(energyBytes)
+        }
+      } catch (e) {
+        console.error('Erro ao buscar conta de energia:', e)
+      }
+    }
+
+    // 4. Criar Novo PDF e Mesclar
     const mergedPdf = await PDFDocument.create()
 
     const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
@@ -38,6 +51,11 @@ serve(async (req) => {
 
     const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
     asaasPages.forEach(p => mergedPdf.addPage(p))
+
+    if (energyBillDoc) {
+      const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
+      energyPages.forEach(p => mergedPdf.addPage(p))
+    }
 
     const mergedBytes = await mergedPdf.save()
 
