@@ -27,7 +27,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [ucModalMode, setUcModalMode] = useState('all'); // 'all' | 'technical'
     const [invoices, setInvoices] = useState([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
-    const [invoiceMonthFilter, setInvoiceMonthFilter] = useState(new Date().toISOString().substring(0, 7));
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [billingMode, setBillingMode] = useState(subscriber?.billing_mode || 'consolidada'); // 'consolidada' | 'individualizada'
     const [consolidatedDueDay, setConsolidatedDueDay] = useState(subscriber?.consolidated_due_day || 10);
