@@ -435,7 +435,7 @@ export default function InvoiceListManager() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ background: 'white', padding: '0.5rem 1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b' }}>
-                        <Calendar size={18} />
+                        <CalendarIcon size={18} />
                         <span style={{ fontWeight: 'bold' }}>Mês:</span>
                     </div>
                     <div style={{ position: 'relative' }}>
