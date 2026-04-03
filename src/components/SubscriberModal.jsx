@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendInvoiceEmail } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -42,6 +42,20 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
+
+    const addHistory = async (type, id, action, details = {}) => {
+        try {
+            await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: `${action === 'email_sent' ? 'E-mail enviado' : action}: ${details.type || ''}`,
+                details: details,
+                created_by: profile?.id
+            });
+        } catch (error) {
+            console.error('Error adding history:', error);
+        }
+    };
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -256,13 +270,51 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
-            const summaryBase64 = pdfSummary.output('datauristring');
-            const asaasUrl = consolidated.asaas_boleto_url;
-
-            const fileName = `Fatura_Consolidada_${consolidated.due_date}_${subscriber.name.replace(/\s+/g, '_')}.pdf`;
-
-            await mergePdf(summaryBase64, asaasUrl, fileName);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName);
             showAlert('PDF Consolidado gerado!', 'success');
+
+            // Trigger Email Notification with Merged PDF
+            try {
+                const { data: asaasConfig } = await supabase
+                    .from('integrations_config')
+                    .select('is_sandbox')
+                    .eq('service_name', 'asaas_api')
+                    .single();
+
+                const isSandbox = asaasConfig?.is_sandbox !== false;
+                const recipientEmail = isSandbox ? 'waldineygodoy@gmail.com' : formData.email;
+
+                // Conveter Blob para Base64 (sem o prefixo data:application/pdf;base64,)
+                const reader = new FileReader();
+                reader.readAsDataURL(mergedBlob);
+                reader.onloadend = async () => {
+                    const finalBase64 = reader.result.split(',')[1];
+                    const emailResult = await sendInvoiceEmail(
+                        recipientEmail,
+                        'Sua fatura B2W Energia chegou!',
+                        null,
+                        [{ filename: fileName, content: finalBase64 }],
+                        { 
+                            nome: formData.name, 
+                            vencimento: new Date(consolidated.due_date).toLocaleDateString('pt-BR'),
+                            valor: consolidated.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        }
+                    );
+
+                    if (emailResult.success) {
+                        showAlert(`E-mail de fatura enviado para ${recipientEmail}`, 'success');
+                        await addHistory('subscriber', subscriber.id, 'email_sent', { 
+                            type: 'consolidated_invoice', 
+                            invoice_id: consolidated.id,
+                            recipient: recipientEmail,
+                            sandbox: isSandbox
+                        });
+                    }
+                };
+            } catch (emailErr) {
+                console.error("Error sending notification email:", emailErr);
+                showAlert('Fatura gerada, mas houve um erro ao enviar o e-mail.', 'warning');
+            }
 
         } catch (error) {
             console.error("Error generating consolidated PDF:", error);
@@ -270,6 +322,89 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         } finally {
             setIsGeneratingPdf(false);
             setConsolidatedToDownload(null);
+        }
+    };
+
+    const handleDownloadCombined = async (inv) => {
+        if (!inv || !inv.asaas_boleto_url) {
+            showAlert('Boleto não disponível para esta fatura.', 'warning');
+            return;
+        }
+
+        setIsGeneratingPdf(true);
+        setInvoiceToDownload(inv);
+
+        try {
+            // Pequeno delay para garantir que o renderHiddenInvoiceDetail aconteça
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            const element = hiddenRef.current;
+            if (!element) throw new Error("Elemento de captura não encontrado");
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: "#ffffff"
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfSummary = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdfSummary.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName);
+            showAlert('PDF Combinado gerado com sucesso!', 'success');
+
+            // Trigger Email Notification with Merged PDF
+            try {
+                const { data: asaasConfig } = await supabase
+                    .from('integrations_config')
+                    .select('is_sandbox')
+                    .eq('service_name', 'asaas_api')
+                    .single();
+
+                const isSandbox = asaasConfig?.is_sandbox !== false;
+                const recipientEmail = isSandbox ? 'waldineygodoy@gmail.com' : formData.email;
+
+                const reader = new FileReader();
+                reader.readAsDataURL(mergedBlob);
+                reader.onloadend = async () => {
+                    const finalBase64 = reader.result.split(',')[1];
+                    const emailResult = await sendInvoiceEmail(
+                        recipientEmail,
+                        'Sua fatura B2W Energia chegou!',
+                        null,
+                        [{ filename: fileName, content: finalBase64 }],
+                        { 
+                            nome: formData.name, 
+                            vencimento: new Date(inv.vencimento).toLocaleDateString('pt-BR'),
+                            valor: Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        }
+                    );
+
+                    if (emailResult.success) {
+                        showAlert(`E-mail enviado para ${recipientEmail}`, 'success');
+                        await addHistory('subscriber', subscriber.id, 'email_sent', { 
+                            type: 'individual_invoice', 
+                            invoice_id: inv.id,
+                            recipient: recipientEmail,
+                            sandbox: isSandbox
+                        });
+                    }
+                };
+            } catch (emailErr) {
+                console.error("Error sending notification email:", emailErr);
+                showAlert('PDF gerado, mas erro ao disparar e-mail.', 'warning');
+            }
+
+        } catch (error) {
+            console.error("Error generating combined PDF:", error);
+            showAlert('Erro ao gerar PDF combinado.', 'error');
+        } finally {
+            setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
         }
     };
 
@@ -479,20 +614,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         );
     };
 
-    const addHistory = async (entityType, entityId, action, details = {}) => {
-        try {
-            await supabase.from('entity_history').insert({
-                entity_type: entityType,
-                entity_id: entityId,
-                action: action,
-                details: details,
-                created_by: profile?.id
-            });
-        } catch (e) {
-            console.error('Erro ao salvar histórico:', e);
-        }
-    };
-
     const handleCepBlur = async () => {
         const rawCep = formData.cep.replace(/\D/g, '');
         if (rawCep.length === 8) {
@@ -565,12 +686,25 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         const confirm = await showConfirm(`Gerar boleto CONSOLIDADO (todas as faturas pendentes) para ${formData.name}?`);
         if (!confirm) return;
 
-        setGenerating(true);
         try {
             const result = await createAsaasCharge(subscriber.id, 'subscriber');
-            if (result.url) {
-                showAlert('Boleto consolidado gerado com sucesso!', 'success');
-                window.open(result.url, '_blank');
+            if (result.success && result.consolidatedId) {
+                showAlert('Boleto consolidado gerado com sucesso! Iniciando disparo de e-mail...', 'success');
+                
+                // Recarregar faturas consolidadas
+                const { data: newConsolidated } = await supabase
+                    .from('consolidated_invoices')
+                    .select('*')
+                    .eq('id', result.consolidatedId)
+                    .single();
+
+                if (newConsolidated) {
+                    // Dispara automaticamente o download e o e-mail
+                    setConsolidatedInvoices(prev => [newConsolidated, ...prev]);
+                    handleDownloadConsolidated(newConsolidated);
+                }
+                
+                fetchInvoices(subscriber.id);
             }
         } catch (error) {
             console.error(error);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail } from 'lucide-react';
 
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
@@ -11,6 +11,7 @@ export default function SettingsLayout() {
     const menuItems = [
         { id: 'users', label: 'Perfil de Usuários', icon: Users, desc: 'Gerenciar usuários e acesso' },
         { id: 'evolution', label: 'Evolution API', icon: Code, desc: 'Configuração da API WhatsApp' },
+        { id: 'email_service', label: 'Serviço de e-mail', icon: Mail, desc: 'Configuração do Resend (E-mail)' },
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
     ];
@@ -21,6 +22,8 @@ export default function SettingsLayout() {
                 return <UserProfilesSettings />;
             case 'evolution':
                 return <IntegrationSettings serviceName="evolution_api" title="Evolution API" description="Configuração da API de WhatsApp" />;
+            case 'email_service':
+                return <IntegrationSettings serviceName="resend_api" title="Serviço de E-mail" description="Configuração de envio via Resend" />;
             case 'financial':
                 return <IntegrationSettings serviceName="financial_api" title="Integração Financeira" description="Gateways de Pagamento (Asaas, etc)" />;
             case 'branding':

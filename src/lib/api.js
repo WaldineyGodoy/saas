@@ -283,16 +283,19 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
 
         // data is a Blob because of the response in Edge Function
         const blob = new Blob([data], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        
+        if (fileName) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
 
-        return true;
+        return blob;
     } catch (error) {
         console.error('Erro ao mesclar PDF:', error);
         throw error;
@@ -317,5 +320,31 @@ export const parseInvoice = async (pdfBase64) => {
         } catch (e) { }
         throw new Error(message);
     }
+    return data;
+};
+
+/**
+ * Envia e-mail de fatura via Edge Function
+ * @param {string} to Destinatário
+ * @param {string} subject Assunto
+ * @param {string} html Conteúdo HTML (opcional)
+ * @param {Array} attachments Lista de { filename, content (base64) }
+ * @param {Object} variables { nome, valor, vencimento } para template padrão
+ * @returns {Promise<{ success: boolean, data: any }>}
+ */
+export const sendInvoiceEmail = async (to, subject, html = null, attachments = [], variables = null) => {
+    const { data, error } = await supabase.functions.invoke('send-email', {
+        body: { to, subject, html, attachments, variables }
+    });
+
+    if (error) {
+        let errorMsg = error.message;
+        try {
+            const body = await error.context?.json();
+            if (body && body.error) errorMsg = body.error;
+        } catch (e) { }
+        throw new Error(errorMsg);
+    }
+
     return data;
 };

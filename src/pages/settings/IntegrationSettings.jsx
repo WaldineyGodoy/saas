@@ -153,6 +153,33 @@ export default function IntegrationSettings({ serviceName, title, description })
         } finally {
             setSendingTest(false);
         }
+    const handleSendTestEmail = async () => {
+        if (!testPhone) {
+            showAlert('Informe um e-mail para teste.', 'error');
+            return;
+        }
+
+        setSendingTest(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('send-email', {
+                body: {
+                    to: testPhone,
+                    subject: 'Teste B2W Energia',
+                    html: `<h1>Teste de Conexão</h1><p>${testMessage}</p>`,
+                }
+            });
+
+            if (error) throw new Error(error.message);
+            if (data?.error) throw new Error(data.error);
+
+            showAlert('E-mail de teste enviado com sucesso!', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert('Falha no teste: ' + err.message, 'error');
+        } finally {
+            setSendingTest(false);
+        }
+    };
     };
 
     return (
@@ -511,6 +538,39 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 style={{ padding: '0.7rem 1.5rem', background: loading ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}
                             >
                                 {loading ? 'Testando...' : 'Testar Conexão'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {/* TEST AREA - Email Service (Resend) */}
+                {serviceName === 'resend_api' && (
+                    <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155' }}>Teste de E-mail</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'end' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>E-mail de Destino</label>
+                                <input
+                                    placeholder="exemplo@email.com"
+                                    value={testPhone}
+                                    onChange={e => setTestPhone(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>Mensagem</label>
+                                <input
+                                    value={testMessage}
+                                    onChange={e => setTestMessage(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleSendTestEmail}
+                                disabled={sendingTest || !testPhone}
+                                style={{ padding: '0.7rem 1.5rem', background: sendingTest ? '#94a3b8' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingTest ? 'default' : 'pointer', fontWeight: 600 }}
+                            >
+                                {sendingTest ? 'Enviando...' : 'Enviar Teste'}
                             </button>
                         </div>
                     </div>
