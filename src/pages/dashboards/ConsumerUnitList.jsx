@@ -158,6 +158,15 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
 
     // 2. Agrupar e Calcular Status
     const groupedUnits = activeUnits.reduce((acc, unit) => {
+        const unitDate = new Date(unit.created_at);
+        const unitYear = unitDate.getFullYear();
+        const unitMonth = unitDate.getMonth() + 1;
+        
+        // Verificar se a UC já existia no mês/ano filtrado
+        if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
+            return acc;
+        }
+
         const day = unit.dia_leitura || 0;
         
         // Determinar Status da Leitura para o mês selecionado
@@ -488,6 +497,10 @@ export default function ConsumerUnitList() {
         const activeUnits = units.filter(u => u.status === 'ativo');
 
         activeUnits.forEach(unit => {
+            const unitDate = new Date(unit.created_at);
+            const unitYear = unitDate.getFullYear();
+            const unitMonth = unitDate.getMonth() + 1;
+            
             const day = unit.dia_leitura || 0;
             
             // Cálculo do Mês Selecionado
@@ -495,6 +508,12 @@ export default function ConsumerUnitList() {
             const hasMonthInvoice = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === monthRef);
             
             let monthStatus = 'pending';
+            
+            // Ignorar se a UC não existia no mês selecionado
+            if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
+                return;
+            }
+
             if (hasMonthInvoice) monthStatus = 'success';
             else if (unit.last_scraping_status === 'processing' && isCurrentMonthSelected) monthStatus = 'processing';
             else if (isCurrentMonthSelected) {
@@ -509,6 +528,12 @@ export default function ConsumerUnitList() {
             for (let m = 1; m <= filterMonth; m++) {
                 const mStr = String(m).padStart(2, '0');
                 const mRef = `${filterYear}-${mStr}-01`;
+                
+                // Ignorar meses anteriores à criação da UC
+                if (unitYear > filterYear || (unitYear === filterYear && unitMonth > m)) {
+                    continue;
+                }
+
                 const hasInv = invoicesForMonth.some(inv => inv.uc_id === unit.id && inv.mes_referencia === mRef);
                 
                 if (hasInv) {
