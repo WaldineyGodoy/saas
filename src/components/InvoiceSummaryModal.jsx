@@ -217,7 +217,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             <ExternalLink size={18} /> Visualizar Conta
                         </button>
                         
-                        {invoice.status !== 'pago' && (
+                        {invoice.status !== 'pago' && consumerUnit?.modalidade_consumo === 'auto_consumo_remoto' && (
                             <button 
                                 onClick={handlePay}
                                 disabled={loading || paymentStatus === 'success'}

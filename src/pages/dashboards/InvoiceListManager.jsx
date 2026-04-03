@@ -58,9 +58,12 @@ export default function InvoiceListManager() {
                 .select(`
                     *,
                     consumer_units (
+                        id,
                         numero_uc,
                         titular_conta,
                         concessionaria,
+                        modalidade_consumo,
+                        status,
                         subscribers!consumer_units_subscriber_id_fkey(name)
                     )
                 `);
@@ -364,8 +367,13 @@ export default function InvoiceListManager() {
         const startOffset = (firstDay + 6) % 7; // Segunda = 0
         const daysInMonth = new Date(year, month, 0).getDate();
         const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-        const groupedInvoices = invoices.reduce((acc, inv) => {
+        
+        // Filtra faturas: apenas UCs ativas e modalidade Auto Consumo Remoto
+        const filteredEnergyInvoices = invoices.filter(inv => 
+            inv.consumer_units?.status === 'ativo' && 
+            inv.consumer_units?.modalidade_consumo === 'auto_consumo_remoto'
+        );
+        const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
                 const date = new Date(inv.vencimento + 'T12:00:00');
                 const day = date.getUTCDate();
@@ -374,13 +382,14 @@ export default function InvoiceListManager() {
             }
             return acc;
         }, {});
-
-        const stats = invoices.reduce((acc, inv) => {
+        
+        const stats = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.status === 'pago') acc.pago++;
             else if (inv.status === 'atrasado') acc.atrasado++;
             else if (inv.status === 'a_vencer') acc.a_vencer++;
             return acc;
         }, { pago: 0, atrasado: 0, a_vencer: 0 });
+
 
         return (
             <div style={{ padding: '1rem' }}>
@@ -733,7 +742,7 @@ export default function InvoiceListManager() {
                                                                 border: '1px solid #bbf7d0',
                                                                 display: 'block'
                                                             }}>PAGA</span>
-                                                        ) : inv.linha_digitavel ? (
+                                                        ) : (inv.linha_digitavel && inv.consumer_units?.modalidade_consumo === 'auto_consumo_remoto') ? (
                                                             <button 
                                                                 onClick={() => handlePayBill(inv)}
                                                                 disabled={payingId === inv.id}
