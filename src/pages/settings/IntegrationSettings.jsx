@@ -57,6 +57,10 @@ export default function IntegrationSettings({ serviceName, title, description })
                 environment: data.environment || 'production',
                 variables: varsArray
             });
+
+            // Inicializa o telefone/email de teste se houver salvo nas variáveis
+            const savedTestValue = varsArray.find(v => v.key === 'test_phone')?.value || '';
+            if (savedTestValue) setTestPhone(savedTestValue);
         } else if (error && error.code !== 'PGRST116') {
             console.error('Error fetching config:', error);
         }
@@ -396,6 +400,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 value={formData.variables.find(v => v.key === 'test_phone')?.value || ''}
                                 onChange={e => {
                                     const val = e.target.value.replace(/\D/g, '');
+                                    setTestPhone(val);
                                     setFormData(prev => {
                                         const exists = prev.variables.some(v => v.key === 'test_phone');
                                         let newVars;
@@ -485,7 +490,21 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 <input
                                     placeholder="5511999999999"
                                     value={testPhone}
-                                    onChange={e => setTestPhone(e.target.value.replace(/\D/g, ''))}
+                                    onChange={e => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        setTestPhone(val);
+                                        // Sincroniza com as variáveis para permitir salvar
+                                        setFormData(prev => {
+                                            const exists = prev.variables.some(v => v.key === 'test_phone');
+                                            let newVars;
+                                            if (exists) {
+                                                newVars = prev.variables.map(v => v.key === 'test_phone' ? { ...v, value: val } : v);
+                                            } else {
+                                                newVars = [...prev.variables, { key: 'test_phone', value: val }];
+                                            }
+                                            return { ...prev, variables: newVars };
+                                        });
+                                    }}
                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                                 />
                             </div>
@@ -575,7 +594,21 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 <input
                                     placeholder="exemplo@email.com"
                                     value={testPhone}
-                                    onChange={e => setTestPhone(e.target.value)}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setTestPhone(val);
+                                        // Sincroniza com as variáveis para permitir salvar
+                                        setFormData(prev => {
+                                            const exists = prev.variables.some(v => v.key === 'test_phone');
+                                            let newVars;
+                                            if (exists) {
+                                                newVars = prev.variables.map(v => v.key === 'test_phone' ? { ...v, value: val } : v);
+                                            } else {
+                                                newVars = [...prev.variables, { key: 'test_phone', value: val }];
+                                            }
+                                            return { ...prev, variables: newVars };
+                                        });
+                                    }}
                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                                 />
                             </div>
