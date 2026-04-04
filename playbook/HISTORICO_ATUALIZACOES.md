@@ -4,6 +4,20 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-03] - Integração de Mensageria WhatsApp (Evolution API)
+
+### Atualizações Registradas:
+1. **Mensageria Híbrida**:
+    - Disparo simultâneo e atômico (E-mail via Resend + WhatsApp via Evolution API).
+2. **Suporte a Documentos (sendMedia)**:
+    - Envio do PDF combinado (Demonstrativo B2W + Boleto Asaas) via WhatsApp.
+3. **Persistência de Configuração**:
+    - Armazenamento estável de **Telefone de Teste** para modo Sandbox.
+4. **Log Unificado**:
+    - Registro de sucesso/erro consolidado em uma única entrada no `crm_history`.
+
+---
+
 ## [2026-04-03] - Modernização da Listagem de Assinantes (Dashboard)
 
 ### Atualizações Registradas:

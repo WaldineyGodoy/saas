@@ -157,6 +157,8 @@ export default function IntegrationSettings({ serviceName, title, description })
         } finally {
             setSendingTest(false);
         }
+    };
+
     const handleSendTestEmail = async () => {
         if (!testPhone) {
             showAlert('Informe um e-mail para teste.', 'error');
@@ -183,7 +185,6 @@ export default function IntegrationSettings({ serviceName, title, description })
         } finally {
             setSendingTest(false);
         }
-    };
     };
 
     return (
