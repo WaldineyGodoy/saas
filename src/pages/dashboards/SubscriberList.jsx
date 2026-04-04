@@ -184,10 +184,9 @@ export default function SubscriberList() {
                 const subInvoices = allInvoices?.filter(inv => inv.consumer_units?.subscriber_id === sub.id) || [];
                 const subUnits = units?.filter(u => u.subscriber_id === sub.id) || [];
                 
-                // Total no Mês Selecionado (Baseado em Vencimento: o que o assinante precisa pagar no mês)
+                // Total no Mês Selecionado (Baseado estritamente em VENCIMENTO: fluxo de caixa do período)
                 const invoicesFinance = subInvoices.filter(inv => 
-                    inv.vencimento?.startsWith(month) || 
-                    inv.mes_referencia?.startsWith(month)
+                    inv.vencimento?.startsWith(month)
                 );
                 
                 const totalMonth = invoicesFinance.reduce((sum, inv) => 
