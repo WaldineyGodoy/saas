@@ -391,37 +391,71 @@ export default function SubscriberList() {
             </div>
 
             {/* Controls Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '1.5rem', 
+                flexWrap: 'wrap', 
+                gap: '1rem',
+                padding: '0.5rem',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0'
+            }}>
+                <div style={{ display: 'flex', gap: '1rem', flex: 1, minWidth: '300px' }}>
                     <input
                         type="text"
                         placeholder="Buscar por nome, email, telefone ou CPF..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={{
-                            padding: '0.6rem', width: '100%', maxWidth: '350px',
-                            border: '1px solid #ddd', borderRadius: '4px'
+                            padding: '0.6rem 1rem', width: '100%', maxWidth: '400px',
+                            border: '1px solid #cbd5e1', borderRadius: '6px',
+                            fontSize: '0.9rem', outline: 'none'
                         }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', padding: '0.2rem 0.8rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem', 
+                        background: 'white', 
+                        padding: '0.2rem 0.8rem', 
+                        borderRadius: '6px', 
+                        border: '1px solid #cbd5e1',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}>
                         <Calendar size={16} color="#64748b" />
                         <input
                             type="month"
                             value={monthFilter}
                             onChange={(e) => setMonthFilter(e.target.value)}
                             style={{
-                                border: 'none', background: 'transparent', padding: '0.4rem', 
-                                outline: 'none', color: '#475569', fontWeight: 600, fontSize: '0.9rem'
+                                border: 'none', 
+                                background: 'transparent', 
+                                padding: '0.4rem 0.2rem', 
+                                outline: 'none', 
+                                color: '#1e293b', 
+                                fontWeight: 700, 
+                                fontSize: '0.9rem',
+                                cursor: 'pointer'
                             }}
                         />
                     </div>
-                    <div style={{ display: 'flex', border: '1px solid #ccc', borderRadius: '4px', overflow: 'hidden' }}>
+
+                    <div style={{ display: 'flex', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden', background: 'white' }}>
                         <button
                             onClick={() => setViewMode('list')}
                             style={{
-                                padding: '0.6rem 1rem', cursor: 'pointer', border: 'none',
-                                background: viewMode === 'list' ? 'var(--color-blue)' : 'white',
-                                color: viewMode === 'list' ? 'white' : '#333'
+                                padding: '0.6rem 1.2rem', cursor: 'pointer', border: 'none',
+                                background: viewMode === 'list' ? 'var(--color-blue)' : 'transparent',
+                                color: viewMode === 'list' ? 'white' : '#64748b',
+                                fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s'
                             }}
                         >
                             Lista
@@ -429,9 +463,10 @@ export default function SubscriberList() {
                         <button
                             onClick={() => setViewMode('kanban')}
                             style={{
-                                padding: '0.6rem 1rem', cursor: 'pointer', border: 'none',
-                                background: viewMode === 'kanban' ? 'var(--color-blue)' : 'white',
-                                color: viewMode === 'kanban' ? 'white' : '#333'
+                                padding: '0.6rem 1.2rem', cursor: 'pointer', border: 'none',
+                                background: viewMode === 'kanban' ? 'var(--color-blue)' : 'transparent',
+                                color: viewMode === 'kanban' ? 'white' : '#64748b',
+                                fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s'
                             }}
                         >
                             Kanban
@@ -440,7 +475,11 @@ export default function SubscriberList() {
                 </div>
             </div>
 
-            {loading ? <p>Carregando...</p> : (
+            {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+                    <RefreshCw size={40} color="var(--color-blue)" className="spin" />
+                </div>
+            ) : (
                 <>
                     {viewMode === 'list' ? (
                         <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
