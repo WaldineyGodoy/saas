@@ -4,6 +4,22 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-03] - Reformulação de Indicadores e Filtros (Dashboard)
+
+### Atualizações Registradas:
+1. **Lógica Financeira (Precisão)**:
+    - Inclusão do status `a_vencer` no somatório mensal.
+    - Alteração da base de cálculo de "Total no Mês" para a **Data de Vencimento** (Data de Caixa).
+2. **Ciclo de Leitura**:
+    - Ajuste do contador `X/Y` para refletir apenas o **Mês de Referência** selecionado.
+3. **Interface e Filtros**:
+    - Implementação de **Cards de Somatório** (Total Mensal e Global do Grid).
+    - Substituição de inputs de data por seletores universais (Mês/Ano).
+    - Regra de ocultação automática para assinantes **Cancelados**.
+    - Cabeçalhos interativos para ordenação alfabética e por status.
+
+---
+
 ## [2026-04-03] - Integração de Mensageria WhatsApp (Evolution API)
 
 ### Atualizações Registradas:

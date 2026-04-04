@@ -558,7 +558,7 @@ export default function SubscriberList() {
                         <DollarSign size={24} color="#10b981" />
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Soma Total no Mês</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Total a Receber no Mês</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
                             {summaryTotals.month.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>
@@ -569,7 +569,7 @@ export default function SubscriberList() {
                         <TrendingUp size={24} color="#ef4444" />
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Soma Total a Pagar</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Total a Receber Acumulado</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
                             {summaryTotals.global.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </div>

@@ -9,80 +9,70 @@ Este documento centraliza as regras de negócio, fluxos de trabalho, gatilhos e 
 ### 👥 Gestão de Assinantes (Subscribers)
 Controle do ciclo de vida dos clientes e visão 360º.
 - **Interface**: Navegação por **Abas Superiores** (Dados, Endereço, UCs, Faturas).
-- **Dashboard**: Tabela de alta densidade agrupando Nome, CPF e Contatos em coluna única.
-- **KPIs**: Total no Mês, Total a Pagar (Global) e Progresso de Leitura (Ex: `4/5`).
+- **Dashboard (Dashboard Modernizado)**:
+    - **Cards de Resumo**: Localizados no topo, exibem a soma de **"Total do Mês"** e **"Total Global"** de todos os registros visíveis no grid.
+    - **Tabela de Alta Densidade**: Agrupamento de Nome, CPF e Contatos em coluna única.
+    - **KPIs**: Total no Mês (Vencimento), Total a Pagar (Global) e Progresso de Leitura (Ex: `4/5`).
+- **Filtros Inteligentes**:
+    - **Seletor Universal**: Seletores de Mês e Ano individuais (Substituem o input de data nativo para compatibilidade).
+    - **Ocultação Automática**: Assinantes com status **Cancelado** são ocultados por padrão (exibidos apenas em buscas ativas).
+    - **Sorting**: Ordenação interativa por cabeçalho (Alfabética, Status, Financeiro).
 
 ### ⚡ Gestão de Unidades Consumidoras (UCs)
 Monitoramento técnico e operacional de leituras.
-- **Filtro Temporal**: Seletor de Mês/Ano unificado que controla indicadores em tempo real.
 
 ### 💰 Gestão de Faturas (Billing)
 Faturamento mensal, integração bancária e automação de cobrança.
 
 ---
 
-## 2. Gatilhos e Automações (Triggers)
+## 2. Regras de Negócio e Lógica Financeira
 
-### A. Mensageria Híbrida (Notificações)
-| Evento | Ação de Automação | Destino |
-| :--- | :--- | :--- |
-| **Emissão / Download** | Disparo simultâneo e atômico | **E-mail (Resend) + WhatsApp (Evolution)** |
+### ⚖️ Cálculo de Indicadores
+- **Total no Mês**: Soma das faturas com status `pago`, `atrasado` ou `a_vencer`. O cálculo é baseado na **Data de Vencimento** da fatura, garantindo a visualização correta do fluxo de caixa sem duplicidades por mês de referência.
+- **Total a Pagar (Global)**: Saldo devedor total acumulado ao longo de todo o histórico.
 
-### B. Gestão de Inadimplência
-- **15 dias de atraso**: Move assinante para **Ativo Inadimplente (Âmbar)**.
-- **60 dias de atraso**: Move assinante para **Cancelado Inadimplente (Vinho)**.
+### 📊 Ciclo de Leitura (Indicador `X/Y`)
+- O contador quantitativo (Ex: 2 unidades lidas de 5 totais) reflete o sucesso das coletas estritamente para o **Mês de Referência** selecionado no filtro temporal.
 
-### C. PDF Composto
-- O sistema une o Demonstrativo B2W ao Boleto Asaas em um único anexo enviado ao cliente.
-
----
-
-## 3. Regras de Negócio e Segurança
-
-### 🚦 Sandbox Seguro (Roteamento)
-Se o modo sandbox estiver ativo na integração financeira:
+### 🚦 Roteamento e Segurança (Sandbox)
 - **E-mails**: Desviados para `waldineygodoy@gmail.com`.
 - **WhatsApp**: Desviado para o **Telefone de Teste** fixo nas configurações.
 
-### ⚖️ Visibilidade por Modalidade
-- **Auto Consumo**: Botões de pagamento e calendário de energia **visíveis**.
-- **Geração Compartilhada**: Botões e calendário **ocultos** (responsabilidade do assinante).
+---
+
+## 3. Gatilhos e Automações (Triggers)
+
+- **Mensageria Híbrida**: Disparo simultâneo (E-mail + WhatsApp) na emissão/download.
+- **Inadimplência Automática**: 15 dias -> **Inadimplente** | 60 dias -> **Cancelamento Crítico**.
+- **PDF Composto**: Mesclagem automática de Demonstrativo B2W + Boleto Asaas.
 
 ---
 
-## 4. Padrões de Layout e UX (UI Modernizada)
+## 4. Padrões de Layout e UX
 
-- **Menu em Abas**: Modal do Assinante com abas superiores para eliminar scroll excessivo.
-- **Sticky UI**: Cabeçalhos e filtros fixos (`sticky`) para rápida interação.
-- **Grid de 7 Colunas**: Calendários padronizados (Segunda a Domingo) com `min-height` fixo.
-- **Responsividade**: Layout expandido para `maxWidth: 1600px`.
+- **Menu em Abas**: Modal do Assinante com abas superiores.
+- **Sticky UI**: Filtros e cabeçalhos fixos.
+- **Layout Expandido**: `maxWidth: 1600px`.
+- **Responsividade**: Tabelas adaptadas para omitir dados menos críticos (Ex: Cidade) em favor de indicadores financeiros.
 
 ---
 
 ## 5. Identidade Visual (Cores e Símbolos)
 
 ### Ações de Cobrança (Ícone `CreditCard`)
-Reflete a saúde financeira do **mês selecionado**:
-- 🔴 **Vermelho**: Não Emitido (Existe débito sem boleto consolidado).
-- 🔵 **Azul**: Emitido (Aguardando pagamento/compensação).
+- 🔴 **Vermelho**: Não Emitido (Débito no período sem boleto consolidado).
+- 🔵 **Azul**: Emitido (Aguardando pagamento).
 - 🟢 **Verde**: Quitado (Todas as faturas do período pagas).
 
 ### Status de Unidades Consumidoras (UCs)
-| Status | Cor | Contexto |
-| :--- | :--- | :--- |
-| **Ativo / Sucesso** | 🟢 Verde (`#22c55e`) | Operação normal e leitura confirmada. |
-| **Pendente** | 🟠 Laranja (`#f97316`) | Unidade ativa aguardando leitura/processamento. |
-| **Erro / Alerta** | 🔴 Vermelho (`#ef4444`) | Falha no scraping ou inadimplência crítica. |
-| **Inativo** | 🔘 Cinza (`#64748b`) | Unidade desativada ou transferida. |
+- 🟢 **Verde**: Ativo/Sucesso | 🟠 **Laranja**: Pendente | 🔴 **Vermelho**: Erro/Alerta | 🔘 **Cinza**: Inativo.
 
 ### Status de Leitura (Ícones)
-- ✅ **Sucesso**: Fatura encontrada e processada.
-- 🌀 **Processando (Spin)**: Scraping em curso ou aguardando sincronia.
-- ⚠️ **Erro**: Falha técnica na coleta junto à concessionária.
-- 🕒 **Pendente**: Leitura aguardando data prevista.
+- ✅ Sucesso | 🌀 Processando (Spin) | ⚠️ Erro | 🕒 Pendente
 
 ---
 
-## 6. Rastreabilidade (Logs)
+## 6. Rastreabilidade
 - **Log Unificado**: `"Fatura enviada ao e-mail {email} e whatsapp {phone}"`.
-- **Auditoria**: Tabela `crm_history` com metadados `email_status` e `wa_status`.
+- **Auditoria de Canal**: Metadados `email_status` e `wa_status` na timeline do CRM.
