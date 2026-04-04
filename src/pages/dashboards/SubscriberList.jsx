@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import SubscriberModal from '../../components/SubscriberModal';
-import { CreditCard, X, Eye, Pencil, RefreshCw, CheckCircle, AlertCircle, Clock, Calendar } from 'lucide-react';
+import { CreditCard, X, Eye, Pencil, RefreshCw, CheckCircle, AlertCircle, Clock, Calendar, ArrowUpDown, ChevronUp, ChevronDown, TrendingUp, DollarSign } from 'lucide-react';
 import { createAsaasCharge } from '../../lib/api';
 import {
     DndContext,
@@ -35,6 +35,7 @@ export default function SubscriberList() {
     const [activeId, setActiveId] = useState(null);
     const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
     const [subStats, setSubStats] = useState({});
+    const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -112,23 +113,68 @@ export default function SubscriberList() {
         }
     };
 
-    const filteredSubscribers = subscribers.filter(sub => {
-        const isCancelled = sub.status?.toLowerCase().includes('cancelado');
-        
-        if (!searchTerm) {
-            // Se não houver busca, oculta assinantes cancelados por padrão
-            return !isCancelled;
-        }
+    const filteredSubscribers = useMemo(() => {
+        return subscribers.filter(sub => {
+            const isCancelled = sub.status?.toLowerCase().includes('cancelado');
+            
+            if (!searchTerm) {
+                // Se não houver busca, oculta assinantes cancelados por padrão
+                return !isCancelled;
+            }
 
-        const lowerTerm = searchTerm.toLowerCase();
-        return (
-            sub.name?.toLowerCase().includes(lowerTerm) ||
-            sub.email?.toLowerCase().includes(lowerTerm) ||
-            sub.phone?.includes(lowerTerm) ||
-            sub.cpf_cnpj?.includes(lowerTerm) ||
-            sub.status?.toLowerCase().includes(lowerTerm)
-        );
-    });
+            const lowerTerm = searchTerm.toLowerCase();
+            return (
+                sub.name?.toLowerCase().includes(lowerTerm) ||
+                sub.email?.toLowerCase().includes(lowerTerm) ||
+                sub.phone?.includes(lowerTerm) ||
+                sub.cpf_cnpj?.includes(lowerTerm) ||
+                sub.status?.toLowerCase().includes(lowerTerm)
+            );
+        });
+    }, [subscribers, searchTerm]);
+
+    const sortedSubscribers = useMemo(() => {
+        const sorted = [...filteredSubscribers];
+        if (sortConfig.key) {
+            sorted.sort((a, b) => {
+                let aVal = a[sortConfig.key] || '';
+                let bVal = b[sortConfig.key] || '';
+                
+                if (sortConfig.key === 'status') {
+                    // Prioridade de status opcional ou apenas alfabético
+                    aVal = a.status || '';
+                    bVal = b.status || '';
+                }
+
+                if (aVal.toString().toLowerCase() < bVal.toString().toLowerCase()) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aVal.toString().toLowerCase() > bVal.toString().toLowerCase()) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sorted;
+    }, [filteredSubscribers, sortConfig]);
+
+    const summaryTotals = useMemo(() => {
+        return filteredSubscribers.reduce((acc, sub) => {
+            const stats = subStats[sub.id] || { totalMonth: 0, totalGlobal: 0 };
+            acc.month += stats.totalMonth || 0;
+            acc.global += stats.totalGlobal || 0;
+            return acc;
+        }, { month: 0, global: 0 });
+    }, [filteredSubscribers, subStats]);
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
 
     useEffect(() => {
         fetchSubscribers();
@@ -505,6 +551,32 @@ export default function SubscriberList() {
                 </div>
             </div>
 
+            {/* Summary Bar */}
+            <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px', background: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.8rem', background: '#ecfdf5', borderRadius: '10px' }}>
+                        <DollarSign size={24} color="#10b981" />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Soma Total no Mês</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
+                            {summaryTotals.month.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                    </div>
+                </div>
+                <div style={{ flex: 1, minWidth: '200px', background: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ padding: '0.8rem', background: '#fef2f2', borderRadius: '10px' }}>
+                        <TrendingUp size={24} color="#ef4444" />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Soma Total a Pagar</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
+                            {summaryTotals.global.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
                     <RefreshCw size={40} color="var(--color-blue)" className="spin" />
@@ -513,22 +585,42 @@ export default function SubscriberList() {
                 <>
                     {viewMode === 'list' ? (
                         <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
-                            {filteredSubscribers.length === 0 ? (
+                            {sortedSubscribers.length === 0 ? (
                                 <p style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>Nenhum assinante encontrado.</p>
                             ) : (
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nome / CPF / Contato</th>
+                                            <th 
+                                                onClick={() => requestSort('name')}
+                                                style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'background 0.2s', borderTopLeftRadius: '8px' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    Nome / CPF / Contato
+                                                    {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                                </div>
+                                            </th>
                                             <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Total no Mês</th>
                                             <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Total a Pagar</th>
-                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Status</th>
+                                            <th 
+                                                onClick={() => requestSort('status')}
+                                                style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                                    Status
+                                                    {sortConfig.key === 'status' && (sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                                </div>
+                                            </th>
                                             <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Leitura</th>
-                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Ações</th>
+                                            <th style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', borderTopRightRadius: '8px' }}>Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredSubscribers.map(sub => {
+                                        {sortedSubscribers.map(sub => {
                                             const stats = subStats[sub.id] || { totalMonth: 0, totalGlobal: 0, readingTotal: 0, readingScanned: 0, boletoColor: '#94a3b8' };
                                             
                                             return (
