@@ -113,13 +113,20 @@ export default function SubscriberList() {
     };
 
     const filteredSubscribers = subscribers.filter(sub => {
-        if (!searchTerm) return true;
+        const isCancelled = sub.status?.toLowerCase().includes('cancelado');
+        
+        if (!searchTerm) {
+            // Se não houver busca, oculta assinantes cancelados por padrão
+            return !isCancelled;
+        }
+
         const lowerTerm = searchTerm.toLowerCase();
         return (
             sub.name?.toLowerCase().includes(lowerTerm) ||
             sub.email?.toLowerCase().includes(lowerTerm) ||
             sub.phone?.includes(lowerTerm) ||
-            sub.cpf_cnpj?.includes(lowerTerm)
+            sub.cpf_cnpj?.includes(lowerTerm) ||
+            sub.status?.toLowerCase().includes(lowerTerm)
         );
     });
 
