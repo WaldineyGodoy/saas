@@ -125,7 +125,7 @@ export default function SubscriberList() {
 
     useEffect(() => {
         fetchSubscribers();
-    }, []);
+    }, [monthFilter]);
 
     const fetchSubscribers = async () => {
         setLoading(true);
@@ -152,49 +152,65 @@ export default function SubscriberList() {
         try {
             const subIds = subs.map(s => s.id);
 
-            // 1. Buscar Todas as Faturas Pendentes/Vencidas (para Total Global)
-            const { data: allInvoices } = await supabase
+            // 1. Buscar Faturas (Unpaid/Vencido/A Vencer para Total Global E todas do mês selecionado)
+            // Filtramos por subscriber_id via consumer_units para performance e precisão
+            const { data: allInvoices, error: invError } = await supabase
                 .from('invoices')
-                .select('id, uc_id, valor_a_pagar, status, mes_referencia, consumer_units(subscriber_id)')
-                .in('status', ['pendente', 'vencido']);
+                .select('id, uc_id, valor_a_pagar, status, mes_referencia, vencimento, consumer_units!inner(subscriber_id)')
+                .in('consumer_units.subscriber_id', subIds);
+
+            if (invError) throw invError;
 
             // 2. Buscar Unidades Consumidoras (para Indicador de Leitura)
             const { data: units } = await supabase
                 .from('consumer_units')
-                .select('id, subscriber_id, last_scraping_status, dia_leitura')
+                .select('id, subscriber_id, last_scraping_status, last_scraping_at, dia_leitura')
                 .in('subscriber_id', subIds);
 
             // 3. Buscar Faturas Consolidadas do Mês Selecionado (para Cor do Boleto)
             const { data: consolidated } = await supabase
                 .from('consolidated_invoices')
-                .select('id, subscriber_id, status, asaas_boleto_url, created_at')
+                .select('id, subscriber_id, status, asaas_boleto_url, created_at, due_date')
                 .in('subscriber_id', subIds);
 
-            // Filtrar consolidados do mês (baseado no created_at ou logicamente correlacionado)
-            // Como não temos mes_referencia em consolidated_invoices, usaremos o mês de criação
-            const consolidatedThisMonth = consolidated?.filter(c => c.created_at.startsWith(month)) || [];
+            // Filtrar consolidados do mês (Vencimento ou Criação)
+            const consolidatedThisMonth = consolidated?.filter(c => 
+                (c.due_date && c.due_date.startsWith(month)) || 
+                c.created_at.startsWith(month)
+            ) || [];
 
             const stats = {};
             subs.forEach(sub => {
                 const subInvoices = allInvoices?.filter(inv => inv.consumer_units?.subscriber_id === sub.id) || [];
                 const subUnits = units?.filter(u => u.subscriber_id === sub.id) || [];
-                const subConsolidated = consolidatedThisMonth.find(c => c.subscriber_id === sub.id);
+                
+                // Total no Mês Selecionado (Baseado em Vencimento: o que o assinante precisa pagar no mês)
+                const invoicesFinance = subInvoices.filter(inv => 
+                    inv.vencimento?.startsWith(month) || 
+                    inv.mes_referencia?.startsWith(month)
+                );
+                
+                const totalMonth = invoicesFinance.reduce((sum, inv) => 
+                    inv.status !== 'pago' ? sum + Number(inv.valor_a_pagar || 0) : sum
+                , 0);
 
-                // Total Global (Todas as faturas pendentes/vencidas)
-                const totalGlobal = subInvoices.reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
+                // Total Global (Dívida real: pendentes, vencidas e a vencer)
+                const totalGlobal = subInvoices
+                    .filter(inv => inv.status === 'pendente' || inv.status === 'vencido' || inv.status === 'a_vencer')
+                    .reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
 
-                // Total no Mês Selecionado
-                const invoicesMonth = subInvoices.filter(inv => inv.mes_referencia?.startsWith(month));
-                const totalMonth = invoicesMonth.reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
-
-                // Indicador de Leitura (UCs com fatura no mês ou scraping status success)
+                // Indicador de Leitura (UCs com leitura ou fatura NO MÊS de REFERÊNCIA filtrado)
                 const readingTotal = subUnits.length;
                 const readingScanned = subUnits.filter(u => {
-                    const hasInv = invoicesMonth.some(inv => inv.uc_id === u.id);
-                    return hasInv || u.last_scraping_status === 'success';
+                    const hasInvThisMonth = subInvoices.some(inv => 
+                        inv.uc_id === u.id && inv.mes_referencia?.startsWith(month)
+                    );
+                    const readThisMonth = u.last_scraping_at?.startsWith(month);
+                    return hasInvThisMonth || (readThisMonth && u.last_scraping_status === 'success');
                 }).length;
 
-                // Cor do Ícone de Boleto
+                // Cor do Ícone de Boleto (Baseado no financeiro do mês)
+                const subConsolidated = consolidatedThisMonth.find(c => c.subscriber_id === sub.id);
                 let boletoColor = '#94a3b8'; // Default Gray
                 if (totalMonth > 0) {
                     if (!subConsolidated) {
@@ -218,9 +234,6 @@ export default function SubscriberList() {
         }
     };
 
-    useEffect(() => {
-        fetchSubscribers();
-    }, [monthFilter]);
 
     const handleSave = (savedSub) => {
         const exists = subscribers.find(s => s.id === savedSub.id);

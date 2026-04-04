@@ -7,94 +7,82 @@ Este documento centraliza as regras de negócio, fluxos de trabalho, gatilhos e 
 ## 1. Módulos Principais
 
 ### 👥 Gestão de Assinantes (Subscribers)
-Controle do ciclo de vida dos clientes e visão 360º (Unidades, Faturas, Anexos).
-- **Listagem (Dashboard)**: Tabela densa com filtros temporais dinâmicos e KPIs de performance (Financeira e Leituras).
-- **SubscriberModal**: Navegação por abas e gestão detalhada de faturas e UCs.
+Controle do ciclo de vida dos clientes e visão 360º.
+- **Interface**: Navegação por **Abas Superiores** (Dados, Endereço, UCs, Faturas).
+- **Dashboard**: Tabela de alta densidade agrupando Nome, CPF e Contatos em coluna única.
+- **KPIs**: Total no Mês, Total a Pagar (Global) e Progresso de Leitura (Ex: `4/5`).
 
 ### ⚡ Gestão de Unidades Consumidoras (UCs)
-Módulo para acompanhamento técnico e monitoramento de leituras.
+Monitoramento técnico e operacional de leituras.
+- **Filtro Temporal**: Seletor de Mês/Ano unificado que controla indicadores em tempo real.
 
 ### 💰 Gestão de Faturas (Billing)
-Faturamento mensal, integração bancária (Asaas) e envio de faturas.
-
-### 📢 Sistema de Notificações (Multicanal)
-Automação de envio de faturas via **E-mail (Resend)** e **WhatsApp (Evolution API)**.
+Faturamento mensal, integração bancária e automação de cobrança.
 
 ---
 
 ## 2. Gatilhos e Automações (Triggers)
 
-### A. Gatilhos de Notificação (Híbridos)
-O sistema realiza o disparo coordenado e atômico nos seguintes eventos:
-| Evento | Ação | Canais |
+### A. Mensageria Híbrida (Notificações)
+| Evento | Ação de Automação | Destino |
 | :--- | :--- | :--- |
-| **Emissão Consolidada** | Envio de PDF Combinado | E-mail + WhatsApp |
-| **Download PDF/Fatura** | Envio de cópia/link imediato | E-mail + WhatsApp |
+| **Emissão / Download** | Disparo simultâneo e atômico | **E-mail (Resend) + WhatsApp (Evolution)** |
 
-### B. Gatilhos de Status e Inteligência
-- **Inadimplência**: 15 dias -> **Inadimplente** | 60 dias -> **Cancelamento Crítico (Vinho)**.
-- **Leitura Automática**: Sucesso marcado se houver fatura no mês/ano selecionado para as UCs vinculadas.
+### B. Gestão de Inadimplência
+- **15 dias de atraso**: Move assinante para **Ativo Inadimplente (Âmbar)**.
+- **60 dias de atraso**: Move assinante para **Cancelado Inadimplente (Vinho)**.
+
+### C. PDF Composto
+- O sistema une o Demonstrativo B2W ao Boleto Asaas em um único anexo enviado ao cliente.
 
 ---
 
 ## 3. Regras de Negócio e Segurança
 
-### 🚦 Roteamento de Notificações (Sandbox vs Produção)
-Baseado no ambiente da integração financeira (Asaas):
-| Ambiente | Destino E-mail | Destino WhatsApp |
-| :--- | :--- | :--- |
-| **Modo Sandbox** | `waldineygodoy@gmail.com` | **Telefone de Teste** (Salvo em Settings) |
-| **Modo Produção** | E-mail do Perfil | Celular do Perfil |
-
-### 📦 Composição e Documentos
-- **PDF Mesclado**: Demonstrativo B2W + Boleto Asaas (Página Final). Enviado via `sendMedia` da Evolution API v2.
-- **Formatação WhatsApp**: Uso de Markdown (`*negrito*`, emojis) via helper `sendInvoiceNotifications`.
+### 🚦 Sandbox Seguro (Roteamento)
+Se o modo sandbox estiver ativo na integração financeira:
+- **E-mails**: Desviados para `waldineygodoy@gmail.com`.
+- **WhatsApp**: Desviado para o **Telefone de Teste** fixo nas configurações.
 
 ### ⚖️ Visibilidade por Modalidade
-- **Auto Consumo**: Pagamento e Calendário de Energia **visíveis**.
-- **Geração Compartilhada**: Pagamento e calendário **ocultos** (responsabilidade do cliente).
+- **Auto Consumo**: Botões de pagamento e calendário de energia **visíveis**.
+- **Geração Compartilhada**: Botões e calendário **ocultos** (responsabilidade do assinante).
 
 ---
 
-## 4. Padrões de Layout e UX
+## 4. Padrões de Layout e UX (UI Modernizada)
 
-### 📊 Listagem de Assinantes (Dashboard Modernizado)
-- **Filtro Temporal**: Seletor de Mês/Ano no topo para recalcular indicadores do grid.
-- **Densidade de Dados**: Coluna única agrupada para **Nome, CPF/CNPJ, E-mail e Telefone**.
-- **Novos Indicadores**:
-    - **Total no Mês**: Soma das faturas no período selecionado.
-    - **Total a Pagar**: Saldo devedor histórico (Global).
-    - **Leitura**: Progresso operacional (Ex: `2/5` lidas).
-
-### 📐 SubscriberModal (Tabs & Sticky)
-- **Navegação**: Menu superior em abas com ícones e cabeçalhos fixos (`sticky`).
-- **Layout**: `maxWidth: 1600px` para visualização em alta densidade.
+- **Menu em Abas**: Modal do Assinante com abas superiores para eliminar scroll excessivo.
+- **Sticky UI**: Cabeçalhos e filtros fixos (`sticky`) para rápida interação.
+- **Grid de 7 Colunas**: Calendários padronizados (Segunda a Domingo) com `min-height` fixo.
+- **Responsividade**: Layout expandido para `maxWidth: 1600px`.
 
 ---
 
 ## 5. Identidade Visual (Cores e Símbolos)
 
-### Indicador de Boleto (Ícone CreditCard)
-Representa a saúde financeira do assinante no mês selecionado:
-- 🔴 **Vermelho**: Inadimplente no mês (sem boleto gerado).
-- 🔵 **Azul**: Boleto consolidado emitido e aguardando pagamento.
-- 🟢 **Verde**: Faturas do mês quitadas.
+### Ações de Cobrança (Ícone `CreditCard`)
+Reflete a saúde financeira do **mês selecionado**:
+- 🔴 **Vermelho**: Não Emitido (Existe débito sem boleto consolidado).
+- 🔵 **Azul**: Emitido (Aguardando pagamento/compensação).
+- 🟢 **Verde**: Quitado (Todas as faturas do período pagas).
 
-### Status de Assinantes (Kanban)
-| Status | Label | Cor Hex |
+### Status de Unidades Consumidoras (UCs)
+| Status | Cor | Contexto |
 | :--- | :--- | :--- |
-| `ativacao` | **ATIVAÇÃO** | `#0ea5e9` |
-| `ativo` | **ATIVO** | `#22c55e` |
-| `ativo_inadimplente` | **ATIVO INAD.** | `#f59e0b` |
-| `cancelado_inadimplente` | **CANC. INAD.** | `#b91c1c` |
-| `cancelado` | **CANCELADO** | `#ef4444` |
+| **Ativo / Sucesso** | 🟢 Verde (`#22c55e`) | Operação normal e leitura confirmada. |
+| **Pendente** | 🟠 Laranja (`#f97316`) | Unidade ativa aguardando leitura/processamento. |
+| **Erro / Alerta** | 🔴 Vermelho (`#ef4444`) | Falha no scraping ou inadimplência crítica. |
+| **Inativo** | 🔘 Cinza (`#64748b`) | Unidade desativada ou transferida. |
 
-### Indicadores de Leitura (Cards UC)
-- ✅ Sucesso | 🌀 Lendo (Spin) | ⚠️ Erro | 🕒 Pendente
+### Status de Leitura (Ícones)
+- ✅ **Sucesso**: Fatura encontrada e processada.
+- 🌀 **Processando (Spin)**: Scraping em curso ou aguardando sincronia.
+- ⚠️ **Erro**: Falha técnica na coleta junto à concessionária.
+- 🕒 **Pendente**: Leitura aguardando data prevista.
 
 ---
 
-## 6. Rastreabilidade (Logs do CRM)
-Toda interação é unificada na tabela `crm_history`:
-- **Log de Envio**: `"Fatura enviada ao e-mail {email} e whatsapp {phone}"`.
-- **Metadados**: Registro interno de `email_status` e `wa_status` para auditoria técnica.
+## 6. Rastreabilidade (Logs)
+- **Log Unificado**: `"Fatura enviada ao e-mail {email} e whatsapp {phone}"`.
+- **Auditoria**: Tabela `crm_history` com metadados `email_status` e `wa_status`.

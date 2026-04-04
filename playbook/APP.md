@@ -4,7 +4,7 @@ Este documento documenta todas as funcionalidades do APP do Assinante e as regra
 
 ---
 
-## 1. Funcionalidades do Assinante
+## 1. Experiência do Assinante
 
 ### Visão Geral (Dashboard)
 Painel principal do cliente logado.
@@ -12,32 +12,37 @@ Painel principal do cliente logado.
 - **Minhas Unidades**: Lista de UCs vinculadas ao perfil do assinante.
 - **Última Fatura**: Destaque para a fatura mais recente emitida no CRM.
 
+### Notificações (Multicanal)
+Sempre que uma nova fatura é emitida ou baixada, o assinante recebe:
+- **E-mail**: Detalhamento B2W em PDF mesclado com o boleto.
+- **WhatsApp**: Mensagem formatada com emojis e anexo em PDF (`sendMedia`).
+
 ---
 
 ## 2. Gatilhos e Processos do APP (Triggers)
 
 | Evento (Trigger) | Ação | Resultado |
 | :--- | :--- | :--- |
-| **Login do Usuário** | Checagem de Perfil (Subscriber) | Redireciona para o SubscriberDashboard ou AdminDashboard. |
-| **Aceite de Novo Lead** | Conversão em Assinante | Cria registro na tabela `subscribers` e notifica via CRM. |
-| **Simulação de Crédito** | Salvamento de Dados de Contato | Cria registro na tabela `leads` para prospecção. |
+| **Emissão de Fatura** | Disparo de Notificações | Envio simultâneo via e-mail e WhatsApp. |
+| **Login do Usuário** | Checagem de Perfil | Redireciona para o `SubscriberDashboard` ou `AdminDashboard`. |
+| **Aceite de Novo Lead** | Conversão em Assinante | Criação automática do perfil de cobrança no Asaas. |
 
 ---
 
 ## 3. Experiência Visual (Design System)
 
 ### Cores Principais (B2W Design)
-- **Primary Blue**: `#003366` (Header, Botão Principal) — `--color-blue`
-- **Accent Orange**: `#FF6600` (Call to Action, Referral) — `--color-orange`
-- **Success Green**: `#10b981` (Economia, Paga) — `--color-success`
+- **Primary Blue**: `#003366` (Header, Botão Principal).
+- **Accent Orange**: `#FF6600` (Call to Action).
+- **Success Green**: `#10b981` (Economia e Pagamentos Quitados).
 
 ### Simbologia
 - **Badge Verde**: Status 'Pago' ou 'Ativo'.
 - **Badge Vermelho**: Status 'Atrasado' ou 'Vencido'.
-- **Card Hover**: Efeito de elevação para interatividade.
+- **Animações (Feedback)**: Uso de *spinners* em botões durante o processamento de faturas.
 
 ---
 
 ## 4. Legendas e Símbolos
-- **Ver Boleto**: Botão que abre a URL do boleto gerado no Asaas (se disponível).
-- **Editar (Modo Admin)**: Botão visível apenas para funções `admin`/`manager` para ajustes rápidos de faturas.
+- **Ver Boleto**: Botão que abre a URL do boleto gerado no Asaas.
+- **Download PDF**: Baixa o **PDF Combinado** (Demonstrativo B2W + Boleto).
