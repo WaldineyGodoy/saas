@@ -417,35 +417,59 @@ export default function SubscriberList() {
                     />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
                     <div style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '0.5rem', 
                         background: 'white', 
-                        padding: '0.2rem 0.8rem', 
+                        padding: '0.4rem 0.8rem', 
                         borderRadius: '6px', 
                         border: '1px solid #cbd5e1',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
                         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                     }}>
                         <Calendar size={16} color="#64748b" />
-                        <input
-                            type="month"
-                            value={monthFilter}
-                            onChange={(e) => setMonthFilter(e.target.value)}
-                            style={{
-                                border: 'none', 
-                                background: 'transparent', 
-                                padding: '0.4rem 0.2rem', 
-                                outline: 'none', 
-                                color: '#1e293b', 
-                                fontWeight: 700, 
-                                fontSize: '0.9rem',
-                                cursor: 'pointer'
+                        
+                        {/* Seletor de Mês */}
+                        <select
+                            value={monthFilter.split('-')[1]}
+                            onChange={(e) => {
+                                const year = monthFilter.split('-')[0];
+                                setMonthFilter(`${year}-${e.target.value}`);
                             }}
-                        />
+                            style={{
+                                border: 'none', background: 'transparent', outline: 'none',
+                                color: '#1e293b', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer'
+                            }}
+                        >
+                            {[
+                                {v: '01', l: 'Jan'}, {v: '02', l: 'Fev'}, {v: '03', l: 'Mar'},
+                                {v: '04', l: 'Abr'}, {v: '05', l: 'Mai'}, {v: '06', l: 'Jun'},
+                                {v: '07', l: 'Jul'}, {v: '08', l: 'Ago'}, {v: '09', l: 'Set'},
+                                {v: '10', l: 'Out'}, {v: '11', l: 'Nov'}, {v: '12', l: 'Dez'}
+                            ].map(m => (
+                                <option key={m.v} value={m.v}>{m.l}</option>
+                            ))}
+                        </select>
+
+                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }} />
+
+                        {/* Seletor de Ano */}
+                        <select
+                            value={monthFilter.split('-')[0]}
+                            onChange={(e) => {
+                                const month = monthFilter.split('-')[1];
+                                setMonthFilter(`${e.target.value}-${month}`);
+                            }}
+                            style={{
+                                border: 'none', background: 'transparent', outline: 'none',
+                                color: '#1e293b', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer'
+                            }}
+                        >
+                            {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div style={{ display: 'flex', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden', background: 'white' }}>
