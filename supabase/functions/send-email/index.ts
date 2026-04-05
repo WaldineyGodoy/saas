@@ -18,11 +18,9 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // Parse body gracefully
         const body = await req.json().catch(() => ({}));
         const { to, subject, html, attachments, variables } = body;
 
-        // 1. Buscar Configuração do Resend
         const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
             .select('*')
@@ -30,17 +28,28 @@ serve(async (req) => {
             .single();
 
         if (configError || !config || !config.api_key) {
-            throw new Error('Configuração do Resend não encontrada no banco de dados.');
+            throw new Error('Configuração do Resend não encontrada.');
         }
 
-        // Helper para extrair variáveis do array [{key, value}]
+        // Helper robusto para ler variáveis tanto de Array [{key, value}] quanto de Object {key: value}
         const getV = (key: string, fallback: string) => {
-            if (!Array.isArray(config.variables)) return fallback;
-            const found = config.variables.find((v: any) => v.key === key);
-            return found ? found.value : fallback;
+            const vars = config.variables;
+            if (!vars) return fallback;
+            
+            // Caso 1: É um Objeto Direto (formato atual no DB)
+            if (typeof vars === 'object' && !Array.isArray(vars)) {
+                return vars[key] || fallback;
+            }
+            
+            // Caso 2: É um Array de objetos (formato vindo do UI state)
+            if (Array.isArray(vars)) {
+                const found = vars.find((v: any) => v.key === key);
+                return found ? found.value : fallback;
+            }
+            
+            return fallback;
         };
 
-        // 2. Verificar Ambiente (Sandbox vs Produção)
         const { data: asaasConfig } = await supabaseAdmin
             .from('integrations_config')
             .select('environment')
@@ -49,56 +58,43 @@ serve(async (req) => {
 
         const isSandbox = asaasConfig?.environment === 'sandbox';
         
-        // Destinatário final
         let finalRecipient = to;
         if (isSandbox) {
             finalRecipient = getV('test_email', 'waldineygodoy@gmail.com');
         }
 
         if (!finalRecipient) {
-            throw new Error('Destinatário não definido (e-mail destino ou test_email ausente).');
+            throw new Error('Destinatário não definido.');
         }
 
         const resend = new Resend(config.api_key);
 
-        // 3. Preparar E-mail
+        // Template de Alta Fidelidade
         let finalHtml = html;
         if (!finalHtml && variables) {
             const { nome, valor, vencimento, mensagem } = variables;
             finalHtml = `
             <!DOCTYPE html>
-            <html lang="pt-BR">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    body { font-family: sans-serif; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 20px; }
-                    .main { background: #fff; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
-                    .header { text-align: center; padding: 20px; border-bottom: 1px solid #f1f5f9; }
-                    .hero { background: #003366; color: #fff; padding: 30px; text-align: center; }
-                    .content { padding: 30px; }
-                    .card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-                    .btn { display: inline-block; background: #FF6600; color: #fff; padding: 12px 30px; border-radius: 25px; text-decoration: none; font-weight: bold; }
-                    .test-msg { background: #fff7ed; border: 1px dashed #fdba74; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-style: italic; }
-                </style>
-            </head>
-            <body>
-                <div class="main">
-                    <div class="header"><img src="https://b2wenergia.com.br/wp-content/uploads/2025/12/Logo-Laranja-estreito.png" height="40"></div>
-                    <div class="hero"><h1>Sua fatura chegou!</h1><p>Olá, ${nome || 'Assinante'}</p></div>
-                    <div class="content">
-                        ${mensagem ? `<div class="test-msg"><strong>Teste:</strong> ${mensagem}</div>` : ''}
-                        <div class="card">
+            <html>
+            <body style="font-family: sans-serif; background: #f8fafc; padding: 20px;">
+                <div style="background: #fff; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;">
+                    <div style="background: #003366; color: #fff; padding: 30px; text-align: center;"><h1>Sua fatura chegou!</h1></div>
+                    <div style="padding: 30px;">
+                        ${mensagem ? `<div style="background: #fff7ed; padding: 15px; border-radius: 8px; border: 1px dashed #fdba74; margin-bottom: 20px;">${mensagem}</div>` : ''}
+                        <p>Olá, <strong>${nome || 'Assinante'}</strong>.</p>
+                        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
                             <strong>Vencimento:</strong> ${vencimento || '--/--/----'}<br>
                             <strong>Valor:</strong> ${valor || 'R$ 0,00'}
                         </div>
-                        <div style="text-align:center"><a href="https://app.b2wenergia.com.br" class="btn">Acessar Fatura</a></div>
+                        <div style="text-align:center; padding: 30px;"><a href="https://app.b2wenergia.com.br" style="background: #FF6600; color: #fff; padding: 12px 30px; border-radius: 25px; text-decoration: none; font-weight: bold;">Acessar minha conta</a></div>
                     </div>
                 </div>
             </body>
             </html>`;
         }
 
-        const fromEmail = getV('from_email', 'faturas@comunicacao.b2wenergia.com.br');
+        // Corrigido para garantir que use o domínio b2wenergia.com.br que está verificado
+        const fromEmail = getV('from_email', 'faturas@b2wenergia.com.br');
         const fromName = getV('from_name', 'B2W Energia');
         const fromHeader = `${fromName} <${fromEmail}>`;
 
@@ -121,7 +117,7 @@ serve(async (req) => {
         console.error('Edge Function Error:', error);
         return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 // Always 200 for CORS stability
+            status: 200
         });
     }
 })
