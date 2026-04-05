@@ -171,8 +171,14 @@ export default function IntegrationSettings({ serviceName, title, description })
             const { data, error } = await supabase.functions.invoke('send-email', {
                 body: {
                     to: testEmail,
-                    subject: 'Teste B2W Energia',
-                    html: `<h1>Teste de Conexão</h1><p>${testMessage}</p>`,
+                    subject: 'Teste de E-mail CRM - B2W Energia',
+                    html: null,
+                    variables: {
+                        nome: 'Assinante de Teste',
+                        valor: 'R$ 1.250,00',
+                        vencimento: '10/04/2026',
+                        mensagem: testMessage
+                    }
                 }
             });
 
