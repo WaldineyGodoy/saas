@@ -4,6 +4,22 @@ Este log registra cronologicamente todas as atualizações informadas pelo usuá
 
 ---
 
+## [2026-04-05] - Automação de Notificações de Fatura (E-mail + PDF)
+
+### Atualizações Registradas:
+1. **Infraestrutura de E-mail**:
+    - Implementação de disparos transacionais via **Resend** e **Supabase Edge Functions**.
+2. **Segurança e Testes**:
+    - Roteamento inteligente baseado no status da conta Asaas (Sandbox vs Produção).
+3. **Composição de Documentos**:
+    - Fluxo de mesclagem de PDF em tempo real: Demonstrativo B2W + Boleto Asaas em anexo único.
+4. **Logs e Rastreabilidade**:
+    - Registro detalhado de cada disparo na `crm_history` para auditoria na timeline do cliente.
+5. **Configuração via UI**:
+    - Gestão de credenciais `resend_api` integrada ao menu de Configurações.
+
+---
+
 ## [2026-04-03] - Reformulação de Indicadores e Filtros (Dashboard)
 
 ### Atualizações Registradas:
