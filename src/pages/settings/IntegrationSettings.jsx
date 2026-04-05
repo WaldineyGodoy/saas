@@ -126,6 +126,7 @@ export default function IntegrationSettings({ serviceName, title, description })
 
     // Test Area State
     const [testPhone, setTestPhone] = useState('');
+    const [testEmail, setTestEmail] = useState('');
     const [testMessage, setTestMessage] = useState('Teste de conexão Evolution API');
     const [testMediaUrl, setTestMediaUrl] = useState('');
     const [sendingTest, setSendingTest] = useState(false);
@@ -160,7 +161,7 @@ export default function IntegrationSettings({ serviceName, title, description })
     };
 
     const handleSendTestEmail = async () => {
-        if (!testPhone) {
+        if (!testEmail) {
             showAlert('Informe um e-mail para teste.', 'error');
             return;
         }
@@ -169,7 +170,7 @@ export default function IntegrationSettings({ serviceName, title, description })
         try {
             const { data, error } = await supabase.functions.invoke('send-email', {
                 body: {
-                    to: testPhone,
+                    to: testEmail,
                     subject: 'Teste B2W Energia',
                     html: `<h1>Teste de Conexão</h1><p>${testMessage}</p>`,
                 }
@@ -301,18 +302,20 @@ export default function IntegrationSettings({ serviceName, title, description })
                 {/* Production Fields - Visible only in production mode or for other services */}
                 {(serviceName !== 'financial_api' || formData.environment === 'production') && (
                     <>
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
-                            <input
-                                type="url"
-                                placeholder="https://api.exemplo.com/v1"
-                                value={formData.endpoint_url}
-                                onChange={e => setFormData({ ...formData, endpoint_url: e.target.value })}
-                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
-                            />
-                        </div>
+                        {serviceName !== 'resend_api' && (
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
+                                <input
+                                    type="url"
+                                    placeholder="https://api.exemplo.com/v1"
+                                    value={formData.endpoint_url}
+                                    onChange={e => setFormData({ ...formData, endpoint_url: e.target.value })}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                />
+                            </div>
+                        )}
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: serviceName === 'resend_api' ? '1fr' : '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>API Key / Token</label>
                                 <div style={{ position: 'relative' }}>
@@ -331,18 +334,97 @@ export default function IntegrationSettings({ serviceName, title, description })
                                     </button>
                                 </div>
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Secret Key (Opcional)</label>
-                                <input
-                                    type="password"
-                                    value={formData.secret_key}
-                                    onChange={e => setFormData({ ...formData, secret_key: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
-                                />
-                            </div>
+                            {serviceName !== 'resend_api' && (
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Secret Key (Opcional)</label>
+                                    <input
+                                        type="password"
+                                        value={formData.secret_key}
+                                        onChange={e => setFormData({ ...formData, secret_key: e.target.value })}
+                                        style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </>
                 )}
+
+                {/* Specific Fields for Resend API */}
+                {serviceName === 'resend_api' && (
+                    <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>E-mail do Remetente</label>
+                                <input
+                                    placeholder="faturas@comunicacao.seusite.com.br"
+                                    value={formData.variables.find(v => v.key === 'from_email')?.value || ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setFormData(prev => {
+                                            const exists = prev.variables.some(v => v.key === 'from_email');
+                                            let newVars;
+                                            if (exists) {
+                                                newVars = prev.variables.map(v => v.key === 'from_email' ? { ...v, value: val } : v);
+                                            } else {
+                                                newVars = [...prev.variables, { key: 'from_email', value: val }];
+                                            }
+                                            return { ...prev, variables: newVars };
+                                        });
+                                    }}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                />
+                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Deve estar verificado no painel do Resend.</p>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Nome do Remetente</label>
+                                <input
+                                    placeholder="B2W Energia"
+                                    value={formData.variables.find(v => v.key === 'from_name')?.value || ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setFormData(prev => {
+                                            const exists = prev.variables.some(v => v.key === 'from_name');
+                                            let newVars;
+                                            if (exists) {
+                                                newVars = prev.variables.map(v => v.key === 'from_name' ? { ...v, value: val } : v);
+                                            } else {
+                                                newVars = [...prev.variables, { key: 'from_name', value: val }];
+                                            }
+                                            return { ...prev, variables: newVars };
+                                        });
+                                    }}
+                                    style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                />
+                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>Ex: B2W Energia</p>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>E-mail de Teste (Redirecionamento Sandbox)</label>
+                            <input
+                                placeholder="seuemail@exemplo.com"
+                                value={formData.variables.find(v => v.key === 'test_email')?.value || ''}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setTestEmail(val);
+                                    setFormData(prev => {
+                                        const exists = prev.variables.some(v => v.key === 'test_email');
+                                        let newVars;
+                                        if (exists) {
+                                            newVars = prev.variables.map(v => v.key === 'test_email' ? { ...v, value: val } : v);
+                                        } else {
+                                            newVars = [...prev.variables, { key: 'test_email', value: val }];
+                                        }
+                                        return { ...prev, variables: newVars };
+                                    });
+                                }}
+                                style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                            />
+                            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>E-mail que recebe todos os disparos quando o modo Sandbox está ativo.</p>
+                        </div>
+                    </>
+                ) // End Resend Specific Fields
+                }
 
                 {/* Specific Fields for Evolution API */}
                 {serviceName === 'evolution_api' && (
@@ -442,6 +524,9 @@ export default function IntegrationSettings({ serviceName, title, description })
                         {formData.variables.map((v, index) => {
                             // Hide explicit instance_name from generic list in Evolution API view to avoid redundancy
                             if (serviceName === 'evolution_api' && (v.key === 'instance_name' || v.key === 'invite_media_url' || v.key === 'test_phone')) return null;
+
+                            // Hide explicit Resend fields from generic list
+                            if (serviceName === 'resend_api' && (v.key === 'from_email' || v.key === 'from_name' || v.key === 'test_email')) return null;
 
                             return (
                                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
@@ -591,21 +676,21 @@ export default function IntegrationSettings({ serviceName, title, description })
                         <h4 style={{ margin: '0 0 1rem 0', color: '#334155' }}>Teste de E-mail</h4>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'end' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>E-mail de Destino</label>
+                                    <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', color: '#64748b' }}>E-mail de Destino</label>
                                 <input
                                     placeholder="exemplo@email.com"
-                                    value={testPhone}
+                                    value={testEmail}
                                     onChange={e => {
                                         const val = e.target.value;
-                                        setTestPhone(val);
+                                        setTestEmail(val);
                                         // Sincroniza com as variáveis para permitir salvar
                                         setFormData(prev => {
-                                            const exists = prev.variables.some(v => v.key === 'test_phone');
+                                            const exists = prev.variables.some(v => v.key === 'test_email');
                                             let newVars;
                                             if (exists) {
-                                                newVars = prev.variables.map(v => v.key === 'test_phone' ? { ...v, value: val } : v);
+                                                newVars = prev.variables.map(v => v.key === 'test_email' ? { ...v, value: val } : v);
                                             } else {
-                                                newVars = [...prev.variables, { key: 'test_phone', value: val }];
+                                                newVars = [...prev.variables, { key: 'test_email', value: val }];
                                             }
                                             return { ...prev, variables: newVars };
                                         });
@@ -624,7 +709,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                             <button
                                 type="button"
                                 onClick={handleSendTestEmail}
-                                disabled={sendingTest || !testPhone}
+                                disabled={sendingTest || !testEmail}
                                 style={{ padding: '0.7rem 1.5rem', background: sendingTest ? '#94a3b8' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingTest ? 'default' : 'pointer', fontWeight: 600 }}
                             >
                                 {sendingTest ? 'Enviando...' : 'Enviar Teste'}

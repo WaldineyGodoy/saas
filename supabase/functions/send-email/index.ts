@@ -35,6 +35,19 @@ serve(async (req) => {
             throw new Error('Configuração do Resend não encontrada ou API Key ausente.');
         }
 
+        // 2. Verificar Ambiente (Sandbox vs Produção) via Configuração do Asaas
+        const { data: asaasConfig } = await supabaseAdmin
+            .from('integrations_config')
+            .select('environment')
+            .eq('service_name', 'financial_api')
+            .single();
+
+        const isSandbox = asaasConfig?.environment === 'sandbox';
+        const testEmail = config.variables?.test_email || 'waldineygodoy@gmail.com';
+        
+        // Destinatário final (Redireciona se for Sandbox)
+        const recipient = isSandbox ? testEmail : to;
+
         const resend = new Resend(config.api_key);
 
         // 2. Preparar E-mail
@@ -96,10 +109,14 @@ serve(async (req) => {
         }
 
         // 3. Enviar via Resend
+        const fromEmail = config.variables?.from_email || 'faturas@comunicacao.b2wenergia.com.br';
+        const fromName = config.variables?.from_name || 'B2W Energia';
+        const fromHeader = `${fromName} <${fromEmail}>`;
+
         const emailResponse = await resend.emails.send({
-            from: 'B2W Energia <faturas@comunicacao.b2wenergia.com.br>', // Use o domínio verificado no Resend
-            to: [to],
-            subject: subject || 'Sua fatura B2W Energia chegou!',
+            from: fromHeader,
+            to: [recipient],
+            subject: `${isSandbox ? '[SANDBOX] ' : ''}${subject || 'Sua fatura B2W Energia chegou!'}`,
             html: finalHtml || `<p>Olá, sua fatura está pronta.</p>`,
             attachments: attachments || []
         });

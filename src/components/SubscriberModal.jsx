@@ -66,21 +66,21 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const asaasConfig = configs?.find(c => c.service_name === 'asaas_api');
             const evolutionConfig = configs?.find(c => c.service_name === 'evolution_api');
+            const resendConfig = configs?.find(c => c.service_name === 'resend_api');
 
-            const isSandbox = asaasConfig?.is_sandbox !== false;
+            const isSandbox = asaasConfig?.environment === 'sandbox';
             
             let testPhone = '';
             if (evolutionConfig?.variables) {
                 const vars = evolutionConfig.variables;
-                if (typeof vars === 'object' && !Array.isArray(vars)) {
-                    testPhone = vars.test_phone || '';
-                } else if (Array.isArray(vars)) {
-                    testPhone = vars.find(v => v.key === 'test_phone')?.value || '';
-                }
+                testPhone = (typeof vars === 'object' && !Array.isArray(vars)) 
+                    ? vars.test_phone 
+                    : (Array.isArray(vars) ? vars.find(v => v.key === 'test_phone')?.value : '');
             }
 
-            const targetEmail = isSandbox ? 'waldineygodoy@gmail.com' : recipientEmail;
-            const targetPhone = isSandbox ? testPhone : recipientPhone;
+            const targetPhone = isSandbox ? (testPhone || '5521999999999') : recipientPhone;
+            // O e-mail agora é gerenciado pela Edge Function (Redirecionamento Sandbox interno)
+            const targetEmailForLog = isSandbox ? (resendConfig?.variables?.test_email || 'waldineygodoy@gmail.com') : recipientEmail;
 
             const reader = new FileReader();
             reader.readAsDataURL(pdfBlob);
@@ -91,7 +91,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     const fullBase64 = reader.result;
 
                     const emailPromise = sendInvoiceEmail(
-                        targetEmail,
+                        recipientEmail, // Passamos o e-mail real, a Edge Function redireciona se for Sandbox
                         'Sua fatura B2W Energia chegou!',
                         null,
                         [{ filename: fileName, content: base64Data }],
@@ -110,14 +110,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                     const [emailRes, waRes] = await Promise.all([emailPromise, waPromise]);
 
-                    let logContent = `Fatura enviada ao e-mail ${targetEmail}`;
+                    let logContent = `Fatura enviada ao e-mail ${targetEmailForLog}`;
                     if (targetPhone) logContent += ` e whatsapp ${targetPhone}`;
                     if (isSandbox) logContent += ' (Modo Sandbox)';
 
                     await addHistory('subscriber', subscriber.id, 'notification_sent', {
                         email_status: emailRes.error ? 'error' : 'sent',
                         wa_status: waRes.error ? 'error' : (waRes.skipped ? 'skipped' : 'sent'),
-                        recipient_email: targetEmail,
+                        recipient_email: targetEmailForLog,
                         recipient_phone: targetPhone,
                         sandbox: isSandbox,
                         type: fileName.includes('Consolidada') ? 'consolidated' : 'individual'
