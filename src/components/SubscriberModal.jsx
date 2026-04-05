@@ -942,11 +942,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const totalVisibleInvoicesValue = invoices
-        .filter(inv => inv.status !== 'cancelado') // Show total for all visible, non-canceled invoices
+        .filter(inv => inv.status !== 'cancelado' && inv.status !== 'pago') // Show total for all visible, non-canceled, non-paid invoices
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     const totalToConsolidate = invoices
-        .filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id) // Only what's left to consolidate
+        .filter(inv => inv.status !== 'cancelado' && inv.status !== 'pago' && !inv.asaas_payment_id) // Only what's left to consolidate (not canceled, not paid, no asaas id)
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
