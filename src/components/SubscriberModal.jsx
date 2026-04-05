@@ -412,7 +412,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const asaasUrl = inv.asaas_boleto_url;
             const fileName = `Fatura_${inv.id}.pdf`;
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
             showAlert('PDF Combinado gerado com sucesso!', 'success');
 
             // Trigger Joint Notifications
