@@ -9,6 +9,23 @@ export default function UCInvoicesModal({ uc, onClose }) {
     useEffect(() => {
         if (uc?.id) {
             fetchInvoices();
+
+            // Realtime subscription
+            const channel = supabase
+                .channel(`uc_invoices_${uc.id}`)
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'invoices',
+                    filter: `uc_id=eq.${uc.id}`
+                }, () => {
+                    fetchInvoices();
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
         }
     }, [uc]);
 
@@ -19,6 +36,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
                 .from('invoices')
                 .select('*')
                 .eq('uc_id', uc.id)
+                .neq('status', 'cancelado') // Ocultar faturas canceladas
                 .order('mes_referencia', { ascending: false });
 
             if (error) throw error;
@@ -37,6 +55,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
+            'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado', icon: X },
         };
         const s = map[status] || map['a_vencer'];
         const Icon = s.icon;

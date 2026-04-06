@@ -517,10 +517,15 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             return;
         }
 
+        const isRegeneration = !!localBoletoUrl;
+        const message = isRegeneration 
+            ? 'Já existe uma fatura emitida ou cancelada para este período. Deseja emitir uma nova fatura?'
+            : 'Deseja gerar o boleto Asaas agora para esta fatura?';
+
         const confirmed = await showConfirm(
-            'Deseja gerar o boleto Asaas agora para esta fatura?',
-            'Emitir Boleto',
-            'Gerar Boleto',
+            message,
+            isRegeneration ? 'Nova Cobrança' : 'Emitir Boleto',
+            isRegeneration ? 'Sim, Emitir Nova' : 'Gerar Boleto',
             'Cancelar'
         );
 
@@ -1006,9 +1011,23 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                     }}>
                                         {localBoletoUrl ? (
-                                            <a href={localBoletoUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
-                                                <CreditCard size={18} /> Visualizar Boleto
-                                            </a>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                <a href={localBoletoUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
+                                                    <CreditCard size={18} /> Visualizar Boleto
+                                                </a>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleEmission} 
+                                                    disabled={generating}
+                                                    style={{ 
+                                                        background: 'none', border: 'none', padding: 0, color: '#64748b', 
+                                                        fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left', 
+                                                        textDecoration: 'underline', opacity: 0.8 
+                                                    }}
+                                                >
+                                                    {generating ? 'Emitindo...' : 'Atualizar Cobrança'}
+                                                </button>
+                                            </div>
                                         ) : (
                                             <button 
                                                 type="button" 
