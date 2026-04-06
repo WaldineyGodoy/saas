@@ -12,14 +12,10 @@ serve(async (req) => {
     }
 
     try {
-        // START: Service Role usage for Cross-App access
-        // This allows the App repo (unauthenticated or diff project) to call this function
-        // and this function to still read the protected config from the DB.
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
-        // END: Service Role usage
 
         const { text, mediaUrl, mediaBase64, fileName, phone, instanceName } = await req.json()
 
@@ -29,15 +25,8 @@ serve(async (req) => {
 
         // 0. Sanitize Inputs
         const cleanPhone = phone.replace(/\D/g, '');
-        console.log('Sanitized Phone:', cleanPhone);
-
-        let cleanMedia = mediaBase64 || mediaUrl;
-        if (mediaBase64 && typeof mediaBase64 === 'string' && mediaBase64.includes(';base64,')) {
-            console.log('Sanitizing Base64 content (stripping Data URI prefix)');
-            cleanMedia = mediaBase64.split(';base64,').pop() || '';
-        }
-
-        // 1. Fetch Configuration (using Admin client)
+        
+        // 1. Fetch Configuration
         const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
             .select('*')
@@ -50,49 +39,49 @@ serve(async (req) => {
 
         const endpoint = config.endpoint_url;
         const apiKey = config.api_key;
-        // Variables might contain instance_name if not passed, but we prefer passed
         const vars = config.variables || {};
-        const effectiveInstance = instanceName || vars['instance_name'] || vars['INSTANCE_NAME'];
+        const effectiveInstance = instanceName || vars['instance_name'] || vars['INSTANCE_NAME'] || 'default';
 
         if (!endpoint || !apiKey || !effectiveInstance) {
             throw new Error('Incomplete Configuration: Endpoint, API Key or Instance Name missing.');
         }
 
-        // 2. Construct URL
-        // Evolution v2: {{baseUrl}}/message/sendText/{{instance}}
-        // Evolution v2 Media: {{baseUrl}}/message/sendMedia/{{instance}}
-
-        // Normalize Endpoint (remove trailing slash)
         const baseUrl = endpoint.replace(/\/+$/, '');
         const encodedInstance = encodeURIComponent(effectiveInstance);
 
-        let url = '';
+        // 2. Prepare Payload
         let targetUrl = '';
         let body = {};
 
         if (mediaUrl || mediaBase64) {
             targetUrl = `${baseUrl}/message/sendMedia/${encodedInstance}`;
-            console.log('Detected Media Message. Instance:', effectiveInstance);
             
-            // Detect if it's a PDF
+            // For v2, keeping the 'data:...' prefix helps the internal parser avoid recursion errors
+            const mediaPayload = mediaBase64 || mediaUrl;
+            
             const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
                           (mediaBase64 && mediaBase64.includes('application/pdf')) ||
                           (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
 
-            // Evolution v2 Flattened Structure
+            // Sanitize filename to avoid internal regex issues in sub-v2 versions
+            const shortName = fileName ? fileName.substring(0, 40).replace(/[^a-zA-Z0-0._-]/g, '') : (isPdf ? 'fatura.pdf' : 'imagem.png');
+
             body = {
                 number: cleanPhone,
                 mediatype: isPdf ? "document" : "image",
                 mimetype: isPdf ? "application/pdf" : "image/png",
                 caption: text,
-                media: cleanMedia,
-                fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png'),
-                filename: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png'), // v2 compatibility
+                media: mediaPayload,
+                fileName: shortName,
+                filename: shortName, // v2 compatibility
                 delay: 1200
             };
+            
+            if (mediaBase64) {
+                console.log(`Sending Media (Base64). Name: ${shortName}, Length: ${mediaBase64.length}`);
+            }
         } else {
             targetUrl = `${baseUrl}/message/sendText/${encodedInstance}`;
-            // Evolution v2 Flattened Structure
             body = {
                 number: cleanPhone,
                 text: text,
@@ -103,7 +92,6 @@ serve(async (req) => {
 
         // 3. Send Request
         console.log('Sending to Evolution API:', targetUrl);
-        console.log('Body keys:', Object.keys(body));
 
         const response = await fetch(targetUrl, {
             method: 'POST',
