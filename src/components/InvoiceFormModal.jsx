@@ -49,6 +49,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [showSuccess, setShowSuccess] = useState(false);
     const [subscriberBillingMode, setSubscriberBillingMode] = useState('consolidada');
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [localBoletoUrl, setLocalBoletoUrl] = useState(invoice?.asaas_boleto_url || null);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     const hiddenRef = useRef(null);
 
@@ -90,6 +91,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 const uc = ucs.find(u => u.id === invoice.uc_id);
                 setSelectedUc(uc);
             }
+            // Sync local boleto URL
+            setLocalBoletoUrl(invoice.asaas_boleto_url);
         } else if (ucs && ucs.length > 0) {
             setFormData(prev => ({ ...prev, uc_id: ucs[0].id }));
             setSelectedUc(ucs[0]);
@@ -239,7 +242,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
     const handleDownloadCombined = async (invToUse) => {
         const inv = invToUse || invoice;
-        if (!inv || (!inv.asaas_payment_id && !inv.asaas_boleto_url)) {
+        const currentBoletoUrl = localBoletoUrl || inv?.asaas_boleto_url;
+        
+        if (!inv || (!inv.asaas_payment_id && !currentBoletoUrl)) {
             showAlert('Boleto não disponível para esta fatura.', 'warning');
             return;
         }
@@ -267,7 +272,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
             const summaryBase64 = pdfSummary.output('datauristring');
-            const asaasUrl = inv.asaas_boleto_url;
+            const asaasUrl = localBoletoUrl || inv.asaas_boleto_url;
             if (!asaasUrl) throw new Error("URL do boleto não encontrada");
 
             const fileName = `Fatura_${inv.mes_referencia}_Detalhamento.pdf`;
@@ -526,6 +531,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const targetId = localInvoiceId || invoice?.id;
             const result = await createAsaasCharge(targetId);
             if (result.url) {
+                setLocalBoletoUrl(result.url);
                 setShowSuccess(true);
                 setTimeout(() => setShowSuccess(false), 3000);
                 window.open(result.url, '_blank');
@@ -999,10 +1005,32 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         flexWrap: 'wrap',
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                     }}>
-                                        {invoice?.asaas_boleto_url && (
-                                            <a href={invoice.asaas_boleto_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
-                                                <CreditCard size={18} /> Ver Boleto
+                                        {localBoletoUrl ? (
+                                            <a href={localBoletoUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
+                                                <CreditCard size={18} /> Visualizar Boleto
                                             </a>
+                                        ) : (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleEmission} 
+                                                disabled={generating}
+                                                style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.6rem', 
+                                                    color: '#1e40af', 
+                                                    fontWeight: 'bold', 
+                                                    border: 'none', 
+                                                    background: 'none', 
+                                                    cursor: 'pointer', 
+                                                    fontSize: '0.9rem', 
+                                                    padding: 0,
+                                                    transition: 'opacity 0.2s' 
+                                                }}
+                                            >
+                                                {generating ? <Loader2 size={18} className="spin-animation" /> : <CreditCard size={18} />}
+                                                Emitir Boleto
+                                            </button>
                                         )}
 
                                         {invoice?.concessionaria_pdf_url && (
@@ -1011,7 +1039,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             </a>
                                         )}
                                         
-                                        {invoice?.asaas_boleto_url && (
+                                        {localBoletoUrl && (
                                             <button
                                                 type="button"
                                                 onClick={() => handleDownloadCombined()}
@@ -1051,7 +1079,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                                         background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca',
                                         padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer',
-                                        fontWeight: 'bold', fontSize: '0.9rem', marginLeft: invoice.asaas_boleto_url ? '1rem' : 0,
+                                        fontWeight: 'bold', fontSize: '0.9rem', marginLeft: localBoletoUrl ? '1rem' : 0,
                                         transition: 'all 0.2s'
                                     }}
                                     onMouseOver={e => { e.currentTarget.style.background = '#fecaca'; }}
