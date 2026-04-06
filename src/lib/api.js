@@ -297,17 +297,6 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
         // data is a Blob because of the response in Edge Function
         const blob = new Blob([data], { type: 'application/pdf' });
         
-        if (fileName && download) {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-
         return blob;
     } catch (error) {
         console.error('Error in mergePdf helper:', error);
