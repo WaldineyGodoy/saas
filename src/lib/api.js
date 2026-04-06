@@ -371,9 +371,9 @@ export const sendCombinedNotification = async ({
         const { data: configs } = await supabase
             .from('integrations_config')
             .select('*')
-            .in('service_name', ['asaas_api', 'evolution_api', 'resend_api']);
+            .in('service_name', ['financial_api', 'evolution_api', 'resend_api']);
 
-        const asaasConfig = configs?.find(c => c.service_name === 'asaas_api');
+        const asaasConfig = configs?.find(c => c.service_name === 'financial_api');
         const evolutionConfig = configs?.find(c => c.service_name === 'evolution_api');
         const resendConfig = configs?.find(c => c.service_name === 'resend_api');
 
@@ -387,8 +387,8 @@ export const sendCombinedNotification = async ({
                 : (Array.isArray(vars) ? vars.find(v => v.key === 'test_phone')?.value : '');
         }
 
-        const targetPhone = isSandbox ? (testPhone || '5521999999999') : recipientPhone;
-        const targetEmailForLog = isSandbox ? (resendConfig?.variables?.test_email || 'contato@b2wenergia.com.br') : recipientEmail;
+        const targetPhone = isSandbox ? (testPhone || '5533999991234') : recipientPhone;
+        const targetEmailForLog = isSandbox ? (resendConfig?.variables?.test_email || 'waldineygodoy@gmail.com') : recipientEmail;
 
         return new Promise((resolve, reject) => {
             const reader = new FileReader();

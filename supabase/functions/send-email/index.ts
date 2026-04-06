@@ -46,7 +46,7 @@ serve(async (req) => {
         const { data: asaasConfig } = await supabaseAdmin
             .from('integrations_config')
             .select('environment')
-            .eq('service_name', 'asaas_api')
+            .eq('service_name', 'financial_api')
             .single();
 
         const isSandbox = asaasConfig?.environment === 'sandbox';
