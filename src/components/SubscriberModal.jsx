@@ -909,11 +909,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const totalVisibleInvoicesValue = invoices
-        .filter(inv => inv.status !== 'cancelado' && inv.status !== 'pago') // Show total for all visible, non-canceled, non-paid invoices
+        .filter(inv => inv.status !== 'pago') // Show total for all visible, non-paid invoices (including canceled)
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     const totalToConsolidate = invoices
-        .filter(inv => inv.status !== 'cancelado' && inv.status !== 'pago' && !inv.asaas_payment_id) // Only what's left to consolidate (not canceled, not paid, no asaas id)
+        .filter(inv => inv.status !== 'pago' && !inv.asaas_payment_id) // Only what's left to consolidate (not paid, no asaas id, allows canceled)
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
@@ -1430,7 +1430,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                             const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
                                                             const result = await createAsaasCharge(subscriber.id, 'subscriber', {
                                                                 dueDate,
-                                                                invoice_ids: invoices.filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id).map(i => i.id)
+                                                                invoice_ids: invoices.filter(inv => inv.status !== 'pago' && !inv.asaas_payment_id).map(i => i.id)
                                                             });
 
                                                             if (result.success) {
@@ -1659,7 +1659,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
                                 ) : invoices.length > 0 ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                        {invoices.filter(inv => inv.status !== 'cancelado').map(inv => {
+                                        {invoices.map(inv => {
                                             const statusMap = {
                                                 'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7', icon: CheckCircle },
                                                 'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2', icon: AlertCircle },
