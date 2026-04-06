@@ -14,7 +14,7 @@ serve(async (req) => {
     const { summaryBase64, asaasUrl, energyBillUrl } = await req.json()
 
     if (!summaryBase64 || !asaasUrl) {
-      throw new Error('summaryBase64 e asaasUrl são obrigatórios')
+      throw new Error('Demonstrativo (base64) e URL do Boleto são obrigatórios.')
     }
 
     const supabase = createClient(
@@ -22,7 +22,6 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Buscar Configuração do Asaas para ter a API Key (caso o link exija auth)
     const { data: config } = await supabase
         .from('integrations_config')
         .select('*')
@@ -36,18 +35,22 @@ serve(async (req) => {
     const summaryBytes = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0))
 
     // 1. Processar Demonstrativo
-    const isPdf = cleanBase64.startsWith('JVBERi0')
-    if (isPdf) {
-      const summaryDoc = await PDFDocument.load(summaryBytes)
-      const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
-      summaryPages.forEach(p => mergedPdf.addPage(p))
-    } else {
-      const summaryImg = await mergedPdf.embedPng(summaryBytes).catch(() => mergedPdf.embedJpg(summaryBytes))
-      const page = mergedPdf.addPage([summaryImg.width, summaryImg.height])
-      page.drawImage(summaryImg, { x: 0, y: 0, width: summaryImg.width, height: summaryImg.height })
+    try {
+        const isPdf = cleanBase64.startsWith('JVBERi0')
+        if (isPdf) {
+          const summaryDoc = await PDFDocument.load(summaryBytes)
+          const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
+          summaryPages.forEach(p => mergedPdf.addPage(p))
+        } else {
+          const summaryImg = await mergedPdf.embedPng(summaryBytes).catch(() => mergedPdf.embedJpg(summaryBytes))
+          const page = mergedPdf.addPage([summaryImg.width, summaryImg.height])
+          page.drawImage(summaryImg, { x: 0, y: 0, width: summaryImg.width, height: summaryImg.height })
+        }
+    } catch (e) {
+        throw new Error(`Erro ao processar demonstrativo: ${e.message}`)
     }
 
-    // 2. Buscar o PDF do Boleto no Asaas com RETRY e Headers de Navegador
+    // 2. Buscar Boleto no Asaas
     console.log(`Merge: Buscando boleto em ${asaasUrl}`)
     let asaasRes;
     let retries = 4;
@@ -56,8 +59,7 @@ serve(async (req) => {
         'Accept': 'application/pdf, */*'
     }
     
-    // Se a URL do Asaas for do tipo API, precisamos do token
-    if (asaasUrl.includes('/api/v3/') && asaasKey) {
+    if ((asaasUrl.includes('/api/v3/') || asaasUrl.includes('asaas.com/api')) && asaasKey) {
         fetchHeaders['access_token'] = asaasKey
     }
 
@@ -67,9 +69,11 @@ serve(async (req) => {
             if (asaasRes.ok) break;
             
             const errorBody = await asaasRes.text().catch(() => 'no body');
-            console.warn(`Tentativa falhou (${asaasRes.status}). Body: ${errorBody.substring(0, 100)}. Retentando...`)
+            console.warn(`Tentativa falhou (${asaasRes.status}). Body: ${errorBody.substring(0, 100)}`)
+            
+            if (asaasRes.status === 404 || asaasRes.status === 401) break; // Não adianta retentar se sumiu ou não tem acesso
         } catch (fetchErr: any) {
-            console.warn(`Erro de rede ao buscar boleto: ${fetchErr.message}`)
+            console.warn(`Erro de rede: ${fetchErr.message}`)
         }
         
         await new Promise(r => setTimeout(r, 2000))
@@ -77,11 +81,19 @@ serve(async (req) => {
     }
 
     if (!asaasRes || !asaasRes.ok) {
-        throw new Error(`Asaas retornou erro ${asaasRes?.status || 'desconhecido'} ao buscar o boleto. Certifique-se que o boleto está disponível no Sandbox.`)
+        if (asaasRes?.status === 500) {
+            throw new Error(`O Asaas falhou em gerar o PDF do boleto (Erro 500). Isso ocorre frequentemente no Sandbox quando a cobrança é nova ou foi alterada recentemente. Tente novamente em alguns segundos.`)
+        }
+        if (asaasRes?.status === 404) {
+            throw new Error(`Boleto não encontrado no Asaas (404). O link pode ter expirado ou a cobrança foi removida.`)
+        }
+        throw new Error(`Não foi possível obter o boleto do Asaas (Status ${asaasRes?.status || 'desconhecido'}).`)
     }
     
     const asaasBytes = await asaasRes.arrayBuffer()
     const asaasDoc = await PDFDocument.load(asaasBytes)
+    const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
+    asaasPages.forEach(p => mergedPdf.addPage(p))
 
     // 3. Buscar Conta de Energia (opcional)
     if (energyBillUrl) {
@@ -93,13 +105,12 @@ serve(async (req) => {
           const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
           energyPages.forEach(p => mergedPdf.addPage(p))
         }
-      } catch (e) {}
+      } catch (e) {
+          console.warn(`Erro ao anexar fatura concessionária: ${e.message}`)
+      }
     }
 
     // 4. Finalizar
-    const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
-    asaasPages.forEach(p => mergedPdf.addPage(p))
-
     const mergedBytes = await mergedPdf.save()
 
     return new Response(mergedBytes, {

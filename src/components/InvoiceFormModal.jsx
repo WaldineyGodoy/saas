@@ -92,13 +92,18 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 const uc = ucs.find(u => u.id === invoice.uc_id);
                 setSelectedUc(uc);
             }
-            // Sync local boleto URL
-            setLocalBoletoUrl(invoice.asaas_boleto_url);
+            // Sync local boleto URL ONLY when a new invoice is loaded
+            if (invoice?.id !== localInvoiceId) {
+                setLocalBoletoUrl(invoice.asaas_boleto_url);
+                setLocalInvoiceId(invoice.id);
+            }
         } else if (ucs && ucs.length > 0) {
             setFormData(prev => ({ ...prev, uc_id: ucs[0].id }));
             setSelectedUc(ucs[0]);
+            setLocalInvoiceId(null);
+            setLocalBoletoUrl(null);
         }
-    }, [invoice, ucs]);
+    }, [invoice.id, ucs]);
 
     // Update Selected UC when changed
     useEffect(() => {
@@ -263,9 +268,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
     const handleDownloadCombined = async (invToUse) => {
         const inv = invToUse || invoice;
-        const currentBoletoUrl = localBoletoUrl || inv?.asaas_boleto_url;
+        const currentBoletoUrl = localBoletoUrl; // Use STRICTLY the local state
         
-        if (!inv || (!inv.asaas_payment_id && !currentBoletoUrl)) {
+        if (!inv || !currentBoletoUrl) {
             showAlert('Boleto não disponível para esta fatura.', 'warning');
             return;
         }
@@ -294,8 +299,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
             const summaryBase64 = pdfSummary.output('datauristring');
-            const asaasUrl = localBoletoUrl || inv.asaas_boleto_url;
-            if (!asaasUrl) throw new Error("URL do boleto não encontrada");
+            const asaasUrl = localBoletoUrl; // Use STRICTLY what is visible in the UI
+            if (!asaasUrl) throw new Error("URL do boleto não encontrada ou expirada no Asaas.");
             const fileName = `Fatura_${inv.id}.pdf`;
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
             
