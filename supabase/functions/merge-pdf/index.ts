@@ -14,7 +14,7 @@ serve(async (req) => {
     const { summaryBase64, asaasUrl, energyBillUrl } = await req.json()
 
     if (!summaryBase64 || !asaasUrl) {
-      throw new Error('Demonstrativo (base64) e URL do Boleto são obrigatórios.')
+      throw new Error('Demonstrativo e URL do Boleto são obrigatórios.')
     }
 
     const supabase = createClient(
@@ -47,18 +47,18 @@ serve(async (req) => {
           page.drawImage(summaryImg, { x: 0, y: 0, width: summaryImg.width, height: summaryImg.height })
         }
     } catch (e) {
-        throw new Error(`Erro ao processar demonstrativo: ${e.message}`)
+        throw new Error(`Erro no demonstrativo: ${e.message}`)
     }
 
-    // 2. Buscar Boleto no Asaas
+    // 2. Buscar Boleto no Asaas com paciência aumentada (Sandbox latency)
     console.log(`Merge: Buscando boleto em ${asaasUrl}`)
     let asaasRes;
-    let retries = 4;
+    let retries = 6; // Aumentado para 6 tentativas
     const fetchHeaders: any = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/pdf, */*'
     }
     
+    // Injetar token apenas se for URL de API
     if ((asaasUrl.includes('/api/v3/') || asaasUrl.includes('asaas.com/api')) && asaasKey) {
         fetchHeaders['access_token'] = asaasKey
     }
@@ -66,28 +66,34 @@ serve(async (req) => {
     while (retries > 0) {
         try {
             asaasRes = await fetch(asaasUrl, { headers: fetchHeaders })
-            if (asaasRes.ok) break;
+            if (asaasRes.ok) {
+                const contentType = asaasRes.headers.get('content-type');
+                // Se o Asaas retornar HTML em vez de PDF no Sandbox, geralmente é um erro mascarado ou página de carregamento
+                if (contentType && contentType.includes('text/html')) {
+                    console.warn("Asaas retornou HTML em vez de PDF. Retentando...")
+                } else {
+                    break;
+                }
+            }
             
-            const errorBody = await asaasRes.text().catch(() => 'no body');
-            console.warn(`Tentativa falhou (${asaasRes.status}). Body: ${errorBody.substring(0, 100)}`)
-            
-            if (asaasRes.status === 404 || asaasRes.status === 401) break; // Não adianta retentar se sumiu ou não tem acesso
+            console.warn(`Tentativa falhou (${asaasRes?.status}). Retentando em 3s...`)
+            if (asaasRes?.status === 404 || asaasRes?.status === 401) break;
         } catch (fetchErr: any) {
             console.warn(`Erro de rede: ${fetchErr.message}`)
         }
         
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 3000)) // Aumentado para 3s entre tentativas
         retries--;
     }
 
-    if (!asaasRes || !asaasRes.ok) {
-        if (asaasRes?.status === 500) {
-            throw new Error(`O Asaas falhou em gerar o PDF do boleto (Erro 500). Isso ocorre frequentemente no Sandbox quando a cobrança é nova ou foi alterada recentemente. Tente novamente em alguns segundos.`)
+    if (!asaasRes || !asaasRes.ok || (asaasRes.headers.get('content-type')?.includes('text/html'))) {
+        if (asaasRes?.status === 500 || asaasRes?.ok) {
+            throw new Error(`O Asaas Sandbox está demorando para gerar o PDF (Erro 500/HTML). Aguarde 10 segundos e tente novamente.`)
         }
         if (asaasRes?.status === 404) {
-            throw new Error(`Boleto não encontrado no Asaas (404). O link pode ter expirado ou a cobrança foi removida.`)
+            throw new Error(`Boleto não encontrado no Asaas. Por favor, emita uma nova cobrança.`)
         }
-        throw new Error(`Não foi possível obter o boleto do Asaas (Status ${asaasRes?.status || 'desconhecido'}).`)
+        throw new Error(`Falha ao obter boleto (Status ${asaasRes?.status || '?'}).`)
     }
     
     const asaasBytes = await asaasRes.arrayBuffer()
@@ -95,7 +101,7 @@ serve(async (req) => {
     const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
     asaasPages.forEach(p => mergedPdf.addPage(p))
 
-    // 3. Buscar Conta de Energia (opcional)
+    // 3. Fatura Concessionária
     if (energyBillUrl) {
       try {
         const energyRes = await fetch(energyBillUrl)
@@ -105,20 +111,14 @@ serve(async (req) => {
           const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
           energyPages.forEach(p => mergedPdf.addPage(p))
         }
-      } catch (e) {
-          console.warn(`Erro ao anexar fatura concessionária: ${e.message}`)
-      }
+      } catch (e) {}
     }
 
-    // 4. Finalizar
     const mergedBytes = await mergedPdf.save()
-
-    return new Response(mergedBytes, {
-      headers: { ...corsHeaders, 'Content-Type': 'application/pdf' }
-    })
+    return new Response(mergedBytes, { headers: { ...corsHeaders, 'Content-Type': 'application/pdf' } })
 
   } catch (err: any) {
-    console.error('Erro merge-pdf:', err)
+    console.error('Merge Error:', err.message)
     return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
