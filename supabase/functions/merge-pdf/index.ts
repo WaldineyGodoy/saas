@@ -23,8 +23,12 @@ serve(async (req) => {
 
     // 2. Buscar o PDF do Boleto no Asaas
     console.log(`Buscando boleto em: ${asaasUrl}`)
-    const asaasRes = await fetch(asaasUrl)
-    if (!asaasRes.ok) throw new Error(`Erro ao buscar boleto no Asaas: ${asaasRes.statusText}`)
+    const asaasRes = await fetch(asaasUrl, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+    })
+    if (!asaasRes.ok) throw new Error(`Erro ao buscar boleto no Asaas (${asaasRes.status}): ${asaasRes.statusText}`)
     const asaasBytes = await asaasRes.arrayBuffer()
     const asaasDoc = await PDFDocument.load(asaasBytes)
 
@@ -33,7 +37,11 @@ serve(async (req) => {
     if (energyBillUrl) {
       console.log(`Buscando conta de energia em: ${energyBillUrl}`)
       try {
-        const energyRes = await fetch(energyBillUrl)
+        const energyRes = await fetch(energyBillUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        })
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer()
           // Verificação rápida se o PDF é válido
