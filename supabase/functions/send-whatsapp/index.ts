@@ -64,12 +64,13 @@ serve(async (req) => {
 
         // Normalize Endpoint (remove trailing slash)
         const baseUrl = endpoint.replace(/\/+$/, '');
+        const encodedInstance = encodeURIComponent(effectiveInstance);
 
         let url = '';
         let body = {};
 
         if (mediaUrl || mediaBase64) {
-            url = `${baseUrl}/message/sendMedia/${effectiveInstance}`;
+            url = `${baseUrl}/message/sendMedia/${encodedInstance}`;
             console.log('Detected Media Message. Instance:', effectiveInstance);
             
             // Detect if it's a PDF
@@ -77,36 +78,29 @@ serve(async (req) => {
                           (mediaBase64 && mediaBase64.includes('application/pdf')) ||
                           (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
 
+            // Evolution v2 Flattened Structure
             body = {
                 number: cleanPhone,
-                options: {
-                    delay: 1200,
-                    presence: "composing"
-                },
-                mediaMessage: {
-                    mediatype: isPdf ? "document" : "image",
-                    caption: text,
-                    media: cleanMedia,
-                    fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png')
-                }
+                mediatype: isPdf ? "document" : "image",
+                caption: text,
+                media: cleanMedia,
+                fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png'),
+                delay: 1200
             };
         } else {
-            url = `${baseUrl}/message/sendText/${effectiveInstance}`;
+            url = `${baseUrl}/message/sendText/${encodedInstance}`;
+            // Evolution v2 Flattened Structure
             body = {
                 number: cleanPhone,
-                options: {
-                    delay: 1200,
-                    presence: "composing",
-                    linkPreview: false
-                },
-                textMessage: {
-                    text: text
-                }
+                text: text,
+                delay: 1200,
+                linkPreview: false
             };
         }
 
         // 3. Send Request
         console.log(`Sending to Evolution API: ${url}`);
+        console.log('Body keys:', Object.keys(body));
 
         const response = await fetch(url, {
             method: 'POST',
@@ -117,11 +111,18 @@ serve(async (req) => {
             body: JSON.stringify(body)
         });
 
-        const data = await response.json();
+        // Safe Response Parsing
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            data = { message: responseText };
+        }
 
         if (!response.ok) {
             console.error('Evolution API Error Response:', data);
-            throw new Error(data?.message || 'Failed to send message via Evolution API');
+            throw new Error(data?.message || data?.error || 'Failed to send message via Evolution API');
         }
 
         console.log('Evolution API Message Sent Successfully:', data.key || 'no key returned');

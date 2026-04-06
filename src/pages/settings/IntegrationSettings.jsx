@@ -148,7 +148,15 @@ export default function IntegrationSettings({ serviceName, title, description })
                 }
             });
 
-            if (error) throw new Error(error.message);
+            if (error) {
+                let msg = error.message;
+                // If it's a FunctionsHttpError, the body might be in error.context
+                try {
+                    const body = await error.context?.json();
+                    if (body && (body.error || body.message)) msg = body.error || body.message;
+                } catch (e) {}
+                throw new Error(msg);
+            }
             if (data?.error) throw new Error(data.error);
 
             showAlert('Mensagem de teste enviada com sucesso!', 'success');
@@ -182,7 +190,14 @@ export default function IntegrationSettings({ serviceName, title, description })
                 }
             });
 
-            if (error) throw new Error(error.message);
+            if (error) {
+                let msg = error.message;
+                try {
+                    const body = await error.context?.json();
+                    if (body && (body.error || body.message)) msg = body.error || body.message;
+                } catch (e) {}
+                throw new Error(msg);
+            }
             if (data?.error) throw new Error(data.error);
 
             showAlert('E-mail de teste enviado com sucesso!', 'success');
