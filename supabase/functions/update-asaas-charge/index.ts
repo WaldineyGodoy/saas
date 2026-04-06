@@ -8,7 +8,7 @@ const corsHeaders = {
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+        return new Response('ok', { headers: headers })
     }
 
     try {
@@ -23,7 +23,6 @@ serve(async (req) => {
             throw new Error("ID da fatura não fornecido.");
         }
 
-        // 1. Buscar a fatura para pegar o asaas_payment_id
         const { data: invoice, error: invoiceError } = await supabase
             .from('invoices')
             .select('asaas_payment_id, status')
@@ -34,7 +33,6 @@ serve(async (req) => {
             throw new Error("Fatura não encontrada.");
         }
 
-        // 2. Só atualizar se houver asaas_payment_id
         if (invoice.asaas_payment_id) {
             const { data: configData, error: configError } = await supabase
                 .from('integrations_config')
@@ -52,7 +50,7 @@ serve(async (req) => {
                 throw new Error("Credenciais do Asaas não configuradas.");
             }
 
-            console.log(`Sync Asaas: Atualizando ${invoice.asaas_payment_id} | Valor: ${value} | Vencimento: ${dueDate}`);
+            console.log(`Sync Asaas: Atualizando ${invoice.asaas_payment_id}`);
 
             const updateData: any = {};
             if (value !== undefined && value !== null) updateData.value = value;
@@ -68,6 +66,8 @@ serve(async (req) => {
             });
 
             const responseText = await updateRes.text();
+            console.log(`Asaas Response (${updateRes.status}):`, responseText);
+
             let resultData;
             try {
                 resultData = JSON.parse(responseText);
@@ -77,15 +77,19 @@ serve(async (req) => {
 
             if (!updateRes.ok) {
                 const asaasError = resultData.errors?.[0]?.description || resultData.error || 'Erro desconhecido no Asaas';
-                const asaasCode = resultData.errors?.[0]?.code || '';
+                const lowerError = asaasError.toLowerCase();
 
-                // CASO ESPECIAL: Cobrança removida ou não encontrada
-                const isRemoved = asaasError.includes('removida') || updateRes.status === 404;
+                // Detecção robusta de cobrança removida ou inválida
+                const isRemoved = 
+                    lowerError.includes('removida') || 
+                    lowerError.includes('não encontrada') || 
+                    lowerError.includes('not found') || 
+                    lowerError.includes('inexistente') ||
+                    updateRes.status === 404;
                 
                 if (isRemoved) {
-                    console.warn(`Cobrança ${invoice.asaas_payment_id} removida no Asaas. Limpando ID no CRM...`);
+                    console.warn(`Limpando ID inválido no CRM: ${invoice.asaas_payment_id}`);
                     
-                    // Limpar ID no banco de dados para permitir novo faturamento
                     await supabase.from('invoices')
                         .update({
                             asaas_payment_id: null,
@@ -94,14 +98,13 @@ serve(async (req) => {
                         })
                         .eq('id', invoice_id);
 
-                    // Retornar um sucesso informando que o ID foi limpo
                     return new Response(
                         JSON.stringify({ 
                             success: true, 
-                            warning: "A cobrança anterior foi removida no Asaas. O link de faturamento foi limpo no CRM.",
+                            warning: "O boleto anterior foi removido no Asaas. O CRM limpou o vínculo e permitiu o salvamento.",
                             cleared: true 
                         }),
-                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
                     )
                 }
 
@@ -110,12 +113,12 @@ serve(async (req) => {
         }
 
         return new Response(
-            JSON.stringify({ success: true, message: "Sincronização com Asaas concluída." }),
+            JSON.stringify({ success: true, message: "Sincronização concluída." }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
-    } catch (error) {
-        console.error('Erro na Edge Function update-asaas-charge:', error.message)
+    } catch (error: any) {
+        console.error('Update Asaas Error:', error.message);
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
