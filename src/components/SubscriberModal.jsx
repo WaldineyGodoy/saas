@@ -49,7 +49,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 entity_type: type,
                 entity_id: id,
                 content: customContent || `${action === 'email_sent' ? 'E-mail enviado' : action}: ${details.type || ''}`,
-                details: details,
+                metadata: details,
                 created_by: profile?.id
             });
         } catch (error) {
@@ -276,10 +276,21 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, null, consolidated.asaas_pdf_storage_url);
-            showAlert('PDF Consolidado gerado!', 'success');
+            
+            // Browser Download
+            const blobUrl = window.URL.createObjectURL(mergedBlob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+
+            showAlert('PDF Consolidado gerado e baixado!', 'success');
 
             // Trigger Joint Notifications
-            await sendCombinedNotification({
+            const notifRes = await sendCombinedNotification({
                 recipientEmail: formData.email,
                 recipientPhone: formData.phone,
                 subscriberName: formData.name,
@@ -291,7 +302,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 profileId: profile?.id,
                 isConsolidated: true
             });
-            showAlert('Notificações enviadas!', 'success');
+
+            if (notifRes.emailRes?.error || notifRes.waRes?.error) {
+                showAlert('Fatura baixada, mas houve erro em algumas notificações.', 'warning');
+                console.warn('Notification errors:', notifRes);
+            } else {
+                showAlert('Notificações enviadas com sucesso!', 'success');
+            }
 
         } catch (error) {
 
@@ -337,10 +354,21 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const fileName = `Fatura_${inv.id}.pdf`;
 
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
-            showAlert('PDF Combinado gerado com sucesso!', 'success');
+            
+            // Browser Download
+            const blobUrl = window.URL.createObjectURL(mergedBlob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+
+            showAlert('PDF Combinado gerado e baixado!', 'success');
 
             // Trigger Joint Notifications
-            await sendCombinedNotification({
+            const notifRes = await sendCombinedNotification({
                 recipientEmail: formData.email,
                 recipientPhone: formData.phone,
                 subscriberName: formData.name,
@@ -352,7 +380,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 profileId: profile?.id,
                 isConsolidated: false
             });
-            showAlert('Notificações enviadas!', 'success');
+
+            if (notifRes.emailRes?.error || notifRes.waRes?.error) {
+                showAlert('Fatura baixada, mas houve erro em algumas notificações.', 'warning');
+            } else {
+                showAlert('Notificações enviadas com sucesso!', 'success');
+            }
 
         } catch (error) {
 
@@ -1394,13 +1427,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                 dueDate,
                                                                 invoice_ids: invoices.filter(inv => inv.status !== 'cancelado' && !inv.asaas_payment_id).map(i => i.id)
                                                             });
+
                                                             if (result.success) {
                                                                 showAlert('Fatura consolidada gerada com sucesso!', 'success');
-                                                                fetchInvoices(subscriber.id);
-                                                                fetchConsolidatedInvoices(subscriber.id);
+                                                                await Promise.all([
+                                                                    fetchInvoices(subscriber.id),
+                                                                    fetchConsolidatedInvoices(subscriber.id)
+                                                                ]);
 
                                                                 // Trigger download of the consolidated PDF
                                                                 if (result.consolidatedId) {
+                                                                    // Pequeno delay para garantir propagação no DB antes do fetch
+                                                                    await new Promise(resolve => setTimeout(resolve, 1500));
                                                                     const { data: newCons } = await supabase
                                                                         .from('consolidated_invoices')
                                                                         .select('*')

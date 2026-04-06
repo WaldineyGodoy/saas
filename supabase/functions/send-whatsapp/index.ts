@@ -67,10 +67,11 @@ serve(async (req) => {
         const encodedInstance = encodeURIComponent(effectiveInstance);
 
         let url = '';
+        let targetUrl = '';
         let body = {};
 
         if (mediaUrl || mediaBase64) {
-            url = `${baseUrl}/message/sendMedia/${encodedInstance}`;
+            targetUrl = `${baseUrl}/message/sendMedia/${encodedInstance}`;
             console.log('Detected Media Message. Instance:', effectiveInstance);
             
             // Detect if it's a PDF
@@ -82,13 +83,15 @@ serve(async (req) => {
             body = {
                 number: cleanPhone,
                 mediatype: isPdf ? "document" : "image",
+                mimetype: isPdf ? "application/pdf" : "image/png",
                 caption: text,
                 media: cleanMedia,
                 fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png'),
+                filename: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png'), // v2 compatibility
                 delay: 1200
             };
         } else {
-            url = `${baseUrl}/message/sendText/${encodedInstance}`;
+            targetUrl = `${baseUrl}/message/sendText/${encodedInstance}`;
             // Evolution v2 Flattened Structure
             body = {
                 number: cleanPhone,
@@ -99,50 +102,49 @@ serve(async (req) => {
         }
 
         // 3. Send Request
-        console.log(`Sending to Evolution API: ${url}`);
+        console.log('Sending to Evolution API:', targetUrl);
         console.log('Body keys:', Object.keys(body));
 
-        const response = await fetch(url, {
+        const response = await fetch(targetUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'apikey': apiKey
             },
             body: JSON.stringify(body)
-        });
-
-        // Safe Response Parsing
-        const responseText = await response.text();
-        let data;
-        try {
-            data = JSON.parse(responseText);
-        } catch (e) {
-            data = { message: responseText };
-        }
+        })
 
         if (!response.ok) {
-            console.error('Evolution API Error Response:', data);
-            throw new Error(data?.message || data?.error || 'Failed to send message via Evolution API');
+            let errorDetail = 'Unknown error';
+            const contentType = response.headers.get('content-type');
+            try {
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorDetail = JSON.stringify(errorData);
+                } else {
+                    errorDetail = await response.text();
+                }
+            } catch (e) {
+                errorDetail = 'Failed to parse error response';
+            }
+            console.error(`Evolution API Error [${response.status}]:`, errorDetail);
+            throw new Error(`Failed to send message via Evolution API: ${errorDetail}`)
         }
 
-        console.log('Evolution API Message Sent Successfully:', data.key || 'no key returned');
-
-        return new Response(
-            JSON.stringify({ success: true, data }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200
-            }
-        )
+        const resData = await response.json();
+        return new Response(JSON.stringify({ success: true, apiResponse: resData }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+        })
 
     } catch (error) {
         console.error('Edge Function Error:', error);
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
-            }
-        )
+        return new Response(JSON.stringify({ 
+            error: (error as Error).message,
+            stack: (error as Error).stack 
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400
+        })
     }
 })

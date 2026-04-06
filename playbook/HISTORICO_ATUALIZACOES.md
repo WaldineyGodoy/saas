@@ -1,6 +1,16 @@
-# Histórico de Atualizações do Playbook
+---
 
-Este log registra cronologicamente todas as atualizações informadas pelo usuário e as ações tomadas pelo assistente para manter a base de conhecimento (CRM.md e APP.md) atualizada.
+## [2026-04-06] - Padronização de Dados e Estabilização de APIs
+
+### Atualizações Registradas:
+1. **Padronização de Celulares (Sanitização)**:
+    - Implementação de limpeza automática (`.replace(/\D/g, '')`) em todos os pontos de entrada de telefone (CRM e Signups públicos).
+    - Garantia de conformidade com os requisitos de strings puramente numéricas da Evolution API v2.
+2. **Estabilização Evolution API v2**:
+    - Refatoração completa das requisições para o padrão "flat" (plano) da v2, corrigindo erros de estrutura JSON.
+    - Implementação de `encodeURIComponent` para nomes de instâncias, permitindo espaços e símbolos.
+3. **Melhoria Diagnóstica**:
+    - Novo sistema de extração de erros detalhados na interface de Configurações, facilitando a identificação imediata de problemas de conexão.
 
 ---
 

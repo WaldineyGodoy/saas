@@ -426,7 +426,7 @@ export const sendCombinedNotification = async ({
                     entity_type: 'subscriber',
                     entity_id: subscriberId,
                     content: logContent,
-                    details: {
+                    metadata: {
                         email_status: emailRes.error ? 'error' : 'sent',
                         wa_status: waRes.error ? 'error' : (waRes.skipped ? 'skipped' : 'sent'),
                         recipient_email: targetEmailForLog,
