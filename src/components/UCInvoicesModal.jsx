@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, X, AlertCircle, CheckCircle, Clock, ExternalLink } from 'lucide-react';
+import { FileText, X, AlertCircle, CheckCircle, Clock, ExternalLink, View } from 'lucide-react';
+import InvoiceSummaryModal from './InvoiceSummaryModal';
 
 export default function UCInvoicesModal({ uc, onClose }) {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
 
     useEffect(() => {
         if (uc?.id) {
@@ -78,7 +80,11 @@ export default function UCInvoicesModal({ uc, onClose }) {
 
     const formatMonth = (dateStr) => {
         if (!dateStr) return '-';
-        const date = new Date(dateStr);
+        // split YYYY-MM-DD or YYYY-MM
+        const [year, month] = dateStr.split('-');
+        if (!year || !month) return dateStr;
+        
+        const date = new Date(year, parseInt(month) - 1, 1);
         return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     };
 
@@ -114,7 +120,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
                                     <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Vencimento</th>
                                     <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Valor</th>
                                     <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</th>
-                                    <th style={{ textAlign: 'right', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Link</th>
+                                    <th style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -132,19 +138,28 @@ export default function UCInvoicesModal({ uc, onClose }) {
                                         <td style={{ padding: '0.75rem' }}>
                                             {getStatusBadge(inv.status)}
                                         </td>
-                                        <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                                            {inv.asaas_boleto_url ? (
-                                                <a
-                                                    href={inv.asaas_boleto_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: '#3b82f6', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}
-                                                >
-                                                    Boleto <ExternalLink size={14} />
-                                                </a>
-                                            ) : (
-                                                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>-</span>
-                                            )}
+                                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                            <button
+                                                onClick={() => setSelectedInvoiceForSummary(inv)}
+                                                style={{ 
+                                                    background: '#eff6ff', 
+                                                    color: '#3b82f6', 
+                                                    border: '1px solid #bfdbfe',
+                                                    padding: '0.4rem 0.8rem', 
+                                                    borderRadius: '6px',
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.4rem', 
+                                                    fontSize: '0.8rem', 
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseOver={e => e.currentTarget.style.background = '#dbeafe'}
+                                                onMouseOut={e => e.currentTarget.style.background = '#eff6ff'}
+                                            >
+                                                <ExternalLink size={14} /> Visualizar
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -163,6 +178,14 @@ export default function UCInvoicesModal({ uc, onClose }) {
                     </button>
                 </div>
             </div>
+
+            {selectedInvoiceForSummary && (
+                <InvoiceSummaryModal
+                    invoice={selectedInvoiceForSummary}
+                    consumerUnit={uc}
+                    onClose={() => setSelectedInvoiceForSummary(null)}
+                />
+            )}
         </div>
     );
 }

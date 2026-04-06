@@ -149,7 +149,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                         <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
                             <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Mês Referência</div>
                             <div style={{ fontWeight: 800, color: '#166534', fontSize: '1.1rem' }}>
-                                {invoice.mes_referencia ? `${invoice.mes_referencia.split('-')[1]}/${invoice.mes_referencia.split('-')[0]}` : 'N/A'}
+                                {invoice.mes_referencia ? (() => {
+                                    const [year, month] = invoice.mes_referencia.split('-');
+                                    return new Date(year, parseInt(month) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                                })() : 'N/A'}
                             </div>
                         </div>
                     </div>
