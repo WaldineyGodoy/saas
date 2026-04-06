@@ -180,7 +180,7 @@ serve(async (req) => {
                                             <tr>
                                                 <td width="60%" style="color: #64748b; font-size: 14px; line-height: 1.6;">
                                                     <div style="font-weight: bold; color: #003366; text-transform: uppercase; font-size: 12px; margin-bottom: 10px;">Canais de Atendimento</div>
-                                                    📞 0800 123 4567<br>
+                                                    📞 31 99536-7744<br>
                                                     📧 atendimento@b2wenergia.com.br<br>
                                                     🌐 www.b2wenergia.com.br
                                                 </td>
