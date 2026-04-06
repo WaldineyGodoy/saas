@@ -550,9 +550,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             return;
         }
 
-        const isRegeneration = !!localBoletoUrl;
+        const isRegeneration = !!localBoletoUrl || !!invoice?.asaas_id;
         const message = isRegeneration 
-            ? 'Já existe uma fatura emitida ou cancelada para este período. Deseja emitir uma nova fatura?'
+            ? 'Já existe uma fatura emitida. Deseja atualizar a cobrança no Asaas com os novos dados?'
             : 'Deseja gerar o boleto Asaas agora para esta fatura?';
 
         const confirmed = await showConfirm(
@@ -569,11 +569,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const targetId = localInvoiceId || invoice?.id;
             // Pass the current vencimento from form to ensure Asaas uses the new date
             const result = await createAsaasCharge(targetId, 'invoice', { dueDate: formData.vencimento });
-            if (result.url) {
-                setLocalBoletoUrl(result.url);
+            const finalBoletoUrl = result.url || localBoletoUrl || invoice?.asaas_boleto_url;
+
+            if (finalBoletoUrl) {
+                setLocalBoletoUrl(finalBoletoUrl);
                 setShowSuccess(true);
                 setTimeout(() => setShowSuccess(false), 3000);
-                window.open(result.url, '_blank');
+                window.open(finalBoletoUrl, '_blank');
                 
                 // Automatic Notification logic
                 console.log('Triggering automatic notification step...');
