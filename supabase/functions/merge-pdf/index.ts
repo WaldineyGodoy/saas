@@ -11,9 +11,9 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { summaryBase64, asaasUrl, energyBillUrl } = await req.json()
+    const { summaryBase64, asaasUrl, energyBillUrl, asaasPdfStorageUrl } = await req.json()
 
-    if (!summaryBase64 || !asaasUrl) {
+    if (!summaryBase64 || (!asaasUrl && !asaasPdfStorageUrl)) {
       throw new Error('Demonstrativo e URL do Boleto são obrigatórios.')
     }
 
@@ -50,40 +50,51 @@ serve(async (req) => {
         throw new Error(`Erro no demonstrativo: ${e.message}`)
     }
 
-    // 2. Buscar Boleto no Asaas com paciência aumentada (Sandbox latency)
-    console.log(`Merge: Buscando boleto em ${asaasUrl}`)
-    let asaasRes;
-    let retries = 6; // Aumentado para 6 tentativas
-    const fetchHeaders: any = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    }
+    // 2. Buscar Boleto (Priorizar Storage Privado se disponível)
+    const finalAsaasUrl = asaasPdfStorageUrl || asaasUrl;
+    console.log(`Merge: Buscando boleto em ${finalAsaasUrl}`)
     
-    // Injetar token apenas se for URL de API
-    if ((asaasUrl.includes('/api/v3/') || asaasUrl.includes('asaas.com/api')) && asaasKey) {
-        fetchHeaders['access_token'] = asaasKey
-    }
-
-    while (retries > 0) {
-        try {
-            asaasRes = await fetch(asaasUrl, { headers: fetchHeaders })
-            if (asaasRes.ok) {
-                const contentType = asaasRes.headers.get('content-type');
-                // Se o Asaas retornar HTML em vez de PDF no Sandbox, geralmente é um erro mascarado ou página de carregamento
-                if (contentType && contentType.includes('text/html')) {
-                    console.warn("Asaas retornou HTML em vez de PDF. Retentando...")
-                } else {
-                    break;
-                }
+    let asaasRes;
+    const isInternalStorage = finalAsaasUrl.includes('storage/v1/object/authenticated/invoices_pdfs');
+    
+    if (isInternalStorage) {
+        // Buscar do Storage Privado usando Service Role (bypass RLS)
+        console.log("Usando PDF do Storage Privado (Cache)");
+        asaasRes = await fetch(finalAsaasUrl, {
+            headers: { 
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
             }
-            
-            console.warn(`Tentativa falhou (${asaasRes?.status}). Retentando em 3s...`)
-            if (asaasRes?.status === 404 || asaasRes?.status === 401) break;
-        } catch (fetchErr: any) {
-            console.warn(`Erro de rede: ${fetchErr.message}`)
+        });
+    } else {
+        // Fallback para download direto do Asaas (Sandbox latency logic)
+        let retries = 6;
+        const fetchHeaders: any = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
-        
-        await new Promise(r => setTimeout(r, 3000)) // Aumentado para 3s entre tentativas
-        retries--;
+        if ((finalAsaasUrl.includes('/api/v3/') || finalAsaasUrl.includes('asaas.com/api')) && asaasKey) {
+            fetchHeaders['access_token'] = asaasKey
+        }
+
+        while (retries > 0) {
+            try {
+                asaasRes = await fetch(finalAsaasUrl, { headers: fetchHeaders })
+                if (asaasRes.ok) {
+                    const contentType = asaasRes.headers.get('content-type');
+                    if (contentType && contentType.includes('text/html')) {
+                        console.warn("Asaas retornou HTML em vez de PDF. Retentando...")
+                    } else {
+                        break;
+                    }
+                }
+                console.warn(`Tentativa falhou (${asaasRes?.status}). Retentando em 3s...`)
+                if (asaasRes?.status === 404 || asaasRes?.status === 401) break;
+            } catch (fetchErr: any) {
+                console.warn(`Erro de rede: ${fetchErr.message}`)
+            }
+            await new Promise(r => setTimeout(r, 3000))
+            retries--;
+        }
     }
 
     if (!asaasRes || !asaasRes.ok || (asaasRes.headers.get('content-type')?.includes('text/html'))) {

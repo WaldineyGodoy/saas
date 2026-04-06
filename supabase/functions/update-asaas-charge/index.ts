@@ -110,6 +110,38 @@ serve(async (req) => {
 
                 throw new Error(`Asaas: ${asaasError}`);
             }
+
+            // --- NOVO: Captura Proativa do PDF para o Storage ---
+            console.log(`Iniciando atualização do PDF para o Storage: ${invoice.asaas_payment_id}`);
+            try {
+                const asaasData = resultData;
+                const boletoUrl = asaasData.bankSlipUrl || asaasData.invoiceUrl;
+                
+                if (boletoUrl) {
+                    const storageId = invoice_id; // Sempre individual neste contexto
+                    const pdfData = await downloadAsaasPdf(boletoUrl, asaasKey);
+                    
+                    if (pdfData) {
+                        const { error: uploadError } = await supabase.storage
+                            .from('invoices_pdfs')
+                            .upload(`${storageId}.pdf`, pdfData, {
+                                contentType: 'application/pdf',
+                                upsert: true
+                            });
+
+                        if (!uploadError) {
+                            const storageUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/authenticated/invoices_pdfs/${storageId}.pdf`;
+                            await supabase.from('invoices')
+                                .update({ asaas_pdf_storage_url: storageUrl, asaas_boleto_url: boletoUrl })
+                                .eq('id', invoice_id);
+                            console.log(`PDF atualizado com sucesso: ${storageId}.pdf`);
+                        }
+                    }
+                }
+            } catch (captureErr) {
+                console.warn('Falha na atualização do PDF:', captureErr.message);
+            }
+            // ---------------------------------------------------
         }
 
         return new Response(
@@ -125,3 +157,34 @@ serve(async (req) => {
         )
     }
 })
+
+// Função auxiliar para baixar o PDF do Asaas com retentativas
+async function downloadAsaasPdf(url: string, apiKey: string): Promise<ArrayBuffer | null> {
+    let retries = 5;
+    const headers = { 
+        'access_token': apiKey,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
+
+    while (retries > 0) {
+        try {
+            const res = await fetch(url, { headers });
+            if (res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/pdf')) {
+                    return await res.arrayBuffer();
+                } else if (contentType && contentType.includes('text/html')) {
+                    console.warn(`Asaas retornou HTML (página de carregamento). Retentando em 5s... (${retries} restantes)`);
+                }
+            } else {
+                console.warn(`Erro ao baixar PDF (Status ${res.status}). Retentando...`);
+            }
+        } catch (err) {
+            console.error('Erro de rede na captura do PDF:', err.message);
+        }
+        
+        await new Promise(r => setTimeout(r, 5000)); // Espera 5s entre retentativas
+        retries--;
+    }
+    return null;
+}

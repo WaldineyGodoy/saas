@@ -299,10 +299,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
             const summaryBase64 = pdfSummary.output('datauristring');
-            const asaasUrl = localBoletoUrl; // Use STRICTLY what is visible in the UI
-            if (!asaasUrl) throw new Error("URL do boleto não encontrada ou expirada no Asaas.");
+            const asaasUrl = localBoletoUrl; 
+            if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
             const fileName = `Fatura_${inv.id}.pdf`;
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
             
             // Download the file
             const url = window.URL.createObjectURL(mergedBlob);

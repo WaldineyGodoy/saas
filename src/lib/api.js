@@ -278,10 +278,10 @@ export const sendWhatsapp = async (phone, text, mediaUrl = null, mediaBase64 = n
         throw error;
     }
 };
-export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf', energyBillUrl = null) => {
+export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf', energyBillUrl = null, asaasPdfStorageUrl = null) => {
     try {
         const { data, error } = await supabase.functions.invoke('merge-pdf', {
-            body: { summaryBase64, asaasUrl, energyBillUrl }
+            body: { summaryBase64, asaasUrl, energyBillUrl, asaasPdfStorageUrl }
         });
 
         if (error) {

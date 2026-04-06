@@ -275,7 +275,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const asaasUrl = consolidated.asaas_boleto_url;
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, null, consolidated.asaas_pdf_storage_url);
             showAlert('PDF Consolidado gerado!', 'success');
 
             // Trigger Joint Notifications
@@ -304,7 +304,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const handleDownloadCombined = async (inv) => {
-        if (!inv || !inv.asaas_boleto_url) {
+        if (!inv || (!inv.asaas_boleto_url && !inv.asaas_pdf_storage_url)) {
             showAlert('Boleto não disponível para esta fatura.', 'warning');
             return;
         }
@@ -336,7 +336,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const asaasUrl = inv.asaas_boleto_url;
             const fileName = `Fatura_${inv.id}.pdf`;
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
             showAlert('PDF Combinado gerado com sucesso!', 'success');
 
             // Trigger Joint Notifications

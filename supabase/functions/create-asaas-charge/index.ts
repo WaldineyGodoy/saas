@@ -130,7 +130,6 @@ serve(async (req) => {
             consolidatedId = cons.id;
         }
 
-        // Atualizar Faturas Individuais
         await supabase.from('invoices')
             .update({
                 asaas_payment_id: chargeData.id,
@@ -140,6 +139,38 @@ serve(async (req) => {
                 vencimento: dueDate // Sincronizar data de vencimento
             })
             .in('id', invoiceIds);
+
+        // --- NOVO: Captura Proativa do PDF para o Storage ---
+        console.log(`Iniciando captura do PDF para o Storage: ${chargeData.id}`);
+        try {
+            // Se for consolidada, usar o ID da consolidada para o nome do arquivo, senão usar o ID da fatura
+            const storageId = isConsolidated ? consolidatedId : invoiceIds[0];
+            const pdfData = await downloadAsaasPdf(boletoUrl, asaasKey);
+            
+            if (pdfData) {
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(`${storageId}.pdf`, pdfData, {
+                        contentType: 'application/pdf',
+                        upsert: true
+                    });
+
+                if (!uploadError) {
+                    const storageUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/authenticated/invoices_pdfs/${storageId}.pdf`;
+                    if (isConsolidated) {
+                        await supabase.from('consolidated_invoices').update({ asaas_pdf_storage_url: storageUrl }).eq('id', consolidatedId);
+                    }
+                    // Atualizar todas as faturas (mesmo se consolidada, guardamos a referência)
+                    await supabase.from('invoices').update({ asaas_pdf_storage_url: storageUrl }).in('id', invoiceIds);
+                    console.log(`PDF capturado e salvo com sucesso: ${storageId}.pdf`);
+                } else {
+                    console.error('Erro ao subir PDF para o Storage:', uploadError);
+                }
+            }
+        } catch (captureErr) {
+            console.warn('Falha na captura proativa do PDF (será tentado novamente no merge):', captureErr.message);
+        }
+        // ---------------------------------------------------
 
         // Registrar no Histórico
         const historyEntries = invoiceIds.map(id => ({
@@ -172,3 +203,34 @@ serve(async (req) => {
         )
     }
 })
+
+// Função auxiliar para baixar o PDF do Asaas com retentativas
+async function downloadAsaasPdf(url: string, apiKey: string): Promise<ArrayBuffer | null> {
+    let retries = 5;
+    const headers = { 
+        'access_token': apiKey,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
+
+    while (retries > 0) {
+        try {
+            const res = await fetch(url, { headers });
+            if (res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/pdf')) {
+                    return await res.arrayBuffer();
+                } else if (contentType && contentType.includes('text/html')) {
+                    console.warn(`Asaas retornou HTML (página de carregamento). Retentando em 5s... (${retries} restantes)`);
+                }
+            } else {
+                console.warn(`Erro ao baixar PDF (Status ${res.status}). Retentando...`);
+            }
+        } catch (err) {
+            console.error('Erro de rede na captura do PDF:', err.message);
+        }
+        
+        await new Promise(r => setTimeout(r, 5000)); // Espera 5s entre retentativas
+        retries--;
+    }
+    return null;
+}
