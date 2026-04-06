@@ -27,6 +27,16 @@ serve(async (req) => {
             throw new Error('Missing required fields: text or phone')
         }
 
+        // 0. Sanitize Inputs
+        const cleanPhone = phone.replace(/\D/g, '');
+        console.log('Sanitized Phone:', cleanPhone);
+
+        let cleanMedia = mediaBase64 || mediaUrl;
+        if (mediaBase64 && typeof mediaBase64 === 'string' && mediaBase64.includes(';base64,')) {
+            console.log('Sanitizing Base64 content (stripping Data URI prefix)');
+            cleanMedia = mediaBase64.split(';base64,').pop() || '';
+        }
+
         // 1. Fetch Configuration (using Admin client)
         const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
@@ -68,7 +78,7 @@ serve(async (req) => {
                           (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
 
             body = {
-                number: phone,
+                number: cleanPhone,
                 options: {
                     delay: 1200,
                     presence: "composing"
@@ -76,14 +86,14 @@ serve(async (req) => {
                 mediaMessage: {
                     mediatype: isPdf ? "document" : "image",
                     caption: text,
-                    media: mediaBase64 || mediaUrl,
+                    media: cleanMedia,
                     fileName: fileName || (isPdf ? 'fatura.pdf' : 'imagem.png')
                 }
             };
         } else {
             url = `${baseUrl}/message/sendText/${effectiveInstance}`;
             body = {
-                number: phone,
+                number: cleanPhone,
                 options: {
                     delay: 1200,
                     presence: "composing",
