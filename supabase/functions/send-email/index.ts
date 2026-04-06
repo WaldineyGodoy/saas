@@ -28,6 +28,7 @@ serve(async (req) => {
             .single();
 
         if (configError || !config || !config.api_key) {
+            console.error('Configuração do Resend não encontrada ou incompleta.');
             throw new Error('Configuração do Resend não encontrada.');
         }
 
@@ -45,7 +46,7 @@ serve(async (req) => {
         const { data: asaasConfig } = await supabaseAdmin
             .from('integrations_config')
             .select('environment')
-            .eq('service_name', 'financial_api')
+            .eq('service_name', 'asaas_api')
             .single();
 
         const isSandbox = asaasConfig?.environment === 'sandbox';
@@ -215,6 +216,8 @@ serve(async (req) => {
             html: finalHtml || `<p>Sua fatura está disponível.</p>`,
             attachments: attachments || []
         });
+
+        console.log('Resend API Response Success:', emailResponse.data);
 
         if (emailResponse.error) throw new Error(emailResponse.error.message);
 

@@ -60,6 +60,7 @@ serve(async (req) => {
 
         if (mediaUrl || mediaBase64) {
             url = `${baseUrl}/message/sendMedia/${effectiveInstance}`;
+            console.log('Detected Media Message. Instance:', effectiveInstance);
             
             // Detect if it's a PDF
             const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
@@ -109,9 +110,11 @@ serve(async (req) => {
         const data = await response.json();
 
         if (!response.ok) {
-            console.error('Evolution API Error:', data);
+            console.error('Evolution API Error Response:', data);
             throw new Error(data?.message || 'Failed to send message via Evolution API');
         }
+
+        console.log('Evolution API Message Sent Successfully:', data.key || 'no key returned');
 
         return new Response(
             JSON.stringify({ success: true, data }),
