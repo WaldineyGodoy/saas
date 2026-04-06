@@ -404,70 +404,152 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!data) return null;
 
         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+        
+        // Obter mês de referência do primeiro item
+        const refMonthRaw = data.items[0]?.mes_referencia || '';
+        let formattedRefMonth = 'N/A';
+        if (refMonthRaw) {
+            const [year, month] = refMonthRaw.split('-');
+            formattedRefMonth = `${month}/${year}`;
+        }
 
         return (
-            <div className="pdf-capture-wrapper consolidated">
-                <div className="detail-card">
-                    <div className="branded-header">
-                        {branding?.logo_url ? (
-                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
-                        ) : (
-                            <div className="company-info-fallback">
-                                <FileText size={24} color="#FF6600" />
-                                <span>{branding?.company_name || 'B2W Energia'}</span>
+            <div className="pdf-capture-wrapper consolidated" style={{ width: '210mm', backgroundColor: 'white', position: 'relative' }}>
+                <main className="flex flex-col bg-white min-h-[297mm]">
+                    {/* Header Section */}
+                    <header className="bg-white">
+                        <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">
+                            <div className="flex items-center gap-2">
+                                <img 
+                                    src="https://lh3.googleusercontent.com/aida/ADBb0uifhC93-7nY-qVlpl2VCbHi0L17fw_fp7B9Zyy1aycCrdJNcbpom1KaqidsefxOoWNJ_TWh2YC1BM4hVUnMR4PH0ZYktntr94jGjc9ahANupnJMvBrN6ZnCQeozqTovT4Sp7aWhQH2SfG5jvs9TGwdXDJ95UeUSq9g0Byuz0EB3ZyrATWG6i5pf0EiSgUAxSBQX8eTdwlsr_pfvr5rjC8YuwAMvEvfNExN9LkzCw2QaKRj7VltrbdKjlJZy6thBHv5qrvKIhpyU3Sk" 
+                                    alt="B2W Energia Logo" 
+                                    className="w-10 h-10 object-contain" 
+                                />
+                                <span className="text-xl font-extrabold text-[#003366] uppercase tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                    B2W Energia por assinatura
+                                </span>
                             </div>
-                        )}
-                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                            <h3 style={{ margin: 0, color: '#003366', fontSize: '1.2rem' }}>Resumo Consolidado</h3>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Vencimento: {new Date(data.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full">
+                                <span className="text-[10px] font-bold text-[#fd9000] uppercase tracking-widest">Consolidado Mensal</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#003366] text-white px-8 py-3 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <Info size={18} className="text-[#fd9000]" />
+                                <span className="text-sm font-semibold" style={{ fontFamily: 'Manrope, sans-serif' }}>Detalhamento da Fatura</span>
+                            </div>
+                            <div className="bg-[#fd9000] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">A Vencer</div>
+                        </div>
+
+                        <div className="p-8 grid grid-cols-12 gap-6 bg-slate-50/50">
+                            <div className="col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assinante</p>
+                                <h1 className="text-3xl font-extrabold text-[#003366] mb-4 uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                    {subscriber?.name}
+                                </h1>
+                                <div className="flex gap-8">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Mês Referência</p>
+                                        <p className="text-lg font-bold text-[#003366]">{formattedRefMonth}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Vencimento</p>
+                                        <p className="text-lg font-bold text-red-600">
+                                            {new Date(data.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-span-5 bg-[#5ead5c]/5 border-2 border-[#fd9000] rounded-xl p-6 flex flex-col justify-center items-end shadow-sm">
+                                <p className="text-[10px] font-bold text-[#5ead5c] uppercase tracking-widest mb-1">Total a Pagar</p>
+                                <p className="text-5xl font-black text-[#003366] tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                    {formatCurrency(data.total_value)}
+                                </p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Content Section */}
+                    <div className="flex-1 px-8 py-4">
+                        <div className="flex flex-wrap gap-4">
+                            {data.items.map(inv => (
+                                <div key={inv.id} className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col shadow-sm" style={{ width: 'calc(33.333% - 11px)', minWidth: '200px' }}>
+                                    <div>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex-1">
+                                                <p className="text-[8px] font-bold text-slate-400 uppercase">Endereço do Imóvel:</p>
+                                                <p className="text-[10px] font-bold text-[#003366] leading-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                    {inv.consumer_units?.identification || inv.consumer_units?.numero_uc}
+                                                </p>
+                                                <p className="text-[8px] text-slate-500 font-medium tracking-tight">UC: {inv.consumer_units?.numero_uc}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
+                                                <p className="text-[7px] font-bold text-slate-400 uppercase">Valor a Pagar</p>
+                                                <p className="text-[11px] font-black text-[#003366]">{formatCurrency(inv.valor_a_pagar)}</p>
+                                            </div>
+                                            <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
+                                                <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
+                                                <p className="text-[11px] font-black text-[#5ead5c] truncate">{formatCurrency(inv.economia_reais)}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5 border-t border-dashed border-slate-100 pt-2">
+                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                <span>Consumo Total (kWh)</span>
+                                                <span className="font-bold text-[#003366]">{inv.consumo_kwh} kWh</span>
+                                            </div>
+                                            <div className="flex justify-between text-[8px] font-medium text-[#5ead5c]">
+                                                <span>Energia Compensada</span>
+                                                <span className="font-bold">- {inv.consumo_compensado || 0} kWh</span>
+                                            </div>
+                                            <div className="flex justify-between text-[8px] font-medium text-slate-600 pt-1">
+                                                <span>Custos da Unidade</span>
+                                                <span className="font-bold">{formatCurrency(inv.consumo_reais)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                <span>Iluminação Pública</span>
+                                                <span className="font-bold">{formatCurrency(inv.iluminacao_publica)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                <span>Taxas e Outros</span>
+                                                <span className="font-bold">{formatCurrency((Number(inv.tarifa_minima) || 0) + (Number(inv.outros_lancamentos) || 0))}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="consolidated-subscriber-info" style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                        <div className="detail-item">
-                            <label>ASSINANTE</label>
-                            <span style={{ fontSize: '1.1rem', color: '#003366', fontWeight: 800 }}>{subscriber?.name}</span>
+                    {/* Footer Support Area */}
+                    <footer className="mt-auto px-8 py-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-[#003366]/5 flex items-center justify-center">
+                                <Zap size={20} className="text-[#003366]" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold text-[#003366] uppercase tracking-wider">Suporte Especializado B2W Energia</p>
+                                <p className="text-[9px] text-slate-500">atendimento@b2wenergia.com.br • www.b2wenergia.com.br</p>
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="consolidated-table-container" style={{ padding: '24px' }}>
-                        <table className="consolidated-table">
-                            <thead>
-                                <tr>
-                                    <th>UC / IDENTIFICAÇÃO</th>
-                                    <th>REFERÊNCIA</th>
-                                    <th>CONSUMO (kWh)</th>
-                                    <th>ECONOMIA</th>
-                                    <th>VALOR</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.items.map(inv => (
-                                    <tr key={inv.id}>
-                                        <td>
-                                            <div style={{ fontWeight: 600 }}>{inv.consumer_units?.numero_uc}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inv.consumer_units?.titular_conta}</div>
-                                        </td>
-                                        <td>{inv.mes_referencia}</td>
-                                        <td>{inv.consumo_kwh}</td>
-                                        <td style={{ color: '#16a34a', fontWeight: 600 }}>- {formatCurrency(inv.economia_reais)}</td>
-                                        <td style={{ fontWeight: 700 }}>{formatCurrency(inv.valor_a_pagar)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colSpan="4" style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1rem' }}>TOTAL CONSOLIDADO:</td>
-                                    <td style={{ fontSize: '1.1rem', fontWeight: 800, color: '#003366' }}>{formatCurrency(data.total_value)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-
-                    <div style={{ padding: '0 24px 24px', color: '#64748b', fontSize: '0.75rem', fontStyle: 'italic' }}>
-                        * Este documento é um demonstrativo das faturas de energia compensada do período. O boleto para pagamento encontra-se na página seguinte.
-                    </div>
-                </div>
+                        <div className="text-right">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">Eficiência Energética Nível A+</p>
+                            <div className="flex gap-0.5 justify-end mt-1">
+                                <div className="w-1.5 h-3 bg-[#5ead5c]/20 rounded-full"></div>
+                                <div className="w-1.5 h-3 bg-[#5ead5c]/40 rounded-full"></div>
+                                <div className="w-1.5 h-3 bg-[#5ead5c]/60 rounded-full"></div>
+                                <div className="w-1.5 h-3 bg-[#5ead5c] rounded-full"></div>
+                            </div>
+                        </div>
+                    </footer>
+                    
+                    {/* Decorative Edge */}
+                    <div className="w-full h-1.5 bg-gradient-to-r from-[#003366] via-[#fd9000] to-[#5ead5c]"></div>
+                </main>
             </div>
         );
     };

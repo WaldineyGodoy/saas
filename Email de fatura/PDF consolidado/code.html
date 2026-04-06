@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#003366",
+                        "secondary": "#fd9000",
+                        "tertiary": "#5ead5c",
+                        "surface": "#f7fafc",
+                        "surface-container": "#ebeef0",
+                        "on-surface": "#181c1e",
+                        "outline-variant": "#c3c6d1",
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        @media print {
+            .no-print { display: none; }
+            body { background: white; padding: 0; }
+            .a4-page { box-shadow: none; margin: 0; border: none; }
+        }
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            margin: 0 auto;
+            background: white;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-200 p-4 md:p-8">
+<main class="a4-page shadow-2xl">
+<!-- Header Section (Top) -->
+<header class="bg-white">
+<!-- Logo Bar -->
+<div class="px-8 py-4 flex justify-between items-center border-b border-gray-100">
+<div class="flex items-center gap-2">
+<img alt="B2W Energia Logo" class="w-10 h-10 object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uifhC93-7nY-qVlpl2VCbHi0L17fw_fp7B9Zyy1aycCrdJNcbpom1KaqidsefxOoWNJ_TWh2YC1BM4hVUnMR4PH0ZYktntr94jGjc9ahANupnJMvBrN6ZnCQeozqTovT4Sp7aWhQH2SfG5jvs9TGwdXDJ95UeUSq9g0Byuz0EB3ZyrATWG6i5pf0EiSgUAxSBQX8eTdwlsr_pfvr5rjC8YuwAMvEvfNExN9LkzCw2QaKRj7VltrbdKjlJZy6thBHv5qrvKIhpyU3Sk"/>
+<span class="text-xl font-extrabold text-primary font-headline tracking-tight uppercase">B2W Energia por assinatura</span>
+</div>
+<div class="bg-secondary/10 px-3 py-1 rounded-full">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-widest">Consolidado Mensal</span>
+</div>
+</div>
+<!-- Info Bar (Navy Blue) -->
+<div class="bg-primary text-white px-8 py-3 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">info</span>
+<span class="text-sm font-semibold font-headline">Detalhamento da Fatura</span>
+</div>
+<div class="bg-secondary px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">A Vencer</div>
+</div>
+<!-- Subscriber Hero Area -->
+<div class="p-8 grid grid-cols-12 gap-6 bg-surface-container/30">
+<div class="col-span-7 bg-white p-6 rounded-xl border border-outline-variant/30 shadow-sm">
+<p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assinante</p>
+<h1 class="text-3xl font-extrabold text-primary font-headline mb-4 uppercase">Waldiney Godoy</h1>
+<div class="flex gap-8">
+<div>
+<p class="text-[10px] font-bold text-gray-400 uppercase">Mês Referência</p>
+<p class="text-lg font-bold text-primary">02/2026</p>
+</div>
+<div>
+<p class="text-[10px] font-bold text-gray-400 uppercase">Vencimento</p>
+<p class="text-lg font-bold text-red-600">08/04/2026</p>
+</div>
+</div>
+</div>
+<div class="col-span-5 bg-tertiary/5 border-2 border-secondary rounded-xl p-6 flex flex-col justify-center items-end shadow-sm">
+<p class="text-[10px] font-bold text-tertiary uppercase tracking-widest mb-1">Total a Pagar</p>
+<p class="text-5xl font-black text-primary font-headline tracking-tighter">R$ 264,39</p>
+</div>
+</div>
+</header>
+<!-- Content Section (Grid of 6 Units) -->
+<div class="flex-1 px-8 py-4 overflow-hidden">
+<div class="grid grid-cols-3 grid-rows-2 gap-4 h-full">
+<!-- Unit Macro (Repeated 6 times) -->
+<script>
+                const createUnit = () => `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 flex flex-col shadow-sm hover:border-secondary/30 transition-colors">
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex-1">
+                                <p class="text-[8px] font-bold text-gray-400 uppercase">Endereço do Imóvel:</p>
+                                <p class="text-[10px] font-bold text-primary font-headline leading-tight">Rua das Palmeiras, 123 - Centro, São Paulo/SP</p>
+                                <p class="text-[8px] text-gray-500 font-medium tracking-tight">UC: 7021781376</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <div class="bg-gray-50 p-1.5 rounded border border-gray-100">
+                                <p class="text-[7px] font-bold text-gray-400 uppercase">Valor a Pagar</p>
+                                <p class="text-[11px] font-black text-primary">R$ 264,39</p>
+                            </div>
+                            <div class="bg-tertiary/5 p-1.5 rounded border border-tertiary/10 text-right">
+                                <p class="text-[7px] font-bold text-tertiary uppercase">Economia</p>
+                                <p class="text-[11px] font-black text-tertiary truncate">R$ 48,50</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5 border-t border-dashed border-gray-100 pt-2">
+                            <div class="flex justify-between text-[8px] font-medium text-gray-600">
+                                <span>Consumo Total (kWh)</span>
+                                <span class="font-bold text-primary">275 kWh</span>
+                            </div>
+                            <div class="flex justify-between text-[8px] font-medium text-tertiary">
+                                <span>Energia Compensada</span>
+                                <span class="font-bold">- 221 kWh</span>
+                            </div>
+                            <div class="flex justify-between text-[8px] font-medium text-gray-600 pt-1">
+                                <span>Custo da Energia Compensada</span>
+                                <span class="font-bold">R$ 231,40</span>
+                            </div>
+                            <div class="flex justify-between text-[8px] font-medium text-gray-600">
+                                <span>Iluminação Pública</span>
+                                <span class="font-bold">R$ 30,69</span>
+                            </div>
+                            <div class="flex justify-between text-[8px] font-medium text-gray-600">
+                                <span>Tarifa Mínima/Outros</span>
+                                <span class="font-bold">R$ 56,44</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+
+                for(let i=0; i<6; i++) {
+                    document.write(createUnit());
+                }
+            </script>
+</div>
+</div>
+<!-- Footer Support Area -->
+<footer class="mt-auto px-8 py-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl">contact_support</span>
+</div>
+<div>
+<p class="text-[10px] font-bold text-primary uppercase tracking-wider">Suporte Especializado B2W Energia</p>
+<p class="text-[9px] text-gray-500">Central de Atendimento: 0800 123 4567 • atendimento@b2wenergia.com.br</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-[8px] font-bold text-gray-400 uppercase tracking-[0.2em]">Eficiência Energética Nível A+</p>
+<div class="flex gap-0.5 justify-end mt-1">
+<div class="w-1.5 h-3 bg-tertiary/20 rounded-full"></div>
+<div class="w-1.5 h-3 bg-tertiary/40 rounded-full"></div>
+<div class="w-1.5 h-3 bg-tertiary/60 rounded-full"></div>
+<div class="w-1.5 h-3 bg-tertiary rounded-full"></div>
+</div>
+</div>
+</footer>
+<!-- Decorative Edge -->
+<div class="absolute bottom-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary via-secondary to-tertiary"></div>
+</main>
+</body></html>
