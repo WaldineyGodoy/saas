@@ -394,9 +394,26 @@ export const sendCombinedNotification = async ({
             const reader = new FileReader();
             reader.readAsDataURL(pdfBlob);
             reader.onerror = reject;
-            reader.onloadend = async () => {
-                const base64Data = reader.result.split(',')[1];
-                const fullBase64 = reader.result;
+                // 1. Upload to Storage to avoid Base64 size limits in Evolution API v2
+                let waMediaUrl = null;
+                try {
+                    const storagePath = `merged/${Date.now()}_${fileName}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('invoices_pdfs')
+                        .upload(storagePath, pdfBlob);
+
+                    if (!uploadError) {
+                        const { data: signedData, error: signedError } = await supabase.storage
+                            .from('invoices_pdfs')
+                            .createSignedUrl(storagePath, 3600); // 1 hour
+
+                        if (!signedError) {
+                            waMediaUrl = signedData.signedUrl;
+                        }
+                    }
+                } catch (storageErr) {
+                    console.error('Error uploading/signing PDF for WhatsApp:', storageErr);
+                }
 
                 const emailPromise = sendInvoiceEmail(
                     recipientEmail, 
@@ -411,8 +428,8 @@ export const sendCombinedNotification = async ({
                 const waPromise = targetPhone ? sendWhatsapp(
                     targetPhone,
                     waText,
-                    null,
-                    fullBase64,
+                    waMediaUrl, // Using URL instead of Base64 for WhatsApp
+                    null,       // No Base64 for WhatsApp now
                     fileName
                 ).catch(e => ({ error: e.message })) : Promise.resolve({ skipped: true });
 

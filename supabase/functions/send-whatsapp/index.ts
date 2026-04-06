@@ -56,14 +56,11 @@ serve(async (req) => {
         if (mediaUrl || mediaBase64) {
             targetUrl = `${baseUrl}/message/sendMedia/${encodedInstance}`;
             
-            // For v2, keeping the 'data:...' prefix helps the internal parser avoid recursion errors
-            const mediaPayload = mediaBase64 || mediaUrl;
-            
             const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
                           (mediaBase64 && mediaBase64.includes('application/pdf')) ||
                           (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
 
-            // Sanitize filename to avoid internal regex issues in sub-v2 versions
+            // Use a short, sanitized name for the attachment
             const shortName = fileName ? fileName.substring(0, 40).replace(/[^a-zA-Z0-0._-]/g, '') : (isPdf ? 'fatura.pdf' : 'imagem.png');
 
             body = {
@@ -71,15 +68,11 @@ serve(async (req) => {
                 mediatype: isPdf ? "document" : "image",
                 mimetype: isPdf ? "application/pdf" : "image/png",
                 caption: text,
-                media: mediaPayload,
+                media: mediaUrl || mediaBase64,
                 fileName: shortName,
-                filename: shortName, // v2 compatibility
+                filename: shortName, // Lowercase for v2 consistency
                 delay: 1200
             };
-            
-            if (mediaBase64) {
-                console.log(`Sending Media (Base64). Name: ${shortName}, Length: ${mediaBase64.length}`);
-            }
         } else {
             targetUrl = `${baseUrl}/message/sendText/${encodedInstance}`;
             body = {
