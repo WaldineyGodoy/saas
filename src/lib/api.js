@@ -156,6 +156,12 @@ export const sendCombinedNotification = async ({
             .select('*')
             .in('service_name', ['financial_api', 'evolution_api', 'resend_api']);
 
+        const { data: branding } = await supabase
+            .from('branding_settings')
+            .select('company_name')
+            .single();
+
+        const companyName = branding?.company_name || 'B2W Energia';
         const asaasConfig = configs?.find(c => c.service_name === 'financial_api');
         const evolutionConfig = configs?.find(c => c.service_name === 'evolution_api');
         const resendConfig = configs?.find(c => c.service_name === 'resend_api');
@@ -190,7 +196,18 @@ export const sendCombinedNotification = async ({
                     { nome: subscriberName, vencimento: dueDate, valor: value }
                 ).catch(e => ({ error: e.message }));
 
-                const waText = `Sua fatura da *B2W Energia* chegou! ⚡⚡\n\nOlá, *${subscriberName}*.\nSua fatura com vencimento em *${dueDate}* no valor de *${value}* já está disponível.\nSegue em anexo o PDF completo (Demonstrativo + Boleto). 📄\n\nClique no link abaixo para acessar nosso portal:\nhttps://app.b2wenergia.com.br\n\n*B2W Energia* ☀️`;
+                const waText = `Sua fatura da *${companyName}* chegou! ⚡⚡
+
+Olá, *${subscriberName}*.
+
+Sua fatura com vencimento em *${dueDate}* no valor de *${value}* já está disponível.
+
+Segue em anexo o PDF completo (Demonstrativo + Boleto). 📄
+
+Clique no link abaixo para acessar nosso portal e veja o quanto economizou esse mês.
+https://app.b2wenergia.com.br
+
+*${companyName}* ☀️`;
                 
                 // Agora delegamos o upload para a Edge Function para evitar problemas de RLS no frontend
                 const waPromise = targetPhone ? sendWhatsapp(
