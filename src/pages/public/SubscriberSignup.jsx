@@ -123,7 +123,7 @@ export default function SubscriberSignup() {
                 name: formData.name,
                 cpfCnpj: formData.cpf_cnpj,
                 email: formData.email,
-                phone: formData.phone,
+                phone: formData.phone.replace(/\D/g, ''),
                 postalCode: formData.cep,
                 addressNumber: formData.numero,
                 address: formData.rua,
@@ -143,6 +143,7 @@ export default function SubscriberSignup() {
 
         const payload = {
             ...formData,
+            phone: formData.phone.replace(/\D/g, ''),
             asaas_customer_id: asaasId
         };
         // Ensure originator_id is null if empty string

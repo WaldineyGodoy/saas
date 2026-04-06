@@ -139,6 +139,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
         try {
             const dataToSave = { ...formData };
+            // Sanitize phone for Evolution API (clean digits only)
+            if (dataToSave.phone) {
+                dataToSave.phone = dataToSave.phone.replace(/\D/g, '');
+            }
             // Ensure numbers are numbers and null if empty/invalid
             dataToSave.tarifa_concessionaria = dataToSave.tarifa_concessionaria ? Number(dataToSave.tarifa_concessionaria) : null;
             dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;

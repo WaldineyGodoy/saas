@@ -743,6 +743,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // 3. Save to Supabase
             const dataToSave = {
                 ...formData,
+                phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
                 billing_mode: billingMode,
                 consolidated_due_day: parseInt(consolidatedDueDay),
                 portal_credentials: formData.portal_credentials

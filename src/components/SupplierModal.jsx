@@ -146,7 +146,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 name: formData.name,
                 cnpj: formData.cnpj,
                 email: formData.email,
-                phone: formData.phone,
+                phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
                 status: formData.status,
                 legal_partner_name: formData.legal_partner_name,
                 legal_partner_cpf: formData.legal_partner_cpf,

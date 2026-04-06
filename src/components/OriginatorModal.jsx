@@ -105,7 +105,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
             name: formData.name,
             cpf_cnpj: formData.cpf_cnpj,
             email: formData.email,
-            phone: formData.phone,
+            phone: formData.phone.replace(/\D/g, ''),
             pix_key: formData.pix_key,
             pix_key_type: formData.pix_key_type,
             split_commission: {

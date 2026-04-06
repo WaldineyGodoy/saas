@@ -73,7 +73,7 @@ export default function OriginatorSignupForm() {
                 options: {
                     data: {
                         name: form.name,
-                        phone: form.phone
+                        phone: form.phone.replace(/\D/g, '')
                     }
                 }
             });
@@ -102,7 +102,7 @@ export default function OriginatorSignupForm() {
                 id: userId,
                 name: form.name,
                 email: form.email,
-                phone: form.phone,
+                phone: form.phone.replace(/\D/g, ''),
                 cpf_cnpj: form.cpf,
                 pix_key: form.pix_key,
                 pix_key_type: form.pix_key_type,

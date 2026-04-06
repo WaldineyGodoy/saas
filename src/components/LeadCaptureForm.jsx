@@ -105,7 +105,7 @@ export default function LeadCaptureForm() {
             const payload = {
                 name: form.name,
                 email: form.email,
-                phone: form.phone,
+                phone: form.phone.replace(/\D/g, ''),
                 cep: form.cep,
                 concessionaria: form.concessionaria,
                 consumo_kwh: form.consumo,
@@ -158,7 +158,7 @@ export default function LeadCaptureForm() {
         const params = new URLSearchParams();
         params.append('name', form.name);
         params.append('email', form.email);
-        params.append('phone', form.phone);
+        params.append('phone', form.phone.replace(/\D/g, ''));
         params.append('cep', form.cep);
         params.append('consumo', form.consumo); // Passing consumption for initial display
         if (originatorId) params.append('originator_id', originatorId);
