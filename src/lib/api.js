@@ -198,14 +198,19 @@ export const sendCombinedNotification = async ({
 
                 const waText = `Sua fatura da *${companyName}* chegou! ⚡⚡
 
+
 Olá, *${subscriberName}*.
+
 
 Sua fatura com vencimento em *${dueDate}* no valor de *${value}* já está disponível.
 
+
 Segue em anexo o PDF completo (Demonstrativo + Boleto). 📄
+
 
 Clique no link abaixo para acessar nosso portal e veja o quanto economizou esse mês.
 https://app.b2wenergia.com.br
+
 
 *${companyName}* ☀️`;
                 
