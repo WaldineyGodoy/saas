@@ -231,17 +231,20 @@ export async function updateAsaasCharge(invoiceId, value, dueDate) {
         if (error) {
             let message = error.message;
             try {
-                if (error.context?.context?.status === 400) {
-                    const body = await error.context.response.json();
-                    message = body.error || message;
+                // Tentar extrair erro detalhado do corpo da resposta (Edge Function retorna JSON)
+                const body = await error.context?.json();
+                if (body && body.error) {
+                    message = body.error;
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.warn('Could not parse error body for updateAsaasCharge:', e);
+            }
             throw new Error(message);
         }
 
         return data;
     } catch (error) {
-        console.error('Error in updateAsaasCharge:', error);
+        console.error('Error in updateAsaasCharge helper:', error);
         throw error;
     }
 }

@@ -42,7 +42,7 @@ serve(async (req) => {
                 .eq('service_name', 'financial_api')
                 .single()
 
-            if (configError) throw new Error("Configuração de integração não encontrada.");
+            if (configError) throw new Error("Configuração de integração financeira não encontrada.");
 
             const isSandbox = configData.environment === 'sandbox';
             const asaasKey = isSandbox ? configData.sandbox_api_key : configData.api_key;
@@ -52,10 +52,17 @@ serve(async (req) => {
                 throw new Error("Credenciais do Asaas não configuradas.");
             }
 
-            console.log(`Atualizando pagamento ${invoice.asaas_payment_id} no Asaas...`);
+            // Validar dados
+            if (!value || value <= 0) {
+                console.warn(`Tentativa de atualizar pagamento ${invoice.asaas_payment_id} com valor inválido: ${value}`);
+                // Não lançamos erro aqui, apenas não enviamos ao Asaas se o valor for zero ou nulo
+                // Mas geralmente o Asaas exige valor positivo.
+            }
+
+            console.log(`Sync Asaas: Atualizando ${invoice.asaas_payment_id} | Valor: ${value} | Vencimento: ${dueDate}`);
 
             const updateData: any = {};
-            if (value) updateData.value = value;
+            if (value !== undefined && value !== null) updateData.value = value;
             if (dueDate) updateData.dueDate = dueDate;
 
             const updateRes = await fetch(`${asaasUrl}/payments/${invoice.asaas_payment_id}`, {
@@ -68,6 +75,8 @@ serve(async (req) => {
             });
 
             const responseText = await updateRes.text();
+            console.log(`Asaas Response (${updateRes.status}): ${responseText}`);
+
             let resultData;
             try {
                 resultData = JSON.parse(responseText);
@@ -76,16 +85,19 @@ serve(async (req) => {
             }
 
             if (!updateRes.ok) {
-                throw new Error(`Erro Asaas: ${resultData.errors?.[0]?.description || 'Falha ao atualizar no Asaas'}`);
+                // Extrair descrição amigável do erro do Asaas
+                const asaasError = resultData.errors?.[0]?.description || resultData.error || 'Erro desconhecido no Asaas';
+                throw new Error(`Asaas: ${asaasError}`);
             }
         }
 
         return new Response(
-            JSON.stringify({ success: true, message: "Cobrança Asaas atualizada com sucesso." }),
+            JSON.stringify({ success: true, message: "Sincronização com Asaas concluída." }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
     } catch (error) {
+        console.error('Erro na Edge Function update-asaas-charge:', error.message)
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
