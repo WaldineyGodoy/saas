@@ -113,9 +113,20 @@ export const sendWhatsapp = async (phone, text, mediaUrl = null, mediaBase64 = n
 };
 
 export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf', energyBillUrl = null, asaasPdfStorageUrl = null) => {
-    const { data, error } = await supabase.functions.invoke('merge-pdf', {
-        body: { summaryBase64, asaasUrl, energyBillUrl, asaasPdfStorageUrl }
-    });
+    const body = { 
+        summaryBase64, 
+        asaasUrl, 
+        asaasPdfStorageUrl 
+    };
+
+    // Suporta tanto uma única URL (string) quanto várias (array)
+    if (Array.isArray(energyBillUrl)) {
+        body.energyBillUrls = energyBillUrl;
+    } else if (energyBillUrl) {
+        body.energyBillUrl = energyBillUrl;
+    }
+
+    const { data, error } = await supabase.functions.invoke('merge-pdf', { body });
     if (error) throw new Error(error.message);
     const blob = new Blob([data], { type: 'application/pdf' });
     return blob;

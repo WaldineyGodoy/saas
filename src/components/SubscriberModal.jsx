@@ -275,7 +275,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const asaasUrl = consolidated.asaas_boleto_url;
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, null, consolidated.asaas_pdf_storage_url);
+            // Coletar todas as URLs de faturas de energia das faturas individuais
+            const energyBillUrls = invs
+                .map(i => i.concessionaria_pdf_url)
+                .filter(url => !!url);
+
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, energyBillUrls, consolidated.asaas_pdf_storage_url);
             
             // Browser Download
             const blobUrl = window.URL.createObjectURL(mergedBlob);

@@ -11,7 +11,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { summaryBase64, asaasUrl, energyBillUrl, asaasPdfStorageUrl } = await req.json()
+    const { summaryBase64, asaasUrl, energyBillUrl, energyBillUrls, asaasPdfStorageUrl } = await req.json()
 
     if (!summaryBase64 || (!asaasUrl && !asaasPdfStorageUrl)) {
       throw new Error('Demonstrativo e URL do Boleto são obrigatórios.')
@@ -124,17 +124,25 @@ serve(async (req) => {
     const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
     asaasPages.forEach(p => mergedPdf.addPage(p))
 
-    // 3. Fatura Concessionária
-    if (energyBillUrl) {
+    // 3. Fatura(s) Concessionária
+    const urlsToProcess = Array.isArray(energyBillUrls) ? energyBillUrls : (energyBillUrl ? [energyBillUrl] : []);
+    
+    for (const url of urlsToProcess) {
+      if (!url) continue;
       try {
-        const energyRes = await fetch(energyBillUrl)
+        console.log(`Merge: Buscando conta de energia em ${url}`);
+        const energyRes = await fetch(url);
         if (energyRes.ok) {
-          const energyBytes = await energyRes.arrayBuffer()
-          const energyBillDoc = await PDFDocument.load(energyBytes)
-          const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
-          energyPages.forEach(p => mergedPdf.addPage(p))
+          const energyBytes = await energyRes.arrayBuffer();
+          const energyBillDoc = await PDFDocument.load(energyBytes);
+          const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices());
+          energyPages.forEach(p => mergedPdf.addPage(p));
+        } else {
+          console.warn(`Falha ao buscar conta de energia em ${url}: Status ${energyRes.status}`);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`Erro ao processar conta de energia em ${url}: ${e.message}`);
+      }
     }
 
     const mergedBytes = await mergedPdf.save()
