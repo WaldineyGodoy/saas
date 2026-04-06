@@ -243,12 +243,12 @@ export default function SubscriberList() {
                 );
                 
                 const totalMonth = invoicesFinance.reduce((sum, inv) => 
-                    inv.status !== 'pago' ? sum + Number(inv.valor_a_pagar || 0) : sum
+                    (inv.status !== 'pago') ? sum + Number(inv.valor_a_pagar || 0) : sum
                 , 0);
 
                 // Total Global (Dívida real: pendentes, vencidas e a vencer)
                 const totalGlobal = subInvoices
-                    .filter(inv => inv.status === 'pendente' || inv.status === 'vencido' || inv.status === 'a_vencer')
+                    .filter(inv => inv.status !== 'pago')
                     .reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
 
                 // Indicador de Leitura (UCs com leitura ou fatura NO MÊS de REFERÊNCIA filtrado)
