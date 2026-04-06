@@ -66,19 +66,31 @@ serve(async (req) => {
                 'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
             }
         });
-    } else {
-        // Fallback para download direto do Asaas (Sandbox latency logic)
+
+        // Se o arquivo não existir no storage, tentar fallback para Asaas direto
+        if (!asaasRes || !asaasRes.ok) {
+            console.warn(`PDF não encontrado no Storage (${asaasRes?.status}). Tentando fallback para URL original do Asaas.`);
+            asaasRes = null; // Reset para entrar no else abaixo
+        }
+    }
+
+    if (!asaasRes) {
+        // Fallback para download direto do Asaas (conforme lógica original)
+        const fallbackUrl = asaasUrl;
+        if (!fallbackUrl) throw new Error("PDF não encontrado no cache e URL original do Asaas está vazia.");
+        
+        console.log(`Fallback: Buscando boleto original em ${fallbackUrl}`);
         let retries = 6;
         const fetchHeaders: any = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
-        if ((finalAsaasUrl.includes('/api/v3/') || finalAsaasUrl.includes('asaas.com/api')) && asaasKey) {
+        if ((fallbackUrl.includes('/api/v3/') || fallbackUrl.includes('asaas.com/api')) && asaasKey) {
             fetchHeaders['access_token'] = asaasKey
         }
 
         while (retries > 0) {
             try {
-                asaasRes = await fetch(finalAsaasUrl, { headers: fetchHeaders })
+                asaasRes = await fetch(fallbackUrl, { headers: fetchHeaders })
                 if (asaasRes.ok) {
                     const contentType = asaasRes.headers.get('content-type');
                     if (contentType && contentType.includes('text/html')) {
@@ -87,10 +99,10 @@ serve(async (req) => {
                         break;
                     }
                 }
-                console.warn(`Tentativa falhou (${asaasRes?.status}). Retentando em 3s...`)
+                console.warn(`Tentativa fallback falhou (${asaasRes?.status}). Retentando em 3s...`)
                 if (asaasRes?.status === 404 || asaasRes?.status === 401) break;
             } catch (fetchErr: any) {
-                console.warn(`Erro de rede: ${fetchErr.message}`)
+                console.warn(`Erro de rede no fallback: ${fetchErr.message}`)
             }
             await new Promise(r => setTimeout(r, 3000))
             retries--;
