@@ -180,6 +180,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     .eq('id', selectedUc.subscriber_id)
                     .single();
                 if (error) throw error;
+                console.log('Subscriber fetched for notifications:', data.name, data.email);
                 setSubscriber(data);
             } catch (err) {
                 console.error('Error fetching subscriber for notifications:', err);
@@ -271,6 +272,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
         setIsGeneratingPdf(true);
         setInvoiceToDownload(inv);
+        console.log('Generating Combined PDF for invoice:', inv.id, 'Energy Bill URL:', inv.concessionaria_pdf_url);
 
         try {
             await new Promise(resolve => setTimeout(resolve, 600));
@@ -307,6 +309,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
+            console.log('PDF Merged successfully. Blob size:', mergedBlob.size);
             showAlert('PDF Combinado gerado com sucesso!', 'success');
             return mergedBlob;
         } catch (error) {
@@ -573,6 +576,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 window.open(result.url, '_blank');
                 
                 // Automatic Notification logic
+                console.log('Triggering automatic notification. Subscriber status:', !!subscriber);
                 if (subscriber) {
                     try {
                         // We need to fetch the newly created invoice record to get the correct data
@@ -597,6 +601,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     subscriberId: subscriber.id,
                                     profileId: profile?.id
                                 });
+                                console.log('Notification sent successfully');
+                            } else {
+                                console.warn('Could not generate PDF Blob for notification');
                             }
                         }
                     } catch (notifErr) {
