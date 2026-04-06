@@ -281,12 +281,20 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
             body: { summaryBase64, asaasUrl, energyBillUrl }
         });
 
-        if (error) throw error;
+        if (error) {
+            let errorMsg = error.message;
+            try {
+                const body = await error.context?.json();
+                if (body && body.error) errorMsg = body.error;
+            } catch (e) { }
+            console.error('Erro ao mesclar PDF:', error);
+            throw new Error(`Erro ao mesclar PDF: ${errorMsg}`);
+        }
 
         // data is a Blob because of the response in Edge Function
         const blob = new Blob([data], { type: 'application/pdf' });
         
-        if (fileName) {
+        if (fileName && download) {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -299,7 +307,7 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
 
         return blob;
     } catch (error) {
-        console.error('Erro ao mesclar PDF:', error);
+        console.error('Error in mergePdf helper:', error);
         throw error;
     }
 };

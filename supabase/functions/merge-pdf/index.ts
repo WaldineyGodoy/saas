@@ -16,10 +16,34 @@ serve(async (req) => {
       throw new Error('summaryBase64 e asaasUrl são obrigatórios')
     }
 
-    // 1. Carregar o PDF do Demonstrativo (enviado pelo frontend em Base64)
-    const cleanBase64 = summaryBase64.includes(',') ? summaryBase64.split(',')[1] : summaryBase64
-    const summaryBytes = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0))
-    const summaryDoc = await PDFDocument.load(summaryBytes)
+    // 1. Criar o PDF inicial e embutir o Demonstrativo (Imagem em Base64 enviada pelo frontend)
+    const mergedPdf = await PDFDocument.create()
+    
+    try {
+        const cleanBase64 = summaryBase64.includes(',') ? summaryBase64.split(',')[1] : summaryBase64
+        const summaryBytes = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0))
+        
+        // Embutir a imagem (PNG ou JPG)
+        let summaryImg;
+        try {
+            summaryImg = await mergedPdf.embedPng(summaryBytes)
+        } catch (e) {
+            console.log('Tentando embutir como JPG após falha no PNG...')
+            summaryImg = await mergedPdf.embedJpg(summaryBytes)
+        }
+        
+        const page = mergedPdf.addPage([summaryImg.width, summaryImg.height])
+        page.drawImage(summaryImg, {
+            x: 0,
+            y: 0,
+            width: summaryImg.width,
+            height: summaryImg.height,
+        })
+        console.log('Demonstrativo (Imagem) embutido com sucesso')
+    } catch (imgErr: any) {
+        console.error('Erro ao embutir imagem do demonstrativo:', imgErr.message)
+        throw new Error(`Falha ao processar imagem do demonstrativo: ${imgErr.message}`)
+    }
 
     // 2. Buscar o PDF do Boleto no Asaas
     console.log(`Buscando boleto em: ${asaasUrl}`)
@@ -29,6 +53,7 @@ serve(async (req) => {
         }
     })
     if (!asaasRes.ok) throw new Error(`Erro ao buscar boleto no Asaas (${asaasRes.status}): ${asaasRes.statusText}`)
+    
     const asaasBytes = await asaasRes.arrayBuffer()
     const asaasDoc = await PDFDocument.load(asaasBytes)
 
@@ -44,59 +69,50 @@ serve(async (req) => {
         })
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer()
-          // Verificação rápida se o PDF é válido
           if (energyBytes.byteLength > 0) {
               try {
                   energyBillDoc = await PDFDocument.load(energyBytes)
                   console.log(`Conta de energia carregada com sucesso (${energyBillDoc.getPageCount()} páginas)`)
-      } catch (loadErr: any) {
-        console.error('Erro ao carregar PDF da conta (provavelmente PDF corrompido ou protegido):', loadErr.message)
+              } catch (loadErr: any) {
+                  console.error('Erro ao carregar PDF da conta:', loadErr.message)
+              }
+          }
+        } else {
+          console.error(`Erro ao buscar conta de energia. Status: ${energyRes.status}`)
+        }
+      } catch (e: any) {
+        console.error('Erro de rede ao buscar conta de energia:', e.message)
       }
     }
-  } else {
-    console.error(`Erro ao buscar conta de energia. Status: ${energyRes.status} ${energyRes.statusText}`)
+
+    // 4. Agrupar as páginas
+    // O mergedPdf já tem o Demonstrativo (página 1)
+    
+    // Adicionar Boleto Asaas
+    const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
+    asaasPages.forEach(p => mergedPdf.addPage(p))
+
+    // Adicionar Conta de Energia (se disponível)
+    if (energyBillDoc) {
+        const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
+        energyPages.forEach(p => mergedPdf.addPage(p))
+    }
+
+    const mergedBytes = await mergedPdf.save()
+
+    return new Response(mergedBytes, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="fatura_consolidada.pdf"'
+      }
+    })
+
+  } catch (err: any) {
+    console.error('Erro na Edge Function merge-pdf:', err)
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   }
-} catch (e: any) {
-  console.error('Erro de rede ao buscar conta de energia:', e.message)
-}
-}
-
-// 4. Criar Novo PDF e Mesclar
-const mergedPdf = await PDFDocument.create()
-
-// Copiar páginas do Demonstrativo
-const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
-summaryPages.forEach(p => mergedPdf.addPage(p))
-
-// Copiar páginas do Boleto Asaas
-const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
-asaasPages.forEach(p => mergedPdf.addPage(p))
-
-// Copiar páginas da Conta de Energia (se existir e for válida)
-if (energyBillDoc) {
-try {
-  const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
-  energyPages.forEach(p => mergedPdf.addPage(p))
-} catch (copyErr: any) {
-  console.error('Erro ao copiar páginas da conta para o PDF final:', copyErr.message)
-}
-}
-
-const mergedBytes = await mergedPdf.save()
-
-return new Response(mergedBytes, {
-headers: {
-  ...corsHeaders,
-  'Content-Type': 'application/pdf',
-  'Content-Disposition': 'attachment; filename="fatura_consolidada.pdf"'
-}
-})
-
-} catch (err: any) {
-console.error('Erro na Edge Function merge-pdf:', err)
-return new Response(JSON.stringify({ error: err.message }), {
-status: 400,
-headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-})
-}
 })
