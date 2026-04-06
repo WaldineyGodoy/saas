@@ -576,40 +576,56 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 window.open(result.url, '_blank');
                 
                 // Automatic Notification logic
-                console.log('Triggering automatic notification. Subscriber status:', !!subscriber);
-                if (subscriber) {
-                    try {
-                        // We need to fetch the newly created invoice record to get the correct data
-                        const { data: invData } = await supabase
-                            .from('invoices')
+                console.log('Triggering automatic notification step...');
+                try {
+                    // Fetch subscriber data ON-DEMAND to ensure we have the most up-to-date values
+                    const { data: currentInv, error: invFetchErr } = await supabase
+                        .from('invoices')
+                        .select('*, consumer_units(subscriber_id)')
+                        .eq('id', targetId)
+                        .single();
+                    
+                    if (invFetchErr) throw invFetchErr;
+
+                    const subId = currentInv?.consumer_units?.subscriber_id || selectedUc?.subscriber_id;
+                    
+                    if (subId) {
+                        const { data: subData, error: subFetchErr } = await supabase
+                            .from('subscribers')
                             .select('*')
-                            .eq('id', targetId)
+                            .eq('id', subId)
                             .single();
                         
-                        if (invData) {
-                            // Generate combined PDF first for the notification
-                            const pdfBlob = await handleDownloadCombined(invData);
+                        if (subFetchErr) throw subFetchErr;
+
+                        if (subData) {
+                            showAlert('Gerando PDF para notificações...', 'info');
+                            // handleDownloadCombined returns the blob and handles browser download
+                            const pdfBlob = await handleDownloadCombined(currentInv);
+                            
                             if (pdfBlob) {
+                                showAlert('Enviando notificações (E-mail/WhatsApp)...', 'info');
                                 await sendCombinedNotification({
-                                    recipientEmail: subscriber.email,
-                                    recipientPhone: subscriber.phone,
-                                    subscriberName: subscriber.name,
-                                    dueDate: new Date(invData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR'),
-                                    value: Number(invData.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                    recipientEmail: subData.email,
+                                    recipientPhone: subData.phone,
+                                    subscriberName: subData.name,
+                                    dueDate: new Date(currentInv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR'),
+                                    value: Number(currentInv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                                     pdfBlob: pdfBlob,
-                                    fileName: `Fatura_${invData.id}.pdf`,
-                                    subscriberId: subscriber.id,
+                                    fileName: `Fatura_${currentInv.id}.pdf`,
+                                    subscriberId: subData.id,
                                     profileId: profile?.id
                                 });
+                                showAlert('Notificações enviadas com sucesso!', 'success');
                                 console.log('Notification sent successfully');
-                            } else {
-                                console.warn('Could not generate PDF Blob for notification');
                             }
                         }
-                    } catch (notifErr) {
-                        console.error('Error sending automatic notification:', notifErr);
-                        showAlert('Boleto gerado, mas falha ao enviar notificações. Verifique o histórico.', 'warning');
+                    } else {
+                        console.warn('Subscriber ID not found for notification');
                     }
+                } catch (notifErr) {
+                    console.error('Notification error:', notifErr);
+                    showAlert('Boleto gerado, mas houve erro ao processar notificações automáticas.', 'warning');
                 }
 
                 if (onSave) onSave();
