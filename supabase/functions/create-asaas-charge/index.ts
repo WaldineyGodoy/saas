@@ -136,7 +136,8 @@ serve(async (req) => {
                 asaas_payment_id: chargeData.id,
                 asaas_boleto_url: boletoUrl,
                 asaas_status: 'PENDING',
-                consolidated_invoice_id: consolidatedId
+                consolidated_invoice_id: consolidatedId,
+                vencimento: dueDate // Sincronizar data de vencimento
             })
             .in('id', invoiceIds);
 
