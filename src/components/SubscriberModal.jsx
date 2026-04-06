@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendInvoiceEmail, sendWhatsapp } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -57,86 +57,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         }
     };
 
-    const sendInvoiceNotifications = async (recipientEmail, recipientPhone, subscriberName, dueDate, value, pdfBlob, fileName) => {
-        try {
-            const { data: configs } = await supabase
-                .from('integrations_config')
-                .select('*')
-                .in('service_name', ['asaas_api', 'evolution_api']);
-
-            const asaasConfig = configs?.find(c => c.service_name === 'asaas_api');
-            const evolutionConfig = configs?.find(c => c.service_name === 'evolution_api');
-            const resendConfig = configs?.find(c => c.service_name === 'resend_api');
-
-            const isSandbox = asaasConfig?.environment === 'sandbox';
-            
-            let testPhone = '';
-            if (evolutionConfig?.variables) {
-                const vars = evolutionConfig.variables;
-                testPhone = (typeof vars === 'object' && !Array.isArray(vars)) 
-                    ? vars.test_phone 
-                    : (Array.isArray(vars) ? vars.find(v => v.key === 'test_phone')?.value : '');
-            }
-
-            const targetPhone = isSandbox ? (testPhone || '5521999999999') : recipientPhone;
-            // O e-mail agora é gerenciado pela Edge Function (Redirecionamento Sandbox interno)
-            const targetEmailForLog = isSandbox ? (resendConfig?.variables?.test_email || 'waldineygodoy@gmail.com') : recipientEmail;
-
-            const reader = new FileReader();
-            reader.readAsDataURL(pdfBlob);
-            
-            return new Promise((resolve) => {
-                reader.onloadend = async () => {
-                    const base64Data = reader.result.split(',')[1];
-                    const fullBase64 = reader.result;
-
-                    const emailPromise = sendInvoiceEmail(
-                        recipientEmail, // Passamos o e-mail real, a Edge Function redireciona se for Sandbox
-                        'Sua fatura B2W Energia chegou!',
-                        null,
-                        [{ filename: fileName, content: base64Data }],
-                        { nome: subscriberName, vencimento: dueDate, valor: value }
-                    ).catch(e => ({ error: e.message }));
-
-                    const waText = `Sua fatura da *B2W Energia* chegou! ⚡⚡\n\nOlá, *${subscriberName}*.\nSua fatura com vencimento em *${dueDate}* no valor de *${value}* já está disponível.\nSegue em anexo o PDF completo (Demonstrativo + Boleto). 📄\n\nClique no link abaixo para acessar nosso portal:\nhttps://app.b2wenergia.com.br\n\n*B2W Energia* ☀️`;
-                    
-                    const waPromise = targetPhone ? sendWhatsapp(
-                        targetPhone,
-                        waText,
-                        null,
-                        fullBase64,
-                        fileName
-                    ).catch(e => ({ error: e.message })) : Promise.resolve({ skipped: true });
-
-                    const [emailRes, waRes] = await Promise.all([emailPromise, waPromise]);
-
-                    let logContent = `Fatura enviada ao e-mail ${targetEmailForLog}`;
-                    if (targetPhone) logContent += ` e whatsapp ${targetPhone}`;
-                    if (isSandbox) logContent += ' (Modo Sandbox)';
-
-                    await addHistory('subscriber', subscriber.id, 'notification_sent', {
-                        email_status: emailRes.error ? 'error' : 'sent',
-                        wa_status: waRes.error ? 'error' : (waRes.skipped ? 'skipped' : 'sent'),
-                        recipient_email: targetEmailForLog,
-                        recipient_phone: targetPhone,
-                        sandbox: isSandbox,
-                        type: fileName.includes('Consolidada') ? 'consolidated' : 'individual'
-                    }, logContent);
-
-                    if (!emailRes.error && (waRes.skipped || !waRes.error)) {
-                        showAlert('Notificações enviadas com sucesso!', 'success');
-                    } else {
-                        showAlert('Algumas notificações podem ter falhado. Verifique o histórico.', 'warning');
-                    }
-                    
-                    resolve({ emailRes, waRes });
-                };
-            });
-        } catch (error) {
-            console.error('Error in sendInvoiceNotifications:', error);
-            showAlert('Erro ao processar notificações.', 'error');
-        }
-    };
 
     // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
     const statusOptions = [
@@ -359,15 +279,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             showAlert('PDF Consolidado gerado!', 'success');
 
             // Trigger Joint Notifications
-            await sendInvoiceNotifications(
-                formData.email,
-                formData.phone,
-                formData.name,
-                new Date(consolidated.due_date).toLocaleDateString('pt-BR'),
-                consolidated.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                mergedBlob,
-                fileName
-            );
+            await sendCombinedNotification({
+                recipientEmail: formData.email,
+                recipientPhone: formData.phone,
+                subscriberName: formData.name,
+                dueDate: new Date(consolidated.due_date).toLocaleDateString('pt-BR'),
+                value: consolidated.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                pdfBlob: mergedBlob,
+                fileName: fileName,
+                subscriberId: subscriber.id,
+                profileId: profile?.id,
+                isConsolidated: true
+            });
+            showAlert('Notificações enviadas!', 'success');
 
         } catch (error) {
 
@@ -416,15 +340,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             showAlert('PDF Combinado gerado com sucesso!', 'success');
 
             // Trigger Joint Notifications
-            await sendInvoiceNotifications(
-                formData.email,
-                formData.phone,
-                formData.name,
-                new Date(inv.vencimento).toLocaleDateString('pt-BR'),
-                Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                mergedBlob,
-                fileName
-            );
+            await sendCombinedNotification({
+                recipientEmail: formData.email,
+                recipientPhone: formData.phone,
+                subscriberName: formData.name,
+                dueDate: new Date(inv.vencimento).toLocaleDateString('pt-BR'),
+                value: Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                pdfBlob: mergedBlob,
+                fileName: fileName,
+                subscriberId: subscriber.id,
+                profileId: profile?.id,
+                isConsolidated: false
+            });
+            showAlert('Notificações enviadas!', 'success');
 
         } catch (error) {
 

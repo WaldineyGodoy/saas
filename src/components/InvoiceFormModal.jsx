@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf } from '../lib/api';
+import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf, sendCombinedNotification } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -51,6 +51,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [localBoletoUrl, setLocalBoletoUrl] = useState(invoice?.asaas_boleto_url || null);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
+    const [subscriber, setSubscriber] = useState(null);
     const hiddenRef = useRef(null);
 
     // Helpers
@@ -167,6 +168,25 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         formData.outros_lancamentos,
         selectedUc
     ]);
+    
+    // Fetch Subscriber details when UC is selected
+    useEffect(() => {
+        const fetchSubscriber = async () => {
+            if (!selectedUc?.subscriber_id) return;
+            try {
+                const { data, error } = await supabase
+                    .from('subscribers')
+                    .select('*')
+                    .eq('id', selectedUc.subscriber_id)
+                    .single();
+                if (error) throw error;
+                setSubscriber(data);
+            } catch (err) {
+                console.error('Error fetching subscriber for notifications:', err);
+            }
+        };
+        fetchSubscriber();
+    }, [selectedUc]);
 
     // Automatic Due Date Calculation
     useEffect(() => {
@@ -274,15 +294,25 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const summaryBase64 = pdfSummary.output('datauristring');
             const asaasUrl = localBoletoUrl || inv.asaas_boleto_url;
             if (!asaasUrl) throw new Error("URL do boleto não encontrada");
+            const fileName = `Fatura_${inv.id}.pdf`;
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
+            
+            // Download the file
+            const url = window.URL.createObjectURL(mergedBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
 
-            const fileName = `Fatura_${inv.mes_referencia}_Detalhamento.pdf`;
-
-            await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url);
-            showAlert('PDF gerado com sucesso!', 'success');
-
+            showAlert('PDF Combinado gerado com sucesso!', 'success');
+            return mergedBlob;
         } catch (error) {
-            console.error("Error generating combined PDF:", error);
+            console.error('Erro ao gerar PDF combinado:', error);
             showAlert('Erro ao gerar PDF combinado.', 'error');
+            return null;
         } finally {
             setIsGeneratingPdf(false);
             setInvoiceToDownload(null);
@@ -541,6 +571,40 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 setShowSuccess(true);
                 setTimeout(() => setShowSuccess(false), 3000);
                 window.open(result.url, '_blank');
+                
+                // Automatic Notification logic
+                if (subscriber) {
+                    try {
+                        // We need to fetch the newly created invoice record to get the correct data
+                        const { data: invData } = await supabase
+                            .from('invoices')
+                            .select('*')
+                            .eq('id', targetId)
+                            .single();
+                        
+                        if (invData) {
+                            // Generate combined PDF first for the notification
+                            const pdfBlob = await handleDownloadCombined(invData);
+                            if (pdfBlob) {
+                                await sendCombinedNotification({
+                                    recipientEmail: subscriber.email,
+                                    recipientPhone: subscriber.phone,
+                                    subscriberName: subscriber.name,
+                                    dueDate: new Date(invData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR'),
+                                    value: Number(invData.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                    pdfBlob: pdfBlob,
+                                    fileName: `Fatura_${invData.id}.pdf`,
+                                    subscriberId: subscriber.id,
+                                    profileId: profile?.id
+                                });
+                            }
+                        }
+                    } catch (notifErr) {
+                        console.error('Error sending automatic notification:', notifErr);
+                        showAlert('Boleto gerado, mas falha ao enviar notificações. Verifique o histórico.', 'warning');
+                    }
+                }
+
                 if (onSave) onSave();
             }
         } catch (error) {

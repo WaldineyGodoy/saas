@@ -36,42 +36,59 @@ serve(async (req) => {
         const energyRes = await fetch(energyBillUrl)
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer()
-          energyBillDoc = await PDFDocument.load(energyBytes)
-        }
-      } catch (e) {
-        console.error('Erro ao buscar conta de energia:', e)
+          // Verificação rápida se o PDF é válido
+          if (energyBytes.byteLength > 0) {
+              try {
+                  energyBillDoc = await PDFDocument.load(energyBytes)
+                  console.log(`Conta de energia carregada com sucesso (${energyBillDoc.getPageCount()} páginas)`)
+      } catch (loadErr: any) {
+        console.error('Erro ao carregar PDF da conta (provavelmente PDF corrompido ou protegido):', loadErr.message)
       }
     }
-
-    // 4. Criar Novo PDF e Mesclar
-    const mergedPdf = await PDFDocument.create()
-
-    const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
-    summaryPages.forEach(p => mergedPdf.addPage(p))
-
-    const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
-    asaasPages.forEach(p => mergedPdf.addPage(p))
-
-    if (energyBillDoc) {
-      const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
-      energyPages.forEach(p => mergedPdf.addPage(p))
-    }
-
-    const mergedBytes = await mergedPdf.save()
-
-    return new Response(mergedBytes, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="fatura_consolidada.pdf"'
-      }
-    })
-
-  } catch (err) {
-    console.error('Erro na Edge Function merge-pdf:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+  } else {
+    console.error(`Erro ao buscar conta de energia. Status: ${energyRes.status} ${energyRes.statusText}`)
   }
+} catch (e: any) {
+  console.error('Erro de rede ao buscar conta de energia:', e.message)
+}
+}
+
+// 4. Criar Novo PDF e Mesclar
+const mergedPdf = await PDFDocument.create()
+
+// Copiar páginas do Demonstrativo
+const summaryPages = await mergedPdf.copyPages(summaryDoc, summaryDoc.getPageIndices())
+summaryPages.forEach(p => mergedPdf.addPage(p))
+
+// Copiar páginas do Boleto Asaas
+const asaasPages = await mergedPdf.copyPages(asaasDoc, asaasDoc.getPageIndices())
+asaasPages.forEach(p => mergedPdf.addPage(p))
+
+// Copiar páginas da Conta de Energia (se existir e for válida)
+if (energyBillDoc) {
+try {
+  const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices())
+  energyPages.forEach(p => mergedPdf.addPage(p))
+} catch (copyErr: any) {
+  console.error('Erro ao copiar páginas da conta para o PDF final:', copyErr.message)
+}
+}
+
+const mergedBytes = await mergedPdf.save()
+
+return new Response(mergedBytes, {
+headers: {
+  ...corsHeaders,
+  'Content-Type': 'application/pdf',
+  'Content-Disposition': 'attachment; filename="fatura_consolidada.pdf"'
+}
+})
+
+} catch (err: any) {
+console.error('Erro na Edge Function merge-pdf:', err)
+return new Response(JSON.stringify({ error: err.message }), {
+status: 400,
+headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+})
+}
 })

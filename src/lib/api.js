@@ -350,3 +350,99 @@ export const sendInvoiceEmail = async (to, subject, html = null, attachments = [
 
     return data;
 };
+
+/**
+ * Helper unificado para enviar notificações de fatura (Email + WhatsApp)
+ * @param {Object} params 
+ */
+export const sendCombinedNotification = async ({
+    recipientEmail,
+    recipientPhone,
+    subscriberName,
+    dueDate,
+    value,
+    pdfBlob,
+    fileName,
+    subscriberId,
+    profileId,
+    isConsolidated = false
+}) => {
+    try {
+        const { data: configs } = await supabase
+            .from('integrations_config')
+            .select('*')
+            .in('service_name', ['asaas_api', 'evolution_api', 'resend_api']);
+
+        const asaasConfig = configs?.find(c => c.service_name === 'asaas_api');
+        const evolutionConfig = configs?.find(c => c.service_name === 'evolution_api');
+        const resendConfig = configs?.find(c => c.service_name === 'resend_api');
+
+        const isSandbox = asaasConfig?.environment === 'sandbox';
+        
+        let testPhone = '';
+        if (evolutionConfig?.variables) {
+            const vars = evolutionConfig.variables;
+            testPhone = (typeof vars === 'object' && !Array.isArray(vars)) 
+                ? vars.test_phone 
+                : (Array.isArray(vars) ? vars.find(v => v.key === 'test_phone')?.value : '');
+        }
+
+        const targetPhone = isSandbox ? (testPhone || '5521999999999') : recipientPhone;
+        const targetEmailForLog = isSandbox ? (resendConfig?.variables?.test_email || 'contato@b2wenergia.com.br') : recipientEmail;
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(pdfBlob);
+            reader.onerror = reject;
+            reader.onloadend = async () => {
+                const base64Data = reader.result.split(',')[1];
+                const fullBase64 = reader.result;
+
+                const emailPromise = sendInvoiceEmail(
+                    recipientEmail, 
+                    'Sua fatura B2W Energia chegou!',
+                    null,
+                    [{ filename: fileName, content: base64Data }],
+                    { nome: subscriberName, vencimento: dueDate, valor: value }
+                ).catch(e => ({ error: e.message }));
+
+                const waText = `Sua fatura da *B2W Energia* chegou! ⚡⚡\n\nOlá, *${subscriberName}*.\nSua fatura com vencimento em *${dueDate}* no valor de *${value}* já está disponível.\nSegue em anexo o PDF completo (Demonstrativo + Boleto). 📄\n\nClique no link abaixo para acessar nosso portal:\nhttps://app.b2wenergia.com.br\n\n*B2W Energia* ☀️`;
+                
+                const waPromise = targetPhone ? sendWhatsapp(
+                    targetPhone,
+                    waText,
+                    null,
+                    fullBase64,
+                    fileName
+                ).catch(e => ({ error: e.message })) : Promise.resolve({ skipped: true });
+
+                const [emailRes, waRes] = await Promise.all([emailPromise, waPromise]);
+
+                let logContent = `Fatura enviada ao e-mail ${targetEmailForLog}`;
+                if (targetPhone) logContent += ` e whatsapp ${targetPhone}`;
+                if (isSandbox) logContent += ' (Modo Sandbox)';
+
+                await supabase.from('crm_history').insert({
+                    entity_type: 'subscriber',
+                    entity_id: subscriberId,
+                    content: logContent,
+                    details: {
+                        email_status: emailRes.error ? 'error' : 'sent',
+                        wa_status: waRes.error ? 'error' : (waRes.skipped ? 'skipped' : 'sent'),
+                        recipient_email: targetEmailForLog,
+                        recipient_phone: targetPhone,
+                        sandbox: isSandbox,
+                        type: isConsolidated ? 'consolidated' : 'individual',
+                        error_details: { email: emailRes.error, wa: waRes.error }
+                    },
+                    created_by: profileId
+                });
+
+                resolve({ emailRes, waRes, isSandbox, targetEmailForLog, targetPhone });
+            };
+        });
+    } catch (error) {
+        console.error('Error in sendCombinedNotification helper:', error);
+        throw error;
+    }
+};
