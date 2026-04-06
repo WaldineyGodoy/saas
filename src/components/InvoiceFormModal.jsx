@@ -712,10 +712,16 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 // Sincronizar com Asaas se já houver cobrança emitida
                 if (!result.error && result.data?.asaas_payment_id) {
                     try {
-                        await updateAsaasCharge(targetId, payload.valor_a_pagar, payload.vencimento);
+                        const sync = await updateAsaasCharge(targetId, payload.valor_a_pagar, payload.vencimento);
+                        if (sync?.cleared) {
+                            showAlert(sync.warning, 'warning');
+                            setLocalBoletoUrl(null);
+                            if (invoice) invoice.asaas_boleto_url = null;
+                        }
                     } catch (syncError) {
                         console.error('Erro ao sincronizar com Asaas:', syncError);
-                        // Opcional: Avisar o usuário que salvou local mas falhou no Asaas
+                        // Se o erro não for "removida", mostramos o alerta e paramos o fluxo de sucesso
+                        showAlert('Aviso: Fatura salva localmente, mas erro ao sincronizar com Asaas: ' + syncError.message, 'warning');
                         setShowSuccess(true);
                         setTimeout(() => setShowSuccess(false), 3000);
                         if (onSave) onSave();

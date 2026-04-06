@@ -52,13 +52,6 @@ serve(async (req) => {
                 throw new Error("Credenciais do Asaas não configuradas.");
             }
 
-            // Validar dados
-            if (!value || value <= 0) {
-                console.warn(`Tentativa de atualizar pagamento ${invoice.asaas_payment_id} com valor inválido: ${value}`);
-                // Não lançamos erro aqui, apenas não enviamos ao Asaas se o valor for zero ou nulo
-                // Mas geralmente o Asaas exige valor positivo.
-            }
-
             console.log(`Sync Asaas: Atualizando ${invoice.asaas_payment_id} | Valor: ${value} | Vencimento: ${dueDate}`);
 
             const updateData: any = {};
@@ -75,8 +68,6 @@ serve(async (req) => {
             });
 
             const responseText = await updateRes.text();
-            console.log(`Asaas Response (${updateRes.status}): ${responseText}`);
-
             let resultData;
             try {
                 resultData = JSON.parse(responseText);
@@ -85,8 +76,35 @@ serve(async (req) => {
             }
 
             if (!updateRes.ok) {
-                // Extrair descrição amigável do erro do Asaas
                 const asaasError = resultData.errors?.[0]?.description || resultData.error || 'Erro desconhecido no Asaas';
+                const asaasCode = resultData.errors?.[0]?.code || '';
+
+                // CASO ESPECIAL: Cobrança removida ou não encontrada
+                const isRemoved = asaasError.includes('removida') || updateRes.status === 404;
+                
+                if (isRemoved) {
+                    console.warn(`Cobrança ${invoice.asaas_payment_id} removida no Asaas. Limpando ID no CRM...`);
+                    
+                    // Limpar ID no banco de dados para permitir novo faturamento
+                    await supabase.from('invoices')
+                        .update({
+                            asaas_payment_id: null,
+                            asaas_boleto_url: null,
+                            asaas_status: null
+                        })
+                        .eq('id', invoice_id);
+
+                    // Retornar um sucesso informando que o ID foi limpo
+                    return new Response(
+                        JSON.stringify({ 
+                            success: true, 
+                            warning: "A cobrança anterior foi removida no Asaas. O link de faturamento foi limpo no CRM.",
+                            cleared: true 
+                        }),
+                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    )
+                }
+
                 throw new Error(`Asaas: ${asaasError}`);
             }
         }
