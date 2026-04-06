@@ -242,7 +242,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // Fetch individual invoices for this consolidated one
             const { data: invs, error } = await supabase
                 .from('invoices')
-                .select('*, consumer_units (numero_uc, identification, titular_conta)')
+                .select('*, consumer_units (numero_uc, titular_conta)')
                 .eq('consolidated_invoice_id', consolidated.id)
                 .neq('status', 'cancelado');
 
@@ -443,7 +443,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     <tr key={inv.id}>
                                         <td>
                                             <div style={{ fontWeight: 600 }}>{inv.consumer_units?.numero_uc}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inv.consumer_units?.identification || inv.consumer_units?.titular_conta}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{inv.consumer_units?.titular_conta}</div>
                                         </td>
                                         <td>{inv.mes_referencia}</td>
                                         <td>{inv.consumo_kwh}</td>
