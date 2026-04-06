@@ -12,18 +12,16 @@ serve(async (req) => {
     }
 
     try {
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-        const { text, mediaUrl, mediaBase64, fileName, phone, instanceName } = await req.json()
+        let { text, mediaUrl, mediaBase64, fileName, phone, instanceName } = await req.json()
 
         if (!text || !phone) {
             throw new Error('Missing required fields: text or phone')
         }
 
-        // 0. Sanitize Inputs
         const cleanPhone = phone.replace(/\D/g, '');
         
         // 1. Fetch Configuration
@@ -46,31 +44,75 @@ serve(async (req) => {
             throw new Error('Incomplete Configuration: Endpoint, API Key or Instance Name missing.');
         }
 
+        // 2. INTERNAL UPLOAD (MOST STABLE FOR V2)
+        // If we have base64, we upload it to our own storage first.
+        // This avoids Evolution API's recursion bugs and 400 Bad Request on raw base64.
+        if (mediaBase64 && typeof mediaBase64 === 'string') {
+            try {
+                console.log('Media Base64 detected. Proceeding with internal storage upload...');
+                
+                // Sanitizing filename
+                const isPdf = mediaBase64.includes('application/pdf') || (fileName && fileName.toLowerCase().endsWith('.pdf'));
+                const extension = isPdf ? 'pdf' : 'png';
+                const shortName = fileName ? fileName.substring(0, 30).replace(/[^a-zA-Z0-9.-]/g, '_') : `file_${Date.now()}.${extension}`;
+                const storagePath = `automated/${Date.now()}_${shortName}`;
+
+                // Extracting raw base64
+                const base64Data = mediaBase64.includes(';base64,') ? mediaBase64.split(';base64,').pop() : mediaBase64;
+                
+                // Decoding base64 using standard Deno/Web API
+                const binaryString = atob(base64Data || '');
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                // Uploading to private bucket using Service Role
+                const { error: uploadError } = await supabaseAdmin.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, bytes, {
+                        contentType: isPdf ? 'application/pdf' : 'image/png',
+                        upsert: true
+                    });
+
+                if (uploadError) throw uploadError;
+
+                // Generating a signed URL (1 hour)
+                const { data: signedData, error: signedError } = await supabaseAdmin.storage
+                    .from('invoices_pdfs')
+                    .createSignedUrl(storagePath, 3600);
+
+                if (signedError) throw signedError;
+
+                // Overwriting mediaUrl with the new stable signed URL
+                mediaUrl = signedData.signedUrl;
+                mediaBase64 = null; // Don't send the heavy base64 to Evolution
+                console.log('Internal upload successful. Signed URL generated.');
+            } catch (storageErr) {
+                console.error('Failed to perform internal upload, falling back to original payload:', storageErr);
+            }
+        }
+
+        // 3. Construct Evolution Request
         const baseUrl = endpoint.replace(/\/+$/, '');
         const encodedInstance = encodeURIComponent(effectiveInstance);
-
-        // 2. Prepare Payload
         let targetUrl = '';
         let body = {};
 
         if (mediaUrl || mediaBase64) {
             targetUrl = `${baseUrl}/message/sendMedia/${encodedInstance}`;
-            
-            const isPdf = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
-                          (mediaBase64 && mediaBase64.includes('application/pdf')) ||
-                          (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf'));
-
-            // Use a short, sanitized name for the attachment
-            const shortName = fileName ? fileName.substring(0, 40).replace(/[^a-zA-Z0-0._-]/g, '') : (isPdf ? 'fatura.pdf' : 'imagem.png');
+            const isPdfPayload = (fileName && fileName.toLowerCase().endsWith('.pdf')) || 
+                               (mediaUrl && mediaUrl.toLowerCase().endsWith('.pdf')) ||
+                               (mediaBase64 && mediaBase64.includes('application/pdf'));
 
             body = {
                 number: cleanPhone,
-                mediatype: isPdf ? "document" : "image",
-                mimetype: isPdf ? "application/pdf" : "image/png",
+                mediatype: isPdfPayload ? "document" : "image",
+                mimetype: isPdfPayload ? "application/pdf" : "image/png",
                 caption: text,
                 media: mediaUrl || mediaBase64,
-                fileName: shortName,
-                filename: shortName, // Lowercase for v2 consistency
+                fileName: fileName || (isPdfPayload ? 'fatura.pdf' : 'imagem.png'),
+                filename: fileName || (isPdfPayload ? 'fatura.pdf' : 'imagem.png'),
                 delay: 1200
             };
         } else {
@@ -83,7 +125,7 @@ serve(async (req) => {
             };
         }
 
-        // 3. Send Request
+        // 4. Send to Evolution API
         console.log('Sending to Evolution API:', targetUrl);
 
         const response = await fetch(targetUrl, {
@@ -96,20 +138,10 @@ serve(async (req) => {
         })
 
         if (!response.ok) {
-            let errorDetail = 'Unknown error';
-            const contentType = response.headers.get('content-type');
-            try {
-                if (contentType && contentType.includes('application/json')) {
-                    const errorData = await response.json();
-                    errorDetail = JSON.stringify(errorData);
-                } else {
-                    errorDetail = await response.text();
-                }
-            } catch (e) {
-                errorDetail = 'Failed to parse error response';
-            }
+            const errorData = await response.json().catch(() => ({}));
+            const errorDetail = JSON.stringify(errorData);
             console.error(`Evolution API Error [${response.status}]:`, errorDetail);
-            throw new Error(`Failed to send message via Evolution API: ${errorDetail}`)
+            throw new Error(`Evolution API Error: ${errorDetail}`)
         }
 
         const resData = await response.json();
