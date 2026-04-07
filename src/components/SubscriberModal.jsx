@@ -188,7 +188,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const { data: unpaidSum, error: sumError } = await supabase
                 .from('invoices')
                 .select('valor_a_pagar')
-                .not('status', 'eq', 'pago');
+                .in('uc_id', ucIds) // Agora seleciona todas as UCs do assinante
+                .not('status', 'eq', 'pago')
+                .not('status', 'eq', 'cancelado');
 
             if (!sumError && unpaidSum) {
                 const total = unpaidSum.reduce((acc, inv) => acc + (inv.valor_a_pagar || 0), 0);
@@ -1012,7 +1014,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         .filter(inv => 
             inv.status !== 'pago' && 
             inv.status !== 'cancelado' && 
-            !inv.consolidated_invoice_id // Deve estar livre de qualquer consolidado (ativo ou cancelado)
+            (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null) // Absolutamente livre
         )
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
