@@ -141,37 +141,8 @@ serve(async (req) => {
             })
             .in('id', invoiceIds);
 
-        // --- NOVO: Captura Proativa do PDF para o Storage ---
-        console.log(`Iniciando captura do PDF para o Storage: ${chargeData.id}`);
-        try {
-            // Se for consolidada, usar o ID da consolidada para o nome do arquivo, senão usar o ID da fatura
-            const storageId = isConsolidated ? consolidatedId : invoiceIds[0];
-            const pdfData = await downloadAsaasPdf(boletoUrl, asaasKey);
-            
-            if (pdfData) {
-                const { error: uploadError } = await supabase.storage
-                    .from('invoices_pdfs')
-                    .upload(`${storageId}.pdf`, pdfData, {
-                        contentType: 'application/pdf',
-                        upsert: true
-                    });
-
-                if (!uploadError) {
-                    const storageUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/authenticated/invoices_pdfs/${storageId}.pdf`;
-                    if (isConsolidated) {
-                        await supabase.from('consolidated_invoices').update({ asaas_pdf_storage_url: storageUrl }).eq('id', consolidatedId);
-                    }
-                    // Atualizar todas as faturas (mesmo se consolidada, guardamos a referência)
-                    await supabase.from('invoices').update({ asaas_pdf_storage_url: storageUrl }).in('id', invoiceIds);
-                    console.log(`PDF capturado e salvo com sucesso: ${storageId}.pdf`);
-                } else {
-                    console.error('Erro ao subir PDF para o Storage:', uploadError);
-                }
-            }
-        } catch (captureErr) {
-            console.warn('Falha na captura proativa do PDF (será tentado novamente no merge):', captureErr.message);
-        }
-        // ---------------------------------------------------
+        // --- REMOVIDO: A captura proativa do PDF bruto causava o download incompleto (apenas boleto) ---
+        // O PDF completo (Resumo + Boleto + Contas) será gerado e persistido no primeiro download/notificação.
 
         // Registrar no Histórico
         const historyEntries = invoiceIds.map(id => ({

@@ -285,8 +285,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         try {
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
-            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
-            if (consolidated.asaas_pdf_storage_url) {
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir (Mas ignorar se for apenas o boleto bruto do Asaas)
+            const isRawAsaas = consolidated.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
+                              consolidated.asaas_pdf_storage_url?.includes('invoiceUrl') ||
+                              consolidated.asaas_pdf_storage_url?.includes('asaas.com');
+
+            if (consolidated.asaas_pdf_storage_url && !isRawAsaas) {
                 console.log("Obtendo URL assinada para PDF consolidado...");
                 const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')
@@ -319,8 +323,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // Set data for hidden render
             setConsolidatedToDownload({ ...consolidated, items: invs });
 
-            // Wait for render
-            await new Promise(resolve => setTimeout(resolve, 800));
+            // Wait for render (Aumentado para garantir carregamento de logos/estilos)
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
             const element = hiddenConsolidatedRef.current;
             if (!element) throw new Error("Elemento de captura consolidado não encontrado");
@@ -328,6 +332,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const canvas = await html2canvas(element, {
                 scale: 1.5,
                 useCORS: true,
+                allowTaint: true,
                 logging: false,
                 backgroundColor: "#f8fafc"
             });
@@ -419,7 +424,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const fileName = `Fatura_${inv.id}.pdf`;
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
-            if (inv.asaas_pdf_storage_url) {
+            // OTIMIZAÇÃO: Tentar recuperar do Storage (Ignorar se for apenas o boleto bruto do Asaas)
+            const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
+                              inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
+                              inv.asaas_pdf_storage_url?.includes('asaas.com');
+            
+            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
                 console.log("Obtendo URL assinada para PDF individual...");
                 const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')

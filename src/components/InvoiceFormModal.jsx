@@ -327,8 +327,12 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         try {
             const fileName = `Fatura_${inv.id}.pdf`;
 
-            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
-            if (inv.asaas_pdf_storage_url) {
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir (Ignorar se for apenas o boleto bruto do Asaas)
+            const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
+                              inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
+                              inv.asaas_pdf_storage_url?.includes('asaas.com');
+            
+            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
                 console.log("Obtendo URL assinada para PDF individual...");
                 const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')
@@ -351,8 +355,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
 
-            // Fallback: Gerar novo
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // Fallback: Gerar novo (Aumentado timeout para capturar elementos carregados)
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
             const element = hiddenRef.current;
             if (!element) throw new Error("Elemento de captura não encontrado");
@@ -360,6 +364,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const canvas = await html2canvas(element, {
                 scale: 2,
                 useCORS: true,
+                allowTaint: true,
                 logging: false,
                 backgroundColor: "#f8fafc"
             });
