@@ -18,6 +18,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('vincos'); // 'vincos' | 'dados' | 'endereco' | 'tecnico'
+    const [isSaving, setIsSaving] = useState(false);
     const [showIssueInvoiceModal, setShowIssueInvoiceModal] = useState(false);
     const [showManualUploadModal, setShowManualUploadModal] = useState(false);
     const [invoiceToEdit, setInvoiceToEdit] = useState(null);
@@ -437,114 +439,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
                     <form onSubmit={handleSubmit}>
 
-                        <div style={{ background: 'var(--color-bg-light)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 600 }}>Status da Unidade</label>
-                            <select
-                                value={formData.status}
-                                onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                style={{ width: '100%', maxWidth: '300px', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                            >
-                                {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-
-                        <CollapsibleSection title="Vínculos" icon={Link} defaultOpen={defaultSection === 'all' || defaultSection === 'technical'}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Assinante <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <select
-                                        required
-                                        value={formData.subscriber_id}
-                                        onChange={e => handleSubscriberChange(e.target.value)}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {subscribers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.cpf_cnpj})</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </CollapsibleSection>
-
-                        <CollapsibleSection title="Endereço de Instalação" icon={Home} defaultOpen={defaultSection === 'all'}>
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <div style={{ width: '150px' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>CEP</label>
-                                    <div style={{ position: 'relative' }}>
-                                        <input
-                                            value={formData.cep}
-                                            onChange={handleCepChange}
-                                            onBlur={handleCepBlur}
-                                            placeholder="00000-000"
-                                            maxLength={9}
-                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none', background: searchingCep ? '#f0f9ff' : 'white' }}
-                                        />
-                                        {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '10px', fontSize: '0.7rem', color: '#94a3b8' }}>...</span>}
-                                    </div>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    {/* Fields moved to Dados da Unidade */}
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Rua</label>
-                                    <input
-                                        value={formData.rua}
-                                        onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-                                <div style={{ width: '100px' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Número</label>
-                                    <input
-                                        value={formData.numero}
-                                        onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Bairro</label>
-                                <input
-                                    value={formData.bairro}
-                                    onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Complemento</label>
-                                <input
-                                    value={formData.complemento}
-                                    onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Cidade</label>
-                                <input
-                                    value={formData.cidade}
-                                    onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>UF</label>
-                                <input
-                                    value={formData.uf}
-                                    onChange={e => setFormData({ ...formData, uf: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-                        </CollapsibleSection>
-
-                        <CollapsibleSection title="Dados da Unidade" icon={Zap} defaultOpen={defaultSection === 'all'}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'end' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>

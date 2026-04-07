@@ -195,11 +195,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 if (canceledConsolidatedIds.length > 0) {
                     console.warn('Auto-correção: Faturas órfãs encontradas vinculadas a consolidados cancelados:', canceledConsolidatedIds);
                     
-                    // Desvincular as faturas órfãs no banco
+                    // Desvincular as faturas órfãs no banco completamente (limpar IDs do Asaas também)
                     await supabase
                         .from('invoices')
-                        .update({ consolidated_invoice_id: null })
+                        .update({ 
+                            consolidated_invoice_id: null,
+                            asaas_payment_id: null,
+                            asaas_boleto_url: null,
+                            asaas_status: null,
+                            asaas_pdf_storage_url: null
+                        })
                         .in('consolidated_invoice_id', canceledConsolidatedIds);
+                    
+                    console.log('Faturas órfãs limpas e liberadas para nova cobrança.');
                     
                     // Refetch para garantir estado limpo
                     fetchInvoices(subscriberId);
@@ -1773,10 +1781,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                         const { error } = await supabase.from('consolidated_invoices').update({ status: 'canceled' }).eq('id', ci.id);
                                                                         if (error) throw error;
 
-                                                                        // 2. Liberar faturas individuais associadas
+                                                                        // 2. Liberar faturas individuais associadas (limpando também IDs do Asaas)
                                                                         const { error: unlinkError } = await supabase
                                                                             .from('invoices')
-                                                                            .update({ consolidated_invoice_id: null })
+                                                                            .update({ 
+                                                                                consolidated_invoice_id: null,
+                                                                                asaas_payment_id: null,
+                                                                                asaas_boleto_url: null,
+                                                                                asaas_status: null,
+                                                                                asaas_pdf_storage_url: null
+                                                                            })
                                                                             .eq('consolidated_invoice_id', ci.id);
                                                                         
                                                                         if (unlinkError) console.warn('Erro ao desvincular faturas individuais:', unlinkError);

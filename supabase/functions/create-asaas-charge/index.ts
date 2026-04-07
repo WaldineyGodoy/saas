@@ -61,7 +61,8 @@ serve(async (req) => {
 
             const { data: invs, error: invsErr } = await query;
             if (invsErr) throw invsErr;
-            if (!invs || invs.length === 0) throw new Error("Nenhuma fatura pendente/ativa encontrada.");
+            if (!invs || invs.length === 0) 
+                throw new Error("Nenhuma fatura pendente/ativa e sem cobrança prévia encontrada para este assinante.");
 
             invoicesToCharge = invs;
             subscriber = invs[0].consumer_units.subscriber;
