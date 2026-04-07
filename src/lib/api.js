@@ -127,7 +127,11 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
     }
 
     const { data, error } = await supabase.functions.invoke('merge-pdf', { body });
-    if (error) throw new Error(error.message);
+    if (error) {
+        const customError = new Error(error.message);
+        customError.status = error.status || error.context?.status;
+        throw customError;
+    }
     const blob = new Blob([data], { type: 'application/pdf' });
     return blob;
 };

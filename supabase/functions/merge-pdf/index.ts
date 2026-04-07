@@ -125,18 +125,23 @@ serve(async (req) => {
     asaasPages.forEach(p => mergedPdf.addPage(p))
 
     // 3. Fatura(s) Concessionária
-    const urlsToProcess = Array.isArray(energyBillUrls) ? energyBillUrls : (energyBillUrl ? [energyBillUrl] : []);
+    const urlsToProcess = Array.isArray(energyBillUrls) ? [...new Set(energyBillUrls)] : (energyBillUrl ? [energyBillUrl] : []);
+    const totalUrls = urlsToProcess.length;
     
-    for (const url of urlsToProcess) {
+    for (let i = 0; i < totalUrls; i++) {
+      const url = urlsToProcess[i];
       if (!url) continue;
       try {
-        console.log(`Merge: Buscando conta de energia em ${url}`);
+        console.log(`Merge [${i+1}/${totalUrls}]: Buscando conta de energia em ${url}`);
         const energyRes = await fetch(url);
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer();
           const energyBillDoc = await PDFDocument.load(energyBytes);
           const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices());
           energyPages.forEach(p => mergedPdf.addPage(p));
+          
+          // Tentar forçar liberação de memória
+          (energyBillDoc as any) = null;
         } else {
           console.warn(`Falha ao buscar conta de energia em ${url}: Status ${energyRes.status}`);
         }
@@ -145,8 +150,15 @@ serve(async (req) => {
       }
     }
 
+    console.log("Merge: Finalizando documento...");
     const mergedBytes = await mergedPdf.save()
-    return new Response(mergedBytes, { headers: { ...corsHeaders, 'Content-Type': 'application/pdf' } })
+    return new Response(mergedBytes, { 
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/pdf',
+        'Content-Length': mergedBytes.length.toString()
+      } 
+    })
 
   } catch (err: any) {
     console.error('Merge Error:', err.message)

@@ -302,7 +302,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (!element) throw new Error("Elemento de captura consolidado não encontrado");
 
             const canvas = await html2canvas(element, {
-                scale: 2,
+                scale: 1.5,
                 useCORS: true,
                 logging: false,
                 backgroundColor: "#f8fafc"
@@ -318,10 +318,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const asaasUrl = consolidated.asaas_boleto_url;
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
-            // Coletar todas as URLs de faturas de energia das faturas individuais
-            const energyBillUrls = invs
+            // Coletar todas as URLs de faturas de energia das faturas individuais (Removendo duplicatas)
+            const energyBillUrls = [...new Set(invs
                 .map(i => i.concessionaria_pdf_url)
-                .filter(url => !!url);
+                .filter(url => !!url))];
 
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, energyBillUrls, consolidated.asaas_pdf_storage_url);
             
@@ -361,7 +361,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         } catch (error) {
 
             console.error("Error generating consolidated PDF:", error);
-            showAlert('Erro ao gerar PDF consolidado.', 'error');
+            if (error.status === 546 || error.message?.includes('546')) {
+                showAlert('Limite de processamento excedido.', 'error');
+            } else {
+                showAlert('Erro ao gerar PDF consolidado.', 'error');
+            }
         } finally {
             setIsGeneratingPdf(false);
             setConsolidatedToDownload(null);
