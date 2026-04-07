@@ -435,443 +435,456 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </button>
                     </div>
                 </div>
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    {/* Tab Navigation */}
+                    <div style={{ 
+                        display: 'flex', 
+                        gap: '1.5rem', 
+                        padding: '0.5rem 2rem 0', 
+                        borderBottom: '1px solid #eee',
+                        background: '#f8fafc'
+                    }}>
+                        {[
+                            { id: 'vincos', label: 'Vínculos', icon: Link },
+                            { id: 'dados', label: 'Dados da UC', icon: Zap },
+                            { id: 'endereco', label: 'Endereço', icon: Home },
+                            { id: 'tecnico', label: 'Dados Técnicos', icon: Settings }
+                        ].map(tab => {
+                            const isActive = activeTab === tab.id;
+                            const Icon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '1rem 0.5rem',
+                                        border: 'none',
+                                        background: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 600,
+                                        color: isActive ? 'var(--color-blue)' : '#64748b',
+                                        borderBottom: `2px solid ${isActive ? 'var(--color-blue)' : 'transparent'}`,
+                                        transition: 'all 0.2s',
+                                        marginBottom: '-1px'
+                                    }}
+                                >
+                                    <Icon size={18} />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
-                    <form onSubmit={handleSubmit}>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'end' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <input
-                                        required
-                                        value={formData.numero_uc}
-                                        onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
-                                        placeholder="Ex: 7204400277"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Identificação da Fatura</label>
-                                    <input
-                                        required
-                                        value={formData.titular_conta}
-                                        onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
-                                        placeholder="Identificação na Fatura"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Assinante (Titular)</label>
-                                    <select
-                                        value={formData.titular_fatura_id}
-                                        onChange={e => {
-                                            const sub = subscribers.find(s => s.id === e.target.value);
-                                            setFormData({
-                                                ...formData,
-                                                titular_fatura_id: e.target.value,
-                                                cpf_cnpj_fatura: sub ? sub.cpf_cnpj : formData.cpf_cnpj_fatura,
-                                                portal_credentials: sub?.portal_credentials || { url: '', login: '', password: '' }
-                                            });
-                                        }}
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f0f9ff', color: '#0369a1', fontSize: '0.85rem' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {subscribers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.2fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'end' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>CPF/CNPJ do Titular</label>
-                                    <input
-                                        value={formData.cpf_cnpj_fatura}
-                                        onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
-                                        placeholder="000.000.000-00"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Tipo da UC</label>
-                                    <select
-                                        value={formData.tipo_unidade}
-                                        onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    >
-                                        {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Tipo de Ligação</label>
-                                    <select
-                                        value={formData.tipo_ligacao}
-                                        onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    >
-                                        {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Dia de Leitura</label>
-                                    <select
-                                        value={formData.dia_leitura}
-                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
-                                    >
-                                        <option value="">Selecione o dia...</option>
-                                        {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'stretch' }}>
-                                <div style={{ 
-                                    background: '#f0fdf4', 
-                                    padding: '1rem', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid #dcfce7',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '0.75rem',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                                }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
-                                            <label style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>Concessionária de Energia</label>
+                    <div style={{ padding: '2rem', flex: 1 }}>
+                        <form onSubmit={handleSubmit}>
+                            {/* Tab Content: Vínculos */}
+                            {activeTab === 'vincos' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
+                                            <input
+                                                required
+                                                value={formData.numero_uc}
+                                                onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
+                                                placeholder="Ex: 7204400277"
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Identificação na Fatura</label>
+                                            <input
+                                                required
+                                                value={formData.titular_conta}
+                                                onChange={e => setFormData({ ...formData, titular_conta: e.target.value })}
+                                                placeholder="Nome como aparece na conta"
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante B2W (Titular)</label>
+                                            <select
+                                                value={formData.titular_fatura_id}
+                                                onChange={e => {
+                                                    const sub = subscribers.find(s => s.id === e.target.value);
+                                                    setFormData({
+                                                        ...formData,
+                                                        titular_fatura_id: e.target.value,
+                                                        cpf_cnpj_fatura: sub ? sub.cpf_cnpj : formData.cpf_cnpj_fatura,
+                                                        portal_credentials: sub?.portal_credentials || { url: '', login: '', password: '' }
+                                                    });
+                                                }}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                            >
+                                                <option value="">Selecione o assinante...</option>
+                                                {subscribers.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ do Titular</label>
+                                            <input
+                                                value={formData.cpf_cnpj_fatura}
+                                                onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
+                                                placeholder="000.000.000-00"
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ 
+                                        background: '#f0f9ff', 
+                                        padding: '1.25rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid #bae6fd',
+                                        marginTop: '0.5rem'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Zap size={18} color="#0369a1" />
+                                                <label style={{ fontSize: '0.9rem', color: '#0369a1', fontWeight: 700 }}>Concessionária e Portal</label>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={!formData.titular_fatura_id}
+                                                onClick={() => setShowCredentialsModal(true)}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                                    padding: '0.4rem 1rem', background: '#fff', 
+                                                    color: formData.titular_fatura_id ? '#0369a1' : '#94a3b8',
+                                                    borderRadius: '6px', border: `1px solid ${formData.titular_fatura_id ? '#bae6fd' : '#e2e8f0'}`,
+                                                    fontSize: '0.8rem', fontWeight: 700, cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed'
+                                                }}
+                                            >
+                                                <Key size={14} /> Credenciais Portal
+                                            </button>
+                                        </div>
+                                        
                                         <select
                                             value={formData.concessionaria}
                                             onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
-                                            style={{ flex: 1, padding: '0.7rem', border: '1px solid #bbf7d0', borderRadius: '8px', outline: 'none', background: 'white', color: '#166534', fontWeight: 600 }}
+                                            style={{ width: '100%', padding: '0.8rem', border: '1px solid #bae6fd', borderRadius: '8px', outline: 'none', background: 'white', color: '#0369a1', fontWeight: 600 }}
                                         >
                                             <option value="">Selecione a concessionária...</option>
                                             {concessionariaOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                         </select>
 
-                                        {formData.last_scraping_status && formData.concessionaria === 'Neoenergia Cosern' && (
+                                        {formData.last_scraping_status && (
                                             <div style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                gap: '0.5rem', 
-                                                padding: '0.5rem 0.75rem', 
-                                                borderRadius: '8px',
-                                                background: formData.last_scraping_status === 'success' ? '#dcfce7' : 
-                                                            formData.last_scraping_status === 'not_available' ? '#fef9c3' : '#fee2e2',
-                                                border: `1px solid ${
-                                                    formData.last_scraping_status === 'success' ? '#86efac' : 
-                                                    formData.last_scraping_status === 'not_available' ? '#fde047' : '#fca5a5'
-                                                }`,
-                                                minWidth: '150px'
+                                                display: 'flex', alignItems: 'center', gap: '0.75rem', 
+                                                padding: '0.75rem', borderRadius: '8px', marginTop: '1rem',
+                                                background: formData.last_scraping_status === 'success' ? '#dcfce7' : '#fee2e2',
+                                                border: `1px solid ${formData.last_scraping_status === 'success' ? '#86efac' : '#fca5a5'}`
                                             }}>
-                                                <div style={{ 
-                                                    width: '8px', 
-                                                    height: '8px', 
-                                                    borderRadius: '50%', 
-                                                    background: formData.last_scraping_status === 'success' ? '#22c55e' : 
-                                                                formData.last_scraping_status === 'not_available' ? '#eab308' : '#ef4444'
-                                                }} />
+                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: formData.last_scraping_status === 'success' ? '#22c55e' : '#ef4444' }} />
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ 
-                                                        fontSize: '0.65rem', 
-                                                        fontWeight: 700, 
-                                                        color: formData.last_scraping_status === 'success' ? '#166534' : 
-                                                               formData.last_scraping_status === 'not_available' ? '#854d0e' : '#991b1b',
-                                                        textTransform: 'uppercase'
-                                                    }}>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: formData.last_scraping_status === 'success' ? '#166534' : '#991b1b', textTransform: 'uppercase' }}>
                                                         Status Faturista: {formData.last_scraping_status}
                                                     </span>
                                                     {formData.last_scraping_at && (
-                                                        <span style={{ fontSize: '0.6rem', color: '#64748b' }}>
-                                                            {new Date(formData.last_scraping_at).toLocaleString('pt-BR')}
-                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Sincronizado em: {new Date(formData.last_scraping_at).toLocaleString('pt-BR')}</span>
                                                     )}
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.5rem' }}>
-                                         <button
-                                            type="button"
-                                            disabled={!formData.titular_fatura_id}
-                                            onClick={() => setShowCredentialsModal(true)}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.4rem',
-                                                padding: '0.35rem 0.8rem',
-                                                background: formData.titular_fatura_id ? '#fff' : '#f1f5f9',
-                                                color: formData.titular_fatura_id ? '#ef4444' : '#94a3b8',
-                                                borderRadius: '6px',
-                                                border: `1px solid ${formData.titular_fatura_id ? '#fee2e2' : '#e2e8f0'}`,
-                                                fontSize: '0.75rem',
-                                                fontWeight: 600,
-                                                cursor: formData.titular_fatura_id ? 'pointer' : 'not-allowed',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                width: '150px',
-                                                justifyContent: 'center'
-                                            }}
+                                </div>
+                            )}
+
+                            {/* Tab Content: Dados da UC */}
+                            {activeTab === 'dados' && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Status da Unidade</label>
+                                        <select
+                                            value={formData.status}
+                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                         >
-                                            <Key size={12} /> Portal
-                                        </button>
+                                            {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
                                     </div>
-                                    {formData.last_scraping_status === 'error' && formData.last_scraping_error && (
-                                        <div style={{ fontSize: '0.7rem', color: '#991b1b', background: '#fff', padding: '0.4rem', borderRadius: '4px', border: '1px solid #fee2e2', marginTop: '0.25rem' }}>
-                                            <strong>Erro:</strong> {formData.last_scraping_error}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo da UC</label>
+                                        <select
+                                            value={formData.tipo_unidade}
+                                            onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                        >
+                                            {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
+                                        <select
+                                            value={formData.tipo_ligacao}
+                                            onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                        >
+                                            {tipoLigacaoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Leitura</label>
+                                        <select
+                                            value={formData.dia_leitura}
+                                            onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                        >
+                                            <option value="">Selecione o dia...</option>
+                                            {diaLeituraOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Vencimento</label>
+                                        <select
+                                            value={formData.dia_vencimento}
+                                            onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                        >
+                                            {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab Content: Endereço */}
+                            {activeTab === 'endereco' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 2fr 100px', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CEP (Busca)</label>
+                                            <input
+                                                value={formData.cep || ''}
+                                                onChange={e => setFormData({ ...formData, cep: maskCEP(e.target.value) })}
+                                                onBlur={handleCepBlur}
+                                                maxLength={9}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: searchingCep ? '#f0f9ff' : 'white' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Rua / Logradouro</label>
+                                            <input
+                                                value={formData.rua || ''}
+                                                onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Número</label>
+                                            <input
+                                                value={formData.numero || ''}
+                                                onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Complemento</label>
+                                            <input
+                                                value={formData.complemento || ''}
+                                                onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                                placeholder="Apto, Bloco, etc."
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Bairro</label>
+                                            <input
+                                                value={formData.bairro || ''}
+                                                onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '1.25rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Cidade</label>
+                                            <input
+                                                disabled
+                                                value={formData.cidade || ''}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #f1f5f9', borderRadius: '8px', background: '#f8fafc', color: '#64748b' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>UF</label>
+                                            <input
+                                                disabled
+                                                value={formData.uf || ''}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #f1f5f9', borderRadius: '8px', background: '#f8fafc', color: '#64748b' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab Content: Dados Técnicos */}
+                            {activeTab === 'tecnico' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.2fr', gap: '1.25rem', alignItems: 'end' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Usina Geradora (Opcional)</label>
+                                            <select
+                                                value={formData.usina_id}
+                                                onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            >
+                                                <option value="">Sem vínculo com usina...</option>
+                                                {usinas.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Modalidade</label>
+                                            <select
+                                                value={formData.modalidade}
+                                                onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            >
+                                                {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div style={{ 
+                                            background: '#eff6ff', padding: '0.6rem 1rem', borderRadius: '10px', border: '1px solid #bfdbfe',
+                                            display: 'flex', flexDirection: 'column', gap: '0.4rem'
+                                        }}>
+                                            <label style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 700, textAlign: 'center' }}>Saldo Remanescente</label>
+                                            <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', color: '#1e40af', fontWeight: 500 }}>
+                                                    <input type="radio" checked={formData.saldo_remanescente === true} onChange={() => setFormData({ ...formData, saldo_remanescente: true })} /> Sim
+                                                </label>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', color: '#1e40af', fontWeight: 500 }}>
+                                                    <input type="radio" checked={formData.saldo_remanescente === false} onChange={() => setFormData({ ...formData, saldo_remanescente: false })} /> Não
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {consumerUnit?.id && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <button type="button" onClick={() => setShowInvoicesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', background: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#f1f5f9'} onMouseOut={e => e.currentTarget.style.background = '#fff'}>
+                                                <FileSearch size={18} /> Ver Faturas
+                                            </button>
+                                            <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#22c55e', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)' }}>
+                                                <Upload size={18} /> Upload Fatura
+                                            </button>
+                                            <button type="button" onClick={() => setShowIssueInvoiceModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#3b82f6', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)' }}>
+                                                <PlusCircle size={18} /> Emitir Fatura
+                                            </button>
                                         </div>
                                     )}
-                                </div>
-                            </div>
-                        </CollapsibleSection>
 
-                        <CollapsibleSection title="Dados Técnicos e Comerciais" icon={Settings} defaultOpen={defaultSection === 'all' || defaultSection === 'technical'}>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Usina (Opcional)</label>
-                                <select
-                                    value={formData.usina_id}
-                                    onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {usinas.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+                                        <div style={{ background: '#f0f9ff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0369a1', marginBottom: '1rem' }}>Componentes Tarifários</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                                {[
+                                                    { id: 'tarifa_concessionaria', label: 'Tarifa (R$/kWh)' },
+                                                    { id: 'te', label: 'TE (Energia)' },
+                                                    { id: 'tusd', label: 'TUSD' },
+                                                    { id: 'fio_b', label: 'Fio B' }
+                                                ].map(f => (
+                                                    <div key={f.id}>
+                                                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#075985', marginBottom: '0.25rem', fontWeight: 600 }}>{f.label}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData[f.id]}
+                                                            onChange={e => handleCurrencyChange(f.id, e.target.value)}
+                                                            placeholder="R$ 0,0000"
+                                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '8px', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1.2fr) 1fr 2fr', gap: '1rem', alignItems: 'stretch', marginTop: '1rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Modalidade</label>
-                                    <select
-                                        value={formData.modalidade}
-                                        onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', background: '#fff' }}
-                                    >
-                                        {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div style={{ background: '#fffbeb', padding: '1rem', borderRadius: '12px', border: '1px solid #fde68a', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                                <label style={{ fontSize: '0.75rem', color: '#92400e', fontWeight: 700, marginBottom: '0.25rem' }}>Tarifa Mínima Estimada</label>
+                                                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#d97706' }}>{formData.tarifa_minima || 'R$ 0,00'}</div>
+                                                <span style={{ fontSize: '0.65rem', color: '#b45309', marginTop: '0.25rem' }}>Base: Ligação {formData.tipo_ligacao}</span>
+                                            </div>
+                                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginBottom: '0.4rem' }}>Desconto Assinante (%)</label>
+                                                <input
+                                                    type="number" step="0.01"
+                                                    value={formData.desconto_assinante}
+                                                    onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
+                                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                <div style={{ 
-                                    background: '#eff6ff', 
-                                    padding: '0.75rem 1rem', 
-                                    borderRadius: '10px', 
-                                    border: '1px solid #bfdbfe',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'center',
-                                    gap: '0.6rem'
-                                }}>
-                                    <label style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Saldo Remanescente</label>
-                                    <div style={{ display: 'flex', gap: '1.25rem', justifyContent: 'center' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#1e40af', fontWeight: 500 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Franquia / Consumo Min (kWh)</label>
                                             <input
-                                                type="radio"
-                                                name="saldo_remanescente"
-                                                checked={formData.saldo_remanescente === true}
-                                                onChange={() => setFormData({ ...formData, saldo_remanescente: true })}
-                                                style={{ cursor: 'pointer', accentColor: '#3b82f6' }}
+                                                type="number"
+                                                value={formData.franquia}
+                                                onChange={e => setFormData({ ...formData, franquia: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                             />
-                                            Sim
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: '#1e40af', fontWeight: 500 }}>
-                                            <input
-                                                type="radio"
-                                                name="saldo_remanescente"
-                                                checked={formData.saldo_remanescente === false}
-                                                onChange={() => setFormData({ ...formData, saldo_remanescente: false })}
-                                                style={{ cursor: 'pointer', accentColor: '#3b82f6' }}
-                                            />
-                                            Não
-                                        </label>
+                                        </div>
                                     </div>
                                 </div>
-
-                                {/* Quadrante de Ações */}
-                                {consumerUnit?.id ? (
-                                    <div style={{ 
-                                        display: 'flex', 
-                                        gap: '0.75rem', 
-                                        padding: '0.75rem',
-                                        background: '#f8fafc',
-                                        borderRadius: '12px',
-                                        border: '1px solid #e2e8f0',
-                                        alignItems: 'center'
-                                    }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowInvoicesModal(true)}
-                                            style={{ 
-                                                flex: 1, height: '100%',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                                padding: '0.6rem', background: '#fff', border: '1px solid #cbd5e1', 
-                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: '#475569', fontWeight: 600,
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseOver={e => e.currentTarget.style.background = '#f1f5f9'}
-                                            onMouseOut={e => e.currentTarget.style.background = '#fff'}
-                                        >
-                                            <FileSearch size={18} /> Visualizar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowManualUploadModal(true)}
-                                            style={{ 
-                                                flex: 1, height: '100%',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                                padding: '0.6rem', background: '#22c55e', border: 'none', 
-                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)'
-                                            }}
-                                            onMouseOver={e => e.currentTarget.style.background = '#16a34a'}
-                                            onMouseOut={e => e.currentTarget.style.background = '#22c55e'}
-                                        >
-                                            <Upload size={18} /> Upload Fatura
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowIssueInvoiceModal(true)}
-                                            style={{ 
-                                                flex: 1, height: '100%',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', 
-                                                padding: '0.6rem', background: '#3b82f6', border: 'none', 
-                                                borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', color: 'white', fontWeight: 700,
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
-                                            }}
-                                            onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
-                                            onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
-                                        >
-                                            <PlusCircle size={18} /> Emitir Fatura
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div style={{ flex: 1 }}></div>
-                                )}
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1', background: '#f0f9ff', padding: '1.25rem', borderRadius: '10px', border: '1px solid #bae6fd', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                                <div style={{ gridColumn: '1 / -1', fontSize: '0.95rem', fontWeight: 600, color: '#0369a1', marginBottom: '0.25rem' }}>Componentes Tarifários</div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>Tarifa Concessionária (R$/kWh)</label>
-                                    <input
-                                        type="text"
-                                        value={formData.tarifa_concessionaria}
-                                        onChange={e => handleCurrencyChange('tarifa_concessionaria', e.target.value)}
-                                        placeholder="R$ 0,0000"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>TE (Energia) - R$/kWh</label>
-                                    <input
-                                        type="text"
-                                        value={formData.te}
-                                        onChange={e => handleCurrencyChange('te', e.target.value)}
-                                        placeholder="R$ 0,0000"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>TUSD (Distribuição) - R$/kWh</label>
-                                    <input
-                                        type="text"
-                                        value={formData.tusd}
-                                        onChange={e => handleCurrencyChange('tusd', e.target.value)}
-                                        placeholder="R$ 0,0000"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#075985' }}>Fio B - R$/kWh</label>
-                                    <input
-                                        type="text"
-                                        value={formData.fio_b}
-                                        onChange={e => handleCurrencyChange('fio_b', e.target.value)}
-                                        placeholder="R$ 0,0000"
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ background: '#fffbeb', padding: '1rem', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                <label style={{ fontSize: '0.85rem', color: '#92400e', fontWeight: 600 }}>Tarifa Mínima Estimada</label>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#d97706' }}>
-                                    {formData.tarifa_minima || 'R$ 0,00'}
-                                </div>
-                                <span style={{ fontSize: '0.75rem', color: '#b45309' }}>
-                                    Baseada no Tipo de Ligação ({formData.tipo_ligacao}) x Tarifa.
-                                </span>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Desconto Assinante (%)</label>
-                                <input
-                                    type="number" step="0.01"
-                                    value={formData.desconto_assinante}
-                                    onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
-                                    placeholder="%"
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Franquia / Consumo Min (kWh)</label>
-                                <input
-                                    type="number"
-                                    value={formData.franquia}
-                                    onChange={e => setFormData({ ...formData, franquia: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Dia de Vencimento</label>
-                                <select
-                                    value={formData.dia_vencimento}
-                                    onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
-                                    style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                >
-                                    {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
-                            </div>
-                        </CollapsibleSection>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
-                            {consumerUnit?.id && onDelete && (
-                                <button type="button" onClick={handleDelete} style={{ marginRight: 'auto', padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600, cursor: 'pointer' }}>
-                                    Excluir UC
-                                </button>
                             )}
-                            <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: '#f1f5f9', color: '#475569', borderRadius: '6px', border: '1px solid #e2e8f0', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                style={{
-                                    padding: '0.6rem 1.25rem',
-                                    background: 'var(--color-blue)',
-                                    color: 'white',
-                                    borderRadius: '6px',
-                                    fontWeight: 600,
-                                    border: 'none',
-                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                    cursor: loading ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {loading ? 'Salvando...' : 'Salvar UC'}
-                            </button>
-                        </div>
 
-                    </form>
+                            {/* Actions Footer */}
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'flex-end', 
+                                gap: '0.8rem', 
+                                marginTop: '3rem', 
+                                paddingTop: '1.5rem', 
+                                borderTop: '1px solid #eee',
+                                alignItems: 'center'
+                            }}>
+                                {consumerUnit?.id && onDelete && (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleDelete} 
+                                        style={{ marginRight: 'auto', padding: '0.7rem 1.5rem', background: '#fee2e2', color: '#dc2626', borderRadius: '10px', border: '1px solid #fecaca', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
+                                    >
+                                        Excluir Unidade
+                                    </button>
+                                )}
+                                <button 
+                                    type="button" 
+                                    onClick={onClose} 
+                                    style={{ padding: '0.7rem 1.5rem', background: '#f8fafc', color: '#475569', borderRadius: '10px', border: '1px solid #e2e8f0', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    style={{
+                                        padding: '0.7rem 2rem',
+                                        background: 'var(--color-blue)',
+                                        color: 'white',
+                                        borderRadius: '10px',
+                                        fontWeight: 700,
+                                        border: 'none',
+                                        boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)',
+                                        cursor: loading ? 'not-allowed' : 'pointer',
+                                        fontSize: '0.9rem'
+                                    }}
+                                >
+                                    {loading ? 'Salvando...' : 'Salvar Unidade'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

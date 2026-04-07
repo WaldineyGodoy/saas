@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
@@ -89,21 +89,112 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [searchingCep, setSearchingCep] = useState(false);
     const [searchingDoc, setSearchingDoc] = useState(false);
 
-    useEffect(() => {
-        fetchOriginators();
-    }, []); // Run once on mount
+    const fetchOriginators = useCallback(async () => {
+        const { data } = await supabase
+            .from('originators_v2')
+            .select('id, name')
+            .order('name');
+        setOriginators(data || []);
+    }, []);
+
+    const fetchConsumerUnits = useCallback(async (subscriberId) => {
+        const { data } = await supabase
+            .from('consumer_units')
+            .select('*')
+            .eq('subscriber_id', subscriberId);
+        setConsumerUnits(data || []);
+    }, []);
+
+    const fetchConsolidatedInvoices = useCallback(async (subscriberId) => {
+        const { data } = await supabase
+            .from('consolidated_invoices')
+            .select('*')
+            .eq('subscriber_id', subscriberId)
+            .order('created_at', { ascending: false });
+        setConsolidatedInvoices(data || []);
+    }, []);
+
+    const fetchInvoices = useCallback(async (subscriberId) => {
+        if (!subscriberId) return;
+        setLoadingInvoices(true);
+        try {
+            const { data: ucs } = await supabase
+                .from('consumer_units')
+                .select('id')
+                .eq('subscriber_id', subscriberId);
+
+            if (!ucs || ucs.length === 0) {
+                setInvoices([]);
+                return;
+            }
+
+            const ucIds = ucs.map(u => u.id);
+            let query = supabase
+                .from('invoices')
+                .select('*, consumer_units (numero_uc, titular_conta)')
+                .in('uc_id', ucIds);
+
+            if (invoiceMonthFilter !== 'all') {
+                const [year, month] = invoiceMonthFilter.split('-');
+                const startDate = `${year}-${month}-01`;
+                const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+                const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+                query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+            }
+
+            const { data, error } = await query.order('vencimento', { ascending: false });
+            if (error) throw error;
+
+            const linkedConsolidatedIds = [...new Set(data.filter(inv => inv.consolidated_invoice_id).map(inv => inv.consolidated_invoice_id))];
+            if (linkedConsolidatedIds.length > 0) {
+                const { data: consolidatedStatuses } = await supabase
+                    .from('consolidated_invoices')
+                    .select('id, status')
+                    .in('id', linkedConsolidatedIds);
+
+                const canceledConsolidatedIds = consolidatedStatuses
+                    ?.filter(cs => cs.status === 'canceled')
+                    .map(cs => cs.id) || [];
+
+                if (canceledConsolidatedIds.length > 0) {
+                    await supabase
+                        .from('invoices')
+                        .update({ 
+                            consolidated_invoice_id: null,
+                            asaas_payment_id: null,
+                            asaas_boleto_url: null,
+                            asaas_status: null,
+                            asaas_pdf_storage_url: null
+                        })
+                        .in('consolidated_invoice_id', canceledConsolidatedIds);
+                    fetchInvoices(subscriberId);
+                    return;
+                }
+            }
+
+            setInvoices(data || []);
+
+            const { data: unpaidSum, error: sumError } = await supabase
+                .from('invoices')
+                .select('valor_a_pagar')
+                .in('uc_id', ucIds)
+                .not('status', 'eq', 'pago')
+                .not('status', 'eq', 'cancelado');
+
+            if (!sumError && unpaidSum) {
+                const total = unpaidSum.reduce((acc, inv) => acc + (inv.valor_a_pagar || 0), 0);
+                setTotalUnpaidGlobal(total);
+            }
+        } catch (error) {
+            console.error('Error fetching invoices:', error);
+        } finally {
+            setLoadingInvoices(false);
+        }
+    }, [invoiceMonthFilter]);
 
     useEffect(() => {
-        if (subscriber?.billing_mode) {
-            setBillingMode(subscriber.billing_mode);
-        }
-        if (subscriber?.consolidated_due_day) {
-            setConsolidatedDueDay(subscriber.consolidated_due_day);
-        }
-        if (subscriber?.id) {
-            fetchConsolidatedInvoices(subscriber.id);
-        }
-    }, [subscriber?.id]);
+        fetchOriginators();
+    }, [fetchOriginators]);
 
     useEffect(() => {
         if (subscriber) {
@@ -124,127 +215,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 portal_credentials: subscriber.portal_credentials || { url: '', login: '', password: '' }
             });
             fetchConsumerUnits(subscriber.id);
+            fetchConsolidatedInvoices(subscriber.id);
+        }
+    }, [subscriber, fetchConsumerUnits, fetchConsolidatedInvoices]);
+
+    useEffect(() => {
+        if (subscriber?.id && activeTab === 'faturas') {
             fetchInvoices(subscriber.id);
         }
-    }, [subscriber?.id, invoiceMonthFilter]); // Stable dependency
+    }, [subscriber?.id, activeTab, fetchInvoices]);
 
-    const fetchOriginators = async () => {
-        const { data } = await supabase
-            .from('originators_v2')
-            .select('id, name')
-            .order('name');
-        setOriginators(data || []);
-    };
-
-    const fetchConsumerUnits = async (subscriberId) => {
-        const { data } = await supabase
-            .from('consumer_units')
-            .select('*')
-            .eq('subscriber_id', subscriberId);
-        setConsumerUnits(data || []);
-    };
-
-    const fetchInvoices = async (subscriberId) => {
-        if (!subscriberId) return;
-        setLoadingInvoices(true);
-        try {
-            // 1. Pegar as UCs do assinante
-            const { data: ucs } = await supabase
-                .from('consumer_units')
-                .select('id')
-                .eq('subscriber_id', subscriberId);
-
-            if (!ucs || ucs.length === 0) {
-                setInvoices([]);
-                return;
-            }
-
-            const ucIds = ucs.map(u => u.id);
-            
-            // 2. Buscar faturas individuais
-            let query = supabase
-                .from('invoices')
-                .select('*, consumer_units (numero_uc, titular_conta)')
-                .in('uc_id', ucIds);
-
-            if (invoiceMonthFilter !== 'all') {
-                const [year, month] = invoiceMonthFilter.split('-');
-                const startDate = `${year}-${month}-01`;
-                const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-                const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-                query = query.gte('vencimento', startDate).lte('vencimento', endDate);
-            }
-
-            const { data, error } = await query.order('vencimento', { ascending: false });
-            if (error) throw error;
-
-            // --- Lógica de Auto-Correção (Self-Healing) ---
-            // Se houver faturas vinculadas a consolidados, verificar se o consolidado foi cancelado
-            const linkedConsolidatedIds = [...new Set(data.filter(inv => inv.consolidated_invoice_id).map(inv => inv.consolidated_invoice_id))];
-            
-            if (linkedConsolidatedIds.length > 0) {
-                const { data: consolidatedStatuses } = await supabase
-                    .from('consolidated_invoices')
-                    .select('id, status')
-                    .in('id', linkedConsolidatedIds);
-
-                const canceledConsolidatedIds = consolidatedStatuses
-                    ?.filter(cs => cs.status === 'canceled')
-                    .map(cs => cs.id) || [];
-
-                if (canceledConsolidatedIds.length > 0) {
-                    console.warn('Auto-correção: Faturas órfãs encontradas vinculadas a consolidados cancelados:', canceledConsolidatedIds);
-                    
-                    // Desvincular as faturas órfãs no banco completamente (limpar IDs do Asaas também)
-                    await supabase
-                        .from('invoices')
-                        .update({ 
-                            consolidated_invoice_id: null,
-                            asaas_payment_id: null,
-                            asaas_boleto_url: null,
-                            asaas_status: null,
-                            asaas_pdf_storage_url: null
-                        })
-                        .in('consolidated_invoice_id', canceledConsolidatedIds);
-                    
-                    console.log('Faturas órfãs limpas e liberadas para nova cobrança.');
-                    
-                    // Refetch para garantir estado limpo
-                    fetchInvoices(subscriberId);
-                    return;
-                }
-            }
-            // ----------------------------------------------
-
-            setInvoices(data || []);
-
-            // 3. Calcular o total global devedor (excluindo pagos e cancelados)
-            const { data: unpaidSum, error: sumError } = await supabase
-                .from('invoices')
-                .select('valor_a_pagar')
-                .in('uc_id', ucIds)
-                .not('status', 'eq', 'pago')
-                .not('status', 'eq', 'cancelado');
-
-            if (!sumError && unpaidSum) {
-                const total = unpaidSum.reduce((acc, inv) => acc + (inv.valor_a_pagar || 0), 0);
-                setTotalUnpaidGlobal(total);
-            }
-        } catch (error) {
-            console.error('Error fetching invoices:', error);
-        } finally {
-            setLoadingInvoices(false);
-        }
-    };
-
-    const fetchConsolidatedInvoices = async (subscriberId) => {
-        const { data } = await supabase
-            .from('consolidated_invoices')
-            .select('*')
-            .eq('subscriber_id', subscriberId)
-            .order('created_at', { ascending: false });
-        setConsolidatedInvoices(data || []);
-    };
 
     const calculateConsolidatedDueDate = (day) => {
         const today = new Date();
@@ -803,42 +783,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         }
     };
 
-    const handleEmission = async () => {
-        if (!subscriber?.id) {
-            showAlert('Salve o assinante antes de gerar boletos.', 'warning');
-            return;
-        }
-
-        const confirm = await showConfirm(`Gerar boleto CONSOLIDADO (todas as faturas pendentes) para ${formData.name}?`);
-        if (!confirm) return;
-
-        try {
-            const result = await createAsaasCharge(subscriber.id, 'subscriber');
-            if (result.success && result.consolidatedId) {
-                showAlert('Boleto consolidado gerado com sucesso! Iniciando disparo de e-mail...', 'success');
-                
-                // Recarregar faturas consolidadas
-                const { data: newConsolidated } = await supabase
-                    .from('consolidated_invoices')
-                    .select('*')
-                    .eq('id', result.consolidatedId)
-                    .single();
-
-                if (newConsolidated) {
-                    // Dispara automaticamente o download e o e-mail
-                    setConsolidatedInvoices(prev => [newConsolidated, ...prev]);
-                    handleDownloadConsolidated(newConsolidated);
-                }
-                
-                fetchInvoices(subscriber.id);
-            }
-        } catch (error) {
-            console.error(error);
-            showAlert('Erro: ' + (error.message || 'Falha ao gerar boleto. Verifique se há faturas pendentes.'), 'error');
-        } finally {
-            setGenerating(false);
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -1541,7 +1485,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                 </div>
 
-                                {/* Top Summary & Actions */}
                                 {/* Top Summary & Actions */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
                                     
