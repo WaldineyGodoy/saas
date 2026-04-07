@@ -5,7 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -280,9 +280,34 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         }
 
         setIsGeneratingPdf(true);
+        setConsolidatedToDownload(consolidated);
 
         try {
-            // Fetch individual invoices for this consolidated one
+            const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
+
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
+            if (consolidated.asaas_pdf_storage_url) {
+                console.log("Baixando PDF consolidado existente do storage...");
+                const { data: fileBlob, error: downloadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .download(`${consolidated.id}.pdf`);
+
+                if (!downloadError && fileBlob) {
+                    const blobUrl = window.URL.createObjectURL(fileBlob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(blobUrl);
+                    showAlert('PDF Consolidado baixado!', 'success');
+                    return;
+                }
+                console.warn("Falha ao baixar do storage, gerando novo...", downloadError);
+            }
+
+            // Fallback: Gerar novo
             const { data: invs, error } = await supabase
                 .from('invoices')
                 .select('*, consumer_units (numero_uc, titular_conta, address)')
@@ -316,7 +341,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const summaryBase64 = pdfSummary.output('datauristring').split(',')[1];
             const asaasUrl = consolidated.asaas_boleto_url;
-            const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
 
             // Coletar todas as URLs de faturas de energia das faturas individuais (Removendo duplicatas)
             const energyBillUrls = [...new Set(invs
@@ -337,29 +361,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             showAlert('PDF Consolidado gerado e baixado!', 'success');
 
-            // Trigger Joint Notifications
-            const notifRes = await sendCombinedNotification({
-                recipientEmail: formData.email,
-                recipientPhone: formData.phone,
-                subscriberName: formData.name,
-                dueDate: new Date(consolidated.due_date).toLocaleDateString('pt-BR'),
-                value: consolidated.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                pdfBlob: mergedBlob,
-                fileName: fileName,
-                subscriberId: subscriber.id,
-                profileId: profile?.id,
-                isConsolidated: true
-            });
-
-            if (notifRes.emailRes?.error || notifRes.waRes?.error) {
-                showAlert('Fatura baixada, mas houve erro em algumas notificações.', 'warning');
-                console.warn('Notification errors:', notifRes);
-            } else {
-                showAlert('Notificações enviadas com sucesso!', 'success');
-            }
-
         } catch (error) {
-
             console.error("Error generating consolidated PDF:", error);
             if (error.status === 546 || error.message?.includes('546')) {
                 showAlert('Limite de processamento excedido.', 'error');
@@ -382,6 +384,31 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         setInvoiceToDownload(inv);
 
         try {
+            const fileName = `Fatura_${inv.id}.pdf`;
+
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
+            if (inv.asaas_pdf_storage_url) {
+                console.log("Baixando PDF individual existente do storage...");
+                const { data: fileBlob, error: downloadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .download(`${inv.id}.pdf`);
+
+                if (!downloadError && fileBlob) {
+                    const blobUrl = window.URL.createObjectURL(fileBlob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(blobUrl);
+                    showAlert('PDF Baixado!', 'success');
+                    return;
+                }
+                console.warn("Falha ao baixar do storage, gerando novo...", downloadError);
+            }
+
+            // Fallback: Gerar novo
             // Pequeno delay para garantir que o renderHiddenInvoiceDetail aconteça
             await new Promise(resolve => setTimeout(resolve, 600));
 
@@ -403,7 +430,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const summaryBase64 = pdfSummary.output('datauristring').split(',')[1];
             const asaasUrl = inv.asaas_boleto_url;
-            const fileName = `Fatura_${inv.id}.pdf`;
 
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
             
@@ -419,32 +445,66 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             showAlert('PDF Combinado gerado e baixado!', 'success');
 
-            // Trigger Joint Notifications
-            const notifRes = await sendCombinedNotification({
-                recipientEmail: formData.email,
-                recipientPhone: formData.phone,
-                subscriberName: formData.name,
-                dueDate: new Date(inv.vencimento).toLocaleDateString('pt-BR'),
-                value: Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                pdfBlob: mergedBlob,
-                fileName: fileName,
-                subscriberId: subscriber.id,
-                profileId: profile?.id,
-                isConsolidated: false
-            });
-
-            if (notifRes.emailRes?.error || notifRes.waRes?.error) {
-                showAlert('Fatura baixada, mas houve erro em algumas notificações.', 'warning');
-            } else {
-                showAlert('Notificações enviadas com sucesso!', 'success');
-            }
-
         } catch (error) {
-
             console.error("Error generating combined PDF:", error);
             showAlert('Erro ao gerar PDF combinado.', 'error');
         } finally {
             setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
+        }
+    };
+
+    const handleResendNotification = async (invoice, isConsolidated) => {
+        setIsGeneratingPdf(true); // Reusar o estado de loading visual
+        if (isConsolidated) setConsolidatedToDownload(invoice);
+        else setInvoiceToDownload(invoice);
+
+        try {
+            let pdfBlob = null;
+            const fileName = isConsolidated ? `Fatura_Consolidada_${invoice.id}.pdf` : `Fatura_${invoice.id}.pdf`;
+
+            // 1. Obter o PDF (Storage ou Gerar Temporário)
+            if (invoice.asaas_pdf_storage_url) {
+                const { data, error } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .download(`${invoice.id}.pdf`);
+                if (!error && data) pdfBlob = data;
+            }
+
+            if (!pdfBlob) {
+                showAlert('Fatura em processamento. Por favor, gere o PDF primeiro clicando em Download.', 'warning');
+                return;
+            }
+
+            // 2. Chamar a API de Notificação
+            const notifRes = await sendCombinedNotification({
+                recipientEmail: formData.email,
+                recipientPhone: formData.phone,
+                subscriberName: formData.name,
+                dueDate: new Date(invoice.due_date || invoice.vencimento).toLocaleDateString('pt-BR'),
+                value: (invoice.total_value || invoice.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                pdfBlob: pdfBlob,
+                fileName: fileName,
+                subscriberId: subscriber.id,
+                profileId: profile?.id,
+                isConsolidated: isConsolidated
+            });
+
+            if (notifRes.emailRes?.error || notifRes.waRes?.error) {
+                showAlert('Houve erro em algumas notificações.', 'warning');
+            } else {
+                showAlert('Notificações reenviadas com sucesso!', 'success');
+                await addHistory(isConsolidated ? 'consolidated_invoice' : 'invoice', invoice.id, 'renotified', { 
+                    type: isConsolidated ? 'consolidated' : 'individual',
+                    target: 'Email & WhatsApp'
+                });
+            }
+        } catch (error) {
+            console.error("Error resending notification:", error);
+            showAlert('Erro ao reenviar notificações.', 'error');
+        } finally {
+            setIsGeneratingPdf(false);
+            setConsolidatedToDownload(null);
             setInvoiceToDownload(null);
         }
     };
@@ -1736,11 +1796,20 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDownloadConsolidated(ci)}
-                                                                    title="Download PDF Consolidado"
+                                                                    title="Download PDF Consolidado (Silencioso)"
                                                                     disabled={isGeneratingPdf}
                                                                     style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #ffedd5', background: '#fff7ed', color: '#c2410c', cursor: 'pointer' }}
                                                                 >
-                                                                    {isGeneratingPdf ? <Loader2 size={16} className="spin-animation" /> : <Download size={16} />}
+                                                                    {isGeneratingPdf && consolidatedToDownload?.id === ci.id ? <Loader2 size={16} className="spin-animation" /> : <Download size={16} />}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleResendNotification(ci, true)}
+                                                                    title="Reenviar Fatura (Email/WhatsApp)"
+                                                                    disabled={isGeneratingPdf}
+                                                                    style={{ padding: '0.3rem', borderRadius: '6px', border: '1px solid #dcfce7', background: '#f0fdf4', color: '#166534', cursor: 'pointer' }}
+                                                                >
+                                                                    {isGeneratingPdf && consolidatedToDownload?.id === ci.id ? <Loader2 size={16} className="spin-animation" /> : <Send size={16} />}
                                                                 </button>
                                                             </>
                                                         )}
@@ -1853,7 +1922,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                         type="button"
                                                                         onClick={(e) => { e.stopPropagation(); handleDownloadCombined(inv); }}
                                                                         disabled={isGeneratingPdf}
-                                                                        title="Baixar Detalhamento + Boleto"
+                                                                        title="Baixar Detalhamento + Boleto (Silencioso)"
                                                                         style={{
                                                                             background: 'none',
                                                                             border: 'none',
@@ -1868,6 +1937,27 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                             <Loader2 size={14} className="spin-animation" />
                                                                         ) : (
                                                                             <Download size={14} />
+                                                                        )}
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleResendNotification(inv, false); }}
+                                                                        disabled={isGeneratingPdf}
+                                                                        title="Reenviar Fatura (Email/WhatsApp)"
+                                                                        style={{
+                                                                            background: 'none',
+                                                                            border: 'none',
+                                                                            padding: 0,
+                                                                            cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                                            color: '#166534',
+                                                                            opacity: isGeneratingPdf ? 0.5 : 1,
+                                                                            marginLeft: '0.3rem'
+                                                                        }}
+                                                                    >
+                                                                        {isGeneratingPdf && invoiceToDownload?.id === inv.id ? (
+                                                                            <Loader2 size={14} className="spin-animation" />
+                                                                        ) : (
+                                                                            <Send size={14} />
                                                                         )}
                                                                     </button>
                                                                 </>
