@@ -240,7 +240,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // Fetch individual invoices for this consolidated one
             const { data: invs, error } = await supabase
                 .from('invoices')
-                .select('*, consumer_units (numero_uc, titular_conta)')
+                .select('*, consumer_units (numero_uc, titular_conta, address)')
                 .eq('consolidated_invoice_id', consolidated.id)
                 .neq('status', 'cancelado');
 
@@ -429,23 +429,27 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     B2W Energia por assinatura
                                 </span>
                             </div>
-                            <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full">
-                                <span className="text-[10px] font-bold text-[#fd9000] uppercase tracking-widest">Consolidado Mensal</span>
+                            <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-[#fd9000] uppercase tracking-widest text-center">Consolidado Mensal</span>
                             </div>
                         </div>
 
                         <div className="bg-[#003366] text-white px-8 py-3 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <Info size={18} className="text-[#fd9000]" />
-                                <span className="text-sm font-semibold" style={{ fontFamily: 'Manrope, sans-serif' }}>Detalhamento da Fatura</span>
+                            <div className="flex items-center justify-center gap-3 w-full">
+                                <div className="flex items-center gap-3">
+                                    <Info size={18} className="text-[#fd9000]" />
+                                    <span className="text-sm font-semibold" style={{ fontFamily: 'Manrope, sans-serif' }}>Detalhamento da Fatura</span>
+                                </div>
                             </div>
-                            <div className="bg-[#fd9000] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">A Vencer</div>
+                            <div className="bg-[#fd9000] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center min-w-[80px]">
+                                {(data.status || 'a_vencer').replace(/_/g, ' ')}
+                            </div>
                         </div>
 
                         <div className="p-8 grid grid-cols-12 gap-6 bg-slate-50/50">
                             <div className="col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assinante</p>
-                                <h1 className="text-3xl font-extrabold text-[#003366] mb-4 uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                <h1 className="text-2xl font-extrabold text-[#003366] mb-4 uppercase truncate" style={{ fontFamily: 'Manrope, sans-serif' }} title={subscriber?.name}>
                                     {subscriber?.name}
                                 </h1>
                                 <div className="flex gap-8">
@@ -461,9 +465,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-span-5 bg-[#5ead5c]/5 border-2 border-[#fd9000] rounded-xl p-6 flex flex-col justify-center items-end shadow-sm">
-                                <p className="text-[10px] font-bold text-[#5ead5c] uppercase tracking-widest mb-1">Total a Pagar</p>
-                                <p className="text-5xl font-black text-[#003366] tracking-tighter" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                            <div className="col-span-5 bg-[#5ead5c]/5 border-2 border-[#fd9000] rounded-xl p-6 flex flex-col justify-center items-end shadow-sm overflow-hidden">
+                                <p className="text-[10px] font-bold text-[#5ead5c] uppercase tracking-widest mb-1 text-right">Total a Pagar</p>
+                                <p className="text-3xl font-black text-[#003366] tracking-tighter text-right" style={{ fontFamily: 'Manrope, sans-serif' }}>
                                     {formatCurrency(data.total_value)}
                                 </p>
                             </div>
@@ -477,10 +481,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 <div key={inv.id} className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col shadow-sm" style={{ width: 'calc(33.333% - 11px)', minWidth: '200px' }}>
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
-                                            <div className="flex-1">
-                                                <p className="text-[8px] font-bold text-slate-400 uppercase">Endereço do Imóvel:</p>
-                                                <p className="text-[10px] font-bold text-[#003366] leading-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                                    {inv.consumer_units?.identification || inv.consumer_units?.numero_uc}
+                                            <div className="flex-1 flex flex-col justify-center h-full">
+                                                <p className="text-[7px] font-bold text-slate-400 uppercase leading-none mb-0.5">Endereço da Unidade:</p>
+                                                <p className="text-[9px] font-bold text-[#003366] leading-tight mb-1" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                    {inv.consumer_units?.address ? 
+                                                        `${inv.consumer_units.address.rua || ''}${inv.consumer_units.address.numero ? `, ${inv.consumer_units.address.numero}` : ''} - ${inv.consumer_units.address.bairro || ''}` : 
+                                                        (inv.consumer_units?.identification || inv.consumer_units?.numero_uc)
+                                                    }
                                                 </p>
                                                 <p className="text-[8px] text-slate-500 font-medium tracking-tight">UC: {inv.consumer_units?.numero_uc}</p>
                                             </div>
@@ -605,6 +612,15 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             <div className="detail-item">
                                 <label>ASSINANTE</label>
                                 <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || 'N/A'}</span>
+                            </div>
+                            <div className="detail-item">
+                                <label>ENDEREÇO DA UNIDADE</label>
+                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                    {uc?.address ? 
+                                        `${uc.address.rua || ''}${uc.address.numero ? `, ${uc.address.numero}` : ''} - ${uc.address.bairro || ''} - ${uc.address.cidade || ''}/${uc.address.uf || ''}` : 
+                                        'N/A'
+                                    }
+                                </span>
                             </div>
                             <div className="detail-row">
                                 <div className="detail-item">

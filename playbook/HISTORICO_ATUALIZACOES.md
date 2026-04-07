@@ -30,6 +30,22 @@
 
 ---
 
+## [2026-04-05] - Integração Resend Email (Edge Function)
+
+### Atualizações Registradas:
+1. **Engine de E-mail (Deploy v7)**:
+    - Implementação da função `send-email` via Supabase Edge Functions.
+    - Suporte a payloads flexíveis e CORS resiliente (status 200).
+2. **Template Premium**:
+    - HTML baseado em tabelas de alta fidelidade para compatibilidade total.
+    - Variáveis dinâmicas (`nome`, `valor`, `vencimento`, `mensagem`).
+3. **Ambiente de Segurança**:
+    - Redirecionamento automático para `test_email` em modo Sandbox.
+4. **Endpoint Técnico**:
+    - Mapeamento da URL e método de autenticação (`--no-verify-jwt`).
+
+---
+
 ## [2026-04-03] - Reformulação de Indicadores e Filtros (Dashboard)
 
 ### Atualizações Registradas:
