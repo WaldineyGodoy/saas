@@ -148,7 +148,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!subscriberId) return;
         setLoadingInvoices(true);
         try {
-            // Primeiro pegar as UCs do assinante
+            // 1. Pegar as UCs do assinante
             const { data: ucs } = await supabase
                 .from('consumer_units')
                 .select('id')
@@ -160,21 +160,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             const ucIds = ucs.map(u => u.id);
+            
+            // 2. Buscar faturas individuais
             let query = supabase
                 .from('invoices')
-                .select(`
-                    *,
-                    consumer_units (
-                        numero_uc,
-                        titular_conta
-                    )
-                `)
+                .select('*, consumer_units (numero_uc, titular_conta)')
                 .in('uc_id', ucIds);
 
             if (invoiceMonthFilter !== 'all') {
                 const [year, month] = invoiceMonthFilter.split('-');
                 const startDate = `${year}-${month}-01`;
-                // Pegar o último dia do mês corretamente
                 const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
                 const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
                 query = query.gte('vencimento', startDate).lte('vencimento', endDate);
@@ -182,13 +177,44 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const { data, error } = await query.order('vencimento', { ascending: false });
             if (error) throw error;
+
+            // --- Lógica de Auto-Correção (Self-Healing) ---
+            // Se houver faturas vinculadas a consolidados, verificar se o consolidado foi cancelado
+            const linkedConsolidatedIds = [...new Set(data.filter(inv => inv.consolidated_invoice_id).map(inv => inv.consolidated_invoice_id))];
+            
+            if (linkedConsolidatedIds.length > 0) {
+                const { data: consolidatedStatuses } = await supabase
+                    .from('consolidated_invoices')
+                    .select('id, status')
+                    .in('id', linkedConsolidatedIds);
+
+                const canceledConsolidatedIds = consolidatedStatuses
+                    ?.filter(cs => cs.status === 'canceled')
+                    .map(cs => cs.id) || [];
+
+                if (canceledConsolidatedIds.length > 0) {
+                    console.warn('Auto-correção: Faturas órfãs encontradas vinculadas a consolidados cancelados:', canceledConsolidatedIds);
+                    
+                    // Desvincular as faturas órfãs no banco
+                    await supabase
+                        .from('invoices')
+                        .update({ consolidated_invoice_id: null })
+                        .in('consolidated_invoice_id', canceledConsolidatedIds);
+                    
+                    // Refetch para garantir estado limpo
+                    fetchInvoices(subscriberId);
+                    return;
+                }
+            }
+            // ----------------------------------------------
+
             setInvoices(data || []);
 
-            // Calcular o total global devedor (independente de filtro)
+            // 3. Calcular o total global devedor (excluindo pagos e cancelados)
             const { data: unpaidSum, error: sumError } = await supabase
                 .from('invoices')
                 .select('valor_a_pagar')
-                .in('uc_id', ucIds) // Agora seleciona todas as UCs do assinante
+                .in('uc_id', ucIds)
                 .not('status', 'eq', 'pago')
                 .not('status', 'eq', 'cancelado');
 
@@ -1532,7 +1558,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                             const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
                                                             const result = await createAsaasCharge(subscriber.id, 'subscriber', {
                                                                 dueDate,
-                                                                invoice_ids: invoices.filter(inv => inv.status !== 'pago' && !inv.asaas_payment_id).map(i => i.id)
+                                                                invoice_ids: invoices
+                                                                    .filter(inv => 
+                                                                        inv.status !== 'pago' && 
+                                                                        inv.status !== 'cancelado' && 
+                                                                        (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null)
+                                                                    )
+                                                                    .map(i => i.id)
                                                             });
 
                                                             if (result.success) {
