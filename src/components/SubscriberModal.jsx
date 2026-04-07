@@ -1005,11 +1005,15 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const totalVisibleInvoicesValue = invoices
-        .filter(inv => inv.status !== 'pago') // Show total for all visible, non-paid invoices (including canceled)
+        .filter(inv => inv.status !== 'pago' && inv.status !== 'cancelado') // Excluir cancelados do total
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     const totalToConsolidate = invoices
-        .filter(inv => inv.status !== 'pago' && !inv.asaas_payment_id) // Only what's left to consolidate (not paid, no asaas id, allows canceled)
+        .filter(inv => 
+            inv.status !== 'pago' && 
+            inv.status !== 'cancelado' && 
+            !inv.consolidated_invoice_id // Deve estar livre de qualquer consolidado (ativo ou cancelado)
+        )
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
@@ -1678,7 +1682,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             <FileText size={16} /> Faturas Consolidadas Emitidas
                                         </h4>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
-                                            {consolidatedInvoices.map(ci => (
+                                            {consolidatedInvoices
+                                                .filter(ci => ci.status !== 'canceled') // Somente pagas e a vencer conforme solicitado
+                                                .map(ci => (
                                                 <div key={ci.id} style={{
                                                     background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem',
                                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1729,11 +1735,25 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                     try {
                                                                         // Aqui chamaríamos uma nova API de cancelamento consolidado ou adaptariamos a atual
                                                                         // Por enquanto, vamos marcar como cancelado localmente (Simulado - ideal seria Edge Function)
+                                                                        // 1. Atualizar status da fatura consolidada
                                                                         const { error } = await supabase.from('consolidated_invoices').update({ status: 'canceled' }).eq('id', ci.id);
                                                                         if (error) throw error;
-                                                                        await addHistory('consolidated_invoice', ci.id, 'canceled', { asaas_id: ci.asaas_payment_id });
+
+                                                                        // 2. Liberar faturas individuais associadas
+                                                                        const { error: unlinkError } = await supabase
+                                                                            .from('invoices')
+                                                                            .update({ consolidated_invoice_id: null })
+                                                                            .eq('consolidated_invoice_id', ci.id);
+                                                                        
+                                                                        if (unlinkError) console.warn('Erro ao desvincular faturas individuais:', unlinkError);
+
+                                                                        await addHistory('consolidated_invoice', ci.id, 'canceled', { asaas_id: ci.asaas_payment_id, detail: 'Fatura consolidada cancelada e faturas individuais liberadas' });
+                                                                        
+                                                                        // 3. Recarregar dados
                                                                         fetchConsolidatedInvoices(subscriber.id);
-                                                                        showAlert('Fatura consolidada cancelada.', 'info');
+                                                                        fetchInvoices(subscriber.id);
+                                                                        
+                                                                        showAlert('Fatura consolidada cancelada e itens liberados para nova emissão.', 'info');
                                                                     } catch (e) {
                                                                         showAlert('Erro ao cancelar: ' + e.message, 'error');
                                                                     }
