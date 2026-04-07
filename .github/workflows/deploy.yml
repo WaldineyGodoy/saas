@@ -50,5 +50,6 @@ jobs:
           supabase functions deploy merge-pdf --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy send-email --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy send-whatsapp --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy create-asaas-charge --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
