@@ -280,7 +280,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         }
 
         setIsGeneratingPdf(true);
-        setConsolidatedToDownload(consolidated);
+        // Não definir setConsolidatedToDownload(consolidated) aqui para evitar crash no renderizador que espera .items
 
         try {
             const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
@@ -515,7 +515,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
         
         // Obter mês de referência do primeiro item
-        const refMonthRaw = data.items[0]?.mes_referencia || '';
+        const refMonthRaw = data.items?.[0]?.mes_referencia || '';
         let formattedRefMonth = 'N/A';
         if (refMonthRaw) {
             const [year, month] = refMonthRaw.split('-');
