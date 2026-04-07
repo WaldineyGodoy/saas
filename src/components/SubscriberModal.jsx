@@ -287,24 +287,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
             if (consolidated.asaas_pdf_storage_url) {
-                console.log("Baixando PDF consolidado existente do storage...");
-                const { data: fileBlob, error: downloadError } = await supabase.storage
+                console.log("Obtendo URL assinada para PDF consolidado...");
+                const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')
-                    .download(`${consolidated.id}.pdf`);
+                    .createSignedUrl(`${consolidated.id}.pdf`, 60);
 
-                if (!downloadError && fileBlob) {
-                    const blobUrl = window.URL.createObjectURL(fileBlob);
+                if (!signedError && signedData?.signedUrl) {
                     const link = document.createElement('a');
-                    link.href = blobUrl;
+                    link.href = signedData.signedUrl;
                     link.download = fileName;
+                    link.target = "_blank"; // Abrir em nova aba/disparar download
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    window.URL.revokeObjectURL(blobUrl);
                     showAlert('PDF Consolidado baixado!', 'success');
                     return;
                 }
-                console.warn("Falha ao baixar do storage, gerando novo...", downloadError);
+                console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
 
             // Fallback: Gerar novo
@@ -388,24 +387,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
             if (inv.asaas_pdf_storage_url) {
-                console.log("Baixando PDF individual existente do storage...");
-                const { data: fileBlob, error: downloadError } = await supabase.storage
+                console.log("Obtendo URL assinada para PDF individual...");
+                const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')
-                    .download(`${inv.id}.pdf`);
+                    .createSignedUrl(`${inv.id}.pdf`, 60);
 
-                if (!downloadError && fileBlob) {
-                    const blobUrl = window.URL.createObjectURL(fileBlob);
+                if (!signedError && signedData?.signedUrl) {
                     const link = document.createElement('a');
-                    link.href = blobUrl;
+                    link.href = signedData.signedUrl;
                     link.download = fileName;
+                    link.target = "_blank"; 
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    window.URL.revokeObjectURL(blobUrl);
                     showAlert('PDF Baixado!', 'success');
                     return;
                 }
-                console.warn("Falha ao baixar do storage, gerando novo...", downloadError);
+                console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
 
             // Fallback: Gerar novo
