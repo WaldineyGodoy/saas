@@ -549,7 +549,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             </div>
                                             <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
                                                 <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
-                                                <p className="text-[14px] font-extrabold text-[#5ead5c] truncate">{formatCurrency(inv.economia_reais)}</p>
+                                                <p className="text-[12px] font-extrabold text-[#5ead5c] truncate">{formatCurrency(inv.economia_reais)}</p>
                                             </div>
                                         </div>
 
