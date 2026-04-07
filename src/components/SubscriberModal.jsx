@@ -494,7 +494,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         <div className="p-8 grid grid-cols-12 gap-6 bg-slate-50/50">
                             <div className="col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assinante</p>
-                                <h1 className="text-2xl font-extrabold text-[#003366] mb-4 uppercase truncate" style={{ fontFamily: 'Manrope, sans-serif' }} title={subscriber?.name}>
+                                <h1 className="text-[18px] font-extrabold text-[#003366] mb-4 uppercase truncate" style={{ fontFamily: 'Manrope, sans-serif' }} title={subscriber?.name}>
                                     {subscriber?.name}
                                 </h1>
                                 <div className="flex gap-8">
@@ -545,7 +545,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             </div>
                                             <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
                                                 <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
-                                                <p className="text-[11px] font-black text-[#5ead5c] truncate">{formatCurrency(inv.economia_reais)}</p>
+                                                <p className="text-[14px] font-extrabold text-[#5ead5c] truncate">{formatCurrency(inv.economia_reais)}</p>
                                             </div>
                                         </div>
 
