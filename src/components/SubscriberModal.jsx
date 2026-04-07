@@ -145,6 +145,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             const { data, error } = await query.order('vencimento', { ascending: false });
             if (error) throw error;
 
+            // --- Lógica de Auto-Correção (Self-Healing) ---
+            // 1. Verificar se faturas estão vinculadas a consolidados cancelados
             const linkedConsolidatedIds = [...new Set(data.filter(inv => inv.consolidated_invoice_id).map(inv => inv.consolidated_invoice_id))];
             if (linkedConsolidatedIds.length > 0) {
                 const { data: consolidatedStatuses } = await supabase
@@ -157,6 +159,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     .map(cs => cs.id) || [];
 
                 if (canceledConsolidatedIds.length > 0) {
+                    console.warn('Auto-correção: Faturas órfãs vinculadas a consolidados cancelados:', canceledConsolidatedIds);
                     await supabase
                         .from('invoices')
                         .update({ 
@@ -171,6 +174,32 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     return;
                 }
             }
+
+            // 2. Verificar se faturas têm ID Asaas mas sem vínculo consolidado (sendo billingMode === 'consolidada')
+            const orphanInvoices = data.filter(inv => 
+                inv.asaas_payment_id && 
+                !inv.consolidated_invoice_id && 
+                inv.status !== 'pago' && 
+                inv.status !== 'cancelado' &&
+                billingMode === 'consolidada'
+            );
+
+            if (orphanInvoices.length > 0) {
+                const orphanIds = orphanInvoices.map(i => i.id);
+                console.warn('Auto-correção: Faturas com ID Asaas mas sem vínculo consolidado encontradas:', orphanIds);
+                await supabase
+                    .from('invoices')
+                    .update({ 
+                        asaas_payment_id: null,
+                        asaas_boleto_url: null,
+                        asaas_status: null,
+                        asaas_pdf_storage_url: null
+                    })
+                    .in('id', orphanIds);
+                fetchInvoices(subscriberId);
+                return;
+            }
+            // ----------------------------------------------
 
             setInvoices(data || []);
 
@@ -190,7 +219,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         } finally {
             setLoadingInvoices(false);
         }
-    }, [invoiceMonthFilter]);
+    }, [invoiceMonthFilter, billingMode]);
 
     useEffect(() => {
         fetchOriginators();
