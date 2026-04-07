@@ -397,6 +397,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             showAlert('PDF Consolidado gerado e baixado!', 'success');
+            return mergedBlob;
 
         } catch (error) {
             console.error("Error generating consolidated PDF:", error);
@@ -405,6 +406,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             } else {
                 showAlert('Erro ao gerar PDF consolidado.', 'error');
             }
+            return null;
         } finally {
             setIsGeneratingPdf(false);
             setConsolidatedToDownload(null);
@@ -518,10 +520,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             showAlert('PDF Combinado gerado e baixado!', 'success');
+            return mergedBlob;
 
         } catch (error) {
             console.error("Error generating combined PDF:", error);
             showAlert('Erro ao gerar PDF combinado.', 'error');
+            return null;
         } finally {
             setIsGeneratingPdf(false);
             setInvoiceToDownload(null);
@@ -546,7 +550,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             if (!pdfBlob) {
-                showAlert('Fatura em processamento. Por favor, gere o PDF primeiro clicando em Download.', 'warning');
+                console.log("PDF não encontrado no storage, iniciando geração automática para reenvio...");
+                if (isConsolidated) {
+                    pdfBlob = await handleDownloadConsolidated(invoice);
+                } else {
+                    pdfBlob = await handleDownloadCombined(invoice);
+                }
+            }
+
+            if (!pdfBlob) {
+                showAlert('Não foi possível gerar o PDF para reenvio.', 'error');
                 return;
             }
 

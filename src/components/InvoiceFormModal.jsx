@@ -284,7 +284,12 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             }
 
             if (!pdfBlob) {
-                showAlert('Fatura em processamento no storage. Por favor, gere o PDF primeiro clicando em Download.', 'warning');
+                console.log("PDF não encontrado no storage (Modal Fatura), iniciando geração automática para reenvio...");
+                pdfBlob = await handleDownloadCombined(inv);
+            }
+
+            if (!pdfBlob) {
+                showAlert('Não foi possível gerar o PDF para reenvio.', 'error');
                 return;
             }
 
