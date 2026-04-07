@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle } from 'lucide-react';
+import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle, Send } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf, sendCombinedNotification } from '../lib/api';
@@ -266,6 +266,51 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         }
     };
 
+    const handleResendNotification = async (inv) => {
+        if (!inv || !inv.id) return;
+        setIsGeneratingPdf(true);
+        setInvoiceToDownload(inv);
+
+        try {
+            let pdfBlob = null;
+            const fileName = `Fatura_${inv.id}.pdf`;
+
+            // 1. Obter PDF do Storage
+            if (inv.asaas_pdf_storage_url) {
+                const { data, error } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .download(`${inv.id}.pdf`);
+                if (!error && data) pdfBlob = data;
+            }
+
+            if (!pdfBlob) {
+                showAlert('Fatura em processamento no storage. Por favor, gere o PDF primeiro clicando em Download.', 'warning');
+                return;
+            }
+
+            // 2. Notificar
+            await sendCombinedNotification({
+                recipientEmail: subscriber?.email,
+                recipientPhone: subscriber?.phone,
+                subscriberName: subscriber?.name,
+                dueDate: new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR'),
+                value: Number(inv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                pdfBlob: pdfBlob,
+                fileName: fileName,
+                subscriberId: subscriber?.id,
+                profileId: profile?.id
+            });
+
+            showAlert('Notificações reenviadas com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao reenviar notificações:', error);
+            showAlert('Erro ao reenviar notificações.', 'error');
+        } finally {
+            setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
+        }
+    };
+
     const handleDownloadCombined = async (invToUse) => {
         const inv = invToUse || invoice;
         const currentBoletoUrl = localBoletoUrl; // Use STRICTLY the local state
@@ -280,6 +325,33 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         console.log('Generating Combined PDF for invoice:', inv.id, 'Energy Bill URL:', inv.concessionaria_pdf_url);
 
         try {
+            const fileName = `Fatura_${inv.id}.pdf`;
+
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
+            if (inv.asaas_pdf_storage_url) {
+                console.log("Obtendo URL assinada para PDF individual...");
+                const { data: signedData, error: signedError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .createSignedUrl(`${inv.id}.pdf`, 60);
+
+                if (!signedError && signedData?.signedUrl) {
+                    const link = document.createElement('a');
+                    link.href = signedData.signedUrl;
+                    link.download = fileName;
+                    link.target = "_blank"; 
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showAlert('PDF Baixado!', 'success');
+                    
+                    // Se estivermos gerando para notificação, precisamos do blob
+                    const { data: fileBlob } = await supabase.storage.from('invoices_pdfs').download(`${inv.id}.pdf`);
+                    return fileBlob;
+                }
+                console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
+            }
+
+            // Fallback: Gerar novo
             await new Promise(resolve => setTimeout(resolve, 600));
 
             const element = hiddenRef.current;
@@ -301,7 +373,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const summaryBase64 = pdfSummary.output('datauristring');
             const asaasUrl = localBoletoUrl; 
             if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
-            const fileName = `Fatura_${inv.id}.pdf`;
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
             
             // Download the file
@@ -313,6 +384,39 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
+
+            // OTIMIZAÇÃO: Fazer upload para o Storage para os próximos downloads serem instantâneos
+            try {
+                const storagePath = `${inv.id}.pdf`;
+                console.log(`Subindo PDF individual para o Storage: ${storagePath}`);
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, mergedBlob, {
+                        upsert: true,
+                        contentType: 'application/pdf'
+                    });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('invoices_pdfs')
+                        .getPublicUrl(storagePath);
+                    
+                    // Ajustar para URL autenticada que o merge-pdf espera
+                    const authenticatedUrl = publicUrl.replace('/public/', '/authenticated/');
+
+                    await supabase
+                        .from('invoices')
+                        .update({ asaas_pdf_storage_url: authenticatedUrl })
+                        .eq('id', inv.id);
+                        
+                    console.log("Storage e Banco de Dados atualizados para PDF Individual (Modal Fatura).");
+                } else {
+                    console.warn("Falha ao subir PDF para o Storage:", uploadError);
+                }
+            } catch (storageErr) {
+                console.warn("Erro ao processar persistência no Storage:", storageErr);
+            }
 
             console.log('PDF Merged successfully. Blob size:', mergedBlob.size);
             showAlert('PDF Combinado gerado com sucesso!', 'success');
@@ -1160,26 +1264,48 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         )}
                                         
                                         {localBoletoUrl && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDownloadCombined()}
-                                                disabled={isGeneratingPdf}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.6rem',
-                                                    color: '#ff6600',
-                                                    fontWeight: 'bold',
-                                                    border: 'none',
-                                                    background: 'none',
-                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                    fontSize: '0.9rem',
-                                                    transition: 'opacity 0.2s'
-                                                }}
-                                            >
-                                                {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Download size={18} />}
-                                                Download PDF Combinado
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadCombined()}
+                                                    disabled={isGeneratingPdf}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.6rem',
+                                                        color: '#ff6600',
+                                                        fontWeight: 'bold',
+                                                        border: 'none',
+                                                        background: 'none',
+                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                        fontSize: '0.9rem',
+                                                        transition: 'opacity 0.2s'
+                                                    }}
+                                                >
+                                                    {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Download size={18} />}
+                                                    Download PDF
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleResendNotification(invoice || { id: localInvoiceId, ...formData })}
+                                                    disabled={isGeneratingPdf}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.6rem',
+                                                        color: '#166534',
+                                                        fontWeight: 'bold',
+                                                        border: 'none',
+                                                        background: 'none',
+                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                        fontSize: '0.9rem',
+                                                        transition: 'opacity 0.2s'
+                                                    }}
+                                                >
+                                                    {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Send size={18} />}
+                                                    Reenviar
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 )}

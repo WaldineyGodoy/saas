@@ -1,5 +1,25 @@
 ---
 
+## [2026-04-07] - Estabilização de Build e Modernização de Modais
+
+### Atualizações Registradas:
+1. **Refatoração de Front-end (Estabilidade)**:
+    - Reestruturação do `SubscriberModal.jsx` para eliminação de erros de linting e build.
+    - Memoização de buscas de faturas e UCs com `useCallback`.
+2. **Modernização de UI (`ConsumerUnitModal`)**:
+    - Substituição de acordeões por navegação em abas superiores (**Vínculos**, **Dados UC**, **Endereço**, **Técnico**).
+    - Padronização visual com o design system (Manrope, Grades Modernas).
+3. **Melhorias no PDF Consolidado**:
+    - Nome do assinante aumentado para **18px (Extra-Bold)**.
+    - Valores de economia nos cards das UCs aumentados para **14px (Extra-Bold)**.
+4. **Resiliência de Back-end**:
+    - Resolução do Erro 400 em `create-asaas-charge` com limpeza de pagamentos órfãos.
+    - Mecanismo de **Self-Healing** no front-end para detecção automática de registros inconsistentes.
+5. **Regras de Negócio**:
+    - Recálculo dinâmico de tarifas mínimas/descontos com base no tipo de ligação (**Mono/Bi/Trifásico**).
+
+---
+
 ## [2026-04-06] - Padronização de Dados e Estabilização de APIs
 
 ### Atualizações Registradas:

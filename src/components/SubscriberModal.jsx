@@ -358,6 +358,39 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             document.body.removeChild(link);
             window.URL.revokeObjectURL(blobUrl);
 
+            // OTIMIZAÇÃO: Fazer upload para o Storage para os próximos downloads serem instantâneos
+            try {
+                const storagePath = `${consolidated.id}.pdf`;
+                console.log(`Subindo PDF consolidado para o Storage: ${storagePath}`);
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, mergedBlob, {
+                        upsert: true,
+                        contentType: 'application/pdf'
+                    });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('invoices_pdfs')
+                        .getPublicUrl(storagePath);
+                    
+                    // Ajustar para URL autenticada que o merge-pdf espera
+                    const authenticatedUrl = publicUrl.replace('/public/', '/authenticated/');
+
+                    await supabase
+                        .from('consolidated_invoices')
+                        .update({ asaas_pdf_storage_url: authenticatedUrl })
+                        .eq('id', consolidated.id);
+                        
+                    console.log("Storage e Banco de Dados atualizados para PDF Consolidado.");
+                } else {
+                    console.warn("Falha ao subir PDF para o Storage:", uploadError);
+                }
+            } catch (storageErr) {
+                console.warn("Erro ao processar persistência no Storage:", storageErr);
+            }
+
             showAlert('PDF Consolidado gerado e baixado!', 'success');
 
         } catch (error) {
@@ -440,6 +473,39 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(blobUrl);
+
+            // OTIMIZAÇÃO: Fazer upload para o Storage para os próximos downloads serem instantâneos
+            try {
+                const storagePath = `${inv.id}.pdf`;
+                console.log(`Subindo PDF individual para o Storage: ${storagePath}`);
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, mergedBlob, {
+                        upsert: true,
+                        contentType: 'application/pdf'
+                    });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('invoices_pdfs')
+                        .getPublicUrl(storagePath);
+                    
+                    // Ajustar para URL autenticada que o merge-pdf espera
+                    const authenticatedUrl = publicUrl.replace('/public/', '/authenticated/');
+
+                    await supabase
+                        .from('invoices')
+                        .update({ asaas_pdf_storage_url: authenticatedUrl })
+                        .eq('id', inv.id);
+                        
+                    console.log("Storage e Banco de Dados atualizados para PDF Individual.");
+                } else {
+                    console.warn("Falha ao subir PDF para o Storage:", uploadError);
+                }
+            } catch (storageErr) {
+                console.warn("Erro ao processar persistência no Storage:", storageErr);
+            }
 
             showAlert('PDF Combinado gerado e baixado!', 'success');
 
