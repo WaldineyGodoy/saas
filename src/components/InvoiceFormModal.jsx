@@ -361,10 +361,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             }
 
             // Fallback: Gerar novo (Aumentado timeout para capturar elementos carregados)
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
             const element = hiddenRef.current;
-            if (!element) throw new Error("Elemento de captura não encontrado");
+            if (!element) {
+                console.error("Ref hiddenRef ainda é null após 2s no Modal de Fatura Individual.");
+                throw new Error("Elemento de captura não encontrado no DOM.");
+            }
 
             const canvas = await html2canvas(element, {
                 scale: 2,

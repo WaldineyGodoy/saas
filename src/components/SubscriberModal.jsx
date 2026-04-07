@@ -320,14 +320,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (error) throw error;
             if (!invs || invs.length === 0) throw new Error("Nenhuma fatura individual encontrada para este consolidado.");
 
-            // Set data for hidden render
+            // 2. Set data for hidden render (This triggers the component to appear in the DOM)
             setConsolidatedToDownload({ ...consolidated, items: invs });
 
-            // Wait for render (Aumentado para garantir carregamento de logos/estilos)
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // 3. Wait for React to render the component and attach the ref
+            // We use two frames or a slightly longer timeout to be safe
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
             const element = hiddenConsolidatedRef.current;
-            if (!element) throw new Error("Elemento de captura consolidado não encontrado");
+            if (!element) {
+                console.error("Ref hiddenConsolidatedRef ainda é null após 2s. Verifique se o componente está sendo renderizado no JSX.");
+                throw new Error("Elemento de captura consolidado não encontrado no DOM.");
+            }
 
             const canvas = await html2canvas(element, {
                 scale: 1.5,
@@ -453,14 +457,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // Fallback: Gerar novo
             // Pequeno delay para garantir que o renderHiddenInvoiceDetail aconteça
-            await new Promise(resolve => setTimeout(resolve, 600));
+            // Aumentado timeout para garantir que o React monte o componente e o CSS/Imagens carreguem
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
             const element = hiddenRef.current;
-            if (!element) throw new Error("Elemento de captura não encontrado");
+            if (!element) {
+                console.error("Ref hiddenRef ainda é null após 2s em handleDownloadCombined.");
+                throw new Error("Elemento de captura individual não encontrado no DOM.");
+            }
 
             const canvas = await html2canvas(element, {
                 scale: 2,
                 useCORS: true,
+                allowTaint: true,
                 logging: false,
                 backgroundColor: "#ffffff"
             });
@@ -597,7 +606,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const renderHiddenConsolidatedDetail = (data) => {
-        if (!data) return null;
+        if (!data || !data.items) return null;
 
         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
         
@@ -673,7 +682,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     {/* Content Section */}
                     <div className="flex-1 px-8 py-4">
                         <div className="flex flex-wrap gap-4">
-                            {data.items.map(inv => (
+                            {(data.items || []).map(inv => (
                                 <div key={inv.id} className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col shadow-sm" style={{ width: 'calc(33.333% - 11px)', minWidth: '200px' }}>
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
