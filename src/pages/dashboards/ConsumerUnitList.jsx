@@ -358,7 +358,7 @@ export default function ConsumerUnitList() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const [viewMode, setViewMode] = useState('kanban');
+    const [viewMode, setViewMode] = useState('calendar');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState(null);
     const [activeId, setActiveId] = useState(null);
