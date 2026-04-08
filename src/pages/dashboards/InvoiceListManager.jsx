@@ -528,15 +528,15 @@ export default function InvoiceListManager() {
                                                 key={inv.id}
                                                 onClick={() => onInvoiceClick(inv)}
                                                 style={{
-                                                    padding: '1rem',
-                                                    borderRadius: '12px',
+                                                    padding: '0.6rem',
+                                                    borderRadius: '10px',
                                                     background: 'white',
                                                     border: '1px solid #e2e8f0',
                                                     cursor: 'pointer', 
                                                     transition: 'all 0.2s',
                                                     display: 'flex', 
                                                     flexDirection: 'column', 
-                                                    gap: '0.6rem', 
+                                                    gap: '0.35rem', 
                                                     boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
                                                     position: 'relative',
                                                     borderLeft: `5px solid ${s.color}`
@@ -551,29 +551,29 @@ export default function InvoiceListManager() {
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.8rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                         {inv.consumer_units?.subscribers?.name || 'Assinante'}
                                                     </div>
-                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 900, background: s.bg, color: s.color }}>
+                                                    <span style={{ padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.55rem', fontWeight: 900, background: s.bg, color: s.color }}>
                                                         {s.label}
                                                     </span>
                                                 </div>
 
-                                                <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                                                <div style={{ fontSize: '0.65rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
                                                     <span>UC: {inv.consumer_units?.numero_uc}</span>
                                                     <span style={{ fontWeight: 'bold' }}>{inv.consumo_kwh} kWh</span>
                                                 </div>
 
-                                                <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }}></div>
+                                                <div style={{ height: '1px', background: '#f1f5f9', margin: '1px 0' }}></div>
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#94a3b8' }}>
                                                         <span>IP + Taxas + Outros:</span>
                                                         <span style={{ fontWeight: 600 }}>{formatCurrencyValue(ip + outros)}</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>CONCESSIONÁRIA:</span>
-                                                        <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#475569' }}>Vr. A Pagar:</span>
+                                                        <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.9rem' }}>
                                                             {formatCurrencyValue(valorConcessionaria)}
                                                         </span>
                                                     </div>
@@ -587,23 +587,23 @@ export default function InvoiceListManager() {
                                                             window.open(inv.asaas_boleto_url, '_blank');
                                                         }}
                                                         style={{
-                                                            marginTop: '0.5rem',
-                                                            padding: '0.5rem',
+                                                            marginTop: '0.3rem',
+                                                            padding: '0.4rem',
                                                             background: '#2563eb',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: '6px',
-                                                            fontSize: '0.75rem',
+                                                            fontSize: '0.7rem',
                                                             fontWeight: 'bold',
                                                             cursor: 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
-                                                            gap: '0.4rem',
+                                                            gap: '0.3rem',
                                                             boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
                                                         }}
                                                     >
-                                                        <CreditCard size={14} /> PAGAR BOLETO
+                                                        <CreditCard size={12} /> PAGAR BOLETO
                                                     </button>
                                                 )}
                                                 
