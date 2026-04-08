@@ -120,3 +120,4 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Rótulo Financeiro**: Alteração do texto "CONCESSIONÁRIA" para "Vr. A Pagar" na visão de faturas da concessionária.
 - **Detalhamento de UC**: Inclusão automática do **Assinante B2W (Titular)** (campo da seção de vínculos) nos cards da visão de Calendário de Leituras, facilitando a identificação do responsável pela fatura.
 - **Filtro Inteligente**: O campo de busca de Unidades Consumidoras agora permite filtrar também pelo **Assinante Titular**, além de Número da UC, Assinante Principal, Concessionária e Cidade.
+- **Seção Comunicados**: Refatoração da aba "Comunicação" para **Comunicados**, com identidade visual inspirada no WhatsApp (cores verdes, ícone de mensagem circular) e foco no envio de mensagens manuais.
