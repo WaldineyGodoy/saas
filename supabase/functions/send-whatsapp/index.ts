@@ -22,7 +22,14 @@ serve(async (req) => {
             throw new Error('Missing required fields: text or phone')
         }
 
-        const cleanPhone = phone.replace(/\D/g, '');
+        let cleanPhone = phone.replace(/\D/g, '');
+        
+        // Normalização de DDI (Brasil)
+        // Se o número tiver 10 ou 11 dígitos e não começar com 55, adiciona o 55
+        if ((cleanPhone.length === 10 || cleanPhone.length === 11) && !cleanPhone.startsWith('55')) {
+            console.log(`Normalizando telefone ${cleanPhone} para 55${cleanPhone}`);
+            cleanPhone = `55${cleanPhone}`;
+        }
         
         // 1. Fetch Configuration
         const { data: config, error: configError } = await supabaseAdmin
