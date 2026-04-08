@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette, Mail } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail, Zap } from 'lucide-react';
 
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
 import CustomizationSettings from '../settings/CustomizationSettings';
+import EnergyAccountSettings from '../settings/EnergyAccountSettings';
 
 export default function SettingsLayout() {
     const [activeTab, setActiveTab] = useState('users');
@@ -13,6 +14,7 @@ export default function SettingsLayout() {
         { id: 'evolution', label: 'Evolution API', icon: Code, desc: 'Configuração da API WhatsApp' },
         { id: 'email_service', label: 'Serviço de e-mail', icon: Mail, desc: 'Configuração do Resend (E-mail)' },
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
+        { id: 'energy', label: 'Conta de Energia', icon: Zap, desc: 'Regras de Faturamento' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
     ];
 
@@ -26,6 +28,8 @@ export default function SettingsLayout() {
                 return <IntegrationSettings serviceName="resend_api" title="Serviço de E-mail" description="Configuração de envio via Resend" />;
             case 'financial':
                 return <IntegrationSettings serviceName="financial_api" title="Integração Financeira" description="Gateways de Pagamento (Asaas, etc)" />;
+            case 'energy':
+                return <EnergyAccountSettings />;
             case 'branding':
                 return <CustomizationSettings />;
             default:
