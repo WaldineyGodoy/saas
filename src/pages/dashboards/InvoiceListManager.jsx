@@ -31,6 +31,7 @@ export default function InvoiceListManager() {
 
 
     const filteredInvoices = invoices.filter(inv => {
+        if (inv.status === 'cancelado') return false;
         if (statusFilter && inv.status !== statusFilter) return false;
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
@@ -786,7 +787,7 @@ export default function InvoiceListManager() {
                                     {filteredInvoices.map(inv => (
                                         <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '1rem' }}>{getStatusBadge(inv.status)}</td>
-                                            <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? new Date(inv.vencimento).toLocaleDateString('pt-BR') : '-'}</td>
+                                            <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
                                             <td style={{ padding: '1rem' }}>
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{inv.consumer_units?.numero_uc || 'N/A'}</div>
                                                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{inv.consumer_units?.subscribers?.name}</div>
@@ -912,7 +913,7 @@ export default function InvoiceListManager() {
                                                 <div key={inv.id} onClick={() => handleEdit(inv)} style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', border: '1px solid transparent', transition: '0.2s' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                         <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-medium)' }}>{inv.vencimento ? new Date(inv.vencimento).toLocaleDateString('pt-BR') : '-'}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-medium)' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
                                                     </div>
                                                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>{inv.consumer_units?.subscribers?.name}</div>
                                                     <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
