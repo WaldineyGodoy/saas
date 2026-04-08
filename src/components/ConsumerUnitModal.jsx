@@ -24,6 +24,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showManualUploadModal, setShowManualUploadModal] = useState(false);
     const [invoiceToEdit, setInvoiceToEdit] = useState(null);
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+    const [showZeroInvoiceModal, setShowZeroInvoiceModal] = useState(false);
+    const [zeroInvoiceMonth, setZeroInvoiceMonth] = useState(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -391,16 +393,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         }
     };
 
-    const handleIssueZeroInvoice = async () => {
-        const userInput = window.prompt(
-            "Digite o mês de referência para a fatura zerada (Formato: MM/AAAA):", 
-            `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`
-        );
-        
-        if (!userInput) return;
+    const handleIssueZeroInvoice = () => {
+        setZeroInvoiceMonth(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
+        setShowZeroInvoiceModal(true);
+    };
 
+    const handleConfirmZeroInvoice = async () => {
         const datePattern = /^(\d{2})\/(\d{4})$/;
-        const match = userInput.trim().match(datePattern);
+        const match = zeroInvoiceMonth.trim().match(datePattern);
         
         if (!match) {
             showAlert('Formato inválido. Use MM/AAAA.', 'error');
@@ -418,6 +418,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         );
         if (!confirm) return;
 
+        setShowZeroInvoiceModal(false);
         setLoading(true);
         try {
             const mesReferencia = `${y}-${m}-01`;
@@ -1134,6 +1135,65 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         setShowInvoicesModal(true);
                     }}
                 />
+            )}
+
+            {showZeroInvoiceModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000
+                }}>
+                    <div style={{
+                        background: 'white', padding: '2rem', borderRadius: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        width: '90%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1.5rem'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#1e293b' }}>Emitir Fatura Zerada</h3>
+                            <button onClick={() => setShowZeroInvoiceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div>
+                            <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#64748b' }}>
+                                Informe o mês de referência (MM/AAAA) para a fatura avulsa zerada.
+                            </p>
+                            <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 700, marginBottom: '0.5rem', textTransform: 'uppercase' }}>Mês Referência</label>
+                            <input
+                                type="text"
+                                value={zeroInvoiceMonth}
+                                onChange={(e) => {
+                                    let val = e.target.value.replace(/\D/g, '');
+                                    if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 6);
+                                    setZeroInvoiceMonth(val.substring(0, 7));
+                                }}
+                                placeholder="03/2026"
+                                style={{
+                                    width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0',
+                                    fontSize: '1rem', outline: 'none', transition: 'border-color 0.2s',
+                                    color: '#0f172a'
+                                }}
+                                onFocus={(e) => e.target.style.borderColor = '#fb923c'}
+                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button
+                                onClick={() => setShowZeroInvoiceModal(false)}
+                                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmZeroInvoice}
+                                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: 'none', background: '#fb923c', color: 'white', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(251, 146, 60, 0.2)' }}
+                            >
+                                Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
