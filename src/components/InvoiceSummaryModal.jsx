@@ -87,6 +87,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
         const getUtilityDueDate = () => {
             if (!invoice.vencimento) return 'N/A';
+            if (consumerUnit?.dia_vencimento) {
+                const [year, month] = invoice.vencimento.split('-');
+                return `${String(consumerUnit.dia_vencimento).padStart(2, '0')}/${month}/${year}`;
+            }
             return new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
         };
 
