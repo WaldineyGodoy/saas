@@ -66,7 +66,8 @@ export default function InvoiceListManager() {
                         modalidade,
                         status,
                         dia_vencimento,
-                        subscribers!consumer_units_subscriber_id_fkey(name)
+                        subscribers!consumer_units_subscriber_id_fkey(name),
+                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     )
                 `);
 
@@ -915,9 +916,14 @@ export default function InvoiceListManager() {
                                                 <div key={inv.id} onClick={() => handleEdit(inv)} style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', border: '1px solid transparent', transition: '0.2s' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                         <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-medium)' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
+                                                        <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
                                                     </div>
                                                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>{inv.consumer_units?.subscribers?.name}</div>
+                                                    {inv.consumer_units?.titular_fatura?.name && (
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
+                                                            {inv.consumer_units.titular_fatura.name}
+                                                        </div>
+                                                    )}
                                                     <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
                                                 </div>
                                             ))}
