@@ -739,7 +739,7 @@ export default function ConsumerUnitList() {
                                 <Layout size={16} /> Kanban
                             </button>
                             <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'calendar' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
-                                <CalendarIcon size={16} /> Calendário
+                                <CalendarIcon size={16} /> Calendário de Leituras
                             </button>
                         </div>
 
