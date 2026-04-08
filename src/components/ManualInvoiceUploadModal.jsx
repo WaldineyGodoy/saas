@@ -344,6 +344,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 outros_lancamentos: extractedData.outrosLancamentos || 0,
                 consumo_reais: (extractedData.consumoKwh || kwhMinimo) * valorTarifa,
                 valor_a_pagar: extractedData.valorTotal || 0,
+                valor_concessionaria: extractedData.valorTotal || 0,
                 desconto_assinante: Number(uc.desconto_assinante) || 0,
                 status: 'a_vencer',
                 concessionaria_pdf_url: publicUrl,
