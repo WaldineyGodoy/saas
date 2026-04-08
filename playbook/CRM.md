@@ -118,4 +118,4 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Renomeação Semântica**: Botões de calendário de faturas renomeados para "Venc. Faturas" e "Venc. Conta de Energia".
 - **Ajuste de Grid**: Correção do layout dos cards no calendário de energia para evitar quebra de layout em resoluções padrão.
 - **Rótulo Financeiro**: Alteração do texto "CONCESSIONÁRIA" para "Vr. A Pagar" na visão de faturas da concessionária.
-- **Detalhamento de UC**: Inclusão automática do **Nome do Titular da Conta** nos cards da visão de Calendário de Leituras, permitindo identificar a associação/usina diretamente no card.
+- **Detalhamento de UC**: Inclusão automática do **Assinante B2W (Titular)** (campo da seção de vínculos) nos cards da visão de Calendário de Leituras, facilitando a identificação do responsável pela fatura.
