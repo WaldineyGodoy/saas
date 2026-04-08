@@ -645,10 +645,10 @@ export default function InvoiceListManager() {
                                 <Layout size={16} /> Kanban
                             </button>
                             <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <CalendarIcon size={16} /> Op.
+                                <CalendarIcon size={16} /> Venc. Faturas
                             </button>
                             <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <CreditCard size={16} /> Energia
+                                <CreditCard size={16} /> Venc. Conta de Energia
                             </button>
                         </div>
 
