@@ -1245,15 +1245,19 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
     const totalVisibleInvoicesValue = invoices
-        .filter(inv => inv.status !== 'pago' && inv.status !== 'cancelado') // Excluir cancelados do total
+        .filter(inv => {
+            const status = inv.status?.trim().toLowerCase();
+            return status !== 'pago' && status !== 'cancelado';
+        })
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     const totalToConsolidate = invoices
-        .filter(inv => 
-            inv.status !== 'pago' && 
-            inv.status !== 'cancelado' && 
-            (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null) // Absolutamente livre
-        )
+        .filter(inv => {
+            const status = inv.status?.trim().toLowerCase();
+            return status !== 'pago' && 
+                   status !== 'cancelado' && 
+                   (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
+        })
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     return (
@@ -1757,11 +1761,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                             const result = await createAsaasCharge(subscriber.id, 'subscriber', {
                                                                 dueDate,
                                                                 invoice_ids: invoices
-                                                                    .filter(inv => 
-                                                                        inv.status !== 'pago' && 
-                                                                        inv.status !== 'cancelado' && 
-                                                                        (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null)
-                                                                    )
+                                                                    .filter(inv => {
+                                                                        const s = inv.status?.trim().toLowerCase();
+                                                                        return s !== 'pago' && 
+                                                                               s !== 'cancelado' && 
+                                                                               (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
+                                                                    })
                                                                     .map(i => i.id)
                                                             });
 
@@ -2025,7 +2030,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
                                 ) : invoices.length > 0 ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                        {invoices.map(inv => {
+                                        {invoices
+                                            .filter(inv => inv.status?.toLowerCase() !== 'cancelado')
+                                            .map(inv => {
                                             const statusMap = {
                                                 'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7', icon: CheckCircle },
                                                 'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2', icon: AlertCircle },

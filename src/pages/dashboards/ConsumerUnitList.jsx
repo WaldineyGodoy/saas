@@ -177,7 +177,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const hasInvoice = invoices.some(inv => 
             inv.uc_id === unit.id && 
             inv.mes_referencia === monthRef && 
-            inv.status !== 'cancelado'
+            inv.status?.trim().toLowerCase() !== 'cancelado'
         );
 
         let status = 'pending';
@@ -562,7 +562,7 @@ export default function ConsumerUnitList() {
             const hasMonthInvoice = invoicesForMonth.some(inv => 
                 inv.uc_id === unit.id && 
                 inv.mes_referencia === monthRef && 
-                inv.status !== 'cancelado'
+                inv.status?.trim().toLowerCase() !== 'cancelado'
             );
             
             let monthStatus = 'pending';
@@ -604,7 +604,7 @@ export default function ConsumerUnitList() {
                 const hasInv = invoicesForMonth.some(inv => 
                     inv.uc_id === unit.id && 
                     inv.mes_referencia === mRef && 
-                    inv.status !== 'cancelado'
+                    inv.status?.trim().toLowerCase() !== 'cancelado'
                 );
                 
                 if (hasInv) {

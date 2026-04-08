@@ -242,13 +242,17 @@ export default function SubscriberList() {
                     inv.vencimento?.startsWith(month)
                 );
                 
-                const totalMonth = invoicesFinance.reduce((sum, inv) => 
-                    (inv.status !== 'pago') ? sum + Number(inv.valor_a_pagar || 0) : sum
-                , 0);
+                const totalMonth = invoicesFinance.reduce((sum, inv) => {
+                    const s = inv.status?.trim().toLowerCase();
+                    return (s !== 'pago' && s !== 'cancelado') ? sum + Number(inv.valor_a_pagar || 0) : sum;
+                }, 0);
 
                 // Total Global (Dívida real: pendentes, vencidas e a vencer)
                 const totalGlobal = subInvoices
-                    .filter(inv => inv.status !== 'pago')
+                    .filter(inv => {
+                        const s = inv.status?.trim().toLowerCase();
+                        return s !== 'pago' && s !== 'cancelado';
+                    })
                     .reduce((sum, inv) => sum + Number(inv.valor_a_pagar || 0), 0);
 
                 // Indicador de Leitura (UCs com leitura ou fatura NO MÊS de REFERÊNCIA filtrado)
