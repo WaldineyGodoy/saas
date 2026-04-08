@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { Clock, Send, User, Calendar as CalendarIcon, X } from 'lucide-react';
+import { Clock, Send, User, Calendar as CalendarIcon, X, Search } from 'lucide-react';
 
 // Reusable CollapsibleSection Component
 export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, noGrid = false }) => {
@@ -58,6 +58,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
     const [newComment, setNewComment] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
@@ -84,6 +85,18 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
             setLoading(false);
         }
     };
+
+    const filteredHistory = history.filter(item => {
+        if (!searchTerm) return true;
+        const lower = searchTerm.toLowerCase();
+        const dateStr = new Date(item.created_at).toLocaleString('pt-BR').toLowerCase();
+        return (
+            item.content?.toLowerCase().includes(lower) ||
+            item.author_name?.toLowerCase().includes(lower) ||
+            item.event_type?.toLowerCase().includes(lower) ||
+            dateStr.includes(lower)
+        );
+    });
 
     const handleAddComment = async (e) => {
         e.preventDefault();
@@ -153,14 +166,55 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                     </button>
                 </div>
 
+                {/* Search Bar */}
+                <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #e2e8f0', background: 'white' }}>
+                    <div style={{ position: 'relative' }}>
+                        <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Pesquisar por tipo, data ou texto..."
+                            style={{
+                                width: '100%',
+                                padding: '0.6rem 1rem 0.6rem 2.5rem',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                fontSize: '0.9rem',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                background: '#f8fafc'
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = 'var(--color-blue)';
+                                e.target.style.background = 'white';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#e2e8f0';
+                                e.target.style.background = '#f8fafc';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                        />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 {/* Timeline content */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {loading ? (
                         <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Carregando histórico...</div>
-                    ) : history.length === 0 ? (
+                    ) : filteredHistory.length === 0 ? (
                         <div style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>
-                            <Clock size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
-                            <p>Nenhum registro encontrado.</p>
+                            <Search size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+                            <p>{searchTerm ? 'Nenhum resultado para sua busca.' : 'Nenhum registro encontrado.'}</p>
                         </div>
                     ) : (
                         <div style={{ position: 'relative', paddingLeft: '2rem' }}>
@@ -170,7 +224,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                                 width: '2px', background: '#e2e8f0'
                             }} />
 
-                            {history.map((item, index) => (
+                            {filteredHistory.map((item, index) => (
                                 <div key={item.id} style={{ position: 'relative', marginBottom: '2rem' }}>
                                     {/* Dot */}
                                     <div style={{

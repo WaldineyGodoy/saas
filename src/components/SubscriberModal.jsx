@@ -1275,21 +1275,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         {subscriber ? `Assinante - ${formData.name}` : 'Novo Assinante'}
                     </h3>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        {subscriber && (
-                            <button
-                                type="button"
-                                onClick={() => setShowHistory(true)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    background: '#fff', color: 'var(--color-blue)',
-                                    border: '1px solid var(--color-blue)',
-                                    padding: '0.4rem 0.8rem', borderRadius: '6px',
-                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
-                                }}
-                            >
-                                <History size={16} /> Histórico
-                            </button>
-                        )}
+
                         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                             <X size={24} />
                         </button>
@@ -1929,7 +1915,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                         </h4>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
                                             {consolidatedInvoices
-                                                .filter(ci => ci.status !== 'canceled') // Somente pagas e a vencer conforme solicitado
+                                                .filter(ci => {
+                                                    const status = ci.status?.toLowerCase();
+                                                    return status !== 'canceled' && status !== 'cancelado';
+                                                })
                                                 .map(ci => (
                                                 <div key={ci.id} style={{
                                                     background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.75rem',
@@ -2155,10 +2144,28 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     border: '1px solid #e2e8f0',
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                 }}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
-                                        <MessageCircle size={20} color="#25D366" />
-                                        Enviar Mensagem de Whatsapp
-                                    </h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
+                                            <MessageCircle size={20} color="#25D366" />
+                                            Enviar Mensagem de Whatsapp
+                                        </h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowHistory(true)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                                background: '#fff', color: '#25D366',
+                                                border: '1px solid #25D366',
+                                                padding: '0.4rem 0.8rem', borderRadius: '6px',
+                                                cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#f0fdf4' }}
+                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff' }}
+                                        >
+                                            <History size={16} /> Histórico
+                                        </button>
+                                    </div>
 
                                     <div style={{ marginBottom: '1.5rem' }}>
                                         <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
