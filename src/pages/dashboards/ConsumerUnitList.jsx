@@ -208,6 +208,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             const matchesSearch = 
                 unit.numero_uc?.toLowerCase().includes(lower) ||
                 unit.subscriber?.name?.toLowerCase().includes(lower) ||
+                unit.titular_fatura?.name?.toLowerCase().includes(lower) ||
                 unit.concessionaria?.toLowerCase().includes(lower);
             if (!matchesSearch) return acc;
         }
