@@ -1,5 +1,21 @@
 ---
 
+## [2026-04-07] - Estabilização de PDF e Reenvio Automático (21:05)
+
+### Atualizações Registradas:
+1. **Auto-Geração no Reenvio**:
+    - Gatilho automático para gerar o PDF consolidado se ele não for encontrado no Storage ao disparar uma notificação.
+2. **Estabilidade de Captura PDF**:
+    - Ajuste de **Timeout para 2000ms** para garantir carregamento de logos e fontes externas.
+    - Implementação de **Safe Access** em arrays de itens de fatura para evitar erros `undefined map`.
+3. **Diagnóstico e Logs**:
+    - Alertas no console para identificar falhas de renderização em componentes ocultos durante a captura.
+4. **Regras Visuais e Dashboard**:
+    - Confirmação do padrão **Semafórico** (Vermelho/Azul/Verde) nos ícones de cobrança.
+    - Confirmação da regra de "Total no Mês" estritamente baseada no faturamento financeiro (**Vencimento**).
+
+---
+
 ## [2026-04-07] - Estabilização de Build e Modernização de Modais
 
 ### Atualizações Registradas:

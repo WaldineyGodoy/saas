@@ -5,6 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
@@ -13,6 +14,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [extractionStatus, setExtractionStatus] = useState('idle'); // idle, extracting, success, error, mismtach
+    const [applyStamp, setApplyStamp] = useState(true);
     const [extractedData, setExtractedData] = useState({
         mesReferencia: '',
         vencimento: '',
@@ -21,7 +23,8 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
         consumoCompensado: '',
         cipValor: '',
         outrosLancamentos: '',
-        codigoCliente: ''
+        codigoCliente: '',
+        stampCoords: null // x, y for "Informações Importantes"
     });
 
     const fileInputRef = useRef(null);
@@ -60,9 +63,23 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
             const pdfDocument = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             
             let fullText = '';
+            let stampCoords = null;
+            
             for (let i = 1; i <= pdfDocument.numPages; i++) {
                 const page = await pdfDocument.getPage(i);
                 const textContent = await page.getTextContent();
+                
+                // Find coordinates for the stamp on the first page
+                if (i === 1) {
+                    const targetItem = textContent.items.find(item => 
+                        item.str.toUpperCase().includes('INFORMAÇÕES IMPORTANTES') || 
+                        item.str.toUpperCase().includes('AVISOS')
+                    );
+                    if (targetItem) {
+                        stampCoords = { x: targetItem.transform[4], y: targetItem.transform[5] };
+                    }
+                }
+
                 const pageText = textContent.items.map(item => item.str).join(' ');
                 fullText += pageText + ' ';
             }
@@ -193,6 +210,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 outrosLancamentos: somaOutros,
                 linhaDigitavel: linhaDigitavelText,
                 pixString: pixStringText,
+                stampCoords: stampCoords
             });
 
             if (!parsedUc) {
@@ -225,13 +243,79 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
 
         setUploading(true);
         try {
+            let fileToUpload = file;
+
+            // Apply Stamp and Trim if requested
+            if (applyStamp) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdfDoc = await PDFDocument.load(arrayBuffer);
+                    const pages = pdfDoc.getPages();
+                    
+                    // Discard secondary pages
+                    const initialCount = pages.length;
+                    if (initialCount > 1) {
+                        for (let i = initialCount - 1; i > 0; i--) {
+                            pdfDoc.removePage(i);
+                        }
+                    }
+
+                    const firstPage = pdfDoc.getPages()[0];
+                    const { width, height } = firstPage.getSize();
+                    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+                    
+                    const stampText = "NÃO PAGUE ESSA CONTA - VIA DE CONFERÊNCIA";
+                    const fontSize = 11;
+                    const textWidth = font.widthOfTextAtSize(stampText, fontSize);
+
+                    // Determine Y coordinate (pdfjs ty is from bottom, same as pdf-lib)
+                    // If we found the "Informações Importantes" text, position below it.
+                    // Otherwise, use a safe default at the bottom area.
+                    let stampX = 40;
+                    let stampY = 50;
+
+                    if (extractedData.stampCoords) {
+                        stampX = extractedData.stampCoords.x;
+                        stampY = Math.max(20, extractedData.stampCoords.y - 15); // Just below the title
+                    } else {
+                        // Safe fallback area
+                        stampY = 80; 
+                    }
+
+                    // Draw a highlight background
+                    firstPage.drawRectangle({
+                        x: stampX - 2,
+                        y: stampY - 3,
+                        width: textWidth + 10,
+                        height: fontSize + 6,
+                        color: rgb(1, 0.9, 0.9),
+                        opacity: 0.9
+                    });
+
+                    // Draw the text
+                    firstPage.drawText(stampText, {
+                        x: stampX + 3,
+                        y: stampY,
+                        size: fontSize,
+                        font: font,
+                        color: rgb(0.8, 0, 0),
+                    });
+
+                    const pdfBytes = await pdfDoc.save();
+                    fileToUpload = new File([pdfBytes], file.name, { type: 'application/pdf' });
+                    console.log("PDF trimmed and stamped successfully.");
+                } catch (pdfErr) {
+                    console.warn("Failed to apply stamp/trim, using original file:", pdfErr);
+                }
+            }
+
             const fileName = `manual_${Date.now()}.pdf`;
             const storagePath = `invoices/${uc.numero_uc}/${fileName}`;
             
             // Upload to Supabase Storage
             const { error: uploadError } = await supabase.storage
                 .from('energy-bills')
-                .upload(storagePath, file, {
+                .upload(storagePath, fileToUpload, {
                     contentType: 'application/pdf',
                     upsert: true
                 });
@@ -347,6 +431,23 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Extração automática de consumo e valores</span>
                             </div>
                         )}
+                    </div>
+
+                    {/* Security Stamp Toggle */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5' }}>
+                        <input 
+                            type="checkbox" 
+                            id="applyStamp"
+                            checked={applyStamp}
+                            onChange={(e) => setApplyStamp(e.target.checked)}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="applyStamp" style={{ fontSize: '0.9rem', fontWeight: '500', color: '#9a3412', cursor: 'pointer', flex: 1 }}>
+                             Aviso para Não Pagar 
+                             <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'normal', color: '#c2410c', marginTop: '2px' }}>
+                                (Quando ativo: descarta 2ª página e aplica carimbo de segurança "Não Pague esta conta" na área de informações importantes)
+                             </span>
+                        </label>
                     </div>
 
                     {/* Extraction Status & Form */}
