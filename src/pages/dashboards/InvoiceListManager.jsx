@@ -799,7 +799,7 @@ export default function InvoiceListManager() {
                                                     <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
                                                         <span>v. conta:</span>
                                                         <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                                                            {formatCurrency((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))}
+                                                            {formatCurrency(Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0)))}
                                                         </span>
                                                     </div>
                                                 </div>
