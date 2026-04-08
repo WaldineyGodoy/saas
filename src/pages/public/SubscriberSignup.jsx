@@ -215,7 +215,7 @@ export default function SubscriberSignup() {
                         console.error('Error fetching integration config:', err);
                     }
 
-                    await sendWhatsapp(org.phone, msgOrg, null, instanceName);
+                    await sendWhatsapp(org.phone, msgOrg, null, null, null, instanceName);
                 }
             }
 
@@ -236,7 +236,7 @@ export default function SubscriberSignup() {
                     console.error('Error fetching integration config:', err);
                 }
 
-                await sendWhatsapp(sub.phone, msgSub, null, instanceName);
+                await sendWhatsapp(sub.phone, msgSub, null, null, null, instanceName);
             }
 
             showAlert('Cadastro realizado com sucesso!', 'success');

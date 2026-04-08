@@ -62,10 +62,32 @@ export const fetchCpfCnpjData = async (doc) => {
     }
 }
 
+/**
+ * Helper unificado para chamadas de Edge Functions com tratamento de erro detalhado
+ */
+const callFunction = async (name, payload) => {
+    const { data, error } = await supabase.functions.invoke(name, { body: payload });
+    
+    if (error) {
+        let msg = error.message;
+        try {
+            // Tenta extrair a mensagem de erro detalhada do corpo da resposta
+            const body = await error.context?.json();
+            if (body && (body.error || body.message)) {
+                msg = body.error || body.message;
+            }
+        } catch (e) {
+            // Se não for JSON, mantém a mensagem original do Supabase
+        }
+        throw new Error(msg);
+    }
+    
+    if (data?.error) throw new Error(data.error);
+    return data;
+};
+
 export const manageAsaasCustomer = async (data) => {
-    const { data: result, error } = await supabase.functions.invoke('manage-asaas-customer', { body: data });
-    if (error) throw new Error(error.message);
-    return result;
+    return callFunction('manage-asaas-customer', data);
 };
 
 export const fetchOfferData = async (ibge) => {
@@ -80,36 +102,26 @@ export const fetchOfferData = async (ibge) => {
 
 export const createAsaasCharge = async (id, type = 'invoice', extra = {}) => {
     const payload = type === 'invoice' ? { invoice_id: id, ...extra } : { subscriber_id: id, ...extra };
-    const { data, error } = await supabase.functions.invoke('create-asaas-charge', { body: payload });
-    if (error) throw new Error(error.message);
-    return data;
+    return callFunction('create-asaas-charge', payload);
 };
 
 export async function cancelAsaasCharge(invoiceId) {
-    const { data, error } = await supabase.functions.invoke('cancel-asaas-charge', { body: { invoice_id: invoiceId } });
-    if (error) throw new Error(error.message);
-    return data;
+    return callFunction('cancel-asaas-charge', { invoice_id: invoiceId });
 }
 
 export async function updateAsaasCharge(invoiceId, value, dueDate) {
-    const { data, error } = await supabase.functions.invoke('update-asaas-charge', { body: { invoice_id: invoiceId, value, dueDate } });
-    if (error) throw new Error(error.message);
-    return data;
+    return callFunction('update-asaas-charge', { invoice_id: invoiceId, value, dueDate });
 }
 
 export const sendWhatsapp = async (phone, text, mediaUrl = null, mediaBase64 = null, fileName = null, instanceName = null) => {
-    const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-            phone: phone ? phone.replace(/\D/g, '') : '',
-            text,
-            mediaUrl,
-            mediaBase64,
-            fileName,
-            instanceName
-        }
+    return callFunction('send-whatsapp', {
+        phone: phone ? phone.replace(/\D/g, '') : '',
+        text,
+        mediaUrl,
+        mediaBase64,
+        fileName,
+        instanceName
     });
-    if (error) throw new Error(error.message);
-    return data;
 };
 
 export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf', energyBillUrl = null, asaasPdfStorageUrl = null) => {
@@ -128,7 +140,12 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
 
     const { data, error } = await supabase.functions.invoke('merge-pdf', { body });
     if (error) {
-        const customError = new Error(error.message);
+        let msg = error.message;
+        try {
+            const bodyErr = await error.context?.json();
+            if (bodyErr && (bodyErr.error || bodyErr.message)) msg = bodyErr.error || bodyErr.message;
+        } catch (e) {}
+        const customError = new Error(msg);
         customError.status = error.status || error.context?.status;
         throw customError;
     }
@@ -137,18 +154,13 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
 };
 
 export const parseInvoice = async (pdfBase64) => {
-    const { data, error } = await supabase.functions.invoke('parse-invoice', { body: { pdfBase64 } });
-    if (error) throw new Error(error.message);
-    return data;
+    return callFunction('parse-invoice', { pdfBase64 });
 };
 
 export const sendInvoiceEmail = async (to, subject, html = null, attachments = [], variables = null) => {
-    const { data, error } = await supabase.functions.invoke('send-email', {
-        body: { to, subject, html, attachments, variables }
-    });
-    if (error) throw new Error(error.message);
-    return data;
+    return callFunction('send-email', { to, subject, html, attachments, variables });
 };
+
 
 /**
  * Helper unificado para enviar notificações de fatura (Email + WhatsApp)

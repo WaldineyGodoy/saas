@@ -126,7 +126,10 @@ serve(async (req) => {
         }
 
         // 4. Send to Evolution API
-        console.log('Sending to Evolution API:', targetUrl);
+        console.log('Target URL:', targetUrl);
+        // Do not log the full body as it might contain base64, but log length and instance
+        console.log('Sending message to number:', body.number, 'Instance:', effectiveInstance);
+        if (body.media) console.log('Media detected. Type:', body.mediatype, 'Filename:', body.fileName);
 
         const response = await fetch(targetUrl, {
             method: 'POST',
@@ -138,13 +141,20 @@ serve(async (req) => {
         })
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const errorDetail = JSON.stringify(errorData);
+            const errorRaw = await response.text();
+            let errorDetail = errorRaw;
+            try {
+                const errorData = JSON.parse(errorRaw);
+                errorDetail = errorData.message || JSON.stringify(errorData);
+            } catch (e) {
+                // Not JSON
+            }
             console.error(`Evolution API Error [${response.status}]:`, errorDetail);
-            throw new Error(`Evolution API Error: ${errorDetail}`)
+            throw new Error(`Evolution API Error [${response.status}]: ${errorDetail}`);
         }
 
         const resData = await response.json();
+        console.log('Evolution API Success Response:', JSON.stringify(resData));
         return new Response(JSON.stringify({ success: true, apiResponse: resData }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
