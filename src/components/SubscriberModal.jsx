@@ -5,7 +5,7 @@ import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -1309,7 +1309,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'endereco', label: 'Endereço', icon: Home, color: '#f59e0b', bg: '#fff7ed' },
                         { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
                         { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
-                        { id: 'comunicacao', label: 'Comunicação', icon: MessageSquare, color: '#ec4899', bg: '#fdf2f8' }
+                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
                     ].map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -2156,8 +2156,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
                                 }}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
-                                        <MessageSquare size={20} color="#ec4899" />
-                                        Enviar Comunicado Manual
+                                        <MessageCircle size={20} color="#25D366" />
+                                        Enviar Mensagem de Whatsapp
                                     </h4>
 
                                     <div style={{ marginBottom: '1.5rem' }}>
@@ -2181,7 +2181,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 transition: 'border-color 0.2s',
                                                 fontFamily: 'inherit'
                                             }}
-                                            onFocus={(e) => e.target.style.borderColor = '#ec4899'}
+                                            onFocus={(e) => e.target.style.borderColor = '#25D366'}
                                             onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
@@ -2210,7 +2210,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                         borderRadius: '8px',
                                                         cursor: 'pointer',
                                                         fontSize: '0.9rem',
-                                                        color: manualFile ? '#ec4899' : '#64748b',
+                                                        color: manualFile ? '#25D366' : '#64748b',
                                                         transition: 'all 0.2s',
                                                         fontWeight: 500,
                                                         whiteSpace: 'nowrap',
@@ -2234,18 +2234,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 alignItems: 'center',
                                                 gap: '0.75rem',
                                                 padding: '0.75rem 2rem',
-                                                background: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#f1f5f9' : '#ec4899',
+                                                background: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#f1f5f9' : '#25D366',
                                                 color: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#94a3b8' : 'white',
                                                 border: 'none',
                                                 borderRadius: '8px',
                                                 fontWeight: 700,
                                                 cursor: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'not-allowed' : 'pointer',
                                                 transition: 'all 0.2s',
-                                                boxShadow: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'none' : '0 4px 12px rgba(236, 72, 153, 0.25)'
+                                                boxShadow: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'none' : '0 4px 12px rgba(37, 211, 102, 0.25)'
                                             }}
                                         >
                                             {isSendingManualWA ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
-                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Comunicado'}
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Mensagem'}
                                         </button>
                                     </div>
                                 </div>
