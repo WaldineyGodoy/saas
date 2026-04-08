@@ -114,7 +114,7 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 
 ### 📅 07 de Abril de 2026 (23:20)
 - **Refatoração do Modal de Fatura**: Implementação de sistema de abas e limpeza visual total.
-- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de Calendário por padrão.
+- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de **Calendário de Leituras** por padrão.
 - **Renomeação Semântica**: Botões de calendário de faturas renomeados para "Venc. Faturas" e "Venc. Conta de Energia".
 - **Ajuste de Grid**: Correção do layout dos cards no calendário de energia para evitar quebra de layout em resoluções padrão.
 - **Rótulo Financeiro**: Alteração do texto "CONCESSIONÁRIA" para "Vr. A Pagar" na visão de faturas da concessionária.
