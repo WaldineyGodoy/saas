@@ -397,6 +397,24 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
 
                 <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     
+                    {/* Security Stamp Toggle - MOVED TO TOP FOR VISIBILITY */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5', width: '100%' }}>
+                        <input 
+                            type="checkbox" 
+                            id="applyStamp"
+                            checked={applyStamp}
+                            onChange={(e) => setApplyStamp(e.target.checked)}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="applyStamp" style={{ fontSize: '0.9rem', fontWeight: '500', color: '#9a3412', cursor: 'pointer', flex: 1 }}>
+                             Aviso para Não Pagar 
+                             <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'normal', color: '#c2410c', marginTop: '2px' }}>
+                                (Ativo: descarta 2ª página e aplica carimbo de segurança no PDF)
+                             </span>
+                        </label>
+                        <span style={{ fontSize: '0.6rem', color: '#fb923c', fontStyle: 'italic' }}>v1.1</span>
+                    </div>
+
                     {/* Upload Area */}
                     <div 
                         onClick={() => fileInputRef.current?.click()}
@@ -433,22 +451,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                         )}
                     </div>
 
-                    {/* Security Stamp Toggle */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5' }}>
-                        <input 
-                            type="checkbox" 
-                            id="applyStamp"
-                            checked={applyStamp}
-                            onChange={(e) => setApplyStamp(e.target.checked)}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="applyStamp" style={{ fontSize: '0.9rem', fontWeight: '500', color: '#9a3412', cursor: 'pointer', flex: 1 }}>
-                             Aviso para Não Pagar 
-                             <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'normal', color: '#c2410c', marginTop: '2px' }}>
-                                (Quando ativo: descarta 2ª página e aplica carimbo de segurança "Não Pague esta conta" na área de informações importantes)
-                             </span>
-                        </label>
-                    </div>
+
 
                     {/* Extraction Status & Form */}
                     {extractionStatus !== 'idle' && (
