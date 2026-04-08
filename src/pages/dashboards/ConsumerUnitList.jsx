@@ -392,6 +392,7 @@ export default function ConsumerUnitList() {
         return (
             u.numero_uc?.toLowerCase().includes(lower) ||
             u.subscriber?.name?.toLowerCase().includes(lower) ||
+            u.titular_fatura?.name?.toLowerCase().includes(lower) ||
             u.concessionaria?.toLowerCase().includes(lower) ||
             u.address?.cidade?.toLowerCase().includes(lower) ||
             u.status?.toLowerCase().includes(lower)
