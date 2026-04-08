@@ -500,7 +500,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             { id: 'vincos', label: 'Vínculos', icon: Link },
                             { id: 'dados', label: 'Dados da UC', icon: Zap },
                             { id: 'endereco', label: 'Endereço', icon: Home },
-                            { id: 'tecnico', label: 'Dados Técnicos', icon: Settings }
+                            { id: 'tecnico', label: 'Faturamento', icon: Settings }
                         ].map(tab => {
                             const isActive = activeTab === tab.id;
                             const Icon = tab.icon;
@@ -827,10 +827,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 <FileSearch size={18} /> Ver Faturas
                                             </button>
                                             <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#22c55e', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)' }}>
-                                                <Upload size={18} /> Upload Fatura
+                                                <Upload size={18} /> Upload de conta de energia
                                             </button>
                                             <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#3b82f6', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)' }}>
-                                                <PlusCircle size={18} /> Emitir Fatura
+                                                <PlusCircle size={18} /> Emitir Fatura avulsa
                                             </button>
                                         </div>
                                     )}
