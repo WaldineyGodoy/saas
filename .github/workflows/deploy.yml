@@ -51,5 +51,11 @@ jobs:
           supabase functions deploy send-email --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy send-whatsapp --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy create-asaas-charge --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy update-asaas-charge --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy cancel-asaas-charge --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy manage-asaas-customer --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy parse-invoice --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy transfer-asaas-pix --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          supabase functions deploy trigger-faturista --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
