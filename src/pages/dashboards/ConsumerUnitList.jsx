@@ -341,9 +341,9 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                             textOverflow: 'ellipsis'
                                         }}>
                                             UC: {uc.numero_uc}
-                                            {uc.titular_conta && (
+                                            {uc.titular_fatura?.name && (
                                                 <div style={{ marginTop: '0.1rem', fontStyle: 'italic', opacity: 0.9 }}>
-                                                    {uc.titular_conta}
+                                                    {uc.titular_fatura.name}
                                                 </div>
                                             )}
                                         </div>
