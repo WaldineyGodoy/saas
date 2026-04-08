@@ -14,9 +14,13 @@ Controle do ciclo de vida dos clientes e visão 360º.
 ### ⚡ Gestão de Unidades Consumidoras (UCs)
 Monitoramento técnico e operacional de leituras.
 - **Interface Modernizada (`ConsumerUnitModal`)**: Navegação por 4 abas superiores.
+- **Visualização Padrão**: Definida como **Calendário** para facilitar o acompanhamento das datas de leitura e status de extração.
 
 ### 💰 Gestão de Faturas (Billing)
 Faturamento mensal, integração bancária e automação de cobrança.
+- **Novo Modal de Faturamento (`InvoiceFormModal`)**: Refatorado para navegação por abas horizontais (**Identificação, Consumo, Financeiro, Resumo**).
+- **Aba Resumo**: Centraliza o card de detalhamento e as ações de download/visualização, otimizando o fluxo de conferência.
+- **Calendários de Vencimento**: Dualidade de visão entre **Venc. Faturas** (B2W) e **Venc. Conta de Energia** (Concessionária).
 
 ---
 
@@ -38,10 +42,25 @@ Faturamento mensal, integração bancária e automação de cobrança.
 - **Mensageria Híbrida**: Disparo simultâneo (Resend + Evolution API).
 - **WhatsApp Premium**: Texto com emojis e formatação otimizada.
 - **Inadimplência Automática**: 15 dias (`Inadimplente`) e 60 dias (`Cancelamento Crítico`).
+- **Liquidação Automática (Conta de Energia)**: Quando o toggle "Pagamento Automático" está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas.
 
 ---
 
-## 4. Padrões de Layout e UX
+## 4. Configurações e Parâmetros do Sistema
+
+O CRM centraliza as chaves de integração e regras de processamento em um painel unificado.
+
+### ⚙️ Módulos de Configuração
+- **Perfil de Usuários (`Users`)**: Gestão de acessos e permissões (Roles).
+- **Evolution API (`Code`)**: Instância e chaves do WhatsApp para mensageria.
+- **Serviço de e-mail (`Mail`)**: Credenciais do Resend para notificações transacionais.
+- **Integração Financeira (`CreditCard`)**: Endpoint e chaves do Asaas (Sandbox/Produção).
+- **Conta de Energia (`Zap`)**: Regras de faturamento e **Pagamento Automático**.
+- **Padronização (`Palette`)**: Branding, logos e paleta de cores do sistema.
+
+---
+
+## 5. Padrões de Layout e UX
 
 ### 📐 Estrutura de Documentos (PDF Consolidado)
 1. **Capa (Resumo B2W)**: Design em cards por UC.
@@ -87,3 +106,15 @@ Faturamento mensal, integração bancária e automação de cobrança.
 ## 7. Rastreabilidade
 - **Ações**: `email_sent`, `wa_sent`, `fatura_emitida`.
 - **Auditoria**: Timeline registra ambiente (Sandbox/Prod).
+- **Logs de UI**: Histórico de mudanças de layout e visualização padrão.
+
+---
+
+## 8. Log de Atualizações Recentes
+
+### 📅 07 de Abril de 2026 (23:20)
+- **Refatoração do Modal de Fatura**: Implementação de sistema de abas e limpeza visual total.
+- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de Calendário por padrão.
+- **Renomeação Semântica**: Botões de calendário de faturas renomeados para "Venc. Faturas" e "Venc. Conta de Energia".
+- **Ajuste de Grid**: Correção do layout dos cards no calendário de energia para evitar quebra de layout em resoluções padrão.
+- **Rótulo Financeiro**: Alteração do texto "CONCESSIONÁRIA" para "Vr. A Pagar" na visão de faturas da concessionária.
