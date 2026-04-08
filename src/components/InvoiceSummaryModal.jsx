@@ -87,17 +87,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
         const getUtilityDueDate = () => {
             if (!invoice.vencimento) return 'N/A';
-            if (consumerUnit?.dia_vencimento) {
-                const parts = invoice.vencimento.split('-');
-                if (parts.length >= 3) {
-                    const year = parts[0];
-                    const month = parts[1];
-                    const day = String(consumerUnit.dia_vencimento).padStart(2, '0');
-                    return `${day}/${month}/${year}`;
-                }
-            }
             return new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
         };
+
+        const currentStatus = invoice.status === 'cancelado' 
+            ? statusColors.cancelado 
+            : statusColors[invoice.status] || statusColors.a_vencer;
 
         return (
             <div className="modal-overlay" style={{
