@@ -1162,23 +1162,24 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 550px)', gap: '2rem', justifyContent: 'center' }}>
                                     <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #f1f5f9' }}>
-                                            <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px' }}>
-                                                <FileText size={24} color="#2563eb" />
+                                            <div style={{ padding: '0.5rem', background: '#fff7ed', borderRadius: '10px' }}>
+                                                <Calculator size={24} color="#f97316" />
                                             </div>
                                             <div>
-                                                <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem' }}>CONTA DE ENERGIA</h4>
-                                                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Dados extraídos da Concessionária</p>
+                                                <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem' }}>RESUMO DA FATURA</h4>
+                                                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Detalhamento financeiro do assinante</p>
                                             </div>
                                         </div>
 
                                         {selectedUc && (
                                             <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', border: '1px solid #e2e8f0' }}>
                                                 <div style={{ gridColumn: '1 / -1' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Unidade Consumidora (UC)</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{selectedUc.numero_uc}</span>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Beneficiário / Unidade Consumidora</label>
+                                                    <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</span>
+                                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {selectedUc.numero_uc}</div>
                                                 </div>
                                                 <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Mês de Referência</label>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Período</label>
                                                     <span style={{ fontWeight: 600, color: '#334155' }}>
                                                         {(() => {
                                                             const [y, m] = formData.mes_referencia.split('-');
@@ -1188,8 +1189,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Vencimento</label>
-                                                    <span style={{ fontWeight: 'bold', color: '#dc2626' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Vencimento Boleto</label>
+                                                    <span style={{ fontWeight: 'bold', color: '#2563eb' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
                                                 </div>
                                             </div>
                                         )}
@@ -1201,76 +1202,99 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
                                                 <span>Energia Compensada:</span>
-                                                <span style={{ fontWeight: 700, color: '#16a34a' }}>- {formData.consumo_compensado} kWh</span>
+                                                <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
                                             </div>
                                             
                                             <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
 
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Consumo em Reais:</span>
+                                                <span>Custo da Energia:</span>
                                                 <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_reais}</span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Iluminação Pública:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.iluminacao_publica || 'R$ 0,00'}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
-                                                <span>Tarifa Mínima/Outros:</span>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency(parseCurrency(formData.tarifa_minima_excedentes) + parseCurrency(formData.outros_lancamentos))}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#16a34a', fontWeight: '600' }}>
+                                                <span>Economia Gerada:</span>
+                                                <span>- {formData.economia_reais}</span>
                                             </div>
                                             
                                             <div style={{ 
                                                 marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px', 
-                                                background: '#f1f5f9', border: '1px solid #cbd5e1',
+                                                background: '#f0fdf4', border: '1px solid #bbf7d0',
                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                             }}>
-                                                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#475569' }}>VALOR TOTAL CONTA</span>
-                                                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' }}>
-                                                    {formatCurrency(formData.valor_concessionaria)}
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>VALOR TOTAL FATURA</span>
+                                                    <span style={{ fontSize: '0.7rem', color: '#166534', opacity: 0.8 }}>Incluindo taxas e impostos</span>
+                                                </div>
+                                                <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
+                                                    {formData.valor_a_pagar}
                                                 </span>
                                             </div>
 
-                                            {/* Linha Digitável Section */}
-                                            {formData.linha_digitavel && (
-                                                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Linha Digitável de Pagamento</label>
-                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                        <code style={{ flex: 1, fontSize: '0.8rem', background: 'white', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', wordBreak: 'break-all', fontFamily: 'monospace' }}>
-                                                            {formData.linha_digitavel}
-                                                        </code>
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(formData.linha_digitavel);
-                                                                showAlert('Código de barras copiado!', 'success');
-                                                            }}
-                                                            style={{ padding: '0.5rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                                                            title="Copiar Código"
-                                                        >
-                                                            <Download size={16} style={{ transform: 'rotate(-90deg)' }} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Original Document Link */}
-                                            {invoice?.concessionaria_pdf_url && (
-                                                <a 
-                                                    href={invoice.concessionaria_pdf_url} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
+                                            {/* Action Buttons */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleDownloadCombined()}
+                                                    disabled={isGeneratingPdf}
                                                     style={{ 
-                                                        marginTop: '1rem',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                                                         padding: '0.85rem', background: 'white', color: '#475569', fontWeight: 700,
-                                                        border: '1px solid #cbd5e1', borderRadius: '10px', textDecoration: 'none', fontSize: '0.9rem',
-                                                        transition: 'all 0.2s'
+                                                        border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '0.9rem',
+                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer', transition: 'all 0.2s'
                                                     }}
-                                                    onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
-                                                    onMouseOut={e => e.currentTarget.style.background = 'white'}
                                                 >
-                                                    <FileText size={18} /> Acessar Conta PDF Original
-                                                </a>
+                                                    {isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} Imprimir
+                                                </button>
+
+                                                {(invoice?.id || localInvoiceId) && (
+                                                    localBoletoUrl ? (
+                                                        <a 
+                                                            href={localBoletoUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            style={{ 
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                                padding: '0.85rem', background: '#2563eb', color: 'white', fontWeight: 700,
+                                                                borderRadius: '10px', textDecoration: 'none', fontSize: '0.9rem',
+                                                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                                            }}
+                                                        >
+                                                            <CreditCard size={18} /> Pagar Boleto
+                                                        </a>
+                                                    ) : (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={handleEmission}
+                                                            disabled={generating}
+                                                            style={{ 
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                                padding: '0.85rem', background: '#FF6600', color: 'white', fontWeight: 700,
+                                                                border: 'none', borderRadius: '10px', fontSize: '0.9rem',
+                                                                cursor: generating ? 'not-allowed' : 'pointer',
+                                                                boxShadow: '0 4px 6px -1px rgba(255, 102, 0, 0.2)'
+                                                            }}
+                                                        >
+                                                            {generating ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />} Emitir Boleto
+                                                        </button>
+                                                    )
+                                                )}
+                                            </div>
+
+                                            {/* Original Document Link - Move to Footer style icon */}
+                                            {invoice?.concessionaria_pdf_url && (
+                                                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                                                    <a 
+                                                        href={invoice.concessionaria_pdf_url} 
+                                                        target="_blank" 
+                                                        rel="noreferrer"
+                                                        style={{ 
+                                                            fontSize: '0.8rem', color: '#64748b', textDecoration: 'none', 
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
+                                                        }}
+                                                    >
+                                                        <FileText size={14} /> Ver Conta da Concessionária
+                                                    </a>
+                                                </div>
                                             )}
                                         </div>
                                     </div>

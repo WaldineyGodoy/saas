@@ -511,45 +511,117 @@ export default function InvoiceListManager() {
                                 ) : (
                                     dayInvoices.map(inv => {
                                         const statusData = {
-                                            'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
-                                            'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
-                                            'a_vencer': { color: '#92400e', label: 'A Vencer', bg: '#fef9c3' }
+                                            'pago': { color: '#166534', label: 'PAGO', bg: '#dcfce7' },
+                                            'atrasado': { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' },
+                                            'a_vencer': { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' }
                                         };
                                         const s = statusData[inv.status] || { color: '#64748b', label: inv.status, bg: '#f1f5f9' };
-                                        const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+                                        const formatCurrencyValue = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
+                                        // Valores da Concessionária
+                                        const ip = Number(inv.iluminacao_publica) || 0;
+                                        const outros = (Number(inv.tarifa_minima) || 0) + (Number(inv.outros_lancamentos) || 0);
+                                        const valorConcessionaria = Number(inv.valor_concessionaria) || (ip + outros + (Number(inv.consumo_reais) || 0));
 
                                         return (
                                             <div
                                                 key={inv.id}
                                                 onClick={() => onInvoiceClick(inv)}
                                                 style={{
-                                                    padding: '0.75rem',
-                                                    borderRadius: '10px',
+                                                    padding: '1rem',
+                                                    borderRadius: '12px',
                                                     background: 'white',
                                                     border: '1px solid #e2e8f0',
                                                     cursor: 'pointer', 
                                                     transition: 'all 0.2s',
                                                     display: 'flex', 
                                                     flexDirection: 'column', 
-                                                    gap: '0.4rem', 
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                    gap: '0.6rem', 
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                                                    position: 'relative',
+                                                    borderLeft: `5px solid ${s.color}`
                                                 }}
-                                                onMouseOver={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                                onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                                onMouseOver={e => {
+                                                    e.currentTarget.style.borderColor = '#3b82f6';
+                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                }}
+                                                onMouseOut={e => {
+                                                    e.currentTarget.style.borderColor = '#e2e8f0';
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                }}
                                             >
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '0.85rem' }}>
-                                                    {inv.consumer_units?.subscribers?.name || 'S/ Assinante'}
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</span>
-                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800, background: s.bg, color: s.color }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {inv.consumer_units?.subscribers?.name || 'Assinante'}
+                                                    </div>
+                                                    <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 900, background: s.bg, color: s.color }}>
                                                         {s.label}
                                                     </span>
                                                 </div>
-                                                <div style={{ fontWeight: 900, color: '#1e293b', fontSize: '0.9rem', marginTop: '0.2rem', textAlign: 'right' }}>
-                                                    {formatCurrency(inv.valor_a_pagar)}
+
+                                                <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>UC: {inv.consumer_units?.numero_uc}</span>
+                                                    <span style={{ fontWeight: 'bold' }}>{inv.consumo_kwh} kWh</span>
                                                 </div>
+
+                                                <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 0' }}></div>
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8' }}>
+                                                        <span>IP + Taxas + Outros:</span>
+                                                        <span style={{ fontWeight: 600 }}>{formatCurrencyValue(ip + outros)}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#475569' }}>CONCESSIONÁRIA:</span>
+                                                        <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>
+                                                            {formatCurrencyValue(valorConcessionaria)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Botão de Pagamento Asaas */}
+                                                {inv.status !== 'pago' && inv.asaas_boleto_url && (
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(inv.asaas_boleto_url, '_blank');
+                                                        }}
+                                                        style={{
+                                                            marginTop: '0.5rem',
+                                                            padding: '0.5rem',
+                                                            background: '#2563eb',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '0.4rem',
+                                                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                                                        }}
+                                                    >
+                                                        <CreditCard size={14} /> PAGAR BOLETO
+                                                    </button>
+                                                )}
+                                                
+                                                {inv.status === 'pago' && (
+                                                    <div style={{ 
+                                                        marginTop: '0.5rem', 
+                                                        padding: '0.4rem', 
+                                                        textAlign: 'center', 
+                                                        background: '#f0fdf4', 
+                                                        color: '#166534', 
+                                                        borderRadius: '6px', 
+                                                        fontSize: '0.7rem', 
+                                                        fontWeight: 'bold',
+                                                        border: '1px solid #bbf7d0'
+                                                    }}>
+                                                        PAGAMENTO CONFIRMADO
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })
