@@ -392,8 +392,26 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     };
 
     const handleIssueZeroInvoice = async () => {
+        const userInput = window.prompt(
+            "Digite o mês de referência para a fatura zerada (Formato: MM/AAAA):", 
+            `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`
+        );
+        
+        if (!userInput) return;
+
+        const datePattern = /^(\d{2})\/(\d{4})$/;
+        const match = userInput.trim().match(datePattern);
+        
+        if (!match) {
+            showAlert('Formato inválido. Use MM/AAAA.', 'error');
+            return;
+        }
+
+        const m = match[1];
+        const y = match[2];
+
         const confirm = await showConfirm(
-            'Deseja criar uma fatura avulsa zerada para este mês?', 
+            `Confirmar emissão de fatura zerada para o mês ${m}/${y}?`, 
             'Emitir Fatura Zerada',
             'Sim, Emitir',
             'Cancelar'
@@ -402,13 +420,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
         setLoading(true);
         try {
-            const currentDate = new Date();
-            // Default to current month start for mes_referencia
-            const mesReferencia = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+            const mesReferencia = `${y}-${m}-01`;
             
-            // Calculate a normal due date (next month)
+            // Calculate a normal due date
             const dueDay = formData.dia_vencimento || 10; 
-            let vDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, dueDay);
+            let vDate = new Date(Number(y), Number(m), dueDay);
             const vencimento = vDate.toISOString().split('T')[0];
 
             const payload = {
