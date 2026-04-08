@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { FileText, X, AlertCircle, CheckCircle, Clock, ExternalLink, View } from 'lucide-react';
-import InvoiceSummaryModal from './InvoiceSummaryModal';
+import InvoiceFormModal from './InvoiceFormModal';
 
 export default function UCInvoicesModal({ uc, onClose }) {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
+    const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState(null);
 
     useEffect(() => {
         if (uc?.id) {
@@ -140,7 +140,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
                                         </td>
                                         <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                                             <button
-                                                onClick={() => setSelectedInvoiceForSummary(inv)}
+                                                onClick={() => setSelectedInvoiceForEdit(inv)}
                                                 style={{ 
                                                     background: '#eff6ff', 
                                                     color: '#3b82f6', 
@@ -179,11 +179,12 @@ export default function UCInvoicesModal({ uc, onClose }) {
                 </div>
             </div>
 
-            {selectedInvoiceForSummary && (
-                <InvoiceSummaryModal
-                    invoice={selectedInvoiceForSummary}
-                    consumerUnit={uc}
-                    onClose={() => setSelectedInvoiceForSummary(null)}
+            {selectedInvoiceForEdit && (
+                <InvoiceFormModal
+                    invoice={selectedInvoiceForEdit}
+                    ucs={[uc]}
+                    onClose={() => setSelectedInvoiceForEdit(null)}
+                    onSave={fetchInvoices}
                 />
             )}
         </div>

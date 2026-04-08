@@ -914,7 +914,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         </div>
                     )}
                     <div>
-                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>{(invoice || localInvoiceId) ? 'Editar Fatura' : 'Gerar Fatura'}</h3>
+                        <h3 style={{ fontSize: '1.25rem', color: '#1e293b', fontWeight: 'bold' }}>Fatura</h3>
                         <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Após processamento da Conta de Energia Concessionária</p>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
