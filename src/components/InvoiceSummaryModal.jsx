@@ -85,67 +85,79 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         cancelado: { bg: '#f1f5f9', text: '#475569', label: 'CANCELADO' }
     };
 
-    const currentStatus = statusColors[invoice.status] || { bg: '#f1f5f9', text: '#475569', label: invoice.status?.toUpperCase() };
+        const getUtilityDueDate = () => {
+            if (!invoice.vencimento) return 'N/A';
+            if (consumerUnit?.dia_vencimento) {
+                const parts = invoice.vencimento.split('-');
+                if (parts.length >= 3) {
+                    const year = parts[0];
+                    const month = parts[1];
+                    const day = String(consumerUnit.dia_vencimento).padStart(2, '0');
+                    return `${day}/${month}/${year}`;
+                }
+            }
+            return new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
+        };
 
-    return (
-        <div className="modal-overlay" style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
-        }}>
-            <div className="modal-content" style={{
-                backgroundColor: 'white', borderRadius: '20px', width: '90%', maxWidth: '600px',
-                maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+        return (
+            <div className="modal-overlay" style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
             }}>
-                <button onClick={onClose} style={{
-                    position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none',
-                    border: 'none', cursor: 'pointer', color: '#64748b', zIndex: 10
+                <div className="modal-content" style={{
+                    backgroundColor: 'white', borderRadius: '20px', width: '90%', maxWidth: '600px',
+                    maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
                 }}>
-                    <X size={24} />
-                </button>
-
-                <div style={{ padding: '2rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                        <div style={{ padding: '0.5rem', background: (branding?.primary_color || '#003366') + '10', borderRadius: '10px' }}>
-                            <FileText size={24} color={branding?.primary_color || '#003366'} />
-                        </div>
-                        <div>
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
-                                Resumo da Conta de Energia
-                            </h2>
-                            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
-                                Detalhamento técnico e financeiro
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Status e Identificação */}
-                    <div style={{ 
-                        background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', 
-                        marginBottom: '1.5rem', border: '1px solid #e2e8f0',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                    <button onClick={onClose} style={{
+                        position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none',
+                        border: 'none', cursor: 'pointer', color: '#64748b', zIndex: 10
                     }}>
-                        <div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Assinante</div>
-                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
-                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
-                        </div>
-                        <span style={{ 
-                            padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800,
-                            background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`
-                        }}>
-                            {currentStatus.label}
-                        </span>
-                    </div>
-
-                    {/* Grid de Valores */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                        <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                            <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</div>
-                            <div style={{ fontWeight: 800, color: '#ef4444', fontSize: '1.1rem' }}>
-                                {invoice.vencimento ? new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                        <X size={24} />
+                    </button>
+    
+                    <div style={{ padding: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                            <div style={{ padding: '0.5rem', background: (branding?.primary_color || '#003366') + '10', borderRadius: '10px' }}>
+                                <FileText size={24} color={branding?.primary_color || '#003366'} />
+                            </div>
+                            <div>
+                                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
+                                    Resumo da Conta de Energia
+                                </h2>
+                                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
+                                    Detalhamento técnico e financeiro
+                                </p>
                             </div>
                         </div>
+    
+                        {/* Status e Identificação */}
+                        <div style={{ 
+                            background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', 
+                            marginBottom: '1.5rem', border: '1px solid #e2e8f0',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Assinante</div>
+                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
+                            </div>
+                            <span style={{ 
+                                padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800,
+                                background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`
+                            }}>
+                                {currentStatus.label}
+                            </span>
+                        </div>
+    
+                        {/* Grid de Valores */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</div>
+                                <div style={{ fontWeight: 800, color: '#ef4444', fontSize: '1.1rem' }}>
+                                    {getUtilityDueDate()}
+                                </div>
+                            </div>
                         <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
                             <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Mês Referência</div>
                             <div style={{ fontWeight: 800, color: '#166534', fontSize: '1.1rem' }}>

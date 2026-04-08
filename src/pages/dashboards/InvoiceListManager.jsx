@@ -65,6 +65,7 @@ export default function InvoiceListManager() {
                         concessionaria,
                         modalidade,
                         status,
+                        dia_vencimento,
                         subscribers!consumer_units_subscriber_id_fkey(name)
                     )
                 `);
@@ -389,8 +390,9 @@ export default function InvoiceListManager() {
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
-                const date = new Date(inv.vencimento + 'T12:00:00');
-                const day = date.getUTCDate();
+                const diaDaConta = inv.consumer_units?.dia_vencimento;
+                const rawDay = diaDaConta ? diaDaConta : parseInt(inv.vencimento.split('-')[2], 10);
+                const day = parseInt(rawDay, 10);
                 if (!acc[day]) acc[day] = [];
                 acc[day].push(inv);
             }
