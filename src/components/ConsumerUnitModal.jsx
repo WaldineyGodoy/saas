@@ -447,7 +447,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 status: 'pago' // Green color
             };
 
-            const { error } = await supabase.from('invoices').insert([payload]);
+            const { error } = await supabase.from('invoices').upsert(payload, { onConflict: 'uc_id,mes_referencia' });
             if (error) throw error;
 
             showAlert('Fatura zerada criada com sucesso!', 'success');
