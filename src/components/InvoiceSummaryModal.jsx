@@ -44,7 +44,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 body: JSON.stringify({
                     identification: invoice.linha_digitavel,
                     description: `Pagamento Fatura ${invoice.mes_referencia} - UC ${consumerUnit?.numero_uc}`,
-                    value: invoice.valor_a_pagar
+                    value: Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))
                 })
             });
 
@@ -127,7 +127,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     }}>
                         <div>
                             <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Assinante</div>
-                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscriber?.name || 'N/A'}</div>
+                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
                             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
                         </div>
                         <span style={{ 
@@ -196,9 +196,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 border: `1px solid ${branding?.secondary_color || '#FF6600'}20`,
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                             }}>
-                                <span style={{ fontSize: '1rem', fontWeight: 800, color: branding?.primary_color || '#003366' }}>TOTAL A PAGAR</span>
+                                <span style={{ fontSize: '1rem', fontWeight: 800, color: branding?.primary_color || '#003366' }}>TOTAL CONCESSIONÁRIA</span>
                                 <span style={{ fontSize: '1.5rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                    {formatCurrency(invoice.valor_a_pagar)}
+                                    {formatCurrency(Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))}
                                 </span>
                             </div>
                         </div>
