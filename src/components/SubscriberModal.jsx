@@ -3,9 +3,9 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -37,9 +37,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [showConsolidationHelp, setShowConsolidationHelp] = useState(false);
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [activeTab, setActiveTab] = useState('dados'); // 'dados' | 'endereco' | 'ucs' | 'faturas'
+    const [activeTab, setActiveTab] = useState('dados'); // 'dados' | 'endereco' | 'ucs' | 'faturas' | 'comunicacao'
     const [totalUnpaidGlobal, setTotalUnpaidGlobal] = useState(0);
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
+    
+    // Manual Communication States
+    const [manualMessage, setManualMessage] = useState('');
+    const [manualFile, setManualFile] = useState(null);
+    const [isSendingManualWA, setIsSendingManualWA] = useState(false);
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
 
@@ -538,6 +543,72 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         } finally {
             setIsGeneratingPdf(false);
             setInvoiceToDownload(null);
+        }
+    };
+
+    const handleSendManualWhatsApp = async () => {
+        if (!manualMessage.trim() && !manualFile) {
+            showAlert('Por favor, digite uma mensagem ou anexe um arquivo.', 'warning');
+            return;
+        }
+
+        const confirmed = await showConfirm(
+            `Deseja enviar esta mensagem para ${formData.name}?`,
+            'Confirmar Envio',
+            'Sim, Enviar',
+            'Cancelar'
+        );
+        if (!confirmed) return;
+
+        setIsSendingManualWA(true);
+        try {
+            let mediaBase64 = null;
+            let fileName = null;
+
+            if (manualFile) {
+                const reader = new FileReader();
+                const filePromise = new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                });
+                reader.readAsDataURL(manualFile);
+                mediaBase64 = await filePromise;
+                fileName = manualFile.name;
+            }
+
+            const response = await sendWhatsapp(
+                formData.phone,
+                manualMessage,
+                null, // mediaUrl
+                mediaBase64,
+                fileName
+            );
+
+            if (response.error) throw new Error(response.error);
+
+            showAlert('Mensagem enviada com sucesso!', 'success');
+            
+            // Log to history
+            await addHistory('subscriber', subscriber.id, 'whatsapp_manual', {
+                message: manualMessage,
+                file: fileName,
+                status: 'sent'
+            }, `Comunicado WhatsApp: ${manualMessage.substring(0, 50)}${manualMessage.length > 50 ? '...' : ''}`);
+
+            // Clear fields
+            setManualMessage('');
+            setManualFile(null);
+            
+            // Refetch history if it's open
+            if (showHistory) {
+                // Since history is in a separate component/logic, usually it re-fetches on mount
+                // or we could trigger a refresh if we had a refresh function
+            }
+        } catch (error) {
+            console.error('Error sending manual WhatsApp:', error);
+            showAlert('Erro ao enviar mensagem: ' + error.message, 'error');
+        } finally {
+            setIsSendingManualWA(false);
         }
     };
 
@@ -1237,7 +1308,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
                         { id: 'endereco', label: 'Endereço', icon: Home, color: '#f59e0b', bg: '#fff7ed' },
                         { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
-                        { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' }
+                        { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
+                        { id: 'comunicacao', label: 'Comunicação', icon: MessageSquare, color: '#ec4899', bg: '#fdf2f8' }
                     ].map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -2071,6 +2143,112 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                 )}
                             </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'comunicacao' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
+                                <div style={{ 
+                                    background: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
+                                        <MessageSquare size={20} color="#ec4899" />
+                                        Enviar Comunicado Manual
+                                    </h4>
+
+                                    <div style={{ marginBottom: '1.5rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
+                                            Mensagem
+                                        </label>
+                                        <textarea
+                                            value={manualMessage}
+                                            onChange={(e) => setManualMessage(e.target.value)}
+                                            placeholder="Digite aqui o comunicado ou notificação para o assinante..."
+                                            style={{
+                                                width: '100%',
+                                                height: '150px',
+                                                padding: '1rem',
+                                                border: '1px solid #cbd5e1',
+                                                borderRadius: '8px',
+                                                fontSize: '0.95rem',
+                                                lineHeight: '1.5',
+                                                outline: 'none',
+                                                resize: 'none',
+                                                transition: 'border-color 0.2s',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            onFocus={(e) => e.target.style.borderColor = '#ec4899'}
+                                            onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
+                                                Anexar Arquivo (Opcional)
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type="file"
+                                                    onChange={(e) => setManualFile(e.target.files[0])}
+                                                    style={{ display: 'none' }}
+                                                    id="manual-file-upload"
+                                                />
+                                                <label 
+                                                    htmlFor="manual-file-upload"
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.75rem',
+                                                        padding: '0.75rem 1.25rem',
+                                                        background: '#f8fafc',
+                                                        border: '2px dashed #cbd5e1',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.9rem',
+                                                        color: manualFile ? '#ec4899' : '#64748b',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: 500,
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis'
+                                                    }}
+                                                >
+                                                    <Paperclip size={18} />
+                                                    {manualFile ? manualFile.name : 'Escolher arquivo...'}
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleSendManualWhatsApp}
+                                            disabled={isSendingManualWA || (!manualMessage.trim() && !manualFile)}
+                                            style={{
+                                                marginTop: 'auto',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.75rem',
+                                                padding: '0.75rem 2rem',
+                                                background: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#f1f5f9' : '#ec4899',
+                                                color: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#94a3b8' : 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontWeight: 700,
+                                                cursor: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'not-allowed' : 'pointer',
+                                                transition: 'all 0.2s',
+                                                boxShadow: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'none' : '0 4px 12px rgba(236, 72, 153, 0.25)'
+                                            }}
+                                        >
+                                            {isSendingManualWA ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Comunicado'}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

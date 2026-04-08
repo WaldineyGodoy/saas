@@ -1,4 +1,19 @@
 ---
+ 
+ ## [2026-04-07] - Configurações de Conta de Energia e Pagamento Automático (23:00)
+ 
+ ### Atualizações Registradas:
+ 1. **Nova Área de Configurações (`Conta de Energia`)**:
+     - Criação de espaço dedicado para regras de processamento de faturas.
+     - Ícone identificador: `Zap` (Energia/Velocidade).
+ 2. **Gatilho de Pagamento Automático**:
+     - Implementação de controle (On/Off) para autorizar a liquidação automática de contas de energia junto à concessionária após o recebimento do assinante.
+ 3. **Persistência de Regras**:
+     - Armazenamento em `integrations_config` sob o serviço `energy_rules`.
+ 4. **Resumo de Painel de Configurações**:
+     - Consolidação da documentação de todos os módulos existentes: Usuários, WhatsApp, E-mail, Financeiro, Energia e Branding.
+
+---
 
 ## [2026-04-07] - Estabilização de PDF e Reenvio Automático (21:05)
 

@@ -26,6 +26,7 @@ Sempre que uma nova fatura é emitida ou baixada, o assinante recebe:
 | **Emissão de Fatura** | Disparo de Notificações | Envio simultâneo via e-mail e WhatsApp. |
 | **Login do Usuário** | Checagem de Perfil | Redireciona para o `SubscriberDashboard` ou `AdminDashboard`. |
 | **Aceite de Novo Lead** | Conversão em Assinante | Criação automática do perfil de cobrança no Asaas. |
+| **Pagamento de Fatura** | Pagamento Automático | Se autorizado em Configurações, liquida a conta de energia na concessionária. |
 
 ---
 
