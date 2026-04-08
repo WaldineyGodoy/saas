@@ -52,6 +52,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [localBoletoUrl, setLocalBoletoUrl] = useState(invoice?.asaas_boleto_url || null);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     const [subscriber, setSubscriber] = useState(null);
+    const [activeTab, setActiveTab] = useState('geral');
     const hiddenRef = useRef(null);
 
     // Helpers
@@ -920,410 +921,335 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+                {/* Tabs Navigation */}
+                <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: 'white', padding: '0 1.25rem' }}>
+                    {[
+                        { id: 'geral', label: 'Identificação', icon: <Info size={18} /> },
+                        { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
+                        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={18} /> },
+                        { id: 'resumo', label: 'Resumo', icon: <Calculator size={18} /> }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '1rem 1.25rem',
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontSize: '0.9rem',
+                                fontWeight: activeTab === tab.id ? '700' : '500',
+                                color: activeTab === tab.id ? '#2563eb' : '#64748b',
+                                borderBottom: activeTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                    {/* UC Selection & PDF Import */}
-                    <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
-                            <select
-                                required
-                                value={formData.uc_id}
-                                onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
-                                disabled={!!(invoice || localInvoiceId)}
-                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.95rem', background: 'white' }}
-                            >
-                                <option value="">Selecione a UC...</option>
-                                {ucs && ucs.map(uc => (
-                                    <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
-                                ))}
-                            </select>
-                        </div>
+                <form onSubmit={handleSubmit} style={{ padding: '2rem' }}>
 
-                        {!invoice && !localInvoiceId && (
-                            <div>
-                                <label htmlFor="pdf-upload" style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.7rem 1.2rem',
-                                    background: isParsing ? '#f1f5f9' : '#ebf5ff',
-                                    color: isParsing ? '#94a3b8' : '#2563eb',
-                                    borderRadius: '6px',
-                                    cursor: isParsing ? 'not-allowed' : 'pointer',
-                                    fontSize: '0.9rem',
-                                    fontWeight: 'bold',
-                                    border: '1px dashed #2563eb',
-                                    transition: 'all 0.2s',
-                                    whiteSpace: 'nowrap'
-                                }}>
-                                    {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                                    {isParsing ? 'Processando...' : 'Lançamento via PDF'}
-                                </label>
-                                <input 
-                                    id="pdf-upload"
-                                    type="file" 
-                                    accept="application/pdf"
-                                    onChange={handlePdfUpload}
-                                    disabled={isParsing}
-                                    style={{ display: 'none' }} 
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                        {/* Month/Year */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Mês Referência</label>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <select value={formData.mes_referencia.split('-')[1]} onChange={e => handleMonthChange('month', e.target.value)} style={{ flex: 1, padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                    {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => <option key={m} value={m}>{['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i]}</option>)}
-                                </select>
-                                <select value={formData.mes_referencia.split('-')[0]} onChange={e => handleMonthChange('year', e.target.value)} style={{ width: '80px', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                        {/* Reading Date */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Data da Leitura</label>
-                            <input type="date" value={formData.data_leitura} onChange={e => setFormData({ ...formData, data_leitura: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                        </div>
-                        {/* Due Date */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Vencimento</label>
-                            <input type="date" required value={formData.vencimento} onChange={e => setFormData({ ...formData, vencimento: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                        </div>
-                        {/* Status */}
-                        {canManageStatus && (
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Status</label>
-                                <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                    <option value="a_vencer">A Vencer</option>
-                                    <option value="pago">Pago</option>
-                                    <option value="atrasado">Atrasado</option>
-                                </select>
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ height: '1px', background: '#e2e8f0', margin: '1rem 0' }}></div>
-
-                    {/* Data Entry Section */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-
-                        {/* Left Column: Inputs */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <h4 style={{ color: '#334155', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Zap size={18} /> Dados de Consumo</h4>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Consumo (kWh)</label>
-                                <input type="number" step="any" required value={formData.consumo_kwh} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="0" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Consumo Compensado (kWh)</label>
-                                <input type="number" step="any" value={formData.consumo_compensado} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-
-                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><DollarSign size={18} /> Valores de energia e Adicionais</h4>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Energia Compensada (R$)</label>
-                                <input type="text" readOnly value={formData.energia_compensada_reais} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', fontWeight: 600 }} />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Iluminação Pública (R$)</label>
-                                <input type="text" value={formData.iluminacao_publica} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Tarifa Mínima e Excedentes (R$)</label>
-                                <input type="text" readOnly value={formData.tarifa_minima_excedentes} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f8fafc' }} />
-                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.2rem' }}>Calculado: (Consumo - Compensado) * Tarifa</p>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem', color: '#64748b' }}>Outros Lançamentos (R$)</label>
-                                <input type="text" value={formData.outros_lancamentos} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="R$ 0,00" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-
-                            {(invoice?.id || localInvoiceId) && !invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
-                                <div style={{ marginTop: '0.5rem' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleEmission()}
-                                        disabled={generating}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.5rem',
-                                            background: '#FF6600',
-                                            color: 'white',
-                                            border: 'none',
-                                            padding: '0.8rem 1rem',
-                                            borderRadius: '6px',
-                                            cursor: 'pointer',
-                                            fontWeight: 'bold',
-                                            fontSize: '0.9rem',
-                                            width: '100%',
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 4px 6px -1px rgba(255, 102, 0, 0.2)'
-                                        }}
-                                        onMouseOver={e => { e.currentTarget.style.background = '#e65c00'; }}
-                                        onMouseOut={e => { e.currentTarget.style.background = '#FF6600'; }}
+                    {/* Tab Content */}
+                    <div style={{ minHeight: '350px' }}>
+                        {activeTab === 'geral' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+                                {/* UC Selection */}
+                                <div style={{ marginBottom: '2rem' }}>
+                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
+                                    <select
+                                        required
+                                        value={formData.uc_id}
+                                        onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
+                                        disabled={!!(invoice || localInvoiceId)}
+                                        style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
                                     >
-                                        {generating ? 'Gerando...' : <><CreditCard size={18} /> Emitir Boleto Agora</>}
-                                    </button>
+                                        <option value="">Selecione a UC...</option>
+                                        {ucs && ucs.map(uc => (
+                                            <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Right Column: Calculated Results */}
-                        <div style={{ background: '#f1f5f9', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                            <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calculator size={18} /> Detalhamento da Fatura</h4>
-
-                            {selectedUc && (
-                                <div style={{ background: '#003366', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', border: '1px solid #002244' }}>
-                                    <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '0.2rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Assinante</label>
-                                        <span style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.95rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Número da UC</label>
-                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>{selectedUc.numero_uc}</span>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Identificação</label>
-                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>{selectedUc.titular_conta}</span>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Mês Referência</label>
-                                        <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.85rem' }}>
-                                            {(() => {
-                                                const [y, m] = formData.mes_referencia.split('-');
-                                                const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                                                return `${months[parseInt(m) - 1]}/${y}`;
-                                            })()}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Vencimento</label>
-                                        <span style={{ fontWeight: 'bold', color: '#ff8a8a', fontSize: '0.85rem' }}>
-                                            {formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
-                                        </span>
-                                    </div>
-                                    <div style={{ gridColumn: '1 / -1', marginTop: '0.2rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Tipo de Ligação</span>
-                                            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', color: '#ffffff', textTransform: 'capitalize' }}>{selectedUc.tipo_ligacao}</span>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+                                    {/* Month/Year */}
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Referência</label>
+                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <select value={formData.mes_referencia.split('-')[1]} onChange={e => handleMonthChange('month', e.target.value)} style={{ flex: 1, padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+                                                {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map((m, i) => <option key={m} value={m}>{['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i]}</option>)}
+                                            </select>
+                                            <select value={formData.mes_referencia.split('-')[0]} onChange={e => handleMonthChange('year', e.target.value)} style={{ width: '100px', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+                                                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
+                                            </select>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>Consumo Compensado ({formData.consumo_compensado || 0} kWh):</span>
-                                    <span style={{ fontWeight: 600 }}>R$ {(Number(formData.consumo_compensado || 0) * (Number(selectedUc?.tarifa_concessionaria) || 0)).toFixed(2).replace('.', ',')}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.4rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>
-                                    <span>Valor da Tarifa:</span>
-                                    <span>R$ {Number(selectedUc?.tarifa_concessionaria || 0).toFixed(4).replace('.', ',')}</span>
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: '0.2rem' }}>
-                                    <span style={{ color: '#64748b', fontWeight: 600 }}>Custo da Energia Compensada (Líquida):</span>
-                                    <span style={{ fontWeight: 'bold', color: '#0f172a' }}>
-                                        {(() => {
-                                            const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
-                                            const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
-                                            const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
-                                            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
-                                            const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
-                                            return formatCurrency(energiaCompensadaReais);
-                                        })()}
-                                    </span>
-                                </div>
-
-                                <div style={{ height: '1px', background: '#cbd5e1', margin: '0.5rem 0' }}></div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Iluminação Pública:</span>
-                                    <span>{formData.iluminacao_publica || 'R$ 0,00'}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Tarifa Mínima e Excedentes:</span>
-                                    <span>{formData.tarifa_minima_excedentes || 'R$ 0,00'}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                                    <span style={{ color: '#64748b' }}>+ Outros Lançamentos:</span>
-                                    <span>{formData.outros_lancamentos || 'R$ 0,00'}</span>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', background: '#dcfce7', padding: '0.6rem', borderRadius: '6px', border: '1px solid #bbf7d0', margin: '0.5rem 0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#166534' }}>
-                                        <span style={{ fontWeight: 600 }}>Economia Gerada:</span>
-                                        <span style={{ fontWeight: 'bold' }}>
-                                            - {(() => {
-                                                const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
-                                                const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
-                                                const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
-                                                const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
-                                                const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
-                                                return formatCurrency(economiaReais);
-                                            })()}
-                                        </span>
+                                    {/* Reading Date */}
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Data da Leitura</label>
+                                        <input type="date" value={formData.data_leitura} onChange={e => setFormData({ ...formData, data_leitura: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#15803d' }}>
-                                        <span>Desconto Aplicado:</span>
-                                        <span>{selectedUc?.desconto_assinante || 0}%</span>
+                                    {/* Due Date */}
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vencimento</label>
+                                        <input type="date" required value={formData.vencimento} onChange={e => setFormData({ ...formData, vencimento: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#dc2626', fontWeight: 'bold' }} />
                                     </div>
-                                </div>
-
-                                <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
-                                    <div style={{
-                                        marginLeft: 'auto',
-                                        width: 'fit-content',
-                                        padding: '1rem',
-                                        background: '#f0fdf4',
-                                        border: '2px solid #22c55e',
-                                        borderRadius: '12px',
-                                        textAlign: 'right'
-                                    }}>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Valor Total da Fatura CRM</label>
-                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#14532d' }}>
-                                            {(() => {
-                                                const rawConsumo = Number(formData.consumo_kwh) || 0;
-                                                const rawCompensado = Number(formData.consumo_compensado) || 0;
-                                                const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
-                                                const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
-                                                const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
-                                                
-                                                const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
-                                                const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
-                                                const ip = parseCurrency(formData.iluminacao_publica);
-                                                const outros = parseCurrency(formData.outros_lancamentos);
-                                                
-                                                const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
-                                                return formatCurrency(totalCalculado);
-                                            })()}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {(invoice?.asaas_boleto_url || invoice?.concessionaria_pdf_url) && (
-                                    <div style={{ 
-                                        marginTop: '1.5rem', 
-                                        padding: '1rem', 
-                                        background: 'white', 
-                                        borderRadius: '12px', 
-                                        border: '1px solid #e2e8f0', 
-                                        display: 'flex', 
-                                        justifyContent: 'center', 
-                                        gap: '1.5rem', 
-                                        flexWrap: 'wrap',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                                    }}>
-                                        {localBoletoUrl ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                                <a href={localBoletoUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
-                                                    <CreditCard size={18} /> Visualizar Boleto
-                                                </a>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={handleEmission} 
-                                                    disabled={generating}
-                                                    style={{ 
-                                                        background: 'none', border: 'none', padding: 0, color: '#64748b', 
-                                                        fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left', 
-                                                        textDecoration: 'underline', opacity: 0.8 
-                                                    }}
-                                                >
-                                                    {generating ? 'Emitindo...' : 'Atualizar Cobrança'}
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button 
-                                                type="button" 
-                                                onClick={handleEmission} 
-                                                disabled={generating}
-                                                style={{ 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    gap: '0.6rem', 
-                                                    color: '#1e40af', 
-                                                    fontWeight: 'bold', 
-                                                    border: 'none', 
-                                                    background: 'none', 
-                                                    cursor: 'pointer', 
-                                                    fontSize: '0.9rem', 
-                                                    padding: 0,
-                                                    transition: 'opacity 0.2s' 
-                                                }}
-                                            >
-                                                {generating ? <Loader2 size={18} className="spin-animation" /> : <CreditCard size={18} />}
-                                                Emitir Boleto
-                                            </button>
-                                        )}
-
-                                        {invoice?.concessionaria_pdf_url && (
-                                            <a href={invoice.concessionaria_pdf_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: branding?.primary_color || '#003366', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', transition: 'opacity 0.2s' }}>
-                                                <FileText size={18} /> Fatura Concessionária
-                                            </a>
-                                        )}
-                                        
-                                        {localBoletoUrl && (
+                                    {/* Status */}
+                                    {canManageStatus && (
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-full">
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status da Fatura</label>
                                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDownloadCombined()}
-                                                    disabled={isGeneratingPdf}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.6rem',
-                                                        color: '#ff6600',
-                                                        fontWeight: 'bold',
-                                                        border: 'none',
-                                                        background: 'none',
-                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                        fontSize: '0.9rem',
-                                                        transition: 'opacity 0.2s'
-                                                    }}
-                                                >
-                                                    {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Download size={18} />}
-                                                    Download PDF
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleResendNotification(invoice || { id: localInvoiceId, ...formData })}
-                                                    disabled={isGeneratingPdf}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.6rem',
-                                                        color: '#166534',
-                                                        fontWeight: 'bold',
-                                                        border: 'none',
-                                                        background: 'none',
-                                                        cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                        fontSize: '0.9rem',
-                                                        transition: 'opacity 0.2s'
-                                                    }}
-                                                >
-                                                    {isGeneratingPdf ? <Loader2 size={18} className="spin-animation" /> : <Send size={18} />}
-                                                    Reenviar
-                                                </button>
+                                                {['a_vencer', 'pago', 'atrasado'].map((status) => (
+                                                    <button
+                                                        key={status}
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, status })}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.75rem',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid',
+                                                            borderColor: formData.status === status ? (status === 'pago' ? '#22c55e' : status === 'atrasado' ? '#dc2626' : '#2563eb') : '#cbd5e1',
+                                                            background: formData.status === status ? (status === 'pago' ? '#f0fdf4' : status === 'atrasado' ? '#fef2f2' : '#eff6ff') : 'white',
+                                                            color: formData.status === status ? (status === 'pago' ? '#166534' : status === 'atrasado' ? '#991b1b' : '#1e40af') : '#64748b',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '0.9rem',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '0.5rem'
+                                                        }}
+                                                    >
+                                                        {status === 'pago' && <CheckCircle size={16} />}
+                                                        {status === 'atrasado' && <AlertCircle size={16} />}
+                                                        {status === 'a_vencer' && <Calculator size={16} />}
+                                                        {status === 'a_vencer' ? 'A Vencer' : status === 'pago' ? 'Pago' : 'Atrasado'}
+                                                    </button>
+                                                ))}
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'consumo' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <div style={{ background: '#eff6ff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #bfdbfe', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h4 style={{ color: '#1e40af', fontWeight: 'bold', marginBottom: '0.25rem' }}>Lançamento Automático</h4>
+                                        <p style={{ color: '#3b82f6', fontSize: '0.85rem' }}>Importe a fatura em PDF para preenchimento instantâneo.</p>
+                                    </div>
+                                    {!invoice && !localInvoiceId && (
+                                        <div>
+                                            <label htmlFor="pdf-upload" style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                padding: '0.85rem 1.5rem',
+                                                background: isParsing ? '#f1f5f9' : '#2563eb',
+                                                color: 'white',
+                                                borderRadius: '10px',
+                                                cursor: isParsing ? 'not-allowed' : 'pointer',
+                                                fontSize: '0.95rem',
+                                                fontWeight: 'bold',
+                                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                                                {isParsing ? 'Processando...' : 'Fazer Upload do PDF'}
+                                            </label>
+                                            <input id="pdf-upload" type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={isParsing} style={{ display: 'none' }} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
+                                            <Zap size={18} className="text-blue-500" /> Consumo (kWh)
+                                        </label>
+                                        <input type="number" step="any" required value={formData.consumo_kwh} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="Ex: 450" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
+                                            <Calculator size={18} className="text-green-500" /> Consumo Compensado (kWh)
+                                        </label>
+                                        <input type="number" step="any" value={formData.consumo_compensado} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} placeholder="Ex: 400" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'financeiro' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Iluminação Pública (R$)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
+                                            <input type="text" value={formData.iluminacao_publica.replace('R$', '').trim()} onChange={e => handleCurrencyChange('iluminacao_publica', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Outros Lançamentos (R$)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
+                                            <input type="text" value={formData.outros_lancamentos.replace('R$', '').trim()} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 col-span-full">
+                                        <h4 style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 'bold', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Calculator size={18} /> Resultados Calculados
+                                        </h4>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <p style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>T. Mínima e Excedentes</p>
+                                                <p style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1e293b' }}>{formData.tarifa_minima_excedentes}</p>
+                                            </div>
+                                            <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                                <p style={{ fontSize: '0.7rem', color: '#166534', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Energia Compensada (Líquida)</p>
+                                                <p style={{ fontSize: '1.1rem', fontWeight: '800', color: '#15803d' }}>{formData.energia_compensada_reais}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {(invoice?.id || localInvoiceId) && !invoice?.asaas_boleto_url && subscriberBillingMode === 'individualizada' && (
+                                    <div style={{ marginTop: '2rem' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEmission()}
+                                            disabled={generating}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
+                                                background: '#FF6600', color: 'white', border: 'none', padding: '1rem',
+                                                borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem',
+                                                width: '100%', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(255, 102, 0, 0.2)'
+                                            }}
+                                        >
+                                            {generating ? <Loader2 className="animate-spin" size={20} /> : <><CreditCard size={20} /> Emitir Boleto via Asaas</>}
+                                        </button>
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        )}
+
+                        {activeTab === 'resumo' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 450px)', gap: '2rem', justifyContent: 'center' }}>
+                                    {/* Sidebar integrated as Main Content here */}
+                                    <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ color: '#334155', fontWeight: 'bold', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}>
+                                            <Calculator size={22} className="text-blue-600" /> Detalhamento da Fatura
+                                        </h4>
+
+                                        {selectedUc && (
+                                            <div style={{ background: '#003366', padding: '1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', border: '1px solid #002244', boxShadow: '0 10px 15px -3px rgba(0, 51, 102, 0.2)' }}>
+                                                <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem', marginBottom: '0.25rem' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Titular da Conta</label>
+                                                    <span style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '1rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_fatura?.name || 'Não Inf.'}</span>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Unidade Consumidora</label>
+                                                    <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.9rem' }}>{selectedUc.numero_uc}</span>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Ref.</label>
+                                                    <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.9rem' }}>
+                                                        {(() => {
+                                                            const [y, m] = formData.mes_referencia.split('-');
+                                                            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                                            return `${months[parseInt(m) - 1]}/${y}`;
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                                <div style={{ gridColumn: '1 / -1', marginTop: '0.25rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Vencimento</label>
+                                                        <span style={{ fontWeight: 'bold', color: '#ffaaaa', fontSize: '0.95rem' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Ligação</label>
+                                                        <span style={{ background: 'rgba(255,255,255,0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', color: '#ffffff', textTransform: 'uppercase' }}>{selectedUc.tipo_ligacao}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                                                <span>Consumo Direto (kWh)</span>
+                                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{formData.consumo_kwh}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                                                <span>Compensação (kWh)</span>
+                                                <span style={{ fontWeight: 600, color: '#166534' }}>- {formData.consumo_compensado}</span>
+                                            </div>
+                                            
+                                            <div style={{ height: '1px', background: '#e2e8f0', margin: '0.5rem 0' }}></div>
+
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 'bold', color: '#0f172a' }}>
+                                                <span>Total a Pagar CRM:</span>
+                                                <span style={{ fontSize: '1.25rem', color: '#14532d' }}>{formData.valor_a_pagar}</span>
+                                            </div>
+
+                                            <div style={{ background: '#dcfce7', padding: '0.75rem', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 'bold' }}>Economia Garantida:</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: '900', color: '#15803d' }}>{formData.economia_reais}</span>
+                                            </div>
+
+                                            {(invoice?.asaas_boleto_url || invoice?.concessionaria_pdf_url) && (
+                                                <div style={{ 
+                                                    marginTop: '1.5rem', 
+                                                    padding: '1.25rem', 
+                                                    background: 'white', 
+                                                    borderRadius: '12px', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    display: 'flex', 
+                                                    flexDirection: 'column',
+                                                    gap: '1rem',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                                }}>
+                                                    {localBoletoUrl ? (
+                                                        <a href={localBoletoUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', background: '#eff6ff', color: '#1e40af', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.9rem', padding: '0.75rem', borderRadius: '8px' }}>
+                                                            <CreditCard size={18} /> Ver Boleto Bancário
+                                                        </a>
+                                                    ) : (
+                                                        <button type="button" onClick={handleEmission} disabled={generating} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', background: '#eff6ff', color: '#1e40af', fontWeight: 'bold', border: 'none', padding: '0.75rem', borderRadius: '8px', cursor: 'pointer' }}>
+                                                            <CreditCard size={18} /> Gerar Boleto Agora
+                                                        </button>
+                                                    )}
+
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        {invoice?.concessionaria_pdf_url && (
+                                                            <a href={invoice.concessionaria_pdf_url} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: '1px solid #e2e8f0', color: '#475569', fontWeight: 'bold', textDecoration: 'none', fontSize: '0.8rem', padding: '0.6rem', borderRadius: '8px' }}>
+                                                                <FileText size={16} /> Conta Original
+                                                            </a>
+                                                        )}
+                                                        {localBoletoUrl && (
+                                                            <button type="button" onClick={() => handleDownloadCombined()} disabled={isGeneratingPdf} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: '1px solid #fed7aa', color: '#ea580c', fontWeight: 'bold', background: 'none', cursor: 'pointer', fontSize: '0.8rem', padding: '0.6rem', borderRadius: '8px' }}>
+                                                                <Download size={16} /> PDF Completo
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer Actions */}
