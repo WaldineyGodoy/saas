@@ -391,6 +391,58 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         }
     };
 
+    const handleIssueZeroInvoice = async () => {
+        const confirm = await showConfirm(
+            'Deseja criar uma fatura avulsa zerada para este mês?', 
+            'Emitir Fatura Zerada',
+            'Sim, Emitir',
+            'Cancelar'
+        );
+        if (!confirm) return;
+
+        setLoading(true);
+        try {
+            const currentDate = new Date();
+            // Default to current month start for mes_referencia
+            const mesReferencia = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+            
+            // Calculate a normal due date (next month)
+            const dueDay = formData.dia_vencimento || 10; 
+            let vDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, dueDay);
+            const vencimento = vDate.toISOString().split('T')[0];
+
+            const payload = {
+                uc_id: consumerUnit.id,
+                mes_referencia: mesReferencia,
+                vencimento: vencimento,
+                consumo_kwh: 0,
+                consumo_reais: 0,
+                iluminacao_publica: 0,
+                outros_lancamentos: 0,
+                economia_reais: 0,
+                consumo_compensado: 0,
+                tarifa_minima: 0,
+                data_leitura: null,
+                linha_digitavel: null,
+                pix_string: null,
+                valor_a_pagar: 0,
+                valor_concessionaria: 0,
+                status: 'pago' // Green color
+            };
+
+            const { error } = await supabase.from('invoices').insert([payload]);
+            if (error) throw error;
+
+            showAlert('Fatura zerada criada com sucesso!', 'success');
+            setShowInvoicesModal(true); // Open the invoices modal to show it
+        } catch (err) {
+            console.error(err);
+            showAlert('Erro ao criar fatura zerada: ' + err.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Find subscriber name for header
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
@@ -777,7 +829,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#22c55e', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(34, 197, 94, 0.2)' }}>
                                                 <Upload size={18} /> Upload Fatura
                                             </button>
-                                            <button type="button" onClick={() => setShowIssueInvoiceModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#3b82f6', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)' }}>
+                                            <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '0.75rem', border: 'none', borderRadius: '8px', background: '#3b82f6', color: 'white', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)' }}>
                                                 <PlusCircle size={18} /> Emitir Fatura
                                             </button>
                                         </div>
