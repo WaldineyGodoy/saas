@@ -28,3 +28,9 @@ verify_jwt = false
 
 [functions.trigger-faturista]
 verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.pay-asaas-bill]
+verify_jwt = true
