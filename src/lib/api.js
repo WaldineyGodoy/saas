@@ -161,6 +161,11 @@ export const sendInvoiceEmail = async (to, subject, html = null, attachments = [
     return callFunction('send-email', { to, subject, html, attachments, variables });
 };
 
+export const createAutentiqueDocument = async (payload) => {
+    return callFunction('create-autentique-document', payload);
+};
+
+
 
 /**
  * Helper unificado para enviar notificações de fatura (Email + WhatsApp)

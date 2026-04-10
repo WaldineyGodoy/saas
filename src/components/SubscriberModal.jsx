@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -47,6 +47,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
+    const contractPage1Ref = useRef(null);
+    const contractPage2Ref = useRef(null);
+
+    // Contratos States
+    const [signatures, setSignatures] = useState([]);
+    const [loadingSignatures, setLoadingSignatures] = useState(false);
+    const [isCreatingContract, setIsCreatingContract] = useState(false);
+    const [contractFile, setContractFile] = useState(null);
+    const [contractMessage, setContractMessage] = useState("Olá [Nome], segue o link para assinatura do seu contrato de Energia, comece a economizar clicando no link : [Link]");
+
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
         try {
@@ -119,7 +129,142 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         setConsolidatedInvoices(data || []);
     }, []);
 
-    const fetchInvoices = useCallback(async (subscriberId) => {
+    const fetchSignatures = useCallback(async (subscriberId) => {
+        if (!subscriberId) return;
+        setLoadingSignatures(true);
+        try {
+            const { data, error } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('signer_id', subscriberId)
+                .eq('signer_type', 'subscriber')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setSignatures(data || []);
+        } catch (error) {
+            console.error('Error fetching signatures:', error);
+        } finally {
+            setLoadingSignatures(false);
+        }
+    }, []);
+
+    const handleSendContract = async () => {
+        if (!subscriber?.id) return;
+        setIsCreatingContract(true);
+        try {
+            // 1. Capture Page 1
+            const canvas1 = await html2canvas(contractPage1Ref.current, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            // 2. Capture Page 2
+            const canvas2 = await html2canvas(contractPage2Ref.current, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            // 3. Create PDF
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = 210;
+            const pageHeight = 297;
+
+            pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            pdf.addPage();
+            pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+
+            const pdfBase64 = pdf.output('datauristring').split(',')[1];
+            const fileName = `Contrato_${formData.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
+
+            // 4. Send to Autentique
+            const result = await createAutentiqueDocument({
+                name: fileName,
+                file: pdfBase64,
+                signer_name: formData.name,
+                signer_email: formData.email
+            });
+
+            if (!result || !result.id) throw new Error('Falha ao criar documento na Autentique');
+
+            // 5. Save to signatures table
+            const { data: newSig, error: sigErr } = await supabase
+                .from('signatures')
+                .insert({
+                    signer_id: subscriber.id,
+                    signer_type: 'subscriber',
+                    document_name: fileName,
+                    autentique_id: result.id,
+                    autentique_url: result.url,
+                    status: 'PENDING'
+                })
+                .select()
+                .single();
+
+            if (sigErr) throw sigErr;
+
+            // 6. Send Notifications
+            const messageWithLink = `${contractMessage}\n\nLink para assinatura: ${result.url}`;
+            
+            // WhatsApp
+            try {
+                let instanceName = 'default';
+                const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+                if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
+                
+                await sendWhatsapp(formData.phone.replace(/\D/g, ''), messageWithLink, null, null, null, instanceName);
+            } catch (waErr) {
+                console.error('Erro ao enviar WhatsApp:', waErr);
+            }
+
+            // Email (optional/default)
+            try {
+                await supabase.functions.invoke('send-email', {
+                    body: {
+                        to: formData.email,
+                        subject: 'Contrato de Adesão - B2W Energia',
+                        text: messageWithLink
+                    }
+                });
+            } catch (emailErr) {
+                console.error('Erro ao enviar E-mail:', emailErr);
+            }
+
+            showAlert('Contrato gerado e enviado com sucesso!', 'success');
+            fetchSignatures(subscriber.id);
+            addHistory('subscriber', subscriber.id, 'envio_contrato', { document_name: fileName, autentique_id: result.id });
+
+        } catch (error) {
+            console.error('Error sending contract:', error);
+            showAlert('Erro ao enviar contrato: ' + error.message, 'error');
+        } finally {
+            setIsCreatingContract(false);
+        }
+    };
+
+    const handleResendContractLink = async (sig) => {
+        const confirm = await showConfirm('Deseja reenviar os links de assinatura para o cliente?', 'Reenviar Links');
+        if (!confirm) return;
+
+        try {
+            const messageWithLink = `${contractMessage || 'Olá, segue novamente o link para assinatura do seu contrato.'}\n\nLink: ${sig.autentique_url}`;
+            
+            // WhatsApp
+            let instanceName = 'default';
+            const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+            if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
+
+            await sendWhatsapp(formData.phone.replace(/\D/g, ''), messageWithLink, null, null, null, instanceName);
+            
+            showAlert('Links de assinatura reenviados!', 'success');
+            addHistory('subscriber', subscriber.id, 'reenvio_contrato', { document_name: sig.document_name });
+        } catch (error) {
+            showAlert('Erro ao reenviar: ' + error.message, 'error');
+        }
+    };
         if (!subscriberId) return;
         setLoadingInvoices(true);
         try {
@@ -219,12 +364,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 const total = unpaidSum.reduce((acc, inv) => acc + (inv.valor_a_pagar || 0), 0);
                 setTotalUnpaidGlobal(total);
             }
+
         } catch (error) {
             console.error('Error fetching invoices:', error);
         } finally {
             setLoadingInvoices(false);
         }
     }, [invoiceMonthFilter, billingMode]);
+
+    const totalToConsolidate = invoices
+        .filter(inv => {
+            const status = inv.status?.trim().toLowerCase();
+            return status !== 'pago' && 
+                   status !== 'cancelado' && 
+                   (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
+        })
+        .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
+
 
     useEffect(() => {
         fetchOriginators();
@@ -258,6 +414,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             fetchInvoices(subscriber.id);
         }
     }, [subscriber?.id, activeTab, fetchInvoices]);
+
+    useEffect(() => {
+        if (subscriber?.id && activeTab === 'contratos') {
+            fetchSignatures(subscriber.id);
+            setContractMessage(`Olá ${subscriber.name}, segue o link para assinatura do seu contrato de Energia, comece a economizar clicando no link: `);
+        }
+    }, [subscriber?.id, activeTab, fetchSignatures, subscriber?.name]);
+
 
 
     const calculateConsolidatedDueDate = (day) => {
@@ -1251,6 +1415,107 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         })
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
+    const renderHiddenContractPage1 = () => (
+        <div ref={contractPage1Ref} style={{ 
+            width: '210mm', height: '297mm', background: 'white', overflow: 'hidden', padding: '15mm', position: 'relative',
+            border: `4mm solid ${branding?.primary_color || '#003366'}`, boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
+                {branding?.logo_url ? (
+                    <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
+                ) : (
+                    <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '24px', color: branding?.primary_color || '#003366' }}>
+                        {branding?.company_name || 'B2W ENERGIA'}
+                    </div>
+                )}
+            </div>
+            <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '8mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
+            </h1>
+            <p style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '8mm' }}>{branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}</p>
+            
+            <div style={{ fontSize: '11px', lineHeight: '1.5', textAlign: 'justify' }}>
+                <p><strong>(I) ASSOCIAÇÃO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, associação de direito privado, CNPJ 64.561.352/0001-07, com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000;</p>
+                <p style={{ marginTop: '3mm' }}><strong>(II) ASSOCIADO:</strong> {formData.name}, {formData.cpf_cnpj}, {formData.rua}, {formData.numero}, {formData.bairro}, {formData.cidade}/{formData.uf}, CEP: {formData.cep}.</p>
+                
+                <h2 style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '6mm', borderBottom: '1px solid #eee', paddingBottom: '2mm' }}>CLÁUSULA 1 – DO OBJETO</h2>
+                <p>O presente Termo tem por objeto o ingresso do ASSOCIADO na ASSOCIAÇÃO para participação no modelo de geração compartilhada, com compensação de créditos de energia elétrica no Sistema de Compensação de Energia Elétrica (SCEE), nos termos da Lei nº 14.300/2022 e normas da ANEEL.</p>
+                
+                <h2 style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '6mm', borderBottom: '1px solid #eee', paddingBottom: '2mm' }}>CLÁUSULA 2 – DA NATUREZA DA OPERAÇÃO</h2>
+                <p>O ASSOCIADO declara ciência de que não há venda direta de energia elétrica, mas sim a fruição de créditos decorrentes da geração própria da ASSOCIAÇÃO, proporcional à sua quota-parte.</p>
+                
+                <h2 style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '6mm', borderBottom: '1px solid #eee', paddingBottom: '2mm' }}>CLÁUSULA 3 – DA VIGÊNCIA E RESCISÃO</h2>
+                <p>Este termo entra em vigor na data de sua assinatura e terá prazo indeterminado. O ASSOCIADO poderá solicitar o desligamento a qualquer momento, mediante aviso prévio de 90 (noventa) dias, para ajustes operacionais junto à distribuidora.</p>
+                
+                <h2 style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '6mm', borderBottom: '1px solid #eee', paddingBottom: '2mm' }}>CLÁUSULA 6 – DOS VALORES</h2>
+                <p>O ASSOCIADO pagará à ASSOCIAÇÃO um valor mensal referente à sua contribuição para manutenção das usinas. Este valor será calculado aplicando-se um <strong>desconto garantido de 20% (vinte por cento)</strong> sobre a tarifa de energia da concessionária local que seria aplicada ao consumo compensado.</p>
+            </div>
+            
+            <div style={{ position: 'absolute', bottom: '15mm', left: '15mm', right: '15mm', fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '4mm', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Documento gerado eletronicamente via CRM B2W Energia</span>
+                <span>Página 1 de 2</span>
+            </div>
+        </div>
+    );
+
+    const renderHiddenContractPage2 = () => (
+        <div ref={contractPage2Ref} style={{ 
+            width: '210mm', height: '297mm', background: 'white', overflow: 'hidden', padding: '15mm', position: 'relative',
+            border: `4mm solid ${branding?.primary_color || '#003366'}`, boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
+                {branding?.logo_url ? (
+                    <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
+                ) : (
+                    <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '24px', color: branding?.primary_color || '#003366' }}>
+                        {branding?.company_name || 'B2W ENERGIA'}
+                    </div>
+                )}
+            </div>
+            <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '12mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
+            </h1>
+            
+            <div style={{ fontSize: '12px', lineHeight: '1.6', textAlign: 'justify' }}>
+                <p><strong>OUTORGANTE:</strong> {formData.name}, doravante denominado "ASSOCIADO", com os dados constantes na página 1 deste instrumento.</p>
+                <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, doravante denominada "ASSOCIAÇÃO".</p>
+                
+                <p style={{ marginTop: '8mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
+                
+                <div style={{ marginTop: '10mm', padding: '5mm', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <p style={{ fontWeight: 'bold', marginBottom: '4mm', fontSize: '11px' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
+                    <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+                                <th style={{ textAlign: 'left', padding: '2mm 0' }}>Nº Unidade (UC)</th>
+                                <th style={{ textAlign: 'left', padding: '2mm 0' }}>Titular na Concessionária</th>
+                                <th style={{ textAlign: 'left', padding: '2mm 0' }}>Endereço</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {consumerUnits.map(uc => (
+                                <tr key={uc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                    <td style={{ padding: '3mm 0' }}>{uc.numero_uc}</td>
+                                    <td style={{ padding: '3mm 0' }}>{uc.titular_conta}</td>
+                                    <td style={{ padding: '3mm 0' }}>{uc.address?.cidade}/{uc.address?.uf}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style={{ marginTop: '20mm', textAlign: 'center' }}>
+                <p>Assinado eletronicamente via plataforma Autentique.</p>
+            </div>
+            
+            <div style={{ position: 'absolute', bottom: '15mm', left: '15mm', right: '15mm', fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '4mm', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Documento gerado eletronicamente via CRM B2W Energia</span>
+                <span>Página 2 de 2</span>
+            </div>
+        </div>
+    );
+
     const totalToConsolidate = invoices
         .filter(inv => {
             const status = inv.status?.trim().toLowerCase();
@@ -1299,7 +1564,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'endereco', label: 'Endereço', icon: Home, color: '#f59e0b', bg: '#fff7ed' },
                         { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
                         { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
-                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
+                        { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
+                        { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' }
                     ].map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -2142,49 +2408,41 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                             </div>
                         )}
 
-                        {activeTab === 'comunicacao' && (
+                            </div>
+                        )}
+
+                        {activeTab === 'contratos' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
                                 <div style={{ 
                                     background: 'white', 
                                     padding: '2rem', 
                                     borderRadius: '12px', 
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                    border: '1px solid #e2e8f0', 
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' 
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
-                                            <MessageCircle size={20} color="#25D366" />
-                                            Enviar Mensagem de Whatsapp
-                                        </h4>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowHistory(true)}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                                background: '#fff', color: '#25D366',
-                                                border: '1px solid #25D366',
-                                                padding: '0.4rem 0.8rem', borderRadius: '6px',
-                                                cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#f0fdf4' }}
-                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff' }}
-                                        >
-                                            <History size={16} /> Histórico
-                                        </button>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
+                                        <FileText size={20} color="#003366" />
+                                        Novo Contrato para Assinatura
+                                    </h4>
+
+                                    <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#0369a1', lineHeight: '1.4' }}>
+                                            <Info size={14} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} />
+                                            O contrato será <strong>gerado automaticamente</strong> com os dados do assinante e as UCs vinculadas. Não é necessário anexar arquivos.
+                                        </p>
                                     </div>
 
                                     <div style={{ marginBottom: '1.5rem' }}>
                                         <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
-                                            Mensagem
+                                            Mensagem de Acompanhamento (WhatsApp/E-mail)
                                         </label>
                                         <textarea
-                                            value={manualMessage}
-                                            onChange={(e) => setManualMessage(e.target.value)}
-                                            placeholder="Digite aqui o comunicado ou notificação para o assinante..."
+                                            value={contractMessage}
+                                            onChange={(e) => setContractMessage(e.target.value)}
+                                            placeholder="Digite a mensagem que o assinante receberá junto com o link..."
                                             style={{
                                                 width: '100%',
-                                                height: '150px',
+                                                height: '100px',
                                                 padding: '1rem',
                                                 border: '1px solid #cbd5e1',
                                                 borderRadius: '8px',
@@ -2195,76 +2453,160 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 transition: 'border-color 0.2s',
                                                 fontFamily: 'inherit'
                                             }}
-                                            onFocus={(e) => e.target.style.borderColor = '#25D366'}
+                                            onFocus={(e) => e.target.style.borderColor = '#003366'}
                                             onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
                                         />
+                                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                                            Nota: O link de assinatura será adicionado automaticamente ao final desta mensagem.
+                                        </p>
                                     </div>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
-                                                Anexar Arquivo (Opcional)
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <input
-                                                    type="file"
-                                                    onChange={(e) => setManualFile(e.target.files[0])}
-                                                    style={{ display: 'none' }}
-                                                    id="manual-file-upload"
-                                                />
-                                                <label 
-                                                    htmlFor="manual-file-upload"
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.75rem',
-                                                        padding: '0.75rem 1.25rem',
-                                                        background: '#f8fafc',
-                                                        border: '2px dashed #cbd5e1',
-                                                        borderRadius: '8px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.9rem',
-                                                        color: manualFile ? '#25D366' : '#64748b',
-                                                        transition: 'all 0.2s',
-                                                        fontWeight: 500,
-                                                        whiteSpace: 'nowrap',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis'
-                                                    }}
-                                                >
-                                                    <Paperclip size={18} />
-                                                    {manualFile ? manualFile.name : 'Escolher arquivo...'}
-                                                </label>
+                                    <button
+                                        type="button"
+                                        onClick={handleSendContract}
+                                        disabled={isCreatingContract || !subscriber?.id}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.8rem',
+                                            background: isCreatingContract ? '#f1f5f9' : '#003366',
+                                            color: isCreatingContract ? '#94a3b8' : 'white',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontWeight: 700,
+                                            cursor: isCreatingContract ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '0.75rem',
+                                            transition: 'all 0.2s',
+                                            boxShadow: isCreatingContract ? 'none' : '0 4px 12px rgba(0, 51, 102, 0.2)'
+                                        }}
+                                    >
+                                        {isCreatingContract ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
+                                        {isCreatingContract ? 'Gerando e Enviando...' : 'Gerar e Enviar para Assinatura Eletrônica'}
+                                    </button>
+                                </div>
+
+                                {/* Histórico de Contratos */}
+                                <div style={{ 
+                                    background: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #e2e8f0' 
+                                }}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 700 }}>
+                                        Histórico de Assinaturas
+                                    </h4>
+                                    
+                                    {loadingSignatures ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem', gap: '0.5rem' }}>
+                                            <Loader2 size={32} className="spin-animation" color="#003366" />
+                                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Carregando histórico...</span>
+                                        </div>
+                                    ) : signatures.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            {signatures.map(sig => (
+                                                <div key={sig.id} style={{
+                                                    padding: '1.25rem',
+                                                    border: '1px solid #f1f5f9',
+                                                    borderRadius: '10px',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    background: '#f8fafc',
+                                                    transition: 'transform 0.2s'
+                                                }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>
+                                                            {sig.document_name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', gap: '1rem' }}>
+                                                            <span>📅 {new Date(sig.created_at).toLocaleDateString('pt-BR')}</span>
+                                                            <span>⏰ {new Date(sig.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        </div>
+                                                        <div style={{ marginTop: '0.75rem' }}>
+                                                            <span style={{
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 800,
+                                                                padding: '0.25rem 0.75rem',
+                                                                borderRadius: '20px',
+                                                                background: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'REJECTED' ? '#fee2e2' : sig.status === 'CREATED' ? '#dbeafe' : '#fef9c3',
+                                                                color: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'REJECTED' ? '#991b1b' : sig.status === 'CREATED' ? '#1e40af' : '#854d0e',
+                                                                border: `1px solid ${(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'REJECTED' ? '#fecaca' : sig.status === 'CREATED' ? '#bfdbfe' : '#fef08a'}`,
+                                                                textTransform: 'uppercase',
+                                                                letterSpacing: '0.05em'
+                                                            }}>
+                                                                {(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? 'Assinado' : 
+                                                                 sig.status === 'REJECTED' ? 'Rejeitado' : 
+                                                                 sig.status === 'CREATED' ? 'Criado' : 
+                                                                 'Aguardando assinatura'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => window.open(sig.autentique_url, '_blank')}
+                                                            title="Ver no Autentique"
+                                                            style={{
+                                                                padding: '0.6rem',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #e2e8f0',
+                                                                background: 'white',
+                                                                color: '#64748b',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1' }}
+                                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.borderColor = '#e2e8f0' }}
+                                                        >
+                                                            <Eye size={18} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleResendContractLink(sig)}
+                                                            title="Reenviar Links (WhatsApp/Email)"
+                                                            style={{
+                                                                padding: '0.6rem',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #dcfce7',
+                                                                background: '#f0fdf4',
+                                                                color: '#166534',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseOver={e => { e.currentTarget.style.backgroundColor = '#dcfce7' }}
+                                                            onMouseOut={e => { e.currentTarget.style.backgroundColor = '#f0fdf4' }}
+                                                        >
+                                                            <RefreshCw size={18} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div style={{ 
+                                            textAlign: 'center', 
+                                            color: '#94a3b8', 
+                                            padding: '3rem 2rem', 
+                                            border: '2px dashed #f1f5f9', 
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '1rem'
+                                        }}>
+                                            <FileText size={48} style={{ opacity: 0.2 }} />
+                                            <div>
+                                                <p style={{ margin: 0, fontWeight: 600 }}>Nenhum contrato enviado ainda.</p>
+                                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>Os documentos enviados via Autentique aparecerão aqui.</p>
                                             </div>
                                         </div>
-
-                                        <button
-                                            type="button"
-                                            onClick={handleSendManualWhatsApp}
-                                            disabled={isSendingManualWA || (!manualMessage.trim() && !manualFile)}
-                                            style={{
-                                                marginTop: 'auto',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.75rem',
-                                                padding: '0.75rem 2rem',
-                                                background: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#f1f5f9' : '#25D366',
-                                                color: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? '#94a3b8' : 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontWeight: 700,
-                                                cursor: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'not-allowed' : 'pointer',
-                                                transition: 'all 0.2s',
-                                                boxShadow: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'none' : '0 4px 12px rgba(37, 211, 102, 0.25)'
-                                            }}
-                                        >
-                                            {isSendingManualWA ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
-                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Mensagem'}
-                                        </button>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         )}
+
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -2411,6 +2753,12 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 </div>
                 <div ref={hiddenConsolidatedRef}>
                     {consolidatedToDownload && renderHiddenConsolidatedDetail(consolidatedToDownload)}
+                </div>
+                <div ref={contractPage1Ref}>
+                    {renderHiddenContractPage1()}
+                </div>
+                <div ref={contractPage2Ref}>
+                    {renderHiddenContractPage2()}
                 </div>
             </div>
 
