@@ -16,6 +16,7 @@ export default function SettingsLayout() {
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
         { id: 'energy', label: 'Conta de Energia', icon: Zap, desc: 'Regras de Faturamento' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
+        { id: 'autentique', label: 'Assinatura Eletrônica', icon: Code, desc: 'Configuração Autentique' },
     ];
 
     const renderContent = () => {
@@ -32,6 +33,8 @@ export default function SettingsLayout() {
                 return <EnergyAccountSettings />;
             case 'branding':
                 return <CustomizationSettings />;
+            case 'autentique':
+                return <IntegrationSettings serviceName="autentique_api" title="Assinatura Eletrônica" description="Configuração da API Autentique (GraphQL)" />;
             default:
                 return null;
         }

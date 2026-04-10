@@ -48,10 +48,10 @@ export default function IntegrationSettings({ serviceName, title, description })
                 : [];
 
             setFormData({
-                endpoint_url: data.endpoint_url || '',
+                endpoint_url: data.endpoint_url || (serviceName === 'autentique_api' ? 'https://api.autentique.com.br/v2/graphql' : ''),
                 api_key: data.api_key || '',
                 secret_key: data.secret_key || '',
-                sandbox_endpoint_url: data.sandbox_endpoint_url || '',
+                sandbox_endpoint_url: data.sandbox_endpoint_url || (serviceName === 'autentique_api' ? 'https://api.autentique.com.br/v2/graphql' : ''),
                 sandbox_api_key: data.sandbox_api_key || '',
                 sandbox_secret_key: data.sandbox_secret_key || '',
                 environment: data.environment || 'production',
@@ -222,7 +222,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 </div>
 
-                {serviceName === 'financial_api' && (
+                {(serviceName === 'financial_api' || serviceName === 'autentique_api') && (
                     <div style={{ display: 'flex', background: '#e2e8f0', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                         <button
                             type="button"
@@ -283,7 +283,7 @@ export default function IntegrationSettings({ serviceName, title, description })
             </div>
 
             <form onSubmit={handleSave} style={{ padding: '2rem' }}>
-                {serviceName === 'financial_api' && formData.environment === 'sandbox' && (
+                {(serviceName === 'financial_api' || serviceName === 'autentique_api') && formData.environment === 'sandbox' && (
                     <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
                         <h4 style={{ margin: '0 0 1rem 0', color: '#92400e', fontSize: '0.95rem' }}>Configurações de Sandbox</h4>
 
@@ -291,7 +291,7 @@ export default function IntegrationSettings({ serviceName, title, description })
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>Sandbox Endpoint URL</label>
                             <input
                                 type="url"
-                                placeholder="https://sandbox.asaas.com/api/v3"
+                                placeholder={serviceName === 'autentique_api' ? "https://api.autentique.com.br/v2/graphql" : "https://sandbox.asaas.com/api/v3"}
                                 value={formData.sandbox_endpoint_url}
                                 onChange={e => setFormData({ ...formData, sandbox_endpoint_url: e.target.value })}
                                 style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #fcd34d', fontSize: '0.95rem', background: '#fff' }}
@@ -321,14 +321,14 @@ export default function IntegrationSettings({ serviceName, title, description })
                     </div>
                 )}
                 {/* Production Fields - Visible only in production mode or for other services */}
-                {(serviceName !== 'financial_api' || formData.environment === 'production') && (
+                {((serviceName !== 'financial_api' && serviceName !== 'autentique_api') || formData.environment === 'production') && (
                     <>
                         {serviceName !== 'resend_api' && (
                             <div style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Endpoint URL</label>
                                 <input
                                     type="url"
-                                    placeholder="https://api.exemplo.com/v1"
+                                    placeholder={serviceName === 'autentique_api' ? "https://api.autentique.com.br/v2/graphql" : "https://api.exemplo.com/v1"}
                                     value={formData.endpoint_url}
                                     onChange={e => setFormData({ ...formData, endpoint_url: e.target.value })}
                                     style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
@@ -734,6 +734,63 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 style={{ padding: '0.7rem 1.5rem', background: sendingTest ? '#94a3b8' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingTest ? 'default' : 'pointer', fontWeight: 600 }}
                             >
                                 {sendingTest ? 'Enviando...' : 'Enviar Teste'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* TEST AREA - Autentique API */}
+                {serviceName === 'autentique_api' && (
+                    <div style={{ borderTop: '2px dashed #cbd5e1', paddingTop: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', color: '#334155' }}>Teste de Conexão (Autentique)</h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Verifica a validade do Token via query GraphQL simples.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setLoading(true);
+                                    try {
+                                        const endpoint = formData.environment === 'sandbox' ? formData.sandbox_endpoint_url : formData.endpoint_url;
+                                        const token = formData.environment === 'sandbox' ? formData.sandbox_api_key : formData.api_key;
+
+                                        if (!token || !endpoint) throw new Error('Endpoint e Token são obrigatórios para o teste.');
+
+                                        // Simple GraphQL query to list ourselves (check token validity)
+                                        const query = `query { viewer { id email } }`;
+                                        
+                                        const response = await fetch(endpoint, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}`
+                                            },
+                                            body: JSON.stringify({ query })
+                                        });
+
+                                        const result = await response.json();
+
+                                        if (result.errors) {
+                                            throw new Error(result.errors[0].message);
+                                        }
+
+                                        if (result.data?.viewer) {
+                                            showAlert(`Conexão OK! Autenticado como: ${result.data.viewer.email}`, 'success');
+                                        } else {
+                                            throw new Error('Falha ao obter dados do usuário. Verifique o token.');
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                        showAlert('Falha na conexão: ' + err.message, 'error');
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading || (formData.environment === 'production' ? !formData.api_key : !formData.sandbox_api_key)}
+                                style={{ padding: '0.7rem 1.5rem', background: loading ? '#94a3b8' : '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}
+                            >
+                                {loading ? 'Testando...' : 'Testar Conexão'}
                             </button>
                         </div>
                     </div>
