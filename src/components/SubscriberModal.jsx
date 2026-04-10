@@ -55,7 +55,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [loadingSignatures, setLoadingSignatures] = useState(false);
     const [isCreatingContract, setIsCreatingContract] = useState(false);
     const [contractFile, setContractFile] = useState(null);
-    const [contractMessage, setContractMessage] = useState("Olá [Nome], segue o link para assinatura do seu contrato de Energia, comece a economizar clicando no link : [Link]");
+    const [signatureLink, setSignatureLink] = useState('');
+    const [contractDraft, setContractDraft] = useState('');
 
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
@@ -206,8 +207,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             if (sigErr) throw sigErr;
 
+            // 5.1 Save link to subscribers table for quick access
+            await supabase
+                .from('subscribers')
+                .update({ signature_link: result.url })
+                .eq('id', subscriber.id);
+
+            setSignatureLink(result.url);
+
             // 6. Send Notifications
-            const messageWithLink = `${contractMessage}\n\nLink para assinatura: ${result.url}`;
+            const messageWithLink = `Olá ${formData.name}, segue o link para assinatura do seu contrato de energia: ${result.url}\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua economia.`;
             
             // WhatsApp
             try {
@@ -250,7 +259,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!confirm) return;
 
         try {
-            const messageWithLink = `${contractMessage || 'Olá, segue novamente o link para assinatura do seu contrato.'}\n\nLink: ${sig.autentique_url}`;
+            const messageWithLink = `Olá, segue novamente o link para assinatura do seu contrato de energia: ${sig.autentique_url}\n\nPor favor, assine digitalmente para darmos prosseguimento.`;
             
             // WhatsApp
             let instanceName = 'default';
@@ -406,6 +415,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 originator_id: subscriber.originator_id || '',
                 portal_credentials: subscriber.portal_credentials || { url: '', login: '', password: '' }
             });
+            setSignatureLink(subscriber.signature_link || '');
             fetchConsumerUnits(subscriber.id);
             fetchConsolidatedInvoices(subscriber.id);
         }
@@ -420,9 +430,38 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     useEffect(() => {
         if (subscriber?.id && activeTab === 'contratos') {
             fetchSignatures(subscriber.id);
-            setContractMessage(`Olá ${subscriber.name}, segue o link para assinatura do seu contrato de Energia, comece a economizar clicando no link: `);
+            
+            const fullAddress = `${subscriber.rua || ''}, ${subscriber.numero || ''} ${subscriber.complemento || ''} - ${subscriber.bairro || ''}, ${subscriber.cidade || ''}/${subscriber.uf || ''}`;
+            
+            const template = `TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA 
+
+ASSOCIAÇÃO DE USINAS B2W ENERGIA 
+
+(I). ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07 com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, neste ato representada na forma do seu Estatuto Social (“Associação”) por seu presidente; 
+
+(II).Associado: ${subscriber.name || ''}, ${subscriber.cpf_cnpj || ''}, ${fullAddress}
+
+CLÁUSULA 1 – DO OBJETO 
+O presente Termo tem por objeto o ingresso do ASSOCIADO na ASSOCIAÇÃO DE USINAS B2W ENERGIA, para participação no modelo de geração compartilhada, com compensação de créditos de energia elétrica no Sistema de Compensação de Energia Elétrica (SCEE), nos termos da Lei nº 14.300/2022 e normas da ANEEL, junto à distribuidora COSERN. 
+
+CLÁUSULA 2 – DA NATUREZA DA OPERAÇÃO 
+O ASSOCIADO declara ciência de que não há venda direta de energia elétrica, mas sim a participação em sistema de geração compartilhada por meio de associação. 
+
+CLÁUSULA 3 – DA ECONOMIA E BENEFÍCIOS 
+O ASSOCIADO terá direito a descontos na fatura de energia elétrica, proporcionais à sua cota de participação na geração da associação. 
+
+CLÁUSULA 4 – DOS PRAZOS 
+A adesão tem prazo indeterminado, podendo ser rescindida por ambas as partes com aviso prévio de 90 dias. 
+
+CLÁUSULA 5 – DA PROTEÇÃO DE DADOS 
+As partes declaram conformidade com a Lei Geral de Proteção de Dados (LGPD). 
+
+CLÁUSULA 6 – DO FORO 
+Fica eleito o foro da comarca de Teófilo Otoni/MG para dirimir quaisquer dúvidas.`;
+
+            setContractDraft(template);
         }
-    }, [subscriber?.id, activeTab, fetchSignatures, subscriber?.name]);
+    }, [subscriber?.id, activeTab, fetchSignatures, subscriber]);
 
 
 
@@ -2322,30 +2361,73 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                                     <div style={{ marginBottom: '1.5rem' }}>
                                         <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
-                                            Mensagem de Acompanhamento (WhatsApp/E-mail)
+                                            Minuta do Contrato (Para conferência)
                                         </label>
                                         <textarea
-                                            value={contractMessage}
-                                            onChange={(e) => setContractMessage(e.target.value)}
-                                            placeholder="Digite a mensagem que o assinante receberá junto com o link..."
+                                            value={contractDraft}
+                                            onChange={(e) => setContractDraft(e.target.value)}
+                                            placeholder="A minuta será gerada automaticamente..."
                                             style={{
                                                 width: '100%',
-                                                height: '100px',
+                                                height: '250px',
                                                 padding: '1rem',
                                                 border: '1px solid #cbd5e1',
                                                 borderRadius: '8px',
-                                                fontSize: '0.95rem',
+                                                fontSize: '0.9rem',
                                                 lineHeight: '1.5',
                                                 outline: 'none',
-                                                resize: 'none',
+                                                resize: 'vertical',
                                                 transition: 'border-color 0.2s',
-                                                fontFamily: 'inherit'
+                                                fontFamily: 'monospace',
+                                                background: '#f8fafc'
                                             }}
                                             onFocus={(e) => e.target.style.borderColor = '#003366'}
                                             onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
                                         />
+                                    </div>
+
+                                    <div style={{ marginBottom: '1.5rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
+                                            Link de Assinatura (Autentique)
+                                        </label>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <input
+                                                type="text"
+                                                value={signatureLink}
+                                                onChange={(e) => setSignatureLink(e.target.value)}
+                                                placeholder="Link será exibido aqui após geração..."
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '0.75rem',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.95rem',
+                                                    outline: 'none',
+                                                    background: '#ffffff'
+                                                }}
+                                            />
+                                            {signatureLink && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(signatureLink);
+                                                        showAlert('Link copiado!', 'success');
+                                                    }}
+                                                    style={{
+                                                        padding: '0.75rem',
+                                                        background: '#f1f5f9',
+                                                        border: '1px solid #cbd5e1',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    title="Copiar Link"
+                                                >
+                                                    <Copy size={18} color="#475569" />
+                                                </button>
+                                            )}
+                                        </div>
                                         <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                                            Nota: O link de assinatura será adicionado automaticamente ao final desta mensagem.
+                                            Este link é salvo automaticamente para facilitar reenvios futuros.
                                         </p>
                                     </div>
 
