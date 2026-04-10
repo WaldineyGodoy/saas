@@ -34,3 +34,9 @@ verify_jwt = false
 
 [functions.pay-asaas-bill]
 verify_jwt = true
+
+[functions.create-autentique-document]
+verify_jwt = false
+
+[functions.autentique-webhook]
+verify_jwt = false
