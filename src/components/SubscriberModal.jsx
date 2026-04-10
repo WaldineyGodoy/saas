@@ -265,6 +265,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             showAlert('Erro ao reenviar: ' + error.message, 'error');
         }
     };
+    
+    const fetchInvoices = useCallback(async (subscriberId) => {
         if (!subscriberId) return;
         setLoadingInvoices(true);
         try {
@@ -1516,15 +1518,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         </div>
     );
 
-    const totalToConsolidate = invoices
-        .filter(inv => {
-            const status = inv.status?.trim().toLowerCase();
-            return status !== 'pago' && 
-                   status !== 'cancelado' && 
-                   (!inv.consolidated_invoice_id || inv.consolidated_invoice_id === null);
-        })
-        .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
-
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -2291,123 +2284,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                         </div>
                                     </div>
                                 )}
-
-                                {loadingInvoices ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando faturas...</div>
-                                ) : invoices.length > 0 ? (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                        {invoices
-                                            .filter(inv => inv.status?.toLowerCase() !== 'cancelado')
-                                            .map(inv => {
-                                            const statusMap = {
-                                                'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7', icon: CheckCircle },
-                                                'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2', icon: AlertCircle },
-                                                'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3', icon: Clock },
-                                                'cancelado': { color: '#475569', label: 'Cancelada', bg: '#f1f5f9', icon: Ban }
-                                            };
-                                            const s = statusMap[inv.status] || statusMap['a_vencer'];
-                                            const Icon = s.icon;
-                                            const isBoletoEmitido = !!inv.asaas_boleto_url;
-                                            const formatCurrency = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-                                            return (
-                                                <div key={inv.id} style={{ background: '#fff', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', borderLeft: `5px solid ${s.color}`, display: 'flex', flexDirection: 'column', gap: '0.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                        <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>{inv.consumer_units?.titular_conta}</div>
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--color-blue)' }}>{formatCurrency(inv.valor_a_pagar)}</div>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>UC: {inv.consumer_units?.numero_uc}</div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', marginTop: '0.2rem' }}>
-                                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.1rem 0.4rem', background: s.bg, color: s.color, borderRadius: '4px', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                <Icon size={10} /> {s.label}
-                                                            </span>
-                                                            <span style={{
-                                                                fontSize: '0.65rem',
-                                                                fontWeight: '800',
-                                                                color: isBoletoEmitido ? '#0369a1' : '#c2410c',
-                                                                background: isBoletoEmitido ? '#e0f2fe' : '#fff7ed',
-                                                                padding: '0.1rem 0.4rem',
-                                                                borderRadius: '4px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '0.2rem'
-                                                            }}>
-                                                                {isBoletoEmitido ? <TicketCheck size={10} /> : <TicketMinus size={10} />}
-                                                                {isBoletoEmitido ? 'Emitido' : 'Gerar'}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                                                            {isBoletoEmitido && inv.asaas_boleto_url && (
-                                                                <>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => { e.stopPropagation(); window.open(inv.asaas_boleto_url, '_blank'); }}
-                                                                        title="Visualizar Boleto"
-                                                                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#0369a1' }}
-                                                                    >
-                                                                        <Eye size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => { e.stopPropagation(); handleDownloadCombined(inv); }}
-                                                                        disabled={isGeneratingPdf}
-                                                                        title="Baixar Detalhamento + Boleto (Silencioso)"
-                                                                        style={{
-                                                                            background: 'none',
-                                                                            border: 'none',
-                                                                            padding: 0,
-                                                                            cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                                            color: '#ff6600',
-                                                                            opacity: isGeneratingPdf ? 0.5 : 1,
-                                                                            marginLeft: '0.3rem'
-                                                                        }}
-                                                                    >
-                                                                        {isGeneratingPdf && invoiceToDownload?.id === inv.id ? (
-                                                                            <Loader2 size={14} className="spin-animation" />
-                                                                        ) : (
-                                                                            <Download size={14} />
-                                                                        )}
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => { e.stopPropagation(); handleResendNotification(inv, false); }}
-                                                                        disabled={isGeneratingPdf}
-                                                                        title="Reenviar Fatura (Email/WhatsApp)"
-                                                                        style={{
-                                                                            background: 'none',
-                                                                            border: 'none',
-                                                                            padding: 0,
-                                                                            cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
-                                                                            color: '#166534',
-                                                                            opacity: isGeneratingPdf ? 0.5 : 1,
-                                                                            marginLeft: '0.3rem'
-                                                                        }}
-                                                                    >
-                                                                        {isGeneratingPdf && invoiceToDownload?.id === inv.id ? (
-                                                                            <Loader2 size={14} className="spin-animation" />
-                                                                        ) : (
-                                                                            <Send size={14} />
-                                                                        )}
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '500' }}>{new Date(inv.vencimento).toLocaleDateString('pt-BR')}</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem', border: '2px dashed #e2e8f0', borderRadius: '8px' }}>
-                                        <p style={{ margin: 0, fontSize: '0.9rem' }}>Nenhuma fatura encontrada para este período.</p>
-                                    </div>
-                                )}
                             </div>
-                            </div>
-                        )}
+                        </div>
+                    )}
 
+                        {activeTab === 'comunicacao' && (
+                            <div style={{ paddingBottom: '1rem' }}>
+                                <HistoryTimeline
+                                    entityType="subscriber"
+                                    entityId={subscriber.id}
+                                    entityName={formData.name}
+                                    onClose={() => setActiveTab('dados')}
+                                />
                             </div>
                         )}
 
