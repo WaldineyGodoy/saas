@@ -46,6 +46,7 @@ serve(async (req) => {
         }
         const fileBlob = new Blob([bytes], { type: 'application/pdf' });
 
+        // 1. Criar o Documento
         const createMutation = `
             mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
                 createDocument(sandbox: ${isSandbox}, document: $document, signers: $signers, file: $file) {
@@ -78,49 +79,74 @@ serve(async (req) => {
         const result = await response.json();
         if (result.errors) throw new Error(`Autentique: ${result.errors[0].message}`);
 
-        const docData = result.data.createDocument;
-        const firstSignature = docData.signatures?.[0];
+        const documentId = result.data.createDocument.id;
         
-        let signingLink = firstSignature?.link?.short_link;
-        
-        // CONSTRUÇÃO MANUAL (Backup 1): Caso o objeto link venha nulo mas o public_id exista
-        if (!signingLink && firstSignature?.public_id) {
-            signingLink = `https://assina.ae/${firstSignature.public_id}`;
-            console.log('Link construído manualmente via public_id:', signingLink);
+        // 2. PAUSA ESTRATÉGICA (3 segundos)
+        await sleep(3000);
+
+        // 3. CONSULTA DE REDUNDÂNCIA (VARREDURA COMPLETA)
+        let signingLink = null;
+        let finalSignatures = null;
+
+        try {
+            const queryDoc = `
+                query GetDoc($id: String!) {
+                    document(id: $id) {
+                        id
+                        signatures {
+                            public_id
+                            name
+                            email
+                            link {
+                                short_link
+                                view_short_link
+                            }
+                        }
+                    }
+                }
+            `;
+            const queryRes = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ query: queryDoc, variables: { id: documentId } })
+            });
+            const queryData = await queryRes.json();
+            
+            finalSignatures = queryData.data?.document?.signatures;
+            if (finalSignatures && finalSignatures.length > 0) {
+                const sig = finalSignatures[0];
+                // Tentamos capturar de vários campos possíveis para depuração
+                signingLink = sig.link?.short_link || sig.link?.view_short_link;
+            }
+        } catch (e) {
+            console.error('Falha na consulta de redundância:', e);
         }
 
-        // TENTATIVA DE RECUPERAÇÃO (Backup 2): Se ainda nulo, tenta a mutação específica
-        if (!signingLink && firstSignature?.public_id) {
-            await sleep(1000);
-            try {
-                const linkMutation = `mutation { createLinkToSignature(public_id: "${firstSignature.public_id}") { short_link } }`;
-                const lRes = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: linkMutation })
-                });
-                const lData = await lRes.json();
-                signingLink = lData.data?.createLinkToSignature?.short_link || signingLink;
-            } catch (e) { console.error('Rescue failed', e); }
-        }
+        // 4. Fallback final (dashboard administrativo)
+        const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${documentId}`;
 
-        // FALLBACK FINAL (Último recurso): URL do documento/dashboard
-        const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${docData.id}`;
-
+        // 5. Salvar na tabela signatures
         const { error: dbError } = await supabaseAdmin
             .from('signatures')
             .insert({
                 signer_id: signerId,
                 signer_type: signerType,
-                autentique_doc_id: docData.id,
+                autentique_doc_id: documentId,
                 autentique_url: finalUrl,
                 status: 'pending',
-                metadata: { ...docData, signing_link: signingLink }
+                metadata: { 
+                    ...result.data.createDocument, 
+                    debug_signatures: finalSignatures,
+                    captured_via: signingLink ? 'post_query' : 'fallback'
+                }
             });
 
         if (dbError) throw dbError;
 
-        return new Response(JSON.stringify({ success: true, documentId: docData.id, url: finalUrl }), {
+        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
