@@ -1604,8 +1604,8 @@ Associado`;
                     </h1>
                     
                     <div style={{ fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
-                        <p><strong>OUTORGANTE:</strong> {formData.name}, doravante denominado "ASSOCIADO", com os dados constantes no Termo de Adesão.</p>
-                        <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, doravante denominada "ASSOCIAÇÃO".</p>
+                        <p><strong>OUTORGANTE:</strong> {formData.name}, inscrito no CPF/CNPJ sob o nº {formData.cpf_cnpj}, residente e domiciliado à {formData.rua}, nº {formData.numero} {formData.complemento ? `- ${formData.complemento}` : ''}, {formData.bairro}, {formData.cidade}/{formData.uf}, CEP {formData.cep}, doravante denominado "ASSOCIADO".</p>
+                        <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, inscrito no CNPJ sob nº 64.561.352/0001-07, com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, doravante denominada "ASSOCIAÇÃO".</p>
                         
                         <p style={{ marginTop: '8mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
                         
