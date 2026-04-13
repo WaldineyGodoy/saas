@@ -20,97 +20,149 @@ function hexToBytes(hex: string) {
 async function verifySignature(body: string, signature: string | null, secret: string) {
     if (!signature) return false;
     
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["verify"]
-    );
-    
-    const signatureBytes = hexToBytes(signature);
-    const bodyBytes = encoder.encode(body);
-    
-    return await crypto.subtle.verify(
-        "HMAC",
-        key,
-        signatureBytes,
-        bodyBytes
-    );
+    // Autentique enviará a assinatura em minúsculas ou maiúsculas? Normalizamos.
+    // O CryptoJS ou SubtleCrypto geralmente precisa dos bytes corretos.
+    try {
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+            "raw",
+            encoder.encode(secret),
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["verify"]
+        );
+        
+        const signatureBytes = hexToBytes(signature);
+        const bodyBytes = encoder.encode(body);
+        
+        return await crypto.subtle.verify(
+            "HMAC",
+            key,
+            signatureBytes,
+            bodyBytes
+        );
+    } catch (e) {
+        console.error('Error verifying signature:', e);
+        return false;
+    }
 }
 
 serve(async (req) => {
-    // 1. Manter suporte parcial para OPTIONS (CORS)
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    let rawBody = '';
+    let payload: any = {};
+    let statusCode = 200;
+    const headers = Object.fromEntries(req.headers.entries());
+
     try {
-        const rawBody = await req.text();
+        rawBody = await req.text();
         const signature = req.headers.get('x-autentique-signature');
 
-        // Seguranca: Verificar assinatura HMAC (se segredo estiver configurado)
+        // Seguranca: Verificar assinatura HMAC
         if (WEBHOOK_SECRET) {
             const isValid = await verifySignature(rawBody, signature, WEBHOOK_SECRET);
             if (!isValid) {
-                console.error('Assinatura Autentique Inválida ou Ausente');
+                console.error('Assinatura Autentique Inválida');
+                // Mesmo assim logamos para entender o erro
+                await supabaseAdmin.from('webhook_logs').insert({
+                    service_name: 'autentique',
+                    payload: { raw: rawBody, note: 'HMAC verification failed' },
+                    headers: headers,
+                    status_code: 401
+                });
                 return new Response('Unauthorized', { status: 401 });
             }
-        } else {
-            // Fallback se o segredo não estiver no ambiente (não recomendado para produção)
-            console.warn('AUTENTIQUE_WEBHOOK_SECRET não configurado. Ignorando validação.');
         }
 
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+        payload = JSON.parse(rawBody);
+        console.log('Autentique Webhook Payload:', JSON.stringify(payload));
 
-        const payload = JSON.parse(rawBody);
-        console.log('Autentique Webhook Payload:', JSON.stringify(payload, null, 2));
-
-        const action = payload.action; // ex: "document.signed"
-        const docId = payload.document?.id;
+        // Tentar extrair ação e ID de múltiplas formas
+        const action = payload.action || payload.event || payload.type;
+        const docId = payload.document?.id || payload.document?.uuid || payload.id || payload.uuid;
 
         if (!docId || !action) {
-            return new Response(JSON.stringify({ error: 'Payload incompleto' }), { status: 400 });
+            statusCode = 400;
+            await supabaseAdmin.from('webhook_logs').insert({
+                service_name: 'autentique',
+                payload: payload,
+                headers: headers,
+                status_code: 400
+            });
+            return new Response(JSON.stringify({ error: 'Payload incompleto', action, docId }), { status: 400 });
         }
 
         // Mapeamento de Status
         let newStatus = 'pending';
-        if (action.includes('signed')) newStatus = 'signed';
-        else if (action.includes('rejected')) newStatus = 'rejected';
-        else if (action.includes('canceled')) newStatus = 'canceled';
+        const actionLower = action.toLowerCase();
+        
+        if (actionLower.includes('signed')) newStatus = 'signed';
+        else if (actionLower.includes('rejected')) newStatus = 'rejected';
+        else if (actionLower.includes('canceled')) newStatus = 'canceled';
         else {
-             // Outros eventos (ex: viewer, created) não mudam necessariamente o status principal
-             return new Response(JSON.stringify({ success: true, message: 'Evento ignorado' }), { status: 200 });
+             // Eventos informativos logamos e retornamos sucesso
+             await supabaseAdmin.from('webhook_logs').insert({
+                service_name: 'autentique',
+                payload: payload,
+                headers: headers,
+                status_code: 200,
+                message: `Evento ignorado: ${action}`
+            });
+            return new Response(JSON.stringify({ success: true, message: 'Evento ignorado' }), { status: 200 });
         }
 
         // Atualizar o banco de dados
-        const { error: dbError } = await supabaseAdmin
+        const { data: updateData, error: dbError } = await supabaseAdmin
             .from('signatures')
             .update({ 
                 status: newStatus,
                 updated_at: new Date().toISOString(),
-                metadata: payload // Logar o payload completo para auditoria
+                metadata: payload 
             })
-            .eq('autentique_doc_id', docId);
+            .eq('autentique_doc_id', docId)
+            .select();
 
         if (dbError) throw dbError;
 
-        console.log(`Documento ${docId} atualizado para status: ${newStatus}`);
+        // Sucesso
+        const rowCount = updateData?.length || 0;
+        await supabaseAdmin.from('webhook_logs').insert({
+            service_name: 'autentique',
+            payload: payload,
+            headers: headers,
+            status_code: 200,
+            message: rowCount > 0 ? `Documento ${docId} atualizado para ${newStatus}` : `Nenhum registro encontrado para docId ${docId}`
+        });
 
-        return new Response(JSON.stringify({ success: true }), {
+        console.log(`Webhook processado: ${docId} -> ${newStatus}. Rows affected: ${rowCount}`);
+
+        return new Response(JSON.stringify({ success: true, rows: rowCount }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
 
     } catch (error) {
         console.error('Webhook Error:', error);
+        
+        // Logar erro no banco
+        await supabaseAdmin.from('webhook_logs').insert({
+            service_name: 'autentique',
+            payload: { error: error.message, stack: error.stack, raw: rawBody },
+            headers: headers,
+            status_code: 500
+        });
+
         return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 // Sempre retornar 200 para a Autentique
+            status: 200 // Retornamos 200 para evitar retentativas infinitas se for erro nosso
         });
     }
 })
