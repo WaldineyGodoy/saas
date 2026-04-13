@@ -187,7 +187,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 documentName: fileName,
                 fileBase64: pdfBase64,
                 signers: [
-                    { name: formData.name, action: 'SIGN' } // Modo Link: apenas nome, sem email
+                    { 
+                        name: formData.name, 
+                        action: 'SIGN',
+                        positions: [
+                            { x: 50, y: 82, z: 3 }, // Página 3 (Associado)
+                            { x: 50, y: 82, z: 4 }  // Página 4 (Procuração)
+                        ]
+                    }
                 ],
                 signerId: subscriber.id,
                 signerType: 'subscriber'

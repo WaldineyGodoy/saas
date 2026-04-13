@@ -63,6 +63,7 @@ serve(async (req) => {
                         name
                         link {
                             short_link
+                            view_short_link
                         }
                     }
                 }

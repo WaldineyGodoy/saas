@@ -6,29 +6,68 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const WEBHOOK_TOKEN = 'autentique_v2_secret_9283fbc2';
+const WEBHOOK_SECRET = Deno.env.get('AUTENTIQUE_WEBHOOK_SECRET');
+
+// Helper to convert hex string to Uint8Array
+function hexToBytes(hex: string) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    }
+    return bytes;
+}
+
+async function verifySignature(body: string, signature: string | null, secret: string) {
+    if (!signature) return false;
+    
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"]
+    );
+    
+    const signatureBytes = hexToBytes(signature);
+    const bodyBytes = encoder.encode(body);
+    
+    return await crypto.subtle.verify(
+        "HMAC",
+        key,
+        signatureBytes,
+        bodyBytes
+    );
+}
 
 serve(async (req) => {
-    // Basic Security: Check Token in Query String
-    const url = new URL(req.url);
-    const token = url.searchParams.get('token');
-
-    if (token !== WEBHOOK_TOKEN) {
-        console.error('Invalid Webhook Token');
-        return new Response('Unauthorized', { status: 401 });
-    }
-
+    // 1. Manter suporte parcial para OPTIONS (CORS)
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
+        const rawBody = await req.text();
+        const signature = req.headers.get('x-autentique-signature');
+
+        // Seguranca: Verificar assinatura HMAC (se segredo estiver configurado)
+        if (WEBHOOK_SECRET) {
+            const isValid = await verifySignature(rawBody, signature, WEBHOOK_SECRET);
+            if (!isValid) {
+                console.error('Assinatura Autentique Inválida ou Ausente');
+                return new Response('Unauthorized', { status: 401 });
+            }
+        } else {
+            // Fallback se o segredo não estiver no ambiente (não recomendado para produção)
+            console.warn('AUTENTIQUE_WEBHOOK_SECRET não configurado. Ignorando validação.');
+        }
+
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const payload = await req.json();
+        const payload = JSON.parse(rawBody);
         console.log('Autentique Webhook Payload:', JSON.stringify(payload, null, 2));
 
         const action = payload.action; // ex: "document.signed"
@@ -71,7 +110,7 @@ serve(async (req) => {
         console.error('Webhook Error:', error);
         return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 // Sempre retornar 200 para a Autentique não tentar reenviar em caso de erro de lógica
+            status: 200 // Sempre retornar 200 para a Autentique
         });
     }
 })
