@@ -2554,6 +2554,7 @@ Associado`;
                                         entityId={subscriber.id}
                                         entityName={formData.name}
                                         onClose={() => setActiveTab('dados')}
+                                        isInline={true}
                                     />
                                 </div>
                             </div>

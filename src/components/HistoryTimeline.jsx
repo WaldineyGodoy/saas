@@ -53,7 +53,7 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
     );
 };
 
-export default function HistoryTimeline({ entityType, entityId, entityName, onClose }) {
+export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false }) {
     const { profile } = useAuth();
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
@@ -126,23 +126,39 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
         }
     };
 
+    const containerStyle = isInline ? {
+        background: 'white',
+        padding: '0',
+        borderRadius: '12px',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        border: '1px solid #e2e8f0'
+    } : {
+        background: 'white',
+        padding: '0',
+        borderRadius: '12px',
+        width: '90%',
+        maxWidth: '600px',
+        height: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+    };
+
+    const wrapperStyle = isInline ? {
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column'
+    } : {
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
+        backdropFilter: 'blur(4px)'
+    };
+
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
-            backdropFilter: 'blur(4px)'
-        }}>
-            <div style={{
-                background: 'white',
-                padding: '0',
-                borderRadius: '12px',
-                width: '90%',
-                maxWidth: '600px',
-                height: '80vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-            }}>
+        <div style={wrapperStyle}>
+            <div style={containerStyle}>
                 {/* Header */}
                 <div style={{
                     padding: '1.25rem 1.5rem',
@@ -158,12 +174,14 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                         <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Histórico / Timeline</h3>
                         <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{entityName}</p>
                     </div>
-                    <button onClick={onClose} style={{
-                        background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.5rem',
-                        transition: 'color 0.2s'
-                    }}>
-                        <X size={24} />
-                    </button>
+                    {!isInline && (
+                        <button onClick={onClose} style={{
+                            background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.5rem',
+                            transition: 'color 0.2s'
+                        }}>
+                            <X size={24} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Search Bar */}
@@ -208,7 +226,15 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                 </div>
 
                 {/* Timeline content */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ 
+                    flex: 1, 
+                    overflowY: 'auto', 
+                    padding: '1.5rem', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '1.5rem',
+                    maxHeight: isInline ? '400px' : 'none'
+                }}>
                     {loading ? (
                         <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Carregando histórico...</div>
                     ) : filteredHistory.length === 0 ? (
