@@ -183,10 +183,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // 4. Send to Autentique
             const result = await createAutentiqueDocument({
-                name: fileName,
-                file: pdfBase64,
-                signer_name: formData.name,
-                signer_email: formData.email
+                documentName: fileName,
+                fileBase64: pdfBase64,
+                signers: [
+                    { email: formData.email, action: 'SIGN' }
+                ],
+                signerId: subscriber.id,
+                signerType: 'subscriber'
             });
 
             if (!result || !result.id) throw new Error('Falha ao criar documento na Autentique');
@@ -274,7 +277,25 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             showAlert('Erro ao reenviar: ' + error.message, 'error');
         }
     };
-    
+
+    const handleUpdateSignatureStatus = async (sigId, newStatus) => {
+        try {
+            const { error } = await supabase
+                .from('signatures')
+                .update({ status: newStatus })
+                .eq('id', sigId);
+
+            if (error) throw error;
+            
+            showAlert('Status do contrato atualizado!', 'success');
+            fetchSignatures(subscriber.id);
+            addHistory('subscriber', subscriber.id, 'status_contrato_manual', { signature_id: sigId, status: newStatus });
+        } catch (error) {
+            console.error('Error updating signature status:', error);
+            showAlert('Erro ao atualizar status: ' + error.message, 'error');
+        }
+    };
+
     const fetchInvoices = useCallback(async (subscriberId) => {
         if (!subscriberId) return;
         setLoadingInvoices(true);
@@ -2495,22 +2516,30 @@ Fica eleito o foro da comarca de Teófilo Otoni/MG para dirimir quaisquer dúvid
                                                             <span>⏰ {new Date(sig.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                                                         </div>
                                                         <div style={{ marginTop: '0.75rem' }}>
-                                                            <span style={{
-                                                                fontSize: '0.7rem',
-                                                                fontWeight: 800,
-                                                                padding: '0.25rem 0.75rem',
-                                                                borderRadius: '20px',
-                                                                background: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'REJECTED' ? '#fee2e2' : sig.status === 'CREATED' ? '#dbeafe' : '#fef9c3',
-                                                                color: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'REJECTED' ? '#991b1b' : sig.status === 'CREATED' ? '#1e40af' : '#854d0e',
-                                                                border: `1px solid ${(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'REJECTED' ? '#fecaca' : sig.status === 'CREATED' ? '#bfdbfe' : '#fef08a'}`,
-                                                                textTransform: 'uppercase',
-                                                                letterSpacing: '0.05em'
-                                                            }}>
-                                                                {(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? 'Assinado' : 
-                                                                 sig.status === 'REJECTED' ? 'Rejeitado' : 
-                                                                 sig.status === 'CREATED' ? 'Criado' : 
-                                                                 'Aguardando assinatura'}
-                                                            </span>
+                                                            <select
+                                                                value={sig.status}
+                                                                onChange={(e) => handleUpdateSignatureStatus(sig.id, e.target.value)}
+                                                                style={{
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: 800,
+                                                                    padding: '0.25rem 0.75rem',
+                                                                    borderRadius: '20px',
+                                                                    background: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'REJECTED' ? '#fee2e2' : sig.status === 'CREATED' ? '#dbeafe' : '#fef9c3',
+                                                                    color: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'REJECTED' ? '#991b1b' : sig.status === 'CREATED' ? '#1e40af' : '#854d0e',
+                                                                    border: `1px solid ${(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'REJECTED' ? '#fecaca' : sig.status === 'CREATED' ? '#bfdbfe' : '#fef08a'}`,
+                                                                    textTransform: 'uppercase',
+                                                                    letterSpacing: '0.05em',
+                                                                    cursor: 'pointer',
+                                                                    outline: 'none',
+                                                                    appearance: 'none',
+                                                                    textAlign: 'center'
+                                                                }}
+                                                            >
+                                                                <option value="CREATED">Criado</option>
+                                                                <option value="PENDING">Aguardando assinatura</option>
+                                                                <option value="SIGNED">Assinado</option>
+                                                                <option value="REJECTED">Rejeitado</option>
+                                                            </select>
                                                         </div>
                                                     </div>
                                                     <div style={{ display: 'flex', gap: '0.6rem' }}>
