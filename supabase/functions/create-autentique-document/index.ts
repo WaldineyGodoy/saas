@@ -52,7 +52,7 @@ serve(async (req) => {
         }
         const fileBlob = new Blob([bytes], { type: 'application/pdf' });
 
-        // 3. Montar a Mutation GraphQL (Multipart)
+        // 3. Montar a Mutation GraphQL para criação do documento
         const query = `
             mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
                 createDocument(sandbox: ${isSandbox}, document: $document, signers: $signers, file: $file) {
@@ -81,7 +81,7 @@ serve(async (req) => {
         formData.append('map', JSON.stringify({ "0": ["variables.file"] }));
         formData.append('0', fileBlob, `${documentName}.pdf`);
 
-        // 4. Chamada para a Autentique
+        // 4. Chamada para a Autentique (Criação do Documento)
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -93,15 +93,47 @@ serve(async (req) => {
         const result = await response.json();
 
         if (result.errors) {
-            console.error('Autentique API Errors:', result.errors);
+            console.error('Autentique API Errors (Create):', result.errors);
             throw new Error(result.errors[0].message);
         }
 
         const docData = result.data.createDocument;
-        
-        // Capturar o short_link da primeira assinatura (que é o link de quem assina)
-        const signingLink = docData.signatures?.[0]?.link?.short_link;
-        const publicUrl = `https://autentique.com.br/v2/documentos/${docData.id}`;
+        let signingLink = docData.signatures?.[0]?.link?.short_link;
+
+        // 4.1 Se o short_link estiver ausente (comum no modo LINK sem email), geramos ele agora
+        if (!signingLink && docData.signatures?.[0]?.public_id) {
+            try {
+                const linkMutation = `
+                    mutation GenerateLink($public_id: String!) {
+                        createLinkToSignature(public_id: $public_id) {
+                            short_link
+                        }
+                    }
+                `;
+
+                const linkResponse = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: linkMutation,
+                        variables: { public_id: docData.signatures[0].public_id }
+                    })
+                });
+
+                const linkResult = await linkResponse.json();
+                if (linkResult.data?.createLinkToSignature?.short_link) {
+                    signingLink = linkResult.data.createLinkToSignature.short_link;
+                }
+            } catch (linkError) {
+                console.error('Erro ao gerar link de assinatura secundário:', linkError);
+            }
+        }
+
+        // Fallback final caso tudo falhe (link do dashboard - privado)
+        const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${docData.id}`;
 
         // 5. Salvar na tabela signatures
         const { error: dbError } = await supabaseAdmin
@@ -110,7 +142,7 @@ serve(async (req) => {
                 signer_id: signerId,
                 signer_type: signerType,
                 autentique_doc_id: docData.id,
-                autentique_url: signingLink || publicUrl, // Salva o link de assinatura como principal
+                autentique_url: finalUrl,
                 status: 'pending',
                 metadata: { ...docData, environment: config.environment }
             });
@@ -120,7 +152,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ 
             success: true, 
             documentId: docData.id, 
-            url: signingLink || publicUrl 
+            url: finalUrl 
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
