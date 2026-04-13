@@ -27,22 +27,18 @@ serve(async (req) => {
             throw new Error('Parâmetros obrigatórios ausentes.');
         }
 
-        // 1. Buscar configuração da Autentique
         const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
             .select('*')
             .eq('service_name', 'autentique_api')
             .single();
 
-        if (configError || !config) {
-            throw new Error('Configuração da Autentique não encontrada.');
-        }
+        if (configError || !config) throw new Error('Configuração da Autentique não encontrada.');
 
         const isSandbox = config.environment === 'sandbox';
         const endpoint = isSandbox ? config.sandbox_endpoint_url : config.endpoint_url;
         const apiKey = isSandbox ? config.sandbox_api_key : config.api_key;
 
-        // 2. Preparar o arquivo
         const binaryString = atob(fileBase64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -50,13 +46,13 @@ serve(async (req) => {
         }
         const fileBlob = new Blob([bytes], { type: 'application/pdf' });
 
-        // 3. Mutation de Criação
         const createMutation = `
             mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
                 createDocument(sandbox: ${isSandbox}, document: $document, signers: $signers, file: $file) {
                     id
                     signatures {
                         public_id
+                        name
                         link {
                             short_link
                         }
@@ -80,85 +76,51 @@ serve(async (req) => {
         });
 
         const result = await response.json();
-        if (result.errors) throw new Error(`Autentique Create Error: ${result.errors[0].message}`);
+        if (result.errors) throw new Error(`Autentique: ${result.errors[0].message}`);
 
         const docData = result.data.createDocument;
-        const documentId = docData.id;
         const firstSignature = docData.signatures?.[0];
+        
         let signingLink = firstSignature?.link?.short_link;
-
-        // 4. Lógica de Resiliência para capturar o short_link (assina.ae)
+        
+        // CONSTRUÇÃO MANUAL (Backup 1): Caso o objeto link venha nulo mas o public_id exista
         if (!signingLink && firstSignature?.public_id) {
-            // Aguardar um pouco para processamento interno da Autentique
-            await sleep(1500);
-
-            // TENTATIVA 2: Mutation createLinkToSignature
-            try {
-                const linkMutation = `
-                    mutation GenerateLink($public_id: String!) {
-                        createLinkToSignature(public_id: $public_id) {
-                            short_link
-                        }
-                    }
-                `;
-
-                const linkRes = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: linkMutation, variables: { public_id: firstSignature.public_id } })
-                });
-
-                const linkData = await linkRes.json();
-                signingLink = linkData.data?.createLinkToSignature?.short_link;
-            } catch (e) {
-                console.error('Tentativa 2 falhou:', e);
-            }
-
-            // TENTATIVA 3: Query Document redundante
-            if (!signingLink) {
-                try {
-                    const queryDoc = `
-                        query GetDoc($id: String!) {
-                            document(id: $id) {
-                                signatures {
-                                    link {
-                                        short_link
-                                    }
-                                }
-                            }
-                        }
-                    `;
-                    const queryRes = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: queryDoc, variables: { id: documentId } })
-                    });
-                    const queryData = await queryRes.json();
-                    signingLink = queryData.data?.document?.signatures?.[0]?.link?.short_link;
-                } catch (e) {
-                    console.error('Tentativa 3 falhou:', e);
-                }
-            }
+            signingLink = `https://assina.ae/${firstSignature.public_id}`;
+            console.log('Link construído manualmente via public_id:', signingLink);
         }
 
-        // Se após tudo ainda for nulo, usamos o link do dashboard (não ideal, mas evita blank)
-        const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${documentId}`;
+        // TENTATIVA DE RECUPERAÇÃO (Backup 2): Se ainda nulo, tenta a mutação específica
+        if (!signingLink && firstSignature?.public_id) {
+            await sleep(1000);
+            try {
+                const linkMutation = `mutation { createLinkToSignature(public_id: "${firstSignature.public_id}") { short_link } }`;
+                const lRes = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: linkMutation })
+                });
+                const lData = await lRes.json();
+                signingLink = lData.data?.createLinkToSignature?.short_link || signingLink;
+            } catch (e) { console.error('Rescue failed', e); }
+        }
 
-        // 5. Salvar na tabela signatures
+        // FALLBACK FINAL (Último recurso): URL do documento/dashboard
+        const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${docData.id}`;
+
         const { error: dbError } = await supabaseAdmin
             .from('signatures')
             .insert({
                 signer_id: signerId,
                 signer_type: signerType,
-                autentique_doc_id: documentId,
+                autentique_doc_id: docData.id,
                 autentique_url: finalUrl,
                 status: 'pending',
-                metadata: { ...docData, environment: config.environment, captured_link: !!signingLink }
+                metadata: { ...docData, signing_link: signingLink }
             });
 
         if (dbError) throw dbError;
 
-        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl }), {
+        return new Response(JSON.stringify({ success: true, documentId: docData.id, url: finalUrl }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
