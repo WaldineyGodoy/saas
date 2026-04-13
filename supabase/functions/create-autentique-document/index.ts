@@ -58,6 +58,13 @@ serve(async (req) => {
                 createDocument(sandbox: ${isSandbox}, document: $document, signers: $signers, file: $file) {
                     id
                     name
+                    signatures {
+                        public_id
+                        name
+                        link {
+                            short_link
+                        }
+                    }
                 }
             }
         `;
@@ -91,6 +98,9 @@ serve(async (req) => {
         }
 
         const docData = result.data.createDocument;
+        
+        // Capturar o short_link da primeira assinatura (que é o link de quem assina)
+        const signingLink = docData.signatures?.[0]?.link?.short_link;
         const publicUrl = `https://autentique.com.br/v2/documentos/${docData.id}`;
 
         // 5. Salvar na tabela signatures
@@ -100,7 +110,7 @@ serve(async (req) => {
                 signer_id: signerId,
                 signer_type: signerType,
                 autentique_doc_id: docData.id,
-                autentique_url: publicUrl,
+                autentique_url: signingLink || publicUrl, // Salva o link de assinatura como principal
                 status: 'pending',
                 metadata: { ...docData, environment: config.environment }
             });
@@ -110,7 +120,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ 
             success: true, 
             documentId: docData.id, 
-            url: publicUrl 
+            url: signingLink || publicUrl 
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200

@@ -187,7 +187,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 documentName: fileName,
                 fileBase64: pdfBase64,
                 signers: [
-                    { email: formData.email, action: 'SIGN' }
+                    { name: formData.name, action: 'SIGN' } // Modo Link: apenas nome, sem email
                 ],
                 signerId: subscriber.id,
                 signerType: 'subscriber'
@@ -1530,19 +1530,19 @@ Associado`;
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
     const renderHiddenFullContract = () => {
-        // Logic to split the contract into 3 parts based on Clauses 7 and 17
+        // Logic to split the contract into 3 parts based on Clauses 7 and 14
         const splitContent = (text) => {
             const c7Index = text.search(/CLÁUSULA 7/i);
-            const c17Index = text.search(/CLÁUSULA 17/i);
+            const c14Index = text.search(/CLÁUSULA 14/i);
             
             let p1 = text;
             let p2 = "";
             let p3 = "";
 
-            if (c7Index !== -1 && c17Index !== -1) {
+            if (c7Index !== -1 && c14Index !== -1) {
                 p1 = text.substring(0, c7Index);
-                p2 = text.substring(c7Index, c17Index);
-                p3 = text.substring(c17Index);
+                p2 = text.substring(c7Index, c14Index);
+                p3 = text.substring(c14Index);
             } else if (c7Index !== -1) {
                 p1 = text.substring(0, c7Index);
                 p2 = text.substring(c7Index);
@@ -1592,14 +1592,14 @@ Associado`;
                     </div>
                 </PageWrapper>
 
-                {/* Page 2: Clause 7 to 16 */}
+                {/* Page 2: Clause 7 to 13 */}
                 <PageWrapper id="contract-page-2">
                     <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
                         {part2}
                     </div>
                 </PageWrapper>
 
-                {/* Page 3: Clause 17 + Signatures */}
+                {/* Page 3: Clause 14 to 17 + Signatures */}
                 <PageWrapper id="contract-page-3">
                     <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
                         {part3}
