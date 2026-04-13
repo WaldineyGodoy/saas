@@ -192,7 +192,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 signerType: 'subscriber'
             });
 
-            if (!result || !result.id) throw new Error('Falha ao criar documento na Autentique');
+            if (result.error) throw new Error(result.error);
+            if (!result || !result.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado');
 
             // 5. Save to signatures table
             const { data: newSig, error: sigErr } = await supabase
@@ -201,7 +202,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     signer_id: subscriber.id,
                     signer_type: 'subscriber',
                     document_name: fileName,
-                    autentique_id: result.id,
+                    autentique_id: result.documentId,
                     autentique_url: result.url,
                     status: 'PENDING'
                 })
