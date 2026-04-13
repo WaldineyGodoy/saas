@@ -9,6 +9,13 @@ const corsHeaders = {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const extractSigningLink = (signatures: any[]) => {
+    if (!signatures || !Array.isArray(signatures)) return null;
+    // Buscamos em toda a lista pela primeira assinatura que possua um link curto válido
+    const sigWithLink = signatures.find(s => s.link && (s.link.short_link || s.link.view_short_link));
+    return sigWithLink ? (sigWithLink.link.short_link || sigWithLink.link.view_short_link) : null;
+};
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -79,60 +86,46 @@ serve(async (req) => {
         const result = await response.json();
         if (result.errors) throw new Error(`Autentique: ${result.errors[0].message}`);
 
-        const documentId = result.data.createDocument.id;
+        const docData = result.data.createDocument;
+        const documentId = docData.id;
         
-        // 2. PAUSA ESTRATÉGICA (Aumentada para 3.5s para maior resiliência)
-        await sleep(3500);
+        let signingLink = extractSigningLink(docData.signatures);
+        let capturedVia = signingLink ? 'immediate_scan' : 'none';
 
-        // 3. CONSULTA DE REDUNDÂNCIA (VARREDURA COMPLETA)
-        let signingLink = null;
-        let finalSignatures = null;
-
-        try {
-            const queryDoc = `
-                query GetDoc($id: String!) {
-                    document(id: $id) {
-                        id
-                        signatures {
-                            public_id
-                            name
-                            email
-                            link {
-                                short_link
-                                view_short_link
+        // 2. BACKUP: Se não encontrou de imediato, tenta consulta redundante
+        let debugSignatures = null;
+        if (!signingLink) {
+            await sleep(3500);
+            try {
+                const queryDoc = `
+                    query GetDoc($id: String!) {
+                        document(id: $id) {
+                            signatures {
+                                name
+                                link {
+                                    short_link
+                                    view_short_link
+                                }
                             }
                         }
                     }
-                }
-            `;
-            const queryRes = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json' 
-                },
-                body: JSON.stringify({ query: queryDoc, variables: { id: documentId } })
-            });
-            const queryData = await queryRes.json();
-            
-            finalSignatures = queryData.data?.document?.signatures;
-            
-            if (finalSignatures && Array.isArray(finalSignatures)) {
-                // CORREÇÃO v8: Procurar em todas as assinaturas pela primeira que tiver um link válido
-                const signatureWithLink = finalSignatures.find(sig => sig.link && (sig.link.short_link || sig.link.view_short_link));
-                if (signatureWithLink) {
-                    signingLink = signatureWithLink.link.short_link || signatureWithLink.link.view_short_link;
-                    console.log('Link encontrado na assinatura de:', signatureWithLink.name);
-                }
-            }
-        } catch (e) {
-            console.error('Falha na consulta de redundância:', e);
+                `;
+                const qRes = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: queryDoc, variables: { id: documentId } })
+                });
+                const qData = await qRes.json();
+                debugSignatures = qData.data?.document?.signatures;
+                signingLink = extractSigningLink(debugSignatures);
+                if (signingLink) capturedVia = 'post_query_scan';
+            } catch (e) { console.error('Redundancy check failed', e); }
         }
 
-        // 4. Fallback final
+        // 3. Fallback final
         const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${documentId}`;
 
-        // 5. Salvar na tabela signatures
+        // 4. Salvar na tabela signatures
         const { error: dbError } = await supabaseAdmin
             .from('signatures')
             .insert({
@@ -142,9 +135,9 @@ serve(async (req) => {
                 autentique_url: finalUrl,
                 status: 'pending',
                 metadata: { 
-                    ...result.data.createDocument, 
-                    debug_signatures: finalSignatures,
-                    captured_via: signingLink ? 'post_query_scan' : 'fallback'
+                    ...docData, 
+                    debug_signatures: debugSignatures,
+                    captured_via: signingLink ? capturedVia : 'fallback'
                 }
             });
 
