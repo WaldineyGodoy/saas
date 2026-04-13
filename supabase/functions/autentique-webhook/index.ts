@@ -83,14 +83,15 @@ serve(async (req) => {
         }
 
         payload = JSON.parse(rawBody);
-        console.log('Autentique Webhook Payload:', JSON.stringify(payload));
+        console.log('Autentique Webhook Payload Received');
 
-        // Tentar extrair ação e ID de múltiplas formas
-        const action = payload.action || payload.event || payload.type;
-        const docId = payload.document?.id || payload.document?.uuid || payload.id || payload.uuid;
+        // Autentique V2: O evento pode estar em payload.event.type e os dados em payload.event.data
+        const action = payload.action || payload.event?.type || payload.type;
+        const docId = payload.document?.id || payload.event?.data?.id || payload.id;
 
         if (!docId || !action) {
             statusCode = 400;
+            console.error('Payload incompleto:', { action, docId });
             await supabaseAdmin.from('webhook_logs').insert({
                 service_name: 'autentique',
                 payload: payload,
@@ -102,19 +103,20 @@ serve(async (req) => {
 
         // Mapeamento de Status
         let newStatus = 'pending';
-        const actionLower = action.toLowerCase();
+        // Garantir que action é string para o toLowerCase
+        const actionStr = String(action).toLowerCase();
         
-        if (actionLower.includes('signed')) newStatus = 'signed';
-        else if (actionLower.includes('rejected')) newStatus = 'rejected';
-        else if (actionLower.includes('canceled')) newStatus = 'canceled';
+        if (actionStr.includes('signed') || actionStr.includes('finished')) newStatus = 'signed';
+        else if (actionStr.includes('rejected')) newStatus = 'rejected';
+        else if (actionStr.includes('canceled')) newStatus = 'canceled';
         else {
-             // Eventos informativos logamos e retornamos sucesso
+             // Eventos informativos (visto, criado, etc) logamos e retornamos sucesso
              await supabaseAdmin.from('webhook_logs').insert({
                 service_name: 'autentique',
                 payload: payload,
                 headers: headers,
                 status_code: 200,
-                message: `Evento ignorado: ${action}`
+                message: `Evento informativo ignorado: ${actionStr}`
             });
             return new Response(JSON.stringify({ success: true, message: 'Evento ignorado' }), { status: 200 });
         }
