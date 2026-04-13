@@ -196,22 +196,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (result.error) throw new Error(result.error);
             if (!result || !result.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado');
 
-            // 5. Save to signatures table
-            const { data: newSig, error: sigErr } = await supabase
-                .from('signatures')
-                .insert({
-                    signer_id: subscriber.id,
-                    signer_type: 'subscriber',
-                    document_name: fileName,
-                    autentique_doc_id: result.documentId,
-                    autentique_url: result.url,
-                    status: 'PENDING'
-                })
-                .select()
-                .single();
-
-            if (sigErr) throw sigErr;
-
             // 5.1 Save link to subscribers table for quick access
             await supabase
                 .from('subscribers')
@@ -2595,9 +2579,9 @@ Associado`;
                                                                     fontWeight: 800,
                                                                     padding: '0.25rem 0.75rem',
                                                                     borderRadius: '20px',
-                                                                    background: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'REJECTED' ? '#fee2e2' : sig.status === 'CREATED' ? '#dbeafe' : '#fef9c3',
-                                                                    color: (sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'REJECTED' ? '#991b1b' : sig.status === 'CREATED' ? '#1e40af' : '#854d0e',
-                                                                    border: `1px solid ${(sig.status === 'SIGNED' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'REJECTED' ? '#fecaca' : sig.status === 'CREATED' ? '#bfdbfe' : '#fef08a'}`,
+                                                                    background: (sig.status === 'signed' || sig.status === 'CLOSED') ? '#dcfce7' : sig.status === 'rejected' ? '#fee2e2' : sig.status === 'created' ? '#dbeafe' : '#fef9c3',
+                                                                    color: (sig.status === 'signed' || sig.status === 'CLOSED') ? '#166534' : sig.status === 'rejected' ? '#991b1b' : sig.status === 'created' ? '#1e40af' : '#854d0e',
+                                                                    border: `1px solid ${(sig.status === 'signed' || sig.status === 'CLOSED') ? '#bbf7d0' : sig.status === 'rejected' ? '#fecaca' : sig.status === 'created' ? '#bfdbfe' : '#fef08a'}`,
                                                                     textTransform: 'uppercase',
                                                                     letterSpacing: '0.05em',
                                                                     cursor: 'pointer',
@@ -2606,10 +2590,10 @@ Associado`;
                                                                     textAlign: 'center'
                                                                 }}
                                                             >
-                                                                <option value="CREATED">Criado</option>
-                                                                <option value="PENDING">Aguardando assinatura</option>
-                                                                <option value="SIGNED">Assinado</option>
-                                                                <option value="REJECTED">Rejeitado</option>
+                                                                <option value="pending">Pendente</option>
+                                                                <option value="signed">Assinado</option>
+                                                                <option value="rejected">Rejeitado</option>
+                                                                <option value="canceled">Cancelado</option>
                                                             </select>
                                                         </div>
                                                     </div>
