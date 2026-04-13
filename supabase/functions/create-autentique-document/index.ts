@@ -12,8 +12,8 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const extractSigningLink = (signatures: any[]) => {
     if (!signatures || !Array.isArray(signatures)) return null;
     // Buscamos em toda a lista pela primeira assinatura que possua um link curto válido
-    const sigWithLink = signatures.find(s => s.link && (s.link.short_link || s.link.view_short_link));
-    return sigWithLink ? (sigWithLink.link.short_link || sigWithLink.link.view_short_link) : null;
+    const sigWithLink = signatures.find(s => s.link && s.link.short_link);
+    return sigWithLink ? sigWithLink.link.short_link : null;
 };
 
 serve(async (req) => {
@@ -63,7 +63,6 @@ serve(async (req) => {
                         name
                         link {
                             short_link
-                            view_short_link
                         }
                     }
                 }
@@ -105,7 +104,6 @@ serve(async (req) => {
                                 name
                                 link {
                                     short_link
-                                    view_short_link
                                 }
                             }
                         }
