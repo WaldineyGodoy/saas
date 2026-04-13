@@ -154,35 +154,29 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!subscriber?.id) return;
         setIsCreatingContract(true);
         try {
-            // 1. Capture Full Content
-            const element = contractFullRef.current;
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: '#ffffff'
-            });
-
-            // 2. Create PDF with Dynamic Paging
+            // 1. Capture Sections individually for fixed paging
+            const sectionIds = ['contract-page-1', 'contract-page-2', 'contract-page-3', 'contract-page-4'];
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = 210;
-            const pageHeight = 297;
-            const imgWidth = pageWidth;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
             
-            let heightLeft = imgHeight;
-            let position = 0;
+            for (let i = 0; i < sectionIds.length; i++) {
+                const element = document.getElementById(sectionIds[i]);
+                if (!element) continue;
 
-            // First Page
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-            heightLeft -= pageHeight;
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                });
 
-            // Subsequent Pages
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-                heightLeft -= pageHeight;
+                const imgWidth = pageWidth;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                if (i > 0) pdf.addPage();
+                
+                // Add image to the top of the page
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
             }
 
             const pdfBase64 = pdf.output('datauristring').split(',')[1];
@@ -462,9 +456,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             
             const fullAddress = `${subscriber.rua || ''}, ${subscriber.numero || ''} ${subscriber.complemento || ''} - ${subscriber.bairro || ''}, ${subscriber.cidade || ''}/${subscriber.uf || ''}`;
             
-            const template = `TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA 
-
-ASSOCIAÇÃO DE USINAS B2W ENERGIA 
+            const template = `ASSOCIAÇÃO DE USINAS B2W ENERGIA 
 
 (I). ASSOCIAÇÃO: ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07 com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, neste ato representada na forma do seu Estatuto Social por seu presidente; 
 
@@ -1537,79 +1529,125 @@ Associado`;
         })
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
-    const renderHiddenFullContract = () => (
-        <div ref={contractFullRef} style={{ 
-            width: '210mm', background: 'white', padding: '15mm',
-            border: `4mm solid ${branding?.primary_color || '#003366'}`, boxSizing: 'border-box',
-            color: '#1e293b', fontFamily: 'serif'
-        }}>
-            {/* Header / Logo */}
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
-                {branding?.logo_url ? (
-                    <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
-                ) : (
-                    <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '24px', color: branding?.primary_color || '#003366' }}>
-                        {branding?.company_name || 'B2W ENERGIA'}
-                    </div>
-                )}
-            </div>
-
-            <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '8mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
-            </h1>
+    const renderHiddenFullContract = () => {
+        // Logic to split the contract into 3 parts based on Clauses 7 and 17
+        const splitContent = (text) => {
+            const c7Index = text.search(/CLÁUSULA 7/i);
+            const c17Index = text.search(/CLÁUSULA 17/i);
             
-            {/* Contract Body from Draft */}
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify', marginBottom: '20mm' }}>
-                {contractDraft}
-            </div>
+            let p1 = text;
+            let p2 = "";
+            let p3 = "";
 
-            {/* Procuração Section - Start on new space logic */}
-            <div style={{ pageBreakBefore: 'always', borderTop: '1px solid #eee', paddingTop: '10mm', marginTop: '10mm' }}>
-                <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
-                </h1>
-                
-                <div style={{ fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
-                    <p><strong>OUTORGANTE:</strong> {formData.name}, doravante denominado "ASSOCIADO", com os dados constantes no Termo de Adesão.</p>
-                    <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, doravante denominada "ASSOCIAÇÃO".</p>
-                    
-                    <p style={{ marginTop: '8mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
-                    
-                    <div style={{ marginTop: '10mm', padding: '5mm', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <p style={{ fontWeight: 'bold', marginBottom: '4mm', fontSize: '11px' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
-                        <table style={{ width: '100%', fontSize: '10pt', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-                                    <th style={{ textAlign: 'left', padding: '2mm 0' }}>Nº Unidade (UC)</th>
-                                    <th style={{ textAlign: 'left', padding: '2mm 0' }}>Concessionária</th>
-                                    <th style={{ textAlign: 'left', padding: '2mm 0' }}>Localidade</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {consumerUnits.map(uc => (
-                                    <tr key={uc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                        <td style={{ padding: '3mm 0' }}>{uc.numero_uc}</td>
-                                        <td style={{ padding: '3mm 0' }}>{uc.concessionaria}</td>
-                                        <td style={{ padding: '3mm 0' }}>{uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            if (c7Index !== -1 && c17Index !== -1) {
+                p1 = text.substring(0, c7Index);
+                p2 = text.substring(c7Index, c17Index);
+                p3 = text.substring(c17Index);
+            } else if (c7Index !== -1) {
+                p1 = text.substring(0, c7Index);
+                p2 = text.substring(c7Index);
+            }
+
+            return [p1, p2, p3];
+        };
+
+        const [part1, part2, part3] = splitContent(contractDraft);
+
+        const PageWrapper = ({ children, id }) => (
+            <div id={id} style={{ 
+                width: '210mm', minHeight: '297mm', background: 'white', padding: '15mm',
+                border: `4mm solid ${branding?.primary_color || '#003366'}`, boxSizing: 'border-box',
+                color: '#1e293b', fontFamily: 'serif', position: 'relative', marginBottom: '10mm'
+            }}>
+                {/* Header / Logo */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8mm' }}>
+                    {branding?.logo_url ? (
+                        <img src={branding.logo_url} style={{ height: '22mm', objectFit: 'contain' }} alt="Logo" />
+                    ) : (
+                        <div style={{ height: '22mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '24px', color: branding?.primary_color || '#003366' }}>
+                            {branding?.company_name || 'B2W ENERGIA'}
+                        </div>
+                    )}
+                </div>
+
+                {children}
+
+                {/* Footer fixed per page */}
+                <div style={{ position: 'absolute', bottom: '10mm', left: '15mm', right: '15mm', fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '4mm', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Documento gerado eletronicamente via CRM B2W Energia</span>
+                    <span>Associação de Usinas B2W Energia</span>
+                </div>
+            </div>
+        );
+
+        return (
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+                {/* Page 1: Intro + Clauses 1-6 */}
+                <PageWrapper id="contract-page-1">
+                    <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '8mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                        TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
+                    </h1>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                        {part1}
                     </div>
-                </div>
+                </PageWrapper>
 
-                <div style={{ marginTop: '20mm', textAlign: 'center', fontStyle: 'italic', color: '#64748b' }}>
-                    <p>Assinado eletronicamente via plataforma Autentique.</p>
-                </div>
-            </div>
+                {/* Page 2: Clause 7 to 16 */}
+                <PageWrapper id="contract-page-2">
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                        {part2}
+                    </div>
+                </PageWrapper>
 
-            {/* Footer */}
-            <div style={{ marginTop: '20mm', fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '4mm', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Documento gerado eletronicamente via CRM B2W Energia</span>
-                <span>Associação de Usinas B2W Energia</span>
+                {/* Page 3: Clause 17 + Signatures */}
+                <PageWrapper id="contract-page-3">
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                        {part3}
+                    </div>
+                </PageWrapper>
+
+                {/* Page 4: Procuração */}
+                <PageWrapper id="contract-page-4">
+                    <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                        PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
+                    </h1>
+                    
+                    <div style={{ fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                        <p><strong>OUTORGANTE:</strong> {formData.name}, doravante denominado "ASSOCIADO", com os dados constantes no Termo de Adesão.</p>
+                        <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, doravante denominada "ASSOCIAÇÃO".</p>
+                        
+                        <p style={{ marginTop: '8mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
+                        
+                        <div style={{ marginTop: '10mm', padding: '5mm', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <p style={{ fontWeight: 'bold', marginBottom: '4mm', fontSize: '11px' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
+                            <table style={{ width: '100%', fontSize: '10pt', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Nº Unidade (UC)</th>
+                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Concessionária</th>
+                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Localidade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {consumerUnits.map(uc => (
+                                        <tr key={uc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '3mm 0' }}>{uc.numero_uc}</td>
+                                            <td style={{ padding: '3mm 0' }}>{uc.concessionaria}</td>
+                                            <td style={{ padding: '3mm 0' }}>{uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: '20mm', textAlign: 'center', fontStyle: 'italic', color: '#64748b' }}>
+                        <p>Assinado eletronicamente via plataforma Autentique.</p>
+                    </div>
+                </PageWrapper>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div style={{
