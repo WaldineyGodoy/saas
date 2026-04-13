@@ -209,7 +209,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     signer_id: subscriber.id,
                     signer_type: 'subscriber',
                     document_name: fileName,
-                    autentique_id: result.documentId,
+                    autentique_doc_id: result.documentId,
                     autentique_url: result.url,
                     status: 'PENDING'
                 })
@@ -255,7 +255,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             showAlert('Contrato gerado e enviado com sucesso!', 'success');
             fetchSignatures(subscriber.id);
-            addHistory('subscriber', subscriber.id, 'envio_contrato', { document_name: fileName, autentique_id: result.id });
+            addHistory('subscriber', subscriber.id, 'envio_contrato', { document_name: fileName, autentique_doc_id: result.documentId });
 
         } catch (error) {
             console.error('Error sending contract:', error);
