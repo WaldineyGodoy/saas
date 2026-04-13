@@ -205,7 +205,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             setSignatureLink(result.url);
 
             // 6. Send Notifications
-            const messageWithLink = `Olá ${formData.name}, segue o link para assinatura do seu contrato de energia: ${result.url}\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua economia.`;
+            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${result.url}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\nhttps://b2wenergia.com.br/contrato`;
             
             // WhatsApp
             try {
@@ -248,7 +248,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!confirm) return;
 
         try {
-            const messageWithLink = `Olá, segue novamente o link para assinatura do seu contrato de energia: ${sig.autentique_url}\n\nPor favor, assine digitalmente para darmos prosseguimento.`;
+            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${sig.autentique_url}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\nhttps://b2wenergia.com.br/contrato`;
             
             // WhatsApp
             let instanceName = 'default';
