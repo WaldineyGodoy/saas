@@ -81,8 +81,8 @@ serve(async (req) => {
 
         const documentId = result.data.createDocument.id;
         
-        // 2. PAUSA ESTRATÉGICA (3 segundos)
-        await sleep(3000);
+        // 2. PAUSA ESTRATÉGICA (Aumentada para 3.5s para maior resiliência)
+        await sleep(3500);
 
         // 3. CONSULTA DE REDUNDÂNCIA (VARREDURA COMPLETA)
         let signingLink = null;
@@ -116,16 +116,20 @@ serve(async (req) => {
             const queryData = await queryRes.json();
             
             finalSignatures = queryData.data?.document?.signatures;
-            if (finalSignatures && finalSignatures.length > 0) {
-                const sig = finalSignatures[0];
-                // Tentamos capturar de vários campos possíveis para depuração
-                signingLink = sig.link?.short_link || sig.link?.view_short_link;
+            
+            if (finalSignatures && Array.isArray(finalSignatures)) {
+                // CORREÇÃO v8: Procurar em todas as assinaturas pela primeira que tiver um link válido
+                const signatureWithLink = finalSignatures.find(sig => sig.link && (sig.link.short_link || sig.link.view_short_link));
+                if (signatureWithLink) {
+                    signingLink = signatureWithLink.link.short_link || signatureWithLink.link.view_short_link;
+                    console.log('Link encontrado na assinatura de:', signatureWithLink.name);
+                }
             }
         } catch (e) {
             console.error('Falha na consulta de redundância:', e);
         }
 
-        // 4. Fallback final (dashboard administrativo)
+        // 4. Fallback final
         const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${documentId}`;
 
         // 5. Salvar na tabela signatures
@@ -140,7 +144,7 @@ serve(async (req) => {
                 metadata: { 
                     ...result.data.createDocument, 
                     debug_signatures: finalSignatures,
-                    captured_via: signingLink ? 'post_query' : 'fallback'
+                    captured_via: signingLink ? 'post_query_scan' : 'fallback'
                 }
             });
 
