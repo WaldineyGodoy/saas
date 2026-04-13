@@ -1458,6 +1458,55 @@ Associado`;
         }
     };
 
+    const handleSendManualWA = async () => {
+        if (!formData.phone) {
+            showAlert('Assinante sem telefone cadastrado!', 'warning');
+            return;
+        }
+        if (!manualMessage.trim()) {
+            showAlert('Digite uma mensagem!', 'warning');
+            return;
+        }
+
+        setIsSendingManualWA(true);
+        try {
+            let fileBase64 = null;
+            if (manualFile) {
+                const reader = new FileReader();
+                fileBase64 = await new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(manualFile);
+                });
+            }
+
+            const result = await sendWhatsapp(
+                formData.phone,
+                manualMessage,
+                null, 
+                fileBase64,
+                manualFile ? manualFile.name : null
+            );
+
+            if (result.success) {
+                showAlert('Comunicado enviado com sucesso!', 'success');
+                await addHistory('subscriber', subscriber.id, 'whatsapp_manual', { 
+                    message: manualMessage,
+                    attached_file: manualFile ? manualFile.name : null
+                });
+                setManualMessage('');
+                setManualFile(null);
+            } else {
+                throw new Error(result.error || 'Falha ao enviar');
+            }
+        } catch (error) {
+            console.error('Error sending manual WA:', error);
+            showAlert('Erro ao enviar WhatsApp: ' + error.message, 'error');
+        } finally {
+            setIsSendingManualWA(false);
+        }
+    };
+
     const handleDelete = async () => {
         if (!subscriber?.id) return;
         const confirm = await showConfirm('Tem certeza que deseja excluir este assinante?', 'Excluir Assinante', 'Excluir', 'Cancelar');
@@ -2411,13 +2460,102 @@ Associado`;
                     )}
 
                         {activeTab === 'comunicacao' && (
-                            <div style={{ paddingBottom: '1rem' }}>
-                                <HistoryTimeline
-                                    entityType="subscriber"
-                                    entityId={subscriber.id}
-                                    entityName={formData.name}
-                                    onClose={() => setActiveTab('dados')}
-                                />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '1rem' }}>
+                                {/* Composer */}
+                                <div style={{ 
+                                    background: 'white', 
+                                    padding: '1.5rem', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <MessageSquare size={18} color="#25D366" />
+                                        Enviar Novo Comunicado (WhatsApp)
+                                    </h4>
+
+                                    <textarea
+                                        value={manualMessage}
+                                        onChange={(e) => setManualMessage(e.target.value)}
+                                        placeholder="Digite a mensagem para o assinante..."
+                                        style={{
+                                            width: '100%',
+                                            height: '120px',
+                                            padding: '1rem',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '8px',
+                                            fontSize: '0.95rem',
+                                            outline: 'none',
+                                            resize: 'vertical',
+                                            marginBottom: '1rem',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <label style={{ 
+                                                display: 'flex', alignItems: 'center', gap: '0.5rem', 
+                                                padding: '0.5rem 1rem', background: '#f1f5f9', 
+                                                borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem',
+                                                color: '#475569', fontWeight: 600, border: '1px solid #e2e8f0'
+                                            }}>
+                                                <Paperclip size={16} />
+                                                {manualFile ? 'Alterar Arquivo' : 'Anexar Arquivo'}
+                                                <input 
+                                                    type="file" 
+                                                    style={{ display: 'none' }} 
+                                                    onChange={(e) => setManualFile(e.target.files[0])}
+                                                />
+                                            </label>
+                                            {manualFile && (
+                                                <span style={{ fontSize: '0.8rem', color: '#003366', fontWeight: 600 }}>
+                                                    {manualFile.name} ({(manualFile.size / 1024).toFixed(0)} KB)
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setManualFile(null)}
+                                                        style={{ marginLeft: '0.5rem', border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleSendManualWA}
+                                            disabled={isSendingManualWA || !manualMessage.trim()}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.6rem',
+                                                background: '#25D366', color: 'white', border: 'none',
+                                                padding: '0.6rem 1.5rem', borderRadius: '8px',
+                                                fontWeight: 'bold', cursor: (isSendingManualWA || !manualMessage.trim()) ? 'not-allowed' : 'pointer',
+                                                opacity: (isSendingManualWA || !manualMessage.trim()) ? 0.7 : 1,
+                                                boxShadow: '0 4px 6px -1px rgba(37, 211, 102, 0.4)'
+                                            }}
+                                        >
+                                            {isSendingManualWA ? <Loader2 size={18} className="spin-animation" /> : <Send size={18} />}
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Comunicado'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* History Section */}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', paddingLeft: '0.5rem' }}>
+                                        <History size={18} color="#64748b" />
+                                        <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                                            Histórico de Interações
+                                        </h4>
+                                    </div>
+                                    <HistoryTimeline
+                                        entityType="subscriber"
+                                        entityId={subscriber.id}
+                                        entityName={formData.name}
+                                        onClose={() => setActiveTab('dados')}
+                                    />
+                                </div>
                             </div>
                         )}
 
