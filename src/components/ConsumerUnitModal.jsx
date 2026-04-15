@@ -610,6 +610,20 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </div>
                                     </div>
 
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante Vinculado à UC (Dono da Cota)</label>
+                                        <select
+                                            value={formData.subscriber_id}
+                                            onChange={e => handleSubscriberChange(e.target.value)}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc' }}
+                                        >
+                                            <option value="">Nenhum assinante vinculado...</option>
+                                            {subscribers.map(s => (
+                                                <option key={`sub_${s.id}`} value={s.id}>{s.name} - {s.cpf_cnpj}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                     <div style={{ 
                                         background: '#f0f9ff', 
                                         padding: '1.25rem', 
