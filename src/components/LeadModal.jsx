@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
 import { maskPhone, validatePhone } from '../lib/validators';
-import { Clock, User, Home, Zap, CreditCard, History, X } from 'lucide-react';
+import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
@@ -12,6 +12,12 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     const { showAlert, showConfirm } = useUI();
     const [originators, setOriginators] = useState([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [activeTab, setActiveTab] = useState('dados'); // 'dados' or 'comunicados'
+    
+    // Estados para WhatsApp Manual
+    const [manualMessage, setManualMessage] = useState('');
+    const [manualFile, setManualFile] = useState(null);
+    const [isSendingManualWA, setIsSendingManualWA] = useState(false);
 
     // Status Options: Simulação, Indicado, Em negociação, Negocio Perdido, Ativo, Pago
     const statusOptions = [
@@ -74,6 +80,29 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
             }
         }
     }, [lead, profile]);
+
+    const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) {
+            console.error('addHistory: Missing entity ID');
+            return;
+        }
+        try {
+            console.log(`Adding history: ${type} ${id} - ${action}`, details);
+            const { error } = await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: customContent || `${action === 'email_sent' ? 'E-mail enviado' : action}: ${details.type || ''}`,
+                metadata: details,
+                created_by: profile?.id
+            });
+            if (error) {
+                console.error('Supabase Error adding history:', error);
+                throw error;
+            }
+        } catch (error) {
+            console.error('Error adding history:', error);
+        }
+    };
 
     const fetchOriginators = async () => {
         // Fetch from the actual Originators table, not profiles
@@ -220,6 +249,83 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         }
     };
 
+    const handleSendManualWhatsApp = async () => {
+        if (!manualMessage.trim() && !manualFile) {
+            showAlert('Por favor, digite uma mensagem ou anexe um arquivo.', 'warning');
+            return;
+        }
+
+        // Usar dados da prop lead para garantir que não haja "stale state"
+        const targetPhone = lead.phone || formData.phone;
+        const targetId = lead.id;
+        const targetName = lead.name || formData.name;
+
+        if (!targetPhone) {
+            showAlert('Telefone do lead não encontrado.', 'error');
+            return;
+        }
+
+        const confirmed = await showConfirm(
+            `Deseja enviar esta mensagem para ${targetName}?`,
+            'Confirmar Envio',
+            'Sim, Enviar',
+            'Cancelar'
+        );
+        if (!confirmed) return;
+
+        setIsSendingManualWA(true);
+        try {
+            let mediaBase64 = null;
+            let fileName = null;
+
+            if (manualFile) {
+                const reader = new FileReader();
+                const filePromise = new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                });
+                reader.readAsDataURL(manualFile);
+                mediaBase64 = await filePromise;
+                fileName = manualFile.name;
+            }
+
+            // Normalização extra de DDI (Garantir 55 para números brasileiros)
+            let phoneToQuery = targetPhone.replace(/\D/g, '');
+            if (phoneToQuery.length >= 10 && phoneToQuery.length <= 11 && !phoneToQuery.startsWith('55')) {
+                phoneToQuery = `55${phoneToQuery}`;
+            }
+
+            const response = await sendWhatsapp(
+                phoneToQuery,
+                manualMessage,
+                null, // mediaUrl
+                mediaBase64,
+                fileName
+            );
+
+            if (response.error) throw new Error(response.error);
+
+            showAlert('Mensagem enviada com sucesso!', 'success');
+            
+            // Log to history
+            await addHistory('lead', targetId, 'whatsapp_manual', {
+                message: manualMessage,
+                file: fileName,
+                phone: phoneToQuery,
+                status: 'sent'
+            }, `Comunicado WhatsApp: ${manualMessage.substring(0, 50)}${manualMessage.length > 50 ? '...' : ''}`);
+
+            // Clear fields
+            setManualMessage('');
+            setManualFile(null);
+        } catch (error) {
+            console.error('Error sending manual WhatsApp:', error);
+            showAlert('Erro ao enviar mensagem: ' + error.message, 'error');
+        } finally {
+            setIsSendingManualWA(false);
+        }
+    };
+
     const handleDelete = async () => {
         if (!lead?.id) return;
         const confirm = await showConfirm('Tem certeza que deseja excluir este lead? Esta ação não pode ser desfeita.');
@@ -263,6 +369,34 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     </h3>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         {lead && (
+                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px', marginRight: '0.5rem' }}>
+                                <button
+                                    onClick={() => setActiveTab('dados')}
+                                    style={{
+                                        padding: '0.4rem 0.8rem', borderRadius: '6px', border: 'none',
+                                        background: activeTab === 'dados' ? 'white' : 'transparent',
+                                        color: activeTab === 'dados' ? 'var(--color-blue)' : '#64748b',
+                                        boxShadow: activeTab === 'dados' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                    }}
+                                >
+                                    <User size={14} /> Dados
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('comunicados')}
+                                    style={{
+                                        padding: '0.4rem 0.8rem', borderRadius: '6px', border: 'none',
+                                        background: activeTab === 'comunicados' ? 'white' : 'transparent',
+                                        color: activeTab === 'comunicados' ? 'var(--color-blue)' : '#64748b',
+                                        boxShadow: activeTab === 'comunicados' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                    }}
+                                >
+                                    <MessageSquare size={14} /> Comunicados
+                                </button>
+                            </div>
+                        )}
+                        {lead && (
                             <button
                                 type="button"
                                 onClick={() => setShowHistory(true)}
@@ -284,7 +418,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
-                    <form onSubmit={handleSubmit}>
+                    {activeTab === 'dados' ? (
+                        <form onSubmit={handleSubmit}>
 
                         <CollapsibleSection title="Dados do Lead" icon={User} defaultOpen={true}>
                             <div>
@@ -502,6 +637,80 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                             </div>
                         </div>
                     </form>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', animate: 'fadeIn 0.3s ease' }}>
+                        <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                            <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                <MessageSquare size={18} style={{ color: 'var(--color-blue)' }} />
+                                Enviar Novo Comunicado para {formData.name}
+                            </h4>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <textarea
+                                    placeholder="Digite a mensagem que o lead receberá no WhatsApp..."
+                                    value={manualMessage}
+                                    onChange={(e) => setManualMessage(e.target.value)}
+                                    style={{
+                                        width: '100%', minHeight: '120px', padding: '1rem',
+                                        borderRadius: '8px', border: '1px solid #cbd5e1',
+                                        resize: 'vertical', fontSize: '0.95rem', outline: 'none'
+                                    }}
+                                />
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <label style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                            padding: '0.5rem 1rem', background: '#fff',
+                                            border: '1px solid #cbd5e1', borderRadius: '6px',
+                                            cursor: 'pointer', fontSize: '0.85rem', color: '#475569'
+                                        }}>
+                                            <FileText size={16} />
+                                            {manualFile ? manualFile.name : 'Anexar Arquivo'}
+                                            <input
+                                                type="file"
+                                                style={{ display: 'none' }}
+                                                onChange={(e) => setManualFile(e.target.files[0])}
+                                            />
+                                        </label>
+                                        {manualFile && (
+                                            <button
+                                                onClick={() => setManualFile(null)}
+                                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem' }}
+                                            >
+                                                Remover
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={handleSendManualWhatsApp}
+                                        disabled={isSendingManualWA || (!manualMessage.trim() && !manualFile)}
+                                        style={{
+                                            padding: '0.6rem 2rem', background: 'var(--color-blue)',
+                                            color: '#fff', border: 'none', borderRadius: '6px',
+                                            fontWeight: '600', cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            opacity: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 0.6 : 1
+                                        }}
+                                    >
+                                        {isSendingManualWA ? 'Enviando...' : 'Enviar Agora'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                            <h4 style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '1rem' }}>Últimas Interações</h4>
+                            <HistoryTimeline 
+                                entityType="lead" 
+                                entityId={lead.id} 
+                                limit={5} 
+                                showHeader={false} 
+                            />
+                        </div>
+                    </div>
+                )}
                 </div>
             </div>
 

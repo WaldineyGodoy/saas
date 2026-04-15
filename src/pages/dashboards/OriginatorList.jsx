@@ -165,6 +165,7 @@ export default function OriginatorList() {
 
             {isModalOpen && (
                 <OriginatorModal
+                    key={selectedOriginator?.id}
                     originator={selectedOriginator}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}

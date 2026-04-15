@@ -443,6 +443,7 @@ export default function LeadsList() {
 
             {isModalOpen && (
                 <LeadModal
+                    key={editingLead?.id}
                     lead={editingLead}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}

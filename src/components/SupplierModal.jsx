@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { fetchCpfCnpjData } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
+import { History } from 'lucide-react';
+import HistoryTimeline from './HistoryTimeline';
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
+    const { profile } = useAuth();
     const { showAlert, showConfirm } = useUI();
     const [loading, setLoading] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
     const [usinas, setUsinas] = useState([]); // To display linked usinas
 
     const [formData, setFormData] = useState({
@@ -58,6 +63,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const fetchLinkedUsinas = async (supplierId) => {
         const { data } = await supabase.from('usinas').select('id, name, status').eq('supplier_id', supplierId);
         setUsinas(data || []);
+    };
+
+    const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) return;
+        try {
+            await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: customContent || `${action}: ${details.type || ''}`,
+                metadata: details,
+                created_by: profile?.id
+            });
+        } catch (error) {
+            console.error('Error adding history:', error);
+        }
     };
 
     const handleCnpjBlur = async () => {
@@ -177,6 +197,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             console.log('Supabase result:', result); // Debug log
 
             if (result.error) throw result.error;
+
+            // Log history
+            if (supplier?.id) {
+                await addHistory('supplier', supplier.id, 'supplier_updated', {
+                    name: formData.name,
+                    status: 'updated'
+                }, 'Dados do fornecedor atualizados');
+            } else if (result.data) {
+                await addHistory('supplier', result.data.id, 'supplier_created', {
+                    name: formData.name,
+                    status: 'created'
+                }, 'Novo fornecedor cadastrado');
+            }
+
             onSave(result.data);
             onClose();
         } catch (error) {
@@ -407,21 +441,35 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         </div>
                     )}
 
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
-                        <div>
-                            {supplier && onDelete && (
-                                <button type="button" onClick={handleDelete} style={{ padding: '0.5rem 1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', border: '1px solid #fecaca' }}>
-                                    Excluir
-                                </button>
-                            )}
-                        </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', background: '#ccc', borderRadius: '4px' }}>Cancelar</button>
-                            <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px' }}>
-                                {loading ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        </div>
                     </div>
+
+                    {supplier && (
+                        <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, color: '#444' }}>
+                                    <History size={18} style={{ color: 'var(--color-blue)' }} /> Histórico de Alterações
+                                </h4>
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    style={{
+                                        fontSize: '0.8rem', padding: '0.3rem 0.6rem',
+                                        background: '#f1f5f9', border: '1px solid #e2e8f0',
+                                        borderRadius: '4px', cursor: 'pointer', color: '#64748b'
+                                    }}
+                                >
+                                    {showHistory ? 'Ocultar' : 'Ver Tudo'}
+                                </button>
+                            </div>
+                            
+                            <HistoryTimeline 
+                                entityType="supplier" 
+                                entityId={supplier.id} 
+                                limit={showHistory ? 20 : 5}
+                                showHeader={false}
+                            />
+                        </div>
+                    )}
                 </form>
             </div>
         </div>

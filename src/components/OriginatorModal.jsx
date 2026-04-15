@@ -1,12 +1,17 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
+import { History } from 'lucide-react';
+import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 export default function OriginatorModal({ originator, onClose, onSave, onDelete }) {
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -85,6 +90,21 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         }
     }, [formData.pix_key_type, formData.cpf_cnpj, formData.email, formData.phone]);
 
+    const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) return;
+        try {
+            await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: customContent || `${action}: ${details.type || ''}`,
+                metadata: details,
+                created_by: profile?.id
+            });
+        } catch (error) {
+            console.error('Error adding history:', error);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -127,8 +147,20 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
             let result;
             if (originator?.id) {
                 result = await supabase.from('originators_v2').update(payload).eq('id', originator.id).select().single();
+                if (!result.error) {
+                    await addHistory('originator', originator.id, 'originator_updated', {
+                        name: formData.name,
+                        status: 'updated'
+                    }, 'Dados do originador atualizados');
+                }
             } else {
                 result = await supabase.from('originators_v2').insert(payload).select().single();
+                if (!result.error && result.data) {
+                    await addHistory('originator', result.data.id, 'originator_created', {
+                        name: formData.name,
+                        status: 'created'
+                    }, 'Novo originador cadastrado');
+                }
             }
 
             if (result.error) throw result.error;
@@ -382,17 +414,32 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                     )}
 
 
-                    <div className="modal-footer" style={{ gridColumn: '1 / -1' }}>
-                        {originator && onDelete && (
-                            <button type="button" onClick={handleDelete} className="btn btn-danger" style={{ marginRight: 'auto' }}>
-                                Excluir
-                            </button>
-                        )}
-                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
-                        <button type="submit" disabled={loading} className="btn btn-primary">
-                            {loading ? 'Salvando...' : 'Salvar Originador'}
-                        </button>
                     </div>
+
+                    {originator && (
+                        <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, color: '#475569' }}>
+                                    <History size={18} /> Histórico de Alterações
+                                </h4>
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem' }}
+                                >
+                                    {showHistory ? 'Ocultar' : 'Ver Tudo'}
+                                </button>
+                            </div>
+                            
+                            <HistoryTimeline 
+                                entityType="originator" 
+                                entityId={originator.id} 
+                                limit={showHistory ? 20 : 5}
+                                showHeader={false}
+                            />
+                        </div>
+                    )}
 
                 </form>
             </div>

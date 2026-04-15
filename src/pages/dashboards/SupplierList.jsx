@@ -105,6 +105,7 @@ export default function SupplierList() {
 
             {isModalOpen && (
                 <SupplierModal
+                    key={editingSupplier?.id}
                     supplier={editingSupplier}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
