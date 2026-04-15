@@ -778,122 +778,130 @@ export default function InvoiceListManager() {
                                 <thead style={{ background: '#f8fafc' }}>
                                     <tr>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Status</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vr. da Fatura</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vencimento</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Unidade Consumidora</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Valor</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vr. Conta de Energia</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Saldo</th>
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredInvoices.map(inv => (
-                                        <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '1rem' }}>{getStatusBadge(inv.status)}</td>
-                                            <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
-                                            <td style={{ padding: '1rem' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{inv.consumer_units?.numero_uc || 'N/A'}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{inv.consumer_units?.subscribers?.name}</div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'center' }}>
-                                                    <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{formatCurrency(inv.valor_a_pagar)}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
-                                                        <span>v. conta:</span>
-                                                        <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                                                            {formatCurrency(Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0)))}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', alignItems: 'center' }}>
-                                                    {/* Botão PAGAR ou Status PAGA */}
-                                                    <div style={{ width: '85px', display: 'flex', justifyContent: 'center' }}>
-                                                        {inv.status === 'pago' ? (
-                                                            <span style={{ 
-                                                                width: '100%',
-                                                                textAlign: 'center',
-                                                                color: '#166534', 
-                                                                background: '#dcfce7', 
-                                                                padding: '0.4rem 0.2rem', 
-                                                                borderRadius: '4px', 
-                                                                fontSize: '0.7rem', 
-                                                                fontWeight: '800',
-                                                                border: '1px solid #bbf7d0',
-                                                                display: 'block'
-                                                            }}>PAGA</span>
-                                                        ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
-                                                            <button 
-                                                                onClick={() => handlePayBill(inv)}
-                                                                disabled={payingId === inv.id}
-                                                                style={{ 
-                                                                    width: '100%',
-                                                                    background: '#ef4444', 
-                                                                    color: 'white', 
-                                                                    border: 'none', 
-                                                                    padding: '0.4rem 0.2rem', 
-                                                                    borderRadius: '4px', 
-                                                                    fontSize: '0.7rem', 
-                                                                    fontWeight: 'bold', 
-                                                                    cursor: 'pointer',
-                                                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-                                                                }}
-                                                            >
-                                                                {payingId === inv.id ? '...' : 'PAGAR'}
-                                                            </button>
-                                                        ) : null}
-                                                    </div>
+                                        {filteredInvoices.map(inv => {
+                                            const factValue = Number(inv.valor_a_pagar) || 0;
+                                            const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
+                                            const balance = factValue - energyBillValue;
 
-                                                    {/* Botão BOLETO (Asaas) */}
-                                                    <div style={{ width: '85px', display: 'flex', justifyContent: 'center' }}>
-                                                        {inv.asaas_boleto_url ? (
-                                                            <a 
-                                                                href={inv.asaas_boleto_url} 
-                                                                target="_blank" 
-                                                                rel="noopener noreferrer" 
-                                                                style={{ 
-                                                                    width: '100%',
-                                                                    textAlign: 'center',
-                                                                    background: '#dcfce7', 
-                                                                    color: '#166534', 
-                                                                    border: '1px solid #bbf7d0', 
-                                                                    padding: '0.4rem 0.2rem', 
-                                                                    borderRadius: '4px', 
-                                                                    textDecoration: 'none', 
-                                                                    fontSize: '0.7rem',
-                                                                    fontWeight: 'bold',
-                                                                    display: 'block'
-                                                                }}
-                                                            >
-                                                                BOLETO
-                                                            </a>
-                                                        ) : (
-                                                            <div style={{ width: '100%' }}></div>
-                                                        )}
-                                                    </div>
+                                            return (
+                                                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '1rem' }}>{getStatusBadge(inv.status)}</td>
+                                                    
+                                                    {/* Vr. da Fatura + Boleto */}
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                                                            <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
+                                                            {inv.asaas_boleto_url && (
+                                                                <a 
+                                                                    href={inv.asaas_boleto_url} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    style={{ 
+                                                                        padding: '0.3rem 0.6rem',
+                                                                        background: '#dcfce7', 
+                                                                        color: '#166534', 
+                                                                        border: '1px solid #bbf7d0', 
+                                                                        borderRadius: '4px', 
+                                                                        textDecoration: 'none', 
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 'bold'
+                                                                    }}
+                                                                >
+                                                                    BOLETO
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </td>
 
-                                                    {/* Botão EDITAR */}
-                                                    <div style={{ width: '85px', display: 'flex', justifyContent: 'center' }}>
+                                                    <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
+                                                    
+                                                    <td style={{ padding: '1rem' }}>
+                                                        <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{inv.consumer_units?.numero_uc || 'N/A'}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{inv.consumer_units?.subscribers?.name}</div>
+                                                    </td>
+
+                                                    {/* Vr. Conta de Energia + Pagar */}
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                                                            <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
+                                                            <div style={{ minWidth: '85px' }}>
+                                                                {inv.status === 'pago' ? (
+                                                                    <span style={{ 
+                                                                        display: 'block',
+                                                                        textAlign: 'center',
+                                                                        color: '#166534', 
+                                                                        background: '#dcfce7', 
+                                                                        padding: '0.4rem 0.2rem', 
+                                                                        borderRadius: '4px', 
+                                                                        fontSize: '0.7rem', 
+                                                                        fontWeight: '800',
+                                                                        border: '1px solid #bbf7d0'
+                                                                    }}>PAGA</span>
+                                                                ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
+                                                                    <button 
+                                                                        onClick={() => handlePayBill(inv)}
+                                                                        disabled={payingId === inv.id}
+                                                                        style={{ 
+                                                                            width: '100%',
+                                                                            background: '#ef4444', 
+                                                                            color: 'white', 
+                                                                            border: 'none', 
+                                                                            padding: '0.4rem 0.2rem', 
+                                                                            borderRadius: '4px', 
+                                                                            fontSize: '0.7rem', 
+                                                                            fontWeight: 'bold', 
+                                                                            cursor: 'pointer',
+                                                                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                        }}
+                                                                    >
+                                                                        {payingId === inv.id ? '...' : 'PAGAR'}
+                                                                    </button>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Saldo */}
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <div style={{ 
+                                                            fontWeight: 'bold', 
+                                                            fontSize: '1rem',
+                                                            color: balance >= -0.01 ? '#166534' : '#dc2626'
+                                                        }}>
+                                                            {formatCurrency(balance)}
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Ação Editar */}
+                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
                                                         <button 
                                                             onClick={() => handleEdit(inv)} 
                                                             style={{ 
-                                                                width: '100%',
                                                                 background: 'white', 
                                                                 border: '1px solid #e2e8f0', 
-                                                                padding: '0.4rem 0.2rem', 
+                                                                padding: '0.4rem 0.8rem', 
                                                                 borderRadius: '4px', 
                                                                 cursor: 'pointer', 
-                                                                fontSize: '0.7rem', 
+                                                                fontSize: '0.75rem', 
                                                                 color: '#475569', 
                                                                 fontWeight: 'bold' 
                                                             }}
                                                         >
                                                             EDITAR
                                                         </button>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                 </tbody>
                             </table>
                         </div>
