@@ -23,8 +23,24 @@ Faturamento mensal, integração bancária e automação de cobrança.
 - **Visualização em Lista (Grid Financeiro)**: Reestruturada para exibir **Vr. da Fatura**, **Vr. Conta de Energia** (fonte destacada em vermelho) e **Saldo** (lucro líquido por fatura).
 - **Ações Rápidas**: Links de Boleto e botões de Pagamento posicionados junto aos seus respectivos valores para agilidade operacional.
 - **Novo Modal de Faturamento (`InvoiceFormModal`)**: Refatorado para navegação por abas horizontais (**Identificação, Consumo, Financeiro, Resumo**).
+- **Competência Manual**: Introdução de seletor de mês/ano para faturas manuais, permitindo lançamentos de valor zero ou ajustes retroativos sem violação de chaves únicas.
 - **Aba Resumo**: Centraliza o card de detalhamento e as ações de download/visualização, otimizando o fluxo de conferência.
 - **Calendários de Vencimento**: Dualidade de visão entre **Venc. Faturas** (B2W) e **Venc. Conta de Energia** (Concessionária).
+
+### 🏗️ Gestão de Inventário e Obras
+Monitoramento de insumos para projetos de infraestrutura (ex: UFV Bom Jesus II).
+- **Controle de Materiais**: Registro de pedidos, fornecedores e custos unitários na tabela `materials_inventory`.
+- **Rastreabilidade**: Vinculação de compras a projetos específicos para controle de saldo residual de oba.
+
+### 🏢 Gestão de Parceiros (Originadores e Fornecedores)
+Cadastramento e acompanhamento de parceiros estratégicos.
+- **Paridade de Auditoria**: Possuem a mesma aba **Comunicados** e **Timeline de Histórico** que os Assinantes.
+- **Auditoria de Cadastro**: Logs automáticos para criação, edição e ativação de perfis.
+
+### 🎯 Prospecção (Leads)
+Funil de entrada de novos assinantes.
+- **Histórico de Contato**: Timeline dedicada para registrar ligações, visitas e envios de proposta via WhatsApp.
+- **Conversão Direta**: Fluxo simplificado de transformação de Lead em Assinante com preservação do histórico de auditoria.
 
 ---
 
@@ -114,8 +130,8 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 
 Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 - **Motor de PDF**: Geração dinâmica com paginação automática (suporta contratos de 17+ cláusulas).
-- **Integração Automática**: Documentos criados via Edge Function e enviados para os e-mails/telefones do assinante.
-- **Webhooks**: Sincronização em tempo real do status da assinatura (`signed`, `pending`, `rejected`).
+- **Integração YOURLS**: Encurtamento automático do link de assinatura antes do envio ao cliente para melhorar a experiência mobile.
+- **Webhooks V2**: Processamento de payloads aninhados para sincronização instantânea do status da assinatura.
 - **Link Persistente**: O link de assinatura fica disponível no histórico do assinante até a conclusão.
 
 ---
@@ -135,11 +151,20 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 ## 10. Rastreabilidade
 - **Ações**: `email_sent`, `wa_sent`, `fatura_emitida`, `contract_signed`.
 - **Auditoria**: Timeline registra ambiente (Sandbox/Prod).
+- **Interatividade**: Suporte a mensagens expansíveis (`expand/collapse`) para visualização de logs longos (Ex: JSON de Webhooks ou payloads de WhatsApp).
+- **Segurança de Cache**: Uso de `key={id}` na montagem de modais para garantir que a timeline mostrada pertença estritamente ao registro selecionado, eliminando dados residuais de buscas anteriores.
 - **Logs de UI**: Histórico de mudanças de layout e visualização padrão.
 
 ---
 
 ## 11. Log de Atualizações Recentes
+
+### 📅 15 de Abril de 2026 (20:30)
+- **Assinante Vinculado à UC**: Select adicionado na Aba de Vínculos da UC, explicitando o real dono daquele ponto de energia.
+- **DDI 55 no WhatsApp**: Implementação de higienização de contatos com prepends universais de DDI 55 no servidor.
+- **Asaas em Banco de Dados**: Edge functions de cobrança 100% integradas à tabela de configuração (`integrations_config`).
+- **Upsert na Fatura Zerada**: Faturas manuais forçam a substituição segura e evitam erros de chave única com faturas outrora canceladas.
+- **Self-Healing Financeiro**: Remoção absoluta de faturas inativas ("Canceladas") das fórmulas de Inadimplência, estabilizando cálculos.
 
 ### 📅 15 de Abril de 2026 (11:30)
 - **Harmonização de Funções**: Upgrade global do `supabase-js` para v2.45.0 em todas as Edge Functions para resolver erros de CDN (esm.sh).
