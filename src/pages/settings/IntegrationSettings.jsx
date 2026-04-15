@@ -309,13 +309,15 @@ export default function IntegrationSettings({ serviceName, title, description })
                                 />
                             </div>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>Sandbox Secret Key (Opcional)</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>{serviceName === 'financial_api' ? 'Webhook Access Token' : 'Sandbox Secret Key (Opcional)'}</label>
                                 <input
                                     type="password"
                                     value={formData.sandbox_secret_key}
+                                    placeholder={serviceName === 'financial_api' ? 'Token definido no Webhook do Asaas' : ''}
                                     onChange={e => setFormData({ ...formData, sandbox_secret_key: e.target.value })}
                                     style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #fcd34d', fontSize: '0.95rem', background: '#fff' }}
                                 />
+                                {serviceName === 'financial_api' && <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.75rem', color: '#b45309' }}>Use este token se configurado no painel de Webhooks do Asaas.</p>}
                             </div>
                         </div>
                     </div>
@@ -357,13 +359,15 @@ export default function IntegrationSettings({ serviceName, title, description })
                             </div>
                             {serviceName !== 'resend_api' && (
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>Secret Key (Opcional)</label>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>{serviceName === 'financial_api' ? 'Webhook Access Token' : 'Secret Key (Opcional)'}</label>
                                     <input
                                         type="password"
                                         value={formData.secret_key}
+                                        placeholder={serviceName === 'financial_api' ? 'Token definido no Webhook do Asaas' : ''}
                                         onChange={e => setFormData({ ...formData, secret_key: e.target.value })}
                                         style={{ width: '100%', padding: '0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
                                     />
+                                    {serviceName === 'financial_api' && <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>Deve ser idêntico ao Token configurado no painel de Webhooks do Asaas.</p>}
                                 </div>
                             )}
                         </div>

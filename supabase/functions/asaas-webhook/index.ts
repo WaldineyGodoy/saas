@@ -11,8 +11,29 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     try {
-        const signature = req.headers.get('asaas-access-token'); // Or custom header if configured
-        // In real prod, verify signature if Asaas sends one, or use a secret token in URL
+        const supabase = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        // 1. Get Financial Config for Security and API access
+        const { data: finConfig, error: finError } = await supabase
+            .from('integrations_config')
+            .select('*')
+            .eq('service_name', 'financial_api')
+            .single();
+
+        if (finError || !finConfig) {
+            console.error('Financial integration not configured');
+            throw new Error('Financial integration not configured');
+        }
+
+        // Security Check: Validate Asaas Webhook Token
+        const receivedToken = req.headers.get('asaas-access-token');
+        if (finConfig.secret_key && receivedToken !== finConfig.secret_key) {
+            console.error('Invalid Asaas access token');
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+        }
 
         const eventData = await req.json();
         const { event, payment } = eventData;
@@ -23,12 +44,50 @@ serve(async (req) => {
             return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
+        // 2. Identify Invoice Type (Individual or Consolidated)
+        let invoicesToProcess = [];
+        let isConsolidated = false;
 
-        // Map Status
+        // Try individual first
+        const { data: individualInvoice } = await supabase
+            .from('invoices')
+            .select(`*, consumer_units (*)`)
+            .eq('asaas_payment_id', payment.id)
+            .maybeSingle();
+
+        if (individualInvoice) {
+            invoicesToProcess = [individualInvoice];
+        } else {
+            // Try consolidated
+            const { data: consolidatedInvoice } = await supabase
+                .from('consolidated_invoices')
+                .select('*')
+                .eq('asaas_payment_id', payment.id)
+                .maybeSingle();
+
+            if (consolidatedInvoice) {
+                isConsolidated = true;
+                // Update consolidated status
+                if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
+                    await supabase.from('consolidated_invoices').update({ status: 'paid' }).eq('id', consolidatedInvoice.id);
+                }
+
+                // Get linked individual invoices
+                const { data: linkedInvoices } = await supabase
+                    .from('invoices')
+                    .select(`*, consumer_units (*)`)
+                    .eq('consolidated_invoice_id', consolidatedInvoice.id);
+                
+                invoicesToProcess = linkedInvoices || [];
+            }
+        }
+
+        if (invoicesToProcess.length === 0) {
+            console.warn(`No invoice found for payment.id: ${payment.id}`);
+            return new Response(JSON.stringify({ received: true, status: 'ignored' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // 3. Update Invoice Status
         let newStatus = '';
         let asaasStatus = '';
 
@@ -38,23 +97,96 @@ serve(async (req) => {
         } else if (['PAYMENT_OVERDUE'].includes(event)) {
             newStatus = 'atrasado';
             asaasStatus = 'OVERDUE';
-        } else {
-            // Other events (CREATED, UPDATED, DELETED, etc.) - maybe just log or update asaas_status reference
-            return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Update Invoice
-        const { error } = await supabase
-            .from('invoices')
-            .update({
-                status: newStatus,
-                asaas_status: asaasStatus,
-            })
-            .eq('asaas_payment_id', payment.id);
+        if (newStatus) {
+            const { error: updateError } = await supabase
+                .from('invoices')
+                .update({ status: newStatus, asaas_status: asaasStatus })
+                .in('id', invoicesToProcess.map(i => i.id));
+            
+            if (updateError) console.error('Error updating invoices:', updateError);
+        }
 
-        if (error) {
-            console.error('Error updating invoice:', error);
-            throw error;
+        // 4. Automation: Auto Payment of Energy Bill
+        if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
+            // Get Energy Rules
+            const { data: rules } = await supabase
+                .from('integrations_config')
+                .select('*')
+                .eq('service_name', 'energy_rules')
+                .single();
+
+            const isAutoPaymentEnabled = rules?.variables?.auto_payment === true;
+
+            if (isAutoPaymentEnabled) {
+                const isSandbox = finConfig.environment === 'sandbox';
+                const asaasKey = isSandbox ? finConfig.sandbox_api_key : finConfig.api_key;
+                const asaasUrl = isSandbox ? finConfig.sandbox_endpoint_url : finConfig.endpoint_url;
+
+                for (const inv of invoicesToProcess) {
+                    // Criteria Check
+                    const isAutoConsumo = inv.consumer_units?.modalidade === 'auto_consumo_remoto';
+                    const hasLinhaDigitavel = !!inv.linha_digitavel;
+
+                    if (isAutoConsumo && hasLinhaDigitavel) {
+                        try {
+                            const valorParaPagar = Number(inv.valor_concessionaria) || (
+                                (Number(inv.iluminacao_publica) || 0) + 
+                                (Number(inv.tarifa_minima) || 0) + 
+                                (Number(inv.outros_lancamentos) || 0) + 
+                                (Number(inv.consumo_reais) || 0)
+                            );
+
+                            if (valorParaPagar <= 0) throw new Error('Valor inválido para pagamento');
+
+                            console.log(`Processing Auto Payment for Invoice ${inv.id} - Value: ${valorParaPagar}`);
+
+                            const billResponse = await fetch(`${asaasUrl}/bills`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'access_token': asaasKey
+                                },
+                                body: JSON.stringify({
+                                    identification: inv.linha_digitavel,
+                                    scheduleDate: new Date().toISOString().split('T')[0], // Immediate
+                                    description: `Pagamento Automático Concessionária - UC ${inv.consumer_units?.numero_uc}`,
+                                    value: valorParaPagar
+                                })
+                            });
+
+                            const billData = await billResponse.json();
+
+                            if (billData.errors) {
+                                throw new Error(billData.errors[0].description);
+                            }
+
+                            // Success History
+                            await supabase.from('crm_history').insert({
+                                entity_type: 'invoice',
+                                entity_id: inv.id,
+                                content: `Pagamento automático da conta de energia realizado via Asaas. Protocolo: ${billData.id}`,
+                                metadata: { asaas_id: billData.id, value: valorParaPagar }
+                            });
+
+                        } catch (err) {
+                            console.error(`Auto Payment Failed for Invoice ${inv.id}:`, err.message);
+                            
+                            // Update Status to Error
+                            await supabase.from('invoices').update({ status: 'erro' }).eq('id', inv.id);
+
+                            // Failure History
+                            await supabase.from('crm_history').insert({
+                                entity_type: 'invoice',
+                                entity_id: inv.id,
+                                content: `FALHA no pagamento automático: ${err.message}. Status alterado para ERRO.`,
+                                metadata: { error: err.message, status: 'erro' }
+                            });
+                        }
+                    }
+                }
+            }
         }
 
         return new Response(
@@ -63,7 +195,7 @@ serve(async (req) => {
         )
 
     } catch (error) {
-        console.error(error);
+        console.error('Webhook processing error:', error);
         return new Response(
             JSON.stringify({ error: error.message }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
