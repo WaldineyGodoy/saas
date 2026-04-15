@@ -3,9 +3,9 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, shortenLink } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -204,15 +204,26 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             if (!result || !result.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado');
 
             // 5.1 Save link to subscribers table for quick access
+            // Try to shorten the link before saving/sending
+            let finalLink = result.url;
+            try {
+                const shortRes = await shortenLink(result.url, `assinatura-${subscriber.id.substring(0, 5)}-${new Date().getTime().toString().slice(-4)}`, `Contrato - ${formData.name}`);
+                if (shortRes.success && shortRes.shortUrl) {
+                    finalLink = shortRes.shortUrl;
+                }
+            } catch (shortErr) {
+                console.warn('Falha ao encurtar link do contrato:', shortErr);
+            }
+
             await supabase
                 .from('subscribers')
-                .update({ signature_link: result.url })
+                .update({ signature_link: finalLink })
                 .eq('id', subscriber.id);
 
-            setSignatureLink(result.url);
+            setSignatureLink(finalLink);
 
             // 6. Send Notifications
-            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${result.url}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
+            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
             
             // WhatsApp
             try {
@@ -255,7 +266,23 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         if (!confirm) return;
 
         try {
-            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${sig.autentique_url}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
+            // Check if we already have a short URL or if we should try to shorten now
+            let finalLink = sig.short_url || sig.autentique_url;
+            
+            if (!sig.short_url) {
+                try {
+                    const shortRes = await shortenLink(sig.autentique_url, `reenvio-${sig.id.substring(0, 5)}`, `Reenvio Contrato - ${formData.name}`);
+                    if (shortRes.success && shortRes.shortUrl) {
+                        finalLink = shortRes.shortUrl;
+                        // Save it so we don't shorten again
+                        await supabase.from('signatures').update({ short_url: finalLink }).eq('id', sig.id);
+                    }
+                } catch (e) {
+                    console.warn('Falha no encurtamento durante reenvio:', e);
+                }
+            }
+
+            const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
             
             // WhatsApp
             let instanceName = 'default';
@@ -2050,6 +2077,20 @@ Associado`;
                                                     </div>
 
                                                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingUC(uc);
+                                                                setUcModalMode('all');
+                                                                setShowUcModal(true);
+                                                            }}
+                                                            style={{ padding: '0.5rem', color: '#2563eb', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                                                            title="Editar Dados da UC"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => {
