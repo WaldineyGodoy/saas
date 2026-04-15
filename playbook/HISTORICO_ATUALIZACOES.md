@@ -1,4 +1,20 @@
 ---
+ 
+## [2026-04-15] - Estabilização de Build, Edição de UC e Harmonização de Funções (23:45)
+ 
+### Atualizações Registradas:
+1. **Estabilização de Build (Frontend)**:
+    - Limpeza de imports órfãos no `SubscriberModal.jsx` (removido `shortenLink`), garantindo sucesso no bundle de produção do Vite.
+2. **Harmonização de Versões (Edge Functions)**:
+    - Atualização global do `@supabase/supabase-js` para v2.45.0 em 5 funções críticas (`send-email`, `send-whatsapp`, `yourls-shorten`, etc.) para mitigar erros 522 do CDN `esm.sh`.
+3. **Melhoria UX (Unidades Consumidoras)**:
+    - Implementação do botão **Editar** (ícone Lápis) diretamente nos cards de UC no Modal do Assinante, permitindo acesso imediato à edição completa (`ucModalMode: all`).
+4. **Precisão Financeira de Inadimplência**:
+    - Refino do filtro de faturas em modais e cards globais para ignorar lançamentos com status **`cancelado`**, estabilizando o cálculo do "Total a Pagar".
+5. **Comunicação (Comunicados)**:
+    - Re-introdução do compositor manual de WhatsApp na aba Comunicados e suporte ao modo `isInline` para a Timeline Histórica.
+ 
+---
 
 ## [2026-04-15] - Hardening do CRM, UI/UX e Estabilização de Integrações (20:30)
 
