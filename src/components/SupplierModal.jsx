@@ -441,6 +441,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         </div>
                     )}
 
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
+                        <div>
+                            {supplier && onDelete && (
+                                <button type="button" onClick={handleDelete} style={{ padding: '0.5rem 1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', border: '1px solid #fecaca' }}>
+                                    Excluir
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', background: '#ccc', borderRadius: '4px' }}>Cancelar</button>
+                            <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px' }}>
+                                {loading ? 'Salvando...' : 'Salvar'}
+                            </button>
+                        </div>
                     </div>
 
                     {supplier && (
