@@ -758,6 +758,7 @@ export default function SubscriberList() {
 
             {isModalOpen && (
                 <SubscriberModal
+                    key={editingSubscriber?.id}
                     subscriber={editingSubscriber}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}

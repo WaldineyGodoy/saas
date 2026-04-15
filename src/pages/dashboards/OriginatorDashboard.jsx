@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { shortenLink } from '../../lib/api';
 
 export default function OriginatorDashboard() {
-    const { user, profile } = useAuth();
     const [leads, setLeads] = useState([]);
     const [commissions, setCommissions] = useState([]);
+    const [originator, setOriginator] = useState(null);
+    const [shortLink, setShortLink] = useState('');
 
-    // Logic to generate unique link
-    const uniqueLink = `${window.location.origin}/simulacao?id=${profile?.id}`;
+    // Logic to generate unique link (fallback/base)
+    const longLink = `${window.location.origin}/simulacao?id=${profile?.id}`;
+    const displayLink = shortLink || longLink;
 
     useEffect(() => {
         async function fetchData() {
@@ -36,9 +38,31 @@ export default function OriginatorDashboard() {
 
             // I will implement it as requested.
             // Fetch:
-            const { data: origData } = await supabase.from('originators_v2').select('id, name, pix_key, pix_key_type').eq('user_id', user.id).single();
+            const { data: origData } = await supabase.from('originators_v2')
+                .select('id, name, pix_key, pix_key_type, short_url')
+                .eq('user_id', user.id)
+                .single();
 
             if (origData) {
+                setOriginator(origData);
+                
+                // Handle Short Link
+                if (origData.short_url) {
+                    setShortLink(origData.short_url);
+                } else {
+                    // Try to generate short link on the fly if missing
+                    try {
+                        const res = await shortenLink(longLink, `ref-${profile.id.substring(0, 5)}`, `Link Embaixador - ${origData.name}`);
+                        if (res.success && res.shortUrl) {
+                            setShortLink(res.shortUrl);
+                            // Persist to DB
+                            await supabase.from('originators_v2').update({ short_url: res.shortUrl }).eq('id', origData.id);
+                        }
+                    } catch (e) {
+                        console.error('Failed to shorten link:', e);
+                    }
+                }
+
                 // Fetch Leads
                 const { data: leadsData } = await supabase.from('leads').select('*').eq('originator_id', origData.id);
                 setLeads(leadsData || []);
@@ -58,7 +82,7 @@ export default function OriginatorDashboard() {
     }, [user]);
 
     const copyLink = () => {
-        navigator.clipboard.writeText(uniqueLink);
+        navigator.clipboard.writeText(displayLink);
         alert('Link copiado!');
     };
 
@@ -128,12 +152,17 @@ export default function OriginatorDashboard() {
                 <h3 style={{ color: 'var(--color-text-dark)', fontSize: '1.1rem' }}>Seu Link de Indicação</h3>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                     <input
-                        value={uniqueLink}
+                        value={displayLink}
                         readOnly
                         className="input"
                         style={{ background: 'var(--color-bg-light)', color: 'var(--color-text-medium)' }}
                     />
                     <button onClick={copyLink} className="btn btn-accent">Copiar</button>
+                    {shortLink && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-success)', alignSelf: 'center' }}>
+                            ✨ Link encurtado ativo
+                        </span>
+                    )}
                 </div>
             </div>
 

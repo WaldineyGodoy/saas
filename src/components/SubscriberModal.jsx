@@ -61,16 +61,26 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) {
+            console.error('addHistory: Missing entity ID');
+            return;
+        }
         try {
-            await supabase.from('crm_history').insert({
+            console.log(`Adding history: ${type} ${id} - ${action}`, details);
+            const { error } = await supabase.from('crm_history').insert({
                 entity_type: type,
                 entity_id: id,
                 content: customContent || `${action === 'email_sent' ? 'E-mail enviado' : action}: ${details.type || ''}`,
                 metadata: details,
                 created_by: profile?.id
             });
+            if (error) {
+                console.error('Supabase Error adding history:', error);
+                throw error;
+            }
         } catch (error) {
             console.error('Error adding history:', error);
+            // Optionally show alert if it's a critical failure, but usually history is silent
         }
     };
 
@@ -848,8 +858,18 @@ Associado`;
             return;
         }
 
+        // Usar dados da prop subscriber para garantir que não haja "stale state"
+        const targetPhone = subscriber.phone || formData.phone;
+        const targetId = subscriber.id;
+        const targetName = subscriber.name || formData.name;
+
+        if (!targetPhone) {
+            showAlert('Telefone do assinante não encontrado.', 'error');
+            return;
+        }
+
         const confirmed = await showConfirm(
-            `Deseja enviar esta mensagem para ${formData.name}?`,
+            `Deseja enviar esta mensagem para ${targetName}?`,
             'Confirmar Envio',
             'Sim, Enviar',
             'Cancelar'
@@ -872,8 +892,14 @@ Associado`;
                 fileName = manualFile.name;
             }
 
+            // Normalização extra de DDI (Garantir 55 para números brasileiros)
+            let phoneToQuery = targetPhone.replace(/\D/g, '');
+            if (phoneToQuery.length >= 10 && phoneToQuery.length <= 11 && !phoneToQuery.startsWith('55')) {
+                phoneToQuery = `55${phoneToQuery}`;
+            }
+
             const response = await sendWhatsapp(
-                formData.phone,
+                phoneToQuery,
                 manualMessage,
                 null, // mediaUrl
                 mediaBase64,
@@ -884,10 +910,11 @@ Associado`;
 
             showAlert('Mensagem enviada com sucesso!', 'success');
             
-            // Log to history
-            await addHistory('subscriber', subscriber.id, 'whatsapp_manual', {
+            // Log to history - Usando IDs diretos da prop
+            await addHistory('subscriber', targetId, 'whatsapp_manual', {
                 message: manualMessage,
                 file: fileName,
+                phone: phoneToQuery,
                 status: 'sent'
             }, `Comunicado WhatsApp: ${manualMessage.substring(0, 50)}${manualMessage.length > 50 ? '...' : ''}`);
 
@@ -897,8 +924,7 @@ Associado`;
             
             // Refetch history if it's open
             if (showHistory) {
-                // Since history is in a separate component/logic, usually it re-fetches on mount
-                // or we could trigger a refresh if we had a refresh function
+                // If the history component is visible, it usually re-fetches on change or we can force it
             }
         } catch (error) {
             console.error('Error sending manual WhatsApp:', error);
@@ -941,9 +967,9 @@ Associado`;
 
             // 2. Chamar a API de Notificação
             const notifRes = await sendCombinedNotification({
-                recipientEmail: formData.email,
-                recipientPhone: formData.phone,
-                subscriberName: formData.name,
+                recipientEmail: subscriber.email || formData.email,
+                recipientPhone: subscriber.phone || formData.phone,
+                subscriberName: subscriber.name || formData.name,
                 dueDate: new Date(invoice.due_date || invoice.vencimento).toLocaleDateString('pt-BR'),
                 value: (invoice.total_value || invoice.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                 pdfBlob: pdfBlob,

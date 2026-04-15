@@ -453,6 +453,7 @@ export default function LeadsList() {
 
             {isSubscriberModalOpen && (
                 <SubscriberModal
+                    key={leadToConvert?.id}
                     subscriber={leadToConvert ? {
                         ...leadToConvert,
                         id: null,

@@ -165,6 +165,10 @@ export const createAutentiqueDocument = async (payload) => {
     return callFunction('create-autentique-document', payload);
 };
 
+export const shortenLink = async (url, keyword = null, title = null) => {
+    return callFunction('yourls-shorten', { url, keyword, title });
+};
+
 
 
 /**
