@@ -287,7 +287,12 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                                                         {displayContent}
                                                         {isLong && (
                                                             <button
-                                                                onClick={() => setExpandedItems(prev => ({ ...prev, [item.id]: !isExpanded }))}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setExpandedItems(prev => ({ ...prev, [item.id]: !isExpanded }));
+                                                                }}
                                                                 style={{
                                                                     display: 'inline-block',
                                                                     marginLeft: '0.5rem',
