@@ -1,4 +1,53 @@
 ---
+
+ ## [2026-04-15] - Sincronização Definitiva de Webhooks e Harmonização (20:30)
+ 
+ ### Atualizações Registradas:
+ 1. **Fix Webhook Autentique V2**:
+     - Mapeamento definitivo do payload aninhado: `event.type` para ação e `event.data.id` para identificação do documento.
+     - Inclusão do suporte ao evento `document.finished` para atualização de status automático para "signed".
+     - Prevenção de crash `toLowerCase` em payloads não-string.
+ 2. **Auditoria de Integrações**:
+     - Ativação da tabela `webhook_logs` para rastreamento de payload, headers e status de todas as requisições externas.
+ 3. **Harmonização de Dependências**:
+     - Padronização das Edge Functions (v2.45.0) para evitar erros de importação via CDN.
+
+---
+
+ ## [2026-04-13] - Identificação Jurídica e Fix GraphQL Autentique (18:15)
+ 
+ ### Atualizações Registradas:
+ 1. **Validade Jurídica (Procuração)**:
+     - Preenchimento dinâmico de todos os dados do Outorgante na página 4 do contrato (CPF/CNPJ e endereço completo).
+     - Padronização da identificação da B2W Energia como Outorgada.
+ 2. **Padrão Autentique V2**:
+     - Substituição do campo obsoleto `view_short_link` por `short_link` nas queries de criação e consulta.
+     - Implementação de **Assinaturas Visíveis** configuradas para as linhas de assinatura específicas no PDF.
+
+---
+
+ ## [2026-04-10] - Resiliência em Comunicação e Normalização (14:40)
+ 
+ ### Atualizações Registradas:
+ 1. **Sanitização de Contatos (DDI 55)**:
+     - Gatilho automático para garantir que todos os números de WhatsApp possuam o prefixo do país, evitando falhas na Evolution API.
+ 2. **Melhoria no CRM History**:
+     - Registro obrigatório de comunicados manuais na timeline do assinante, permitindo auditoria de conversas extras.
+ 3. **Restauração de Interface**:
+     - Reativação e estilização do compositor de mensagens (aba Comunicados) com suporte a anexos.
+
+---
+
+ ## [2026-04-08] - Configurações de Energia e Infraestrutura (10:00)
+ 
+ ### Atualizações Registradas:
+ 1. **Nova Seção: Conta de Energia**:
+     - Implementação de painel de configuração para regras de liquidação.
+     - Controle de **Pagamento Automático** (Toggle) para automatizar o fluxo financeiro entre assinante e concessionária.
+ 2. **Reestruturação de Funções**:
+     - Migração das funções de webhook do Asaas e Autentique para o padrão de diretórios `supabase/functions/` para melhor manutenção.
+
+---
  
 ## [2026-04-15] - Estabilização de Build, Edição de UC e Harmonização de Funções (23:45)
  

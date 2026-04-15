@@ -3,7 +3,11 @@ import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
-import { ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { 
+    ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
+    GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
+    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle 
+} from 'lucide-react';
 import {
     DndContext,
     closestCorners,
@@ -22,42 +26,39 @@ import { CSS } from '@dnd-kit/utilities';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Collapsible Section Component
-const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false, color = 'var(--color-blue)', rightContent }) => {
-    const [isOpen, setIsOpen] = useState(defaultOpen);
+// Global styles for the modal
+const modalStyles = `
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+    
+    .power-plant-modal * {
+        font-family: 'Manrope', sans-serif;
+    }
 
-    return (
-        <div style={{ marginBottom: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-            <div
-                style={{
-                    padding: '1rem',
-                    background: isOpen ? `${color}10` : 'white',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderBottom: isOpen ? '1px solid #e2e8f0' : 'none',
-                    transition: 'background 0.2s'
-                }}
-            >
-                <div
-                    onClick={() => setIsOpen(!isOpen)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontWeight: 'bold', color: color, cursor: 'pointer', flex: 1 }}
-                >
-                    {Icon && <Icon size={20} />}
-                    <span style={{ fontSize: '1rem' }}>{title}</span>
-                    {isOpen ? <ChevronUp size={20} color="#64748b" style={{ marginLeft: 'auto' }} /> : <ChevronDown size={20} color="#64748b" style={{ marginLeft: 'auto' }} />}
-                </div>
-                {rightContent && <div style={{ marginLeft: '1rem' }}>{rightContent}</div>}
-            </div>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 
-            {isOpen && (
-                <div style={{ padding: '1.5rem', animation: 'fadeIn 0.3s ease-in-out' }}>
-                    {children}
-                </div>
-            )}
-        </div>
-    );
-};
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+`;
 
 // Sortable UC Item Component
 const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
@@ -241,6 +242,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [ucFilter, setUcFilter] = useState('linked'); // 'linked' or 'unlinked'
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal'
     const [showExpandedUCs, setShowExpandedUCs] = useState(false);
 
     const sensors = useSensors(
@@ -312,7 +314,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const [loadingUCs, setLoadingUCs] = useState(false);
-    const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
     const fetchAvailableUCs = async () => {
@@ -874,12 +875,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     }
 
     return (
-        <div style={{
+        <div className="power-plant-modal" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000,
             backdropFilter: 'blur(4px)'
         }}>
-            <div style={{
+            <style>{modalStyles}</style>
+            <div className="custom-scrollbar" style={{
                 background: '#f8fafc',
                 borderRadius: '12px',
                 width: '95%',
@@ -910,111 +912,145 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+                {/* Tab Navigation */}
+                <div style={{ 
+                    display: 'flex', 
+                    overflowX: 'auto', 
+                    background: 'white', 
+                    borderBottom: '1px solid #e2e8f0',
+                    padding: '0 0.5rem',
+                    gap: '0.5rem',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                }}>
+                    {[
+                        { id: 'geral', label: 'Geral', icon: LayoutDashboard },
+                        { id: 'endereco', label: 'Localização', icon: MapPin },
+                        { id: 'tecnico', label: 'Técnico', icon: Activity },
+                        { id: 'financeiro', label: 'Financeiro', icon: Wallet2 },
+                        { id: 'ucs', label: 'UCs & Rateio', icon: Link },
+                        { id: 'portal', label: 'Portal', icon: Globe }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '1rem 1.25rem',
+                                border: 'none',
+                                borderBottom: activeTab === tab.id ? '3px solid #3b82f6' : '3px solid transparent',
+                                background: 'none',
+                                color: activeTab === tab.id ? '#1d4ed8' : '#64748b',
+                                fontWeight: activeTab === tab.id ? 700 : 500,
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.7 }} />
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                    {/* Section 1: Identificação e Localização */}
-                    <CollapsibleSection
-                        title="Identificação e Localização"
-                        icon={MapPin}
-                        defaultOpen={true}
-                        color="#2563eb"
-                        rightContent={
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowCredentialsModal(true);
-                                }}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    padding: '0.5rem 0.8rem',
-                                    background: '#fef2f2',
-                                    color: '#ef4444',
-                                    borderRadius: '6px',
-                                    border: '1px solid #fee2e2',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    transition: '0.2s'
-                                }}
-                            >
-                                <Key size={14} /> Credenciais
-                            </button>
-                        }
-                    >
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Nome da Usina</label>
-                                <input
-                                    required
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                    placeholder="Ex: Usina Solar Norte 01"
-                                />
-                            </div>
+                <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '500px' }}>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Fornecedor / Proprietário</label>
-                                <select
-                                    required
-                                    value={formData.supplier_id}
-                                    onChange={e => setFormData({ ...formData, supplier_id: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {suppliers.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>CEP</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        value={formData.cep}
-                                        onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                                        onBlur={handleCepBlur}
-                                        placeholder="00000-000"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: searchingCep ? '#f0f9ff' : 'white' }}
-                                    />
-                                    {searchingCep && <span style={{ position: 'absolute', right: '10px', top: '12px', fontSize: '0.8rem', color: '#3b82f6' }}>...</span>}
-                                </div>
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Cidade / UF</label>
-                                    <input
-                                        value={formData.cidade && formData.uf ? `${formData.cidade} / ${formData.uf}` : ''}
-                                        disabled
-                                        placeholder="Preenchimento automático"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f1f5f9', color: '#64748b' }}
-                                    />
+                    {/* Floating Summary Card (Técnico e Financeiro) */}
+                    {['tecnico', 'financeiro'].includes(activeTab) && (
+                        <div style={{ 
+                            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
+                            padding: '1.25rem', 
+                            borderRadius: '16px', 
+                            marginBottom: '2rem', 
+                            border: '1px solid #bbf7d0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                            animation: 'slideDown 0.3s ease-out'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ padding: '0.6rem', background: 'white', borderRadius: '10px', color: '#166534', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                    <Zap size={20} />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Concessionária</label>
-                                    <input
-                                        value={formData.concessionaria}
-                                        onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
-                                        placeholder="Ex: Cemig"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                    />
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geração Média Mensal</span>
+                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#14532d' }}>
+                                        {formData.geracao_estimada_kwh ? `${Number(formData.geracao_estimada_kwh).toLocaleString()} kWh/mês` : 'Calcule na aba Técnico'}
+                                    </div>
                                 </div>
                             </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Potência Instalada</span>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#14532d' }}>{potenciaKwp} kWp</div>
+                            </div>
+                        </div>
+                    )}
 
-                            <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    {/* Tab Content: Geral */}
+                    {activeTab === 'geral' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                                 <div style={{ gridColumn: '1 / -1' }}>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Geradora (Seleção Única)</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.8rem', maxHeight: '300px', overflowY: 'auto', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Nome da Usina</label>
+                                    <input
+                                        required
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', outline: 'none' }}
+                                        placeholder="Ex: Usina Solar Norte 01"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fornecedor / Proprietário</label>
+                                    <select
+                                        required
+                                        value={formData.supplier_id}
+                                        onChange={e => setFormData({ ...formData, supplier_id: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {suppliers.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>CNPJ / CPF da Usina</label>
+                                    <input
+                                        value={formData.cnpj_cpf}
+                                        onChange={e => setFormData({ ...formData, cnpj_cpf: e.target.value })}
+                                        placeholder="00.000.000/0000-00"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <label style={{ fontSize: '1rem', color: '#1e293b', fontWeight: 700 }}>Unidade Geradora Principal</label>
+                                        {formData.unidade_geradora && (
+                                            <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#92400e', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 600 }}>
+                                                Selecionada: {formData.unidade_geradora}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1rem', maxHeight: '350px', overflowY: 'auto', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
                                         {(() => {
                                             const allUCs = [...availableUCs, ...selectedUCs];
                                             const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
                                             const geradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
-                                            if (geradoras.length === 0) return <p style={{ fontSize: '0.8rem', color: '#64748b', padding: '1rem' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>;
+                                            if (geradoras.length === 0) return (
+                                                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem' }}>
+                                                    <AlertCircle size={32} color="#94a3b8" style={{ marginBottom: '0.5rem' }} />
+                                                    <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>
+                                                </div>
+                                            );
 
                                             return geradoras.map(uc => {
                                                 const isSelected = formData.unidade_geradora === uc.numero_uc;
@@ -1025,43 +1061,37 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         key={uc.id}
                                                         onClick={() => {
                                                             if (isSelected) {
-                                                                // Deselecting
                                                                 setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
                                                             } else {
-                                                                // Selecting
                                                                 setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
-
-                                                                // Force as Priority 1 in selectedUCs
-                                                                setSelectedUCs(prev => {
-                                                                    const otherUCs = prev.filter(u => u.id !== uc.id);
-                                                                    return [uc, ...otherUCs];
-                                                                });
+                                                                setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
                                                             }
                                                         }}
                                                         style={{
-                                                            padding: '0.8rem',
+                                                            padding: '1.25rem',
                                                             background: 'white',
-                                                            border: isSelected ? '2px solid #7c3aed' : '1px solid #cbd5e1',
-                                                            borderRadius: '8px',
+                                                            border: isSelected ? '2.5px solid #3b82f6' : '1px solid #e2e8f0',
+                                                            borderRadius: '12px',
                                                             cursor: 'pointer',
                                                             position: 'relative',
-                                                            transition: '0.2s',
-                                                            boxShadow: isSelected ? '0 4px 6px -1px rgba(124, 58, 237, 0.1)' : 'none'
+                                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                            boxShadow: isSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
+                                                            transform: isSelected ? 'scale(1.02)' : 'none'
                                                         }}
                                                     >
-                                                        <div style={{ position: 'absolute', top: '0.8rem', right: '0.8rem' }}>
+                                                        <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
                                                             <div style={{
-                                                                width: '18px', height: '18px', borderRadius: '50%',
-                                                                border: isSelected ? '5px solid #7c3aed' : '2px solid #cbd5e1',
-                                                                background: 'white'
+                                                                width: '20px', height: '20px', borderRadius: '50%',
+                                                                border: isSelected ? '6px solid #3b82f6' : '2px solid #cbd5e1',
+                                                                background: 'white', transition: '0.2s'
                                                             }} />
                                                         </div>
-                                                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{uc.numero_uc}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>{uc.titular_conta}</div>
-                                                        {subscriber && <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>{subscriber.name}</div>}
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                                                            <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>{uc.franquia} kWh</span>
+                                                        <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{uc.numero_uc}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>{uc.titular_conta}</div>
+                                                        {subscriber && <div style={{ fontSize: '0.85rem', color: '#3b82f6', fontWeight: 600, marginTop: '0.5rem' }}>{subscriber.name}</div>}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f8fafc', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{uc.concessionaria}</span>
+                                                            <span style={{ fontSize: '0.9rem', color: '#059669', fontWeight: 700 }}>{uc.franquia} kWh</span>
                                                         </div>
                                                     </div>
                                                 );
@@ -1069,454 +1099,422 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         })()}
                                     </div>
                                 </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>CNPJ/CPF</label>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tab Content: Endereço */}
+                    {activeTab === 'endereco' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', gridColumn: '1 / -1', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #eff6ff' }}>
+                                    <div style={{ padding: '0.75rem', background: 'white', borderRadius: '10px', color: '#3b82f6', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                        <MapPin size={24} />
+                                    </div>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>Localização Geográfica</h4>
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Defina onde a usina está fisicamente instalada</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ maxWidth: '300px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>CEP</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            value={formData.cep}
+                                            onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                            onBlur={handleCepBlur}
+                                            placeholder="00000-000"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: searchingCep ? '#f0f9ff' : 'white', outline: 'none' }}
+                                        />
+                                        {searchingCep && <div style={{ position: 'absolute', right: '1rem', top: '1rem' }} className="animate-spin text-blue-500">🌀</div>}
+                                    </div>
+                                </div>
+
+                                <div style={{ gridColumn: 'span 1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Concessionária</label>
                                     <input
-                                        value={formData.cnpj_cpf}
-                                        onChange={e => setFormData({ ...formData, cnpj_cpf: e.target.value })}
-                                        placeholder="00.000.000/0001-00"
-                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                                        value={formData.concessionaria}
+                                        onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
+                                        placeholder="Ex: Cemig, Enel"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Endereço Completo</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                                        <input
+                                            value={formData.rua || ''}
+                                            onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                            placeholder="Rua / Logradouro"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                        />
+                                        <input
+                                            value={formData.numero || ''}
+                                            onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                            placeholder="Nº"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Bairro</label>
+                                    <input
+                                        value={formData.bairro || ''}
+                                        onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                        placeholder="Bairro"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Cidade / UF</label>
+                                    <input
+                                        value={formData.cidade && formData.uf ? `${formData.cidade} / ${formData.uf}` : ''}
+                                        disabled
+                                        placeholder="Preenchimento automático"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '1rem', color: '#64748b' }}
                                     />
                                 </div>
                             </div>
                         </div>
-                    </CollapsibleSection>
+                    )}
 
-                    {/* Section 2: Características Técnicas */}
-                    <CollapsibleSection title="Características Técnicas" icon={Settings} defaultOpen={true} color="#ea580c">
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
-                                <select
-                                    value={formData.status}
-                                    onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Modalidade</label>
-                                <select
-                                    value={formData.modalidade}
-                                    onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
-                            </div>
-
-                            <div style={{ height: '1px', background: '#e2e8f0', margin: '0.5rem 0', gridColumn: '1 / -1' }}></div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Qtd. Módulos</label>
-                                <input
-                                    type="number"
-                                    value={formData.qtd_modulos}
-                                    onChange={e => setFormData({ ...formData, qtd_modulos: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Potência Módulo (W)</label>
-                                <select
-                                    value={formData.potencia_modulos_w}
-                                    onChange={e => setFormData({ ...formData, potencia_modulos_w: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {modulePowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Fabricante Inversor</label>
-                                <select
-                                    value={formData.fabricante_inversor}
-                                    onChange={e => setFormData({ ...formData, fabricante_inversor: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {inverterBrands.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Potência Inversor (W)</label>
-                                <select
-                                    value={formData.potencia_inversor_w}
-                                    onChange={e => setFormData({ ...formData, potencia_inversor_w: e.target.value })}
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white' }}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
-                                </select>
-                            </div>
-
-                        </div>
-
-                        <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#059669', fontWeight: 600, marginBottom: '0.5rem' }}>
-                                <BarChart size={18} />
-                                <span>Estimativa de Geração (Irradiância)</span>
-                            </div>
-                            <IrradianceChart
-                                ibgeCode={formData.ibge_code}
-                                potenciaKwp={potenciaKwp}
-                                onCalculate={handleChartCalculation}
-                            />
-                        </div>
-                    </CollapsibleSection>
-
-                    {/* Section 3: Geração e Financeiro */}
-                    <CollapsibleSection title="Geração e Financeiro" icon={DollarSign} color="#16a34a">
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Valor Investido</label>
-                                <input
-                                    value={formData.valor_investido}
-                                    onChange={handleValorInvestidoChange}
-                                    placeholder="R$ 0,00"
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Geração Estimada (Média Mensal)</label>
-                                <input
-                                    type="number"
-                                    value={formData.geracao_estimada_kwh}
-                                    onChange={e => setFormData({ ...formData, geracao_estimada_kwh: e.target.value })}
-                                    placeholder="Use o gráfico para calcular"
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#f0fdf4' }}
-                                />
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.4rem', color: '#475569', fontWeight: 600 }}>Serviços Contratados</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.8rem' }}>
-                                    {serviceOptions.map(s => {
-                                        const isSelected = formData.servicos_contratados.includes(s);
-                                        return (
-                                            <div key={s} style={{
-                                                border: isSelected ? '1px solid #16a34a' : '1px solid #e2e8f0',
-                                                borderRadius: '6px',
-                                                padding: '0.5rem',
-                                                background: isSelected ? '#f0fdf4' : 'white',
-                                                transition: '0.2s'
-                                            }}>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: isSelected ? '0.5rem' : '0' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => handleServiceChange(s)}
-                                                    />
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#166534' : '#64748b' }}>{s}</span>
-                                                </label>
-
-                                                {isSelected && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', animation: 'fadeIn 0.2s' }}>
-                                                        <input
-                                                            placeholder="Valor (R$)"
-                                                            value={formatCurrency(formData.service_values?.[s])}
-                                                            onChange={(e) => handleServiceValueChange(s, e.target.value)}
-                                                            style={{ width: '100%', padding: '0.3rem', border: '1px solid #bbf7d0', borderRadius: '4px', fontSize: '0.8rem' }}
-                                                        />
-                                                    </div>
-                                                )}
-                                                {isSelected && s === 'Gestão' && (
-                                                    <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <input
-                                                            type="number" step="0.01"
-                                                            placeholder="%"
-                                                            value={formData.gestao_percentual}
-                                                            onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.3rem', border: '1px solid #bbf7d0', borderRadius: '4px', fontSize: '0.8rem' }}
-                                                        />
-                                                        <span style={{ fontSize: '0.8rem', color: '#166534' }}>%</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    </CollapsibleSection>
-
-                    {/* Section 4: Unidades Consumidoras */}
-                    <CollapsibleSection title="Vínculos com UCs" icon={Users} color="#7c3aed">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {/* Toggles */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Tipo de Rateio</label>
-                                    <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', width: 'fit-content' }}>
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                const confirm = await showConfirm(
-                                                    'Alterar Rateio?',
-                                                    'Deseja alterar o tipo de rateio para Prioridade? A ordem das UCs será preservada.'
-                                                );
-                                                if (confirm) setFormData({ ...formData, rateio_type: 'prioridade' });
-                                            }}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                                background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent',
-                                                color: formData.rateio_type === 'prioridade' ? '#7c3aed' : '#64748b',
-                                                boxShadow: formData.rateio_type === 'prioridade' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                cursor: 'pointer', transition: '0.2s'
-                                            }}
-                                        >
-                                            Prioridade
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                const confirm = await showConfirm(
-                                                    'Alterar Rateio?',
-                                                    'Deseja alterar o tipo de rateio para Porcentagem?'
-                                                );
-                                                if (confirm) setFormData({ ...formData, rateio_type: 'porcentagem' });
-                                            }}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                                background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent',
-                                                color: formData.rateio_type === 'porcentagem' ? '#7c3aed' : '#64748b',
-                                                boxShadow: formData.rateio_type === 'porcentagem' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                cursor: 'pointer', transition: '0.2s'
-                                            }}
-                                        >
-                                            Porcentagem
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Exibir UCs</label>
-                                    <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '8px', width: 'fit-content' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setUcFilter('linked')}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                                background: ucFilter === 'linked' ? 'white' : 'transparent',
-                                                color: ucFilter === 'linked' ? '#7c3aed' : '#64748b',
-                                                boxShadow: ucFilter === 'linked' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                cursor: 'pointer', transition: '0.2s'
-                                            }}
-                                        >
-                                            Vinculadas
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setUcFilter('unlinked')}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                                background: ucFilter === 'unlinked' ? 'white' : 'transparent',
-                                                color: ucFilter === 'unlinked' ? '#7c3aed' : '#64748b',
-                                                boxShadow: ucFilter === 'unlinked' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                cursor: 'pointer', transition: '0.2s'
-                                            }}
-                                        >
-                                            Sem vínculo
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style={{ background: '#f5f3ff', padding: '1rem', borderRadius: '8px', border: '1px solid #ede9fe' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                                    <div style={{ fontSize: '0.9rem', color: '#5b21b6' }}>
-                                        Capacidade Comprometida: <strong>{totalFranquiaVinculada.toFixed(2)} kWh</strong>
-                                        {formData.geracao_estimada_kwh > 0 && (
-                                            <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: totalFranquiaVinculada > formData.geracao_estimada_kwh ? '#ef4444' : '#166534' }}>
-                                                ({Math.round((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100)}% da Geração)
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
-                                            Total de Ucs Vinculadas: {selectedUCs.length}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowExpandedUCs(true)}
-                                            style={{
-                                                background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px',
-                                                padding: '0.4rem', color: '#64748b', cursor: 'pointer', display: 'flex',
-                                                alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600,
-                                                transition: '0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            title="Expandir Visualização"
-                                        >
-                                            <Maximize2 size={16} />
-                                            Expandir
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {loadingUCs ? (
-                                    <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>
-                                        Carregando unidades...
-                                    </p>
-                                ) : (
-                                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                        {/* List of UCs */}
-                                        {renderUCList()}
-                                    </div>
-                                )}
-
-                                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #ede9fe', paddingTop: '1rem' }}>
-                                    <button
-                                        type="button"
-                                        style={{
-                                            padding: '0.6rem 1.2rem',
-                                            background: '#ef4444',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '6px',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer',
-                                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-                                        }}
-                                        onClick={handleGenerateList}
+                    {/* Tab Content: Técnico */}
+                    {activeTab === 'tecnico' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
+                                    <select
+                                        value={formData.status}
+                                        onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
                                     >
-                                        Gerar Lista
-                                    </button>
+                                        {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Modalidade</label>
+                                    <select
+                                        value={formData.modalidade}
+                                        onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                    >
+                                        {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                </div>
+
+                                <div style={{ height: '1px', background: '#f1f5f9', margin: '0.5rem 0', gridColumn: '1 / -1' }}></div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Qtd. Módulos</label>
+                                    <input
+                                        type="number"
+                                        value={formData.qtd_modulos}
+                                        onChange={e => setFormData({ ...formData, qtd_modulos: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Módulo (W)</label>
+                                    <select
+                                        value={formData.potencia_modulos_w}
+                                        onChange={e => setFormData({ ...formData, potencia_modulos_w: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {modulePowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fabricante Inversor</label>
+                                    <select
+                                        value={formData.fabricante_inversor}
+                                        onChange={e => setFormData({ ...formData, fabricante_inversor: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {inverterBrands.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Inversor (W)</label>
+                                    <select
+                                        value={formData.potencia_inversor_w}
+                                        onChange={e => setFormData({ ...formData, potencia_inversor_w: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
+                                    </select>
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#166534', fontWeight: 700, marginBottom: '1rem' }}>
+                                        <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '8px' }}>
+                                            <BarChart size={20} />
+                                        </div>
+                                        <span>Estimativa de Geração Acumulada</span>
+                                    </div>
+                                    <IrradianceChart
+                                        ibgeCode={formData.ibge_code}
+                                        potenciaKwp={potenciaKwp}
+                                        onCalculate={handleChartCalculation}
+                                    />
                                 </div>
                             </div>
                         </div>
-                    </CollapsibleSection>
+                    )}
+
+                    {/* Tab Content: Financeiro */}
+                    {activeTab === 'financeiro' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Valor Investido</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            value={formData.valor_investido}
+                                            onChange={handleValorInvestidoChange}
+                                            placeholder="R$ 0,00"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none', fontWeight: 700, color: '#1e293b' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Geração Estimada Mensal (KWh)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.geracao_estimada_kwh}
+                                        onChange={e => setFormData({ ...formData, geracao_estimada_kwh: e.target.value })}
+                                        placeholder="Automático via gráfico"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', background: '#f0fdf4', color: '#166534', fontWeight: 700, outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
+                                    <label style={{ display: 'block', fontSize: '1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Serviços de Manutenção e Gestão</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+                                        {serviceOptions.map(s => {
+                                            const isSelected = formData.servicos_contratados.includes(s);
+                                            return (
+                                                <div key={s} style={{
+                                                    border: isSelected ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                                                    borderRadius: '12px',
+                                                    padding: '1rem',
+                                                    background: isSelected ? '#f0fdf4' : 'white',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: isSelected ? '0 4px 6px -1px rgba(22, 163, 74, 0.1)' : 'none'
+                                                }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: isSelected ? '0.75rem' : '0' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => handleServiceChange(s)}
+                                                            style={{ width: '1.2rem', height: '1.2rem', accentColor: '#16a34a' }}
+                                                        />
+                                                        <span style={{ fontSize: '0.95rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? '#166534' : '#64748b' }}>{s}</span>
+                                                    </label>
+
+                                                    {isSelected && (
+                                                        <div style={{ animation: 'fadeIn 0.2s' }}>
+                                                            <div style={{ position: 'relative' }}>
+                                                                <span style={{ position: 'absolute', left: '0.75rem', top: '0.6rem', fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>R$</span>
+                                                                <input
+                                                                    placeholder="0,00"
+                                                                    value={formatCurrency(formData.service_values?.[s]).replace('R$', '').trim()}
+                                                                    onChange={(e) => handleServiceValueChange(s, e.target.value)}
+                                                                    style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 2rem', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                                                                />
+                                                            </div>
+                                                            {s === 'Gestão' && (
+                                                                <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.4rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                                                    <input
+                                                                        type="number" step="0.01"
+                                                                        placeholder="Porcentagem"
+                                                                        value={formData.gestao_percentual}
+                                                                        onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
+                                                                        style={{ width: '100%', border: 'none', fontSize: '0.85rem', outline: 'none', textAlign: 'right' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>%</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tab Content: UCs */}
+                    {activeTab === 'ucs' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div style={{ background: '#f5f3ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #ede9fe' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#5b21b6' }}>Controle de Vínculos e Rateio</h4>
+                                            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#7c3aed' }}>
+                                                Comprometido: <strong>{totalFranquiaVinculada.toFixed(0)} kWh</strong> 
+                                                {formData.geracao_estimada_kwh > 0 && ` (${Math.round((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100)}% da geração)`}
+                                            </p>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowExpandedUCs(true)}
+                                                style={{ padding: '0.6rem 1rem', background: 'white', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}
+                                            >
+                                                <Maximize2 size={18} /> Expandir Gestor
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleGenerateList}
+                                                style={{ padding: '0.6rem 1.25rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.2)' }}
+                                            >
+                                                <Download size={18} /> Anexo IV
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Sub-Filters embedded */}
+                                    <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem', padding: '1rem', background: 'white', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                            <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Visualizar</label>
+                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
+                                                <button type="button" onClick={() => setUcFilter('linked')} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: ucFilter === 'linked' ? 'white' : 'transparent', color: ucFilter === 'linked' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Vinculadas</button>
+                                                <button type="button" onClick={() => setUcFilter('unlinked')} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: ucFilter === 'unlinked' ? 'white' : 'transparent', color: ucFilter === 'unlinked' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Disponíveis</button>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                            <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Regra de Rateio</label>
+                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
+                                                <button type="button" onClick={() => setFormData({...formData, rateio_type: 'prioridade'})} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent', color: formData.rateio_type === 'prioridade' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Prioridade</button>
+                                                <button type="button" onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent', color: formData.rateio_type === 'porcentagem' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Porcentagem</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {loadingUCs ? (
+                                        <div style={{ textAlign: 'center', padding: '2rem' }}>Carregando...</div>
+                                    ) : (
+                                        <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                            {renderUCList()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tab Content: Portal */}
+                    {activeTab === 'portal' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff7ed', padding: '2rem', borderRadius: '20px', border: '1px solid #ffedd5' }}>
+                                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                    <div style={{ width: '60px', height: '60px', background: 'white', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', color: '#f97316', boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.1)' }}>
+                                        <Globe size={32} />
+                                    </div>
+                                    <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#9a3412', margin: 0 }}>Portal da Concessionária</h4>
+                                    <p style={{ fontSize: '0.9rem', color: '#c2410c', marginTop: '0.5rem' }}>Credenciais para automação e extração de dados</p>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>URL do Portal</label>
+                                        <input
+                                            type="url"
+                                            value={formData.portal_credentials?.url || ''}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                portal_credentials: { ...formData.portal_credentials, url: e.target.value }
+                                            })}
+                                            placeholder="https://seuportal.com.br"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Usuário / Login</label>
+                                        <input
+                                            type="text"
+                                            value={formData.portal_credentials?.login || ''}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                portal_credentials: { ...formData.portal_credentials, login: e.target.value }
+                                            })}
+                                            placeholder="Seu usuário"
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Senha</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type={showPassword ? "text" : "password"}
+                                                value={formData.portal_credentials?.password || ''}
+                                                onChange={e => setFormData({
+                                                    ...formData,
+                                                    portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                                })}
+                                                placeholder="••••••••"
+                                                style={{ width: '100%', padding: '0.8rem 1rem', paddingRight: '3rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#9a3412', cursor: 'pointer', opacity: 0.6 }}
+                                            >
+                                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Footer Actions */}
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        marginTop: '2rem',
-                        paddingTop: '1.5rem',
+                        marginTop: '3rem',
+                        paddingTop: '2rem',
                         borderTop: '1px solid #e2e8f0'
                     }}>
                         <div>
                             {usina && onDelete && (
-                                <button type="button" onClick={handleDelete} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.2rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600, cursor: 'pointer' }}>
+                                <button type="button" onClick={handleDelete} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 1.5rem', background: '#fff1f1', color: '#e11d48', borderRadius: '10px', border: '1px solid #ffe4e6', fontWeight: 700, cursor: 'pointer', transition: '0.2s' }}>
                                     <Trash2 size={18} /> Excluir Usina
                                 </button>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.8rem 1.5rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
+                            <button type="button" onClick={onClose} style={{ padding: '0.8rem 2rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', color: '#64748b', fontWeight: 600 }}>
                                 Cancelar
                             </button>
-                            <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.8rem 2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
-                                {loading ? 'Salvando...' : <><Save size={18} /> Salvar Usina</>}
+                            <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 2.5rem', background: '#2563eb', color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 800, boxShadow: '0 4px 14px 0 rgba(37, 99, 235, 0.39)', transition: '0.2s' }}>
+                                {loading ? 'Salvando...' : <><Save size={20} /> Salvar Usina</>}
                             </button>
                         </div>
                     </div>
-
                 </form>
             </div>
-            {/* Credentials Pop-up Modal */}
-            {showCredentialsModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
-                    animation: 'fadeIn 0.2s ease-out'
-                }}>
-                    <div style={{
-                        background: 'white', borderRadius: '16px', width: '90%', maxWidth: '400px',
-                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                        position: 'relative'
-                    }}>
-                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                            <div style={{
-                                width: '48px', height: '48px', background: '#fff7ed', borderRadius: '12px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem',
-                                color: '#f97316'
-                            }}>
-                                <Key size={24} />
-                            </div>
-                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais</h4>
-                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>Acesso ao portal da concessionária</p>
-                        </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>URL do Portal</label>
-                                <input
-                                    type="url"
-                                    value={formData.portal_credentials?.url || ''}
-                                    onChange={e => setFormData({
-                                        ...formData,
-                                        portal_credentials: { ...formData.portal_credentials, url: e.target.value }
-                                    })}
-                                    placeholder="http://portal.concessionaria.com.br"
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Email / Login</label>
-                                <input
-                                    type="text"
-                                    value={formData.portal_credentials?.login || ''}
-                                    onChange={e => setFormData({
-                                        ...formData,
-                                        portal_credentials: { ...formData.portal_credentials, login: e.target.value }
-                                    })}
-                                    placeholder="login@exemplo.com"
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Senha</label>
-                                <div style={{ position: 'relative' }}>
-                                    <input
-                                        type={showPassword ? "text" : "password"}
-                                        value={formData.portal_credentials?.password || ''}
-                                        onChange={e => setFormData({
-                                            ...formData,
-                                            portal_credentials: { ...formData.portal_credentials, password: e.target.value }
-                                        })}
-                                        placeholder="••••••••"
-                                        style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.2rem' }}
-                                    >
-                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ marginTop: '2rem', display: 'flex', gap: '0.8rem' }}>
-                            <button
-                                type="button"
-                                onClick={() => setShowCredentialsModal(false)}
-                                style={{ flex: 1, padding: '0.75rem', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
-                            >
-                                Fechar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowCredentialsModal(false)}
-                                style={{ flex: 1, padding: '0.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)' }}
-                            >
-                                Salvar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* UC Detail Preview Modal */}
             {showPreviewModal && previewUC && (
                 <div style={{

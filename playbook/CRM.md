@@ -8,7 +8,9 @@ Este documento centraliza as regras de negócio, fluxos de trabalho, gatilhos e 
 
 ### 👥 Gestão de Assinantes (Subscribers)
 Controle do ciclo de vida dos clientes e visão 360º.
-- **Estabilização de Interface**: Refatoração do `SubscriberModal` para estabilidade de build e limpeza de imports.
+- **Gestão de Contratos (Autentique V2)**:
+    - **Identificação Jurídica**: A Procuração exige identificação completa do Outorgante (CPF/CNPJ, Endereço completo com CEP) e Outorgado (B2W Energia).
+    - **Assinaturas Visíveis**: Configuradas para aparecerem em campos específicos das páginas 3 (Contrato) e 4 (Procuração).
 - **Dashboard**: Tabela de alta densidade e **Cards de Resumo** (Total Mês/Global).
 - **Filtro Financeiro**: Faturas com status `cancelado` são explicitamente ignoradas nos cálculos de débito e na visualização do modal do assinante.
 
@@ -23,6 +25,7 @@ Faturamento mensal, integração bancária e automação de cobrança.
 - **Visualização em Lista (Grid Financeiro)**: Reestruturada para exibir **Vr. da Fatura**, **Vr. Conta de Energia** (fonte destacada em vermelho) e **Saldo** (lucro líquido por fatura).
 - **Ações Rápidas**: Links de Boleto e botões de Pagamento posicionados junto aos seus respectivos valores para agilidade operacional.
 - **Novo Modal de Faturamento (`InvoiceFormModal`)**: Refatorado para navegação por abas horizontais (**Identificação, Consumo, Financeiro, Resumo**).
+- **Pagamento de Boletos Externos (`pay-asaas-bill`)**: Funcionalidade para liquidação de contas de consumo (água, luz) e boletos bancários via linha digitável, protegida por autenticação administrativa.
 - **Competência Manual**: Introdução de seletor de mês/ano para faturas manuais, permitindo lançamentos de valor zero ou ajustes retroativos sem violação de chaves únicas.
 - **Aba Resumo**: Centraliza o card de detalhamento e as ações de download/visualização, otimizando o fluxo de conferência.
 - **Calendários de Vencimento**: Dualidade de visão entre **Venc. Faturas** (B2W) e **Venc. Conta de Energia** (Concessionária).
@@ -62,9 +65,10 @@ Funil de entrada de novos assinantes.
 
 - **Mensageria Híbrida**: Disparo simultâneo (Resend + Evolution API).
 - **WhatsApp Premium**: Texto com emojis e formatação otimizada.
-- **Normalização de Contatos**: O sistema adiciona automaticamente o DDI 55 a números de 10 ou 11 dígitos que não o possuam.
+- **Normalização de Contatos**: O sistema obrigatoriamente adiciona o prefixo **55** (DDI Brasil) a todos os números de WhatsApp antes do envio via Evolution API para prevenir erros de entrega.
+- **Registro de Comunicados**: Mensagens enviadas manualmente via aba "Comunicados" são registradas na `crm_history` com o link do anexo (se houver).
 - **Inadimplência Automática**: 15 dias (`Inadimplente`) e 60 dias (`Cancelamento Crítico`).
-- **Liquidação Automática (Conta de Energia)**: Quando o toggle "Pagamento Automático" está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas.
+- **Liquidação Automática (Conta de Energia)**: Quando o toggle **"Pagamento Automático"** está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas.
 
 ---
 
@@ -76,10 +80,9 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Perfil de Usuários (`Users`)**: Gestão de acessos e permissões (Roles).
 - **Evolution API (`Code`)**: Instância e chaves do WhatsApp para mensageria.
 - **Serviço de e-mail (`Mail`)**: Credenciais do Resend para notificações transacionais.
-- **Integração Financeira (`CreditCard`)**: Endpoint e chaves do Asaas (Sandbox/Produção).
+- **Integração Financeira (`CreditCard`)**: Centraliza o endpoint e as chaves do Asaas (Sandbox/Produção). Os dados são consumidos dinamicamente pelas Edge Functions da tabela `integrations_config` (serviço: `financial_api`).
 - **Conta de Energia (`Zap`)**: Regras de faturamento e **Pagamento Automático**.
-- **Encurtador de Links (`ExternalLink`)**: Integração com YOURLS para geração de links curtos de dashboards e assinaturas.
-- **Padronização (`Palette`)**: Branding, logos e paleta de cores do sistema.
+- **Audit de Webhooks (`Telescope`)**: Interface de monitoramento de logs da tabela `webhook_logs` (captura payloads brutos, headers e erros de integração).
 
 ---
 
@@ -131,7 +134,8 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 - **Motor de PDF**: Geração dinâmica com paginação automática (suporta contratos de 17+ cláusulas).
 - **Integração YOURLS**: Encurtamento automático do link de assinatura antes do envio ao cliente para melhorar a experiência mobile.
-- **Webhooks V2**: Processamento de payloads aninhados para sincronização instantânea do status da assinatura.
+- **Webhooks V2**: Processamento de payloads aninhados (`event.type` e `event.data.id`) para sincronização instantânea. 
+- **Evento Crítico**: O sistema reconhece `document.finished` como o gatilho final para mudar o status da assinatura para **Assinado**.
 - **Link Persistente**: O link de assinatura fica disponível no histórico do assinante até a conclusão.
 
 ---
@@ -144,7 +148,10 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 
 ### 💬 WhatsApp (Evolution API)
 - **Versão**: Supabase-JS `2.45.0` | Endpoint `sendMedia` v2.
-- **Padrão de Segurança**: JWT desabilitado para webhooks e funções de callback.
+
+### 💳 Financeiro (Asaas)
+- **Segurança de Credenciais**: Todas as funções financeiras (`create_asaas_charge`, `manage_asaas_customer`, `transfer_asaas_pix`, `pay_asaas_bill`) buscam chaves (`api_key` e `endpoint_url`) dinamicamente no banco de dados.
+- **Webhooks**: A função `asaas-webhook` opera com `verify_jwt = false` no `config.toml`, permitindo o recebimento de notificações diretas do Asaas.
 
 ---
 
@@ -166,17 +173,19 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 - **Upsert na Fatura Zerada**: Faturas manuais forçam a substituição segura e evitam erros de chave única com faturas outrora canceladas.
 - **Self-Healing Financeiro**: Remoção absoluta de faturas inativas ("Canceladas") das fórmulas de Inadimplência, estabilizando cálculos.
 
+### 📅 15 de Abril de 2026 (20:30)
+- **Sincronização Autentique**: Correção do mapeamento de payload V2 (Nested JSON) e suporte a `document.finished`.
+- **Identificação Jurídica**: Implementação de preenchimento dinâmico de dados de endereço na Procuração.
+- **Auditoria**: Ativação da tabela `webhook_logs` para rastreamento de integrações externas.
+- **Sanitização**: Normalização obrigatória de DDI 55 em todos os disparos de WhatsApp.
+
 ### 📅 15 de Abril de 2026 (11:30)
-- **Harmonização de Funções**: Upgrade global do `supabase-js` para v2.45.0 em todas as Edge Functions para resolver erros de CDN (esm.sh).
+- **Harmonização de Funções**: Upgrade global do `supabase-js` para v2.45.0 em todas as Edge Functions.
 - **Edição Expressa de UC**: Adicionado botão de edição rápida nos cards de UC no modal do assinante.
 - **Encurtador de Links**: Ativação da integração YOURLS para dashboards e contratos.
 - **Filtro de Inadimplência**: Implementação de limpeza de faturas canceladas nos cálculos de débito global.
 - **Compositor de Mensagens**: Restauração da interface de envio manual na aba Comunicados.
 
-### 📅 13 de Abril de 2026 (17:45)
-- **Contratos Dinâmicos**: Implementação de paginação dinâmica no PDF para contratos longos.
-- **Webhook Autentique**: Refatoração do processamento de payload V2 (Nested JSON).
-
-### 📅 07 de Abril de 2026 (23:20)
-- **Refatoração do Modal de Fatura**: Implementação de sistema de abas e limpeza visual total.
-- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de **Calendário de Leituras**.
+### 📅 08 de Abril de 2026 (10:00)
+- **Configurações de Energia**: Implementação da seção "Conta de Energia" e do toggle de Pagamento Automático.
+- **Reestruturação Técnica**: Padronização da hierarquia de pastas das Edge Functions do Asaas e Autentique.

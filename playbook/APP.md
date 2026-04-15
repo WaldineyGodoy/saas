@@ -15,7 +15,7 @@ Painel principal do cliente logado.
 ### Notificações (Multicanal)
 Sempre que uma nova fatura é emitida ou baixada, o assinante recebe:
 - **E-mail**: Detalhamento B2W em PDF mesclado com o boleto.
-- **WhatsApp**: Mensagem formatada com emojis e anexo em PDF (`sendMedia`).
+- **WhatsApp**: Mensagem formatada com emojis e anexo em PDF (`sendMedia`). Links externos (boletos e assinaturas) agora são processados pelo **YOURLS** para maior amigabilidade e redução de bloqueios.
 
 ---
 
