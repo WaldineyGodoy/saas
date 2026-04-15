@@ -8,16 +8,20 @@ Este documento centraliza as regras de negócio, fluxos de trabalho, gatilhos e 
 
 ### 👥 Gestão de Assinantes (Subscribers)
 Controle do ciclo de vida dos clientes e visão 360º.
-- **Estabilização de Interface**: Refatoração do `SubscriberModal` para estabilidade de build.
+- **Estabilização de Interface**: Refatoração do `SubscriberModal` para estabilidade de build e limpeza de imports.
 - **Dashboard**: Tabela de alta densidade e **Cards de Resumo** (Total Mês/Global).
+- **Filtro Financeiro**: Faturas com status `cancelado` são explicitamente ignoradas nos cálculos de débito e na visualização do modal do assinante.
 
 ### ⚡ Gestão de Unidades Consumidoras (UCs)
 Monitoramento técnico e operacional de leituras.
 - **Interface Modernizada (`ConsumerUnitModal`)**: Navegação por 4 abas superiores.
 - **Visualização Padrão**: Definida como **Calendário** para facilitar o acompanhamento das datas de leitura e status de extração.
+- **Edição Direta**: Os cards de UC no Modal do Assinante possuem botão de edição rápida (ícone Lápis) para acesso completo aos dados.
 
 ### 💰 Gestão de Faturas (Billing)
 Faturamento mensal, integração bancária e automação de cobrança.
+- **Visualização em Lista (Grid Financeiro)**: Reestruturada para exibir **Vr. da Fatura**, **Vr. Conta de Energia** (fonte destacada em vermelho) e **Saldo** (lucro líquido por fatura).
+- **Ações Rápidas**: Links de Boleto e botões de Pagamento posicionados junto aos seus respectivos valores para agilidade operacional.
 - **Novo Modal de Faturamento (`InvoiceFormModal`)**: Refatorado para navegação por abas horizontais (**Identificação, Consumo, Financeiro, Resumo**).
 - **Aba Resumo**: Centraliza o card de detalhamento e as ações de download/visualização, otimizando o fluxo de conferência.
 - **Calendários de Vencimento**: Dualidade de visão entre **Venc. Faturas** (B2W) e **Venc. Conta de Energia** (Concessionária).
@@ -30,6 +34,7 @@ Faturamento mensal, integração bancária e automação de cobrança.
 - **Total no Mês**: Baseado na **Data de Vencimento** (inclui `atrasado` e `a_vencer`).
 - **Recálculo Dinâmico**: Tarifas mínimas e descontos baseados no tipo de ligação (**Mono/Bi/Trifásico**).
 - **Self-Healing (Auto-Correção)**: Detecção e limpeza de faturas órfãs no Asaas.
+- **Normalização de Status**: Todas as verificações financeiras utilizam `.trim().toLowerCase()` para garantir compatibilidade entre banco de dados e interface.
 
 ### 📊 Ciclo de Leitura e Notificação
 - **Auto-Geração no Reenvio**: Se o PDF consolidado for removido ou não existir no Storage, ele é gerado automaticamente ao disparar um "Reenviar Notificação".
@@ -41,6 +46,7 @@ Faturamento mensal, integração bancária e automação de cobrança.
 
 - **Mensageria Híbrida**: Disparo simultâneo (Resend + Evolution API).
 - **WhatsApp Premium**: Texto com emojis e formatação otimizada.
+- **Normalização de Contatos**: O sistema adiciona automaticamente o DDI 55 a números de 10 ou 11 dígitos que não o possuam.
 - **Inadimplência Automática**: 15 dias (`Inadimplente`) e 60 dias (`Cancelamento Crítico`).
 - **Liquidação Automática (Conta de Energia)**: Quando o toggle "Pagamento Automático" está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas.
 
@@ -56,6 +62,7 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Serviço de e-mail (`Mail`)**: Credenciais do Resend para notificações transacionais.
 - **Integração Financeira (`CreditCard`)**: Endpoint e chaves do Asaas (Sandbox/Produção).
 - **Conta de Energia (`Zap`)**: Regras de faturamento e **Pagamento Automático**.
+- **Encurtador de Links (`ExternalLink`)**: Integração com YOURLS para geração de links curtos de dashboards e assinaturas.
 - **Padronização (`Palette`)**: Branding, logos e paleta de cores do sistema.
 
 ---
@@ -103,21 +110,48 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 
 ---
 
-## 7. Rastreabilidade
-- **Ações**: `email_sent`, `wa_sent`, `fatura_emitida`.
+## 8. Gestão de Contratos Digitais (Autentique)
+
+Fluxo automatizado para geração, envio e monitoramento de assinaturas.
+- **Motor de PDF**: Geração dinâmica com paginação automática (suporta contratos de 17+ cláusulas).
+- **Integração Automática**: Documentos criados via Edge Function e enviados para os e-mails/telefones do assinante.
+- **Webhooks**: Sincronização em tempo real do status da assinatura (`signed`, `pending`, `rejected`).
+- **Link Persistente**: O link de assinatura fica disponível no histórico do assinante até a conclusão.
+
+---
+
+## 9. Especificações Técnicas: Edge Functions
+
+### 🔗 E-mail Engine (Resend)
+- **URL**: `.../functions/v1/send-email`
+- **Versão**: Supabase-JS `2.45.0` (Harmonizado para estabilidade de build).
+
+### 💬 WhatsApp (Evolution API)
+- **Versão**: Supabase-JS `2.45.0` | Endpoint `sendMedia` v2.
+- **Padrão de Segurança**: JWT desabilitado para webhooks e funções de callback.
+
+---
+
+## 10. Rastreabilidade
+- **Ações**: `email_sent`, `wa_sent`, `fatura_emitida`, `contract_signed`.
 - **Auditoria**: Timeline registra ambiente (Sandbox/Prod).
 - **Logs de UI**: Histórico de mudanças de layout e visualização padrão.
 
 ---
 
-## 8. Log de Atualizações Recentes
+## 11. Log de Atualizações Recentes
+
+### 📅 15 de Abril de 2026 (11:30)
+- **Harmonização de Funções**: Upgrade global do `supabase-js` para v2.45.0 em todas as Edge Functions para resolver erros de CDN (esm.sh).
+- **Edição Expressa de UC**: Adicionado botão de edição rápida nos cards de UC no modal do assinante.
+- **Encurtador de Links**: Ativação da integração YOURLS para dashboards e contratos.
+- **Filtro de Inadimplência**: Implementação de limpeza de faturas canceladas nos cálculos de débito global.
+- **Compositor de Mensagens**: Restauração da interface de envio manual na aba Comunicados.
+
+### 📅 13 de Abril de 2026 (17:45)
+- **Contratos Dinâmicos**: Implementação de paginação dinâmica no PDF para contratos longos.
+- **Webhook Autentique**: Refatoração do processamento de payload V2 (Nested JSON).
 
 ### 📅 07 de Abril de 2026 (23:20)
 - **Refatoração do Modal de Fatura**: Implementação de sistema de abas e limpeza visual total.
-- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de **Calendário de Leituras** por padrão.
-- **Renomeação Semântica**: Botões de calendário de faturas renomeados para "Venc. Faturas" e "Venc. Conta de Energia".
-- **Ajuste de Grid**: Correção do layout dos cards no calendário de energia para evitar quebra de layout em resoluções padrão.
-- **Rótulo Financeiro**: Alteração do texto "CONCESSIONÁRIA" para "Vr. A Pagar" na visão de faturas da concessionária.
-- **Detalhamento de UC**: Inclusão automática do **Assinante B2W (Titular)** (campo da seção de vínculos) nos cards da visão de Calendário de Leituras, facilitando a identificação do responsável pela fatura.
-- **Filtro Inteligente**: O campo de busca de Unidades Consumidoras agora permite filtrar também pelo **Assinante Titular**, além de Número da UC, Assinante Principal, Concessionária e Cidade.
-- **Seção Comunicados**: Refatoração da aba "Comunicação" para **Comunicados**, com identidade visual inspirada no WhatsApp (cores verdes, ícone de mensagem circular) e foco no envio de mensagens manuais.
+- **Padronização de Visão**: Unidades Consumidoras agora iniciam na visão de **Calendário de Leituras**.
