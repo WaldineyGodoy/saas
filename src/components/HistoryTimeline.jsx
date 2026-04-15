@@ -61,6 +61,8 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [expandedItems, setExpandedItems] = useState({});
+    const CHARACTER_LIMIT = 150;
 
     useEffect(() => {
         fetchHistory();
@@ -273,7 +275,38 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                                             </div>
                                         </div>
                                         <div style={{ color: '#334155', fontSize: '0.9rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-                                            {item.content}
+                                            {(() => {
+                                                // Priorizar a mensagem completa que costuma estar no metadata (visto na lógica de addHistory)
+                                                const fullMessage = item.metadata?.message || item.metadata?.text || item.content;
+                                                const isLong = fullMessage.length > CHARACTER_LIMIT;
+                                                const isExpanded = expandedItems[item.id];
+                                                const displayContent = isExpanded ? fullMessage : (isLong ? fullMessage.substring(0, CHARACTER_LIMIT) + '...' : fullMessage);
+
+                                                return (
+                                                    <>
+                                                        {displayContent}
+                                                        {isLong && (
+                                                            <button
+                                                                onClick={() => setExpandedItems(prev => ({ ...prev, [item.id]: !isExpanded }))}
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    marginLeft: '0.5rem',
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    padding: 0,
+                                                                    color: 'var(--color-blue)',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    textDecoration: 'underline'
+                                                                }}
+                                                            >
+                                                                {isExpanded ? 'Ver menos' : 'Ver mais'}
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
