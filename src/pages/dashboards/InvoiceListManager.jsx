@@ -182,7 +182,20 @@ export default function InvoiceListManager() {
                 
                 if (updateError) throw updateError;
 
-                showAlert('Pagamento agendado e fatura marcada como paga!', 'success');
+                // Registrar liquidação no Ledger (Livro Razão)
+                const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
+                    p_invoice_id: inv.id,
+                    p_amount: utilityValue
+                });
+
+                if (ledgerError) {
+                    console.error('Erro ao registrar no ledger:', ledgerError);
+                    // Não travamos o fluxo aqui pois o pagamento já foi feito, mas avisamos o admin
+                    showAlert('Pagamento concluído, mas houve um erro ao registrar no Livro Razão.', 'warning');
+                } else {
+                    showAlert('Pagamento agendado e liquidado no Livro Razão!', 'success');
+                }
+                
                 fetchInvoices();
             } else {
                 throw new Error(data?.message || 'Falha ao processar pagamento');

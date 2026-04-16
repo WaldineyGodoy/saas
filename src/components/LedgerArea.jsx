@@ -78,10 +78,7 @@ export default function LedgerArea() {
             if (originDestFilter) {
                 const search = originDestFilter.toLowerCase();
                 filtered = filtered.filter(e =>
-                    (e.subscriber_name?.toLowerCase().includes(search)) ||
-                    (e.usina_name?.toLowerCase().includes(search)) ||
-                    (e.originator_name?.toLowerCase().includes(search)) ||
-                    (e.supplier_name?.toLowerCase().includes(search))
+                    (e.entity_name?.toLowerCase().includes(search))
                 );
             }
 
@@ -166,7 +163,7 @@ export default function LedgerArea() {
                         <div style={{ position: 'relative' }}>
                             <FileText size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                             <input
-                                placeholder="Nome Usina / Assinante..."
+                                placeholder="Nome Usina / Assinante / Originador / Investidor..."
                                 value={originDestFilter}
                                 onChange={e => setOriginDestFilter(e.target.value)}
                                 style={{ width: '100%', padding: '0.6rem 0.6rem 0.6rem 2.2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
@@ -233,7 +230,7 @@ export default function LedgerArea() {
                                 <tr>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Data/Hora</th>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Conta</th>
-                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Origem / Destino</th>
+                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Entidade</th>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Descrição</th>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none', textAlign: 'right' }}>Valor (R$)</th>
                                 </tr>
@@ -241,7 +238,7 @@ export default function LedgerArea() {
                             <tbody>
                                 {entries.map(entry => {
                                     const isDebit = entry.amount > 0;
-                                    const entityName = entry.subscriber_name || entry.usina_name || entry.originator_name || entry.supplier_name || '-';
+                                    const entityName = entry.entity_name || '-';
                                     
                                     return (
                                         <tr key={entry.id} style={{ transition: 'background 0.2s' }}>
@@ -257,7 +254,7 @@ export default function LedgerArea() {
                                                 <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{entry.reference_type?.toUpperCase()}</div>
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', verticalAlign: 'middle' }}>
-                                                <div style={{ color: '#475569', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.description}</div>
+                                                <div style={{ color: '#475569', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.description}>{entry.description}</div>
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', textAlign: 'right', verticalAlign: 'middle' }}>
                                                 <div style={{

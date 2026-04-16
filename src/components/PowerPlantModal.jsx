@@ -1446,166 +1446,146 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', background: '#f0fdf4', color: '#166534', fontWeight: 700, outline: 'none' }}
                                     />
                                 </div>
+                            </div>
 
-                                {/* Exclusive Gestão Block */}
-                                <div style={{ 
-                                    gridColumn: '1 / -1', 
-                                    background: '#f0fdf4', 
-                                    padding: '1.5rem', 
-                                    borderRadius: '16px', 
-                                    border: '1px solid #bbf7d0',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '1rem',
-                                    animation: 'slideDown 0.3s ease-out'
-                                }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <div style={{ padding: '0.5rem', background: 'white', borderRadius: '10px', color: '#16a34a', boxShadow: '0 2px 4px rgba(22,163,74,0.1)' }}>
-                                                <Settings size={20} />
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: 0, fontSize: '1rem', color: '#166534', fontWeight: 700 }}>Gestão e Operação B2W</h4>
-                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a' }}>Defina a remuneração pela gestão da usina</p>
-                                            </div>
+                            {/* Exclusive Gestão Block */}
+                            <div style={{ 
+                                marginTop: '1.5rem',
+                                background: '#f0fdf4', 
+                                padding: '1.5rem', 
+                                borderRadius: '16px', 
+                                border: '1px solid #bbf7d0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1rem',
+                                animation: 'slideDown 0.3s ease-out'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ padding: '0.5rem', background: 'white', borderRadius: '10px', color: '#16a34a', boxShadow: '0 2px 4px rgba(22,163,74,0.1)' }}>
+                                            <Settings size={20} />
                                         </div>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '20px', border: '1px solid #bbf7d0' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.servicos_contratados.includes('Gestão')}
-                                                onChange={() => handleServiceChange('Gestão')}
-                                                style={{ width: '1.1rem', height: '1.1rem', accentColor: '#16a34a' }}
-                                            />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#166534' }}>Habilitar Gestão</span>
-                                        </label>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#166534', fontWeight: 700 }}>Gestão e Operação B2W</h4>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a' }}>Defina a remuneração pela gestão da usina</p>
+                                        </div>
                                     </div>
-
-                                    {formData.servicos_contratados.includes('Gestão') && (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', animation: 'fadeIn 0.2s' }}>
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Percentual (%)</label>
-                                                <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={formData.gestao_percentual || ''}
-                                                        onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
-                                                        placeholder="0.00"
-                                                        style={{ 
-                                                            width: '100%', 
-                                                            border: 'none', 
-                                                            fontSize: '1.1rem', 
-                                                            fontWeight: 700, 
-                                                            color: '#166534', 
-                                                            outline: 'none',
-                                                            MozAppearance: 'textfield', // Firefox
-                                                            WebkitAppearance: 'none' // Chrome/Safari
-                                                        }}
-                                                    />
-                                                    <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '1.1rem' }}>%</span>
-                                                </div>
-                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Calculado sobre a economia bruta gerada</p>
-                                            </div>
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Fixa Extra (R$)</label>
-                                                <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
-                                                    <span style={{ fontWeight: 600, color: '#16a34a', marginRight: '0.4rem' }}>R$</span>
-                                                    <input
-                                                        value={formatCurrency(formData.service_values?.['Gestão']).replace('R$', '').trim()}
-                                                        onChange={(e) => handleServiceValueChange('Gestão', e.target.value)}
-                                                        placeholder="0,00"
-                                                        style={{ width: '100%', border: 'none', fontSize: '1.1rem', fontWeight: 700, color: '#166534', outline: 'none' }}
-                                                    />
-                                                </div>
-                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Adicionado ao valor percentual no fechamento</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '20px', border: '1px solid #bbf7d0' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.servicos_contratados.includes('Gestão')}
+                                            onChange={() => handleServiceChange('Gestão')}
+                                            style={{ width: '1.1rem', height: '1.1rem', accentColor: '#16a34a' }}
+                                        />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#166534' }}>Habilitar Gestão</span>
+                                    </label>
                                 </div>
 
-                                <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
-                                    {/* Sub-tabs for Financeiro */}
-                                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setActiveFinanceTab('servicos')}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
-                                                background: activeFinanceTab === 'servicos' ? '#eff6ff' : 'transparent',
-                                                color: activeFinanceTab === 'servicos' ? '#2563eb' : '#64748b',
-                                                fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
-                                            }}
-                                        >
-                                            Serviços Contratados
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setActiveFinanceTab('lancamentos')}
-                                            style={{
-                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
-                                                background: activeFinanceTab === 'lancamentos' ? '#eff6ff' : 'transparent',
-                                                color: activeFinanceTab === 'lancamentos' ? '#2563eb' : '#64748b',
-                                                fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
-                                            }}
-                                        >
-                                            Extrato de Lançamentos
-                                        </button>
+                                {formData.servicos_contratados.includes('Gestão') && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', animation: 'fadeIn 0.2s' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Percentual (%)</label>
+                                            <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={formData.gestao_percentual || ''}
+                                                    onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
+                                                    placeholder="0.00"
+                                                    style={{ width: '100%', border: 'none', fontSize: '1.1rem', fontWeight: 700, color: '#166534', outline: 'none' }}
+                                                />
+                                                <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '1.1rem' }}>%</span>
+                                            </div>
+                                            <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Calculado sobre a economia bruta gerada</p>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Fixa Extra (R$)</label>
+                                            <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
+                                                <span style={{ fontWeight: 600, color: '#16a34a', marginRight: '0.4rem' }}>R$</span>
+                                                <input
+                                                    value={formatCurrency(formData.service_values?.['Gestão']).replace('R$', '').trim()}
+                                                    onChange={(e) => handleServiceValueChange('Gestão', e.target.value)}
+                                                    placeholder="0,00"
+                                                    style={{ width: '100%', border: 'none', fontSize: '1.1rem', fontWeight: 700, color: '#166534', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Adicionado ao valor percentual no fechamento</p>
+                                        </div>
                                     </div>
+                                )}
+                            </div>
 
-                                    {activeFinanceTab === 'servicos' && (
-                                        <div style={{ animation: 'fadeIn 0.2s' }}>
-                                            <label style={{ display: 'block', fontSize: '1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Parâmetros Mensais</label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-                                                {serviceOptions.filter(s => s !== 'Gestão').map(s => {
-                                            const isSelected = formData.servicos_contratados.includes(s);
-                                            return (
-                                                <div key={s} style={{
-                                                    border: isSelected ? '2px solid #16a34a' : '1px solid #e2e8f0',
-                                                    borderRadius: '12px',
-                                                    padding: '1rem',
-                                                    background: isSelected ? '#f0fdf4' : 'white',
-                                                    transition: 'all 0.2s',
-                                                    boxShadow: isSelected ? '0 4px 6px -1px rgba(22, 163, 74, 0.1)' : 'none'
-                                                }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: isSelected ? '0.75rem' : '0' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            onChange={() => handleServiceChange(s)}
-                                                            style={{ width: '1.2rem', height: '1.2rem', accentColor: '#16a34a' }}
-                                                        />
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? '#166534' : '#64748b' }}>{s}</span>
-                                                    </label>
+                            <div style={{ marginTop: '1.5rem' }}>
+                                {/* Sub-tabs for Financeiro */}
+                                <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setActiveFinanceTab('servicos')}
+                                        style={{
+                                            padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                            background: activeFinanceTab === 'servicos' ? '#eff6ff' : 'transparent',
+                                            color: activeFinanceTab === 'servicos' ? '#2563eb' : '#64748b',
+                                            fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
+                                        }}
+                                    >
+                                        Serviços Contratados
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setActiveFinanceTab('lancamentos')}
+                                        style={{
+                                            padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                            background: activeFinanceTab === 'lancamentos' ? '#eff6ff' : 'transparent',
+                                            color: activeFinanceTab === 'lancamentos' ? '#2563eb' : '#64748b',
+                                            fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
+                                        }}
+                                    >
+                                        Extrato de Lançamentos
+                                    </button>
+                                </div>
 
-                                                    {isSelected && (
-                                                        <div style={{ animation: 'fadeIn 0.2s' }}>
-                                                            <div style={{ position: 'relative' }}>
-                                                                <span style={{ position: 'absolute', left: '0.75rem', top: '0.6rem', fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>R$</span>
-                                                                <input
-                                                                    placeholder="0,00"
-                                                                    value={formatCurrency(formData.service_values?.[s]).replace('R$', '').trim()}
-                                                                    onChange={(e) => handleServiceValueChange(s, e.target.value)}
-                                                                    style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 2rem', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
-                                                                />
-                                                            </div>
-                                                            {s === 'Gestão' && (
-                                                                <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', padding: '0.4rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                {activeFinanceTab === 'servicos' && (
+                                    <div style={{ animation: 'fadeIn 0.2s' }}>
+                                        <label style={{ display: 'block', fontSize: '1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Parâmetros Mensais</label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+                                            {serviceOptions.filter(s => s !== 'Gestão').map(s => {
+                                                const isSelected = formData.servicos_contratados.includes(s);
+                                                return (
+                                                    <div key={s} style={{
+                                                        border: isSelected ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                                                        borderRadius: '12px',
+                                                        padding: '1rem',
+                                                        background: isSelected ? '#f0fdf4' : 'white',
+                                                        transition: 'all 0.2s',
+                                                        boxShadow: isSelected ? '0 4px 6px -1px rgba(22, 163, 74, 0.1)' : 'none'
+                                                    }}>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', marginBottom: isSelected ? '0.75rem' : '0' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => handleServiceChange(s)}
+                                                                style={{ width: '1.2rem', height: '1.2rem', accentColor: '#16a34a' }}
+                                                            />
+                                                            <span style={{ fontSize: '0.95rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? '#166534' : '#64748b' }}>{s}</span>
+                                                        </label>
+
+                                                        {isSelected && (
+                                                            <div style={{ animation: 'fadeIn 0.2s' }}>
+                                                                <div style={{ position: 'relative' }}>
+                                                                    <span style={{ position: 'absolute', left: '0.75rem', top: '0.6rem', fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>R$</span>
                                                                     <input
-                                                                        type="number" step="0.01"
-                                                                        placeholder="Porcentagem"
-                                                                        value={formData.gestao_percentual}
-                                                                        onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
-                                                                        style={{ width: '100%', border: 'none', fontSize: '0.85rem', outline: 'none', textAlign: 'right' }}
+                                                                        placeholder="0,00"
+                                                                        value={formatCurrency(formData.service_values?.[s]).replace('R$', '').trim()}
+                                                                        onChange={(e) => handleServiceValueChange(s, e.target.value)}
+                                                                        style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 2rem', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
                                                                     />
-                                                                    <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>%</span>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
 
@@ -1722,8 +1702,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             cursor: monthlyDetails?.status === 'liquidado' ? 'not-allowed' : 'pointer', 
                                                             fontWeight: 800, boxShadow: monthlyDetails?.status === 'liquidado' ? 'none' : '0 4px 10px rgba(22, 163, 74, 0.2)',
                                                             transition: '0.2s'
-                                                        }}
-                                                    >
+                                                        }}>
                                                         <CheckCircle size={20} /> {monthlyDetails?.status === 'liquidado' ? 'Mês Encerrado' : 'Encerrar Lançamentos e Gravar no Razão'}
                                                     </button>
                                                 </div>
