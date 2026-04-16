@@ -1,5 +1,20 @@
 ---
 
+ ## [2026-04-16] - Módulo de Billing: Livro Razão e Extrato Detalhado (18:15)
+ 
+ ### Atualizações Registradas:
+ 1. **Novo Módulo: Livro Razão (Ledger)**:
+     - Integração completa do **Livro Razão** como uma nova aba no dashboard de Billing.
+     - Implementação de filtros avançados por **Data**, **Descrição**, **Tipo (D/C)** e **Conta**.
+     - **Busca por Origem/Destino**: Filtro inteligente que busca por nome em Usinas, Assinantes, Originadores e Fornecedores.
+ 2. **Infraestrutura de Dados**:
+     - Atualização da view SQL `view_ledger_enriched` para incluir metadados de entidades (nomes), facilitando auditoria e filtragem.
+ 3. **UI/UX Reestruturada**:
+     - Substituição do antigo modal "EXTRATO" por uma visualização integrada de 3 abas: **Kanban**, **Lista** e **Livro Razão**.
+     - Dashboards compactos com somatórios de saldo no topo da área do extrato.
+
+---
+
  ## [2026-04-15] - Sincronização Definitiva de Webhooks e Harmonização (20:30)
  
  ### Atualizações Registradas:
@@ -81,6 +96,18 @@
 5. **WhatsApp & Evolution API**:
     - Regra ativa na Edge Function `send-whatsapp` que monitora números curtos (10-11 digitos) e prepende inteligentemente o prefixo (55), extinguindo o erro `Bad Request`.
 
+### 2026-04-16 - Correção do Endpoint de Pagamento Asaas e Tratamento de Erro de JSON
+- **Ajuste Técnico**: Correção do endpoint de `/v3/bills` para `/v3/bill` (singular) e campo `identification` para `identificationField` para compatibilidade com a API de produção do Asaas.
+- **Tratamento de Erro**: Implementado check de `response.ok` e `responseText` no `asaas-webhook` antes do parsing de JSON, evitando o erro "Unexpected end of JSON input" quando a API do Asaas retorna corpos vazios ou erros 400+.
+- **Manutenção**: Executados manualmente pagamentos pendentes do cliente Guarauto e regularizado o histórico no CRM.
+
+### 2026-04-16 - Estabilização de Webhook e Refatoração de Segurança
+2. **Nova Funcionalidade: Pagamento de Contas (`pay-asaas-bill`)**:
+    - Implementação de Edge Function para pagamento de boletos externos e contas de consumo via linha digitável.
+    - Proteção por autenticação e verificação de nível de acesso (`admin`/`superadmin`).
+3. **Resolução de Erro 404 (Webhook)**:
+    - Identificação e correção da ausência de deploy da função `asaas-webhook`.
+
 ---
 
 ## [2026-04-15] - Refatoração de Segurança e Pagamento de Boletos (20:30)
@@ -139,8 +166,7 @@
 ### Atualizações Registradas:
 1. **Nova Grade de Dados (Modo Lista)**:
     - Implementação de colunas específicas: **Vr. da Fatura**, **Vr. Conta de Energia** e **Saldo**.
-    - **Ação Contextual**: Botão **BOLETO** movido para a coluna da fatura; Botões **PAGAR/PAGA** movidos para a coluna da conta de energia.
-    - **Lógica de Saldo**: Cálculo automático da diferença entre o recebível do assinante e o custo da concessionária.
+    - **Ação Contextual**: Botão **BOLETO** movido para a coluna da fatura; Botões **PAGAR/PAGA** movidos para a coluna da conta de energia e o custo da concessionária.
 2. **Expansão de Mensagens (Timeline)**:
     - Implementação de **"Ver mais/Ver menos"** no `HistoryTimeline.jsx`.
     - **Priorização de Metadata**: Otimização para exibir o conteúdo completo da mensagem armazenada nos metadados, contornando resumos truncados.
