@@ -346,18 +346,23 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 });
             } else {
                 // Initialize placeholder from defaults
+                const getVal = (key) => {
+                    const val = formData.service_values?.[key];
+                    return typeof val === 'number' ? val : parseCurrency(val);
+                };
+
                 const defaultDetails = {
-                    'Internet': parseCurrency(formData.service_values?.['Internet']),
-                    'Água': parseCurrency(formData.service_values?.['Água']),
-                    'Energia': parseCurrency(formData.service_values?.['Energia'])
+                    'Internet': getVal('Internet'),
+                    'Água': getVal('Água'),
+                    'Energia': getVal('Energia')
                 };
                 
                 setMonthlyDetails({
                     usina_id: usina.id,
-                    mes_referencia: firstDay,
-                    manutencao: parseCurrency(formData.service_values?.['Manutenção']),
-                    arrendamento: parseCurrency(formData.service_values?.['Arrendamento']),
-                    gestao_reais: (formData.servicos_contratados.includes('Gestão') ? parseCurrency(formData.service_values?.['Gestão']) : 0),
+                    reference_month: referenceMonth,
+                    manutencao: getVal('Manutenção'),
+                    arrendamento: getVal('Arrendamento'),
+                    gestao_reais: (formData.servicos_contratados.includes('Gestão') ? getVal('Gestão') : 0),
                     details: defaultDetails,
                     servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
                     status: 'pendente'
@@ -549,9 +554,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         setFormData({ ...formData, valor_investido: formatted });
     };
 
-    const parseCurrency = (str) => {
-        if (!str) return 0;
-        const clean = str.replace(/[^\d,]/g, '').replace(',', '.');
+    const parseCurrency = (val) => {
+        if (val === undefined || val === null) return 0;
+        if (typeof val === 'number') return val;
+        const clean = val.replace(/[^\d,]/g, '').replace(',', '.');
         return Number(clean) || 0;
     };
 
@@ -1760,7 +1766,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         Status do Mês
                                                     </div>
                                                     <div style={{ fontSize: '1.25rem', fontWeight: 900, lineHeight: 1.2, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412' }}>
-                                                        {monthlyDetails?.status === 'liquidado' ? 'FECHAMENTO REALIZADO' : 'PENDENTE DE FECHAMENTO'}
+                                                        {monthlyDetails?.status === 'liquidado' ? 'MÊS FECHADO' : 'PENDENTE DE FECHAMENTO'}
                                                     </div>
                                                     {monthlyDetails?.fechamento && (
                                                         <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
