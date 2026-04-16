@@ -65,29 +65,36 @@ serve(async (req) => {
         }
 
         // 4. Prepare Bill Payment Payload
-        const billData = {
-            identification,
+        const billPayload = {
+            identificationField: identification,
             scheduleDate: scheduleDate || new Date().toISOString().split('T')[0],
             description: description || 'Pagamento de boleto via sistema',
             value: value ? Number(value) : undefined
         };
 
-        console.log('Sending Bill Payment to Asaas:', billData);
+        console.log('Sending Bill Payment to Asaas:', billPayload);
 
-        const response = await fetch(`${asaasUrl}/bills`, {
+        const response = await fetch(`${asaasUrl}/bill`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'access_token': asaasKey
             },
-            body: JSON.stringify(billData)
+            body: JSON.stringify(billPayload)
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+            data = responseText ? JSON.parse(responseText) : {};
+        } catch (e) {
+            throw new Error(`Resposta inválida do Asaas (Status ${response.status}): ${responseText || 'Corpo vazio'}`);
+        }
 
-        if (data.errors) {
+        if (!response.ok || data.errors) {
             console.error('Asaas Error:', data.errors);
-            throw new Error(`Asaas Bill Payment Failed: ${data.errors[0].description}`);
+            const errorMsg = data.errors ? data.errors[0].description : `Erro ${response.status}`;
+            throw new Error(`Asaas Bill Payment Failed: ${errorMsg}`);
         }
 
         return new Response(

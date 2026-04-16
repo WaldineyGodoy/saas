@@ -142,24 +142,32 @@ serve(async (req) => {
 
                             console.log(`Processing Auto Payment for Invoice ${inv.id} - Value: ${valorParaPagar}`);
 
-                            const billResponse = await fetch(`${asaasUrl}/bills`, {
+                            const billResponse = await fetch(`${asaasUrl}/bill`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'access_token': asaasKey
                                 },
                                 body: JSON.stringify({
-                                    identification: inv.linha_digitavel,
+                                    identificationField: inv.linha_digitavel,
                                     scheduleDate: new Date().toISOString().split('T')[0], // Immediate
                                     description: `Pagamento Automático Concessionária - UC ${inv.consumer_units?.numero_uc}`,
                                     value: valorParaPagar
                                 })
                             });
 
-                            const billData = await billResponse.json();
+                            let billData;
+                            const responseText = await billResponse.text();
+                            
+                            try {
+                                billData = responseText ? JSON.parse(responseText) : {};
+                            } catch (e) {
+                                throw new Error(`Resposta inválida do Asaas (Status ${billResponse.status}): ${responseText || 'Corpo vazio'}`);
+                            }
 
-                            if (billData.errors) {
-                                throw new Error(billData.errors[0].description);
+                            if (!billResponse.ok || billData.errors) {
+                                const errorMsg = billData.errors ? billData.errors[0].description : `Erro ${billResponse.status}`;
+                                throw new Error(errorMsg);
                             }
 
                             // Success History
