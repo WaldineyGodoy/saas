@@ -6,7 +6,7 @@ import { useUI } from '../contexts/UIContext';
 import { 
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
-    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle 
+    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle
 } from 'lucide-react';
 import {
     DndContext,
@@ -315,6 +315,153 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const [loadingUCs, setLoadingUCs] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [activeFinanceTab, setActiveFinanceTab] = useState('servicos');
+    const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [monthlyDetails, setMonthlyDetails] = useState(null);
+    const [loadingMonthly, setLoadingMonthly] = useState(false);
+
+    useEffect(() => {
+        if (activeFinanceTab === 'lancamentos' && usina?.id) {
+            fetchMonthlyDetails();
+        }
+    }, [activeFinanceTab, referenceMonth, usina?.id]);
+
+    const fetchMonthlyDetails = async () => {
+        setLoadingMonthly(true);
+        try {
+            const firstDay = `${referenceMonth}-01`;
+            const { data, error } = await supabase
+                .from('generation_production')
+                .select('*')
+                .eq('usina_id', usina.id)
+                .eq('mes_referencia', firstDay)
+                .maybeSingle();
+
+            if (error) throw error;
+            
+            if (data) {
+                setMonthlyDetails(data);
+            } else {
+                // Initialize placeholder for the month based on current usina settings
+                setMonthlyDetails({
+                    usina_id: usina.id,
+                    mes_referencia: firstDay,
+                    manutencao: parseCurrency(formData.service_values?.['Manutenção']),
+                    arrendamento: parseCurrency(formData.service_values?.['Arrendamento']),
+                    gestao_reais: (formData.servicos_contratados.includes('Gestão') ? parseCurrency(formData.service_values?.['Gestão']) : 0),
+                    servicos: Object.entries(formData.service_values || {})
+                        .filter(([k]) => k !== 'Manutenção' && k !== 'Arrendamento' && k !== 'Gestão')
+                        .reduce((acc, [_, v]) => acc + parseCurrency(v), 0),
+                    status: 'pendente'
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching monthly details:', err);
+        } finally {
+            setLoadingMonthly(false);
+        }
+    };
+
+    const handleFechamento = async () => {
+        if (!monthlyDetails) return;
+
+        setLoading(true);
+        try {
+            const firstDay = `${referenceMonth}-01`;
+            const transactionId = crypto.randomUUID();
+            
+            // 1. Calculate the final values
+            const maintenance = monthlyDetails.manutencao || 0;
+            const rent = monthlyDetails.arrendamento || 0;
+            const gestaoFixo = monthlyDetails.gestao_reais || 0;
+            // Gestão Percentual calculation: (Faturamento - Concessionária) * %
+            // For now, if faturamento_mensal and custo_disponibilidade are not set, gestao_var is 0
+            const faturamento = monthlyDetails.faturamento_mensal || 0;
+            const concessionaria = monthlyDetails.custo_disponibilidade || 0;
+            const gestaoVar = Math.max(0, (faturamento - concessionaria) * (Number(formData.gestao_percentual) / 100));
+            const gestaoTotal = gestaoFixo + gestaoVar;
+            const otherServices = monthlyDetails.servicos || 0;
+
+            const totalDespesas = maintenance + rent + gestaoTotal + otherServices;
+
+            // 2. Upsert generation_production
+            const { error: prodError } = await supabase
+                .from('generation_production')
+                .upsert({
+                    ...monthlyDetails,
+                    gestao_reais: gestaoTotal,
+                    total_despesas: totalDespesas,
+                    fechamento: new Date().toISOString().split('T')[0],
+                    status: 'liquidado'
+                });
+
+            if (prodError) throw prodError;
+
+            // 3. Create Ledger Entries
+            const entries = [];
+            const supplierId = formData.supplier_id; // Reference for account 2.1.1
+            
+            // Helper to add entry pair (Debit Investor, Credit Revenue/Liability)
+            const addPosting = (accountCode, amount, desc) => {
+                if (amount <= 0) return;
+                // Debit Investor (Positive)
+                entries.push({
+                    transaction_id: transactionId,
+                    account_code: '2.1.1', // Obrigações Usinas
+                    amount: amount,
+                    description: `${desc} - ${referenceMonth}`,
+                    reference_type: 'usina_month',
+                    reference_id: supplierId,
+                    is_sandbox: false
+                });
+                // Credit Revenue or Other Liability (Negative)
+                entries.push({
+                    transaction_id: transactionId,
+                    account_code: accountCode,
+                    amount: -amount,
+                    description: `${desc} - ${referenceMonth}`,
+                    reference_type: 'usina_month',
+                    reference_id: supplierId,
+                    is_sandbox: false
+                });
+            };
+
+            if (gestaoTotal > 0) addPosting('3.1.1', gestaoTotal, 'Taxa de Gestão B2W');
+            if (maintenance > 0) addPosting('3.1.3', maintenance, 'Receita Manutenção Usina');
+            if (rent > 0) addPosting('3.1.4', rent, 'Receita Arrendamento Usina');
+            if (otherServices > 0) addPosting('2.1.4', otherServices, 'Despesas Operacionais (Internet/Água)');
+
+            if (entries.length > 0) {
+                const { data: accountsData } = await supabase.from('ledger_accounts').select('id, code');
+                const accountMap = accountsData?.reduce((acc, curr) => ({ ...acc, [curr.code]: curr.id }), {}) || {};
+
+                const finalEntries = entries.map(entry => {
+                    const mappedId = accountMap[entry.account_code];
+                    // Fallback logic for accounts that might not exist yet
+                    let finalId = mappedId;
+                    if (!finalId) {
+                        if (entry.account_code.startsWith('3.')) finalId = accountMap['3.1.0'] || accountMap['3.0.0'];
+                        if (entry.account_code.startsWith('2.1')) finalId = accountMap['2.1.0'] || accountMap['2.0.0'];
+                    }
+                    delete entry.account_code;
+                    return { ...entry, account_id: finalId || entry.account_id };
+                }).filter(e => e.account_id);
+
+                if (finalEntries.length > 0) {
+                    const { error: ledgerError } = await supabase.from('ledger_entries').insert(finalEntries);
+                    if (ledgerError) throw ledgerError;
+                }
+            }
+
+            showAlert('Fechamento realizado com sucesso!', 'success');
+            fetchMonthlyDetails();
+        } catch (err) {
+            console.error('Error in fechamento:', err);
+            showAlert('Erro ao realizar fechamento: ' + err.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const fetchAvailableUCs = async () => {
         if (!usina?.id && !usina) {
@@ -1300,10 +1447,116 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     />
                                 </div>
 
+                                {/* Exclusive Gestão Block */}
+                                <div style={{ 
+                                    gridColumn: '1 / -1', 
+                                    background: '#f0fdf4', 
+                                    padding: '1.5rem', 
+                                    borderRadius: '16px', 
+                                    border: '1px solid #bbf7d0',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '1rem',
+                                    animation: 'slideDown 0.3s ease-out'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ padding: '0.5rem', background: 'white', borderRadius: '10px', color: '#16a34a', boxShadow: '0 2px 4px rgba(22,163,74,0.1)' }}>
+                                                <Settings size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '1rem', color: '#166534', fontWeight: 700 }}>Gestão e Operação B2W</h4>
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a' }}>Defina a remuneração pela gestão da usina</p>
+                                            </div>
+                                        </div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '20px', border: '1px solid #bbf7d0' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.servicos_contratados.includes('Gestão')}
+                                                onChange={() => handleServiceChange('Gestão')}
+                                                style={{ width: '1.1rem', height: '1.1rem', accentColor: '#16a34a' }}
+                                            />
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#166534' }}>Habilitar Gestão</span>
+                                        </label>
+                                    </div>
+
+                                    {formData.servicos_contratados.includes('Gestão') && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', animation: 'fadeIn 0.2s' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Percentual (%)</label>
+                                                <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.gestao_percentual || ''}
+                                                        onChange={e => setFormData({ ...formData, gestao_percentual: e.target.value })}
+                                                        placeholder="0.00"
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            border: 'none', 
+                                                            fontSize: '1.1rem', 
+                                                            fontWeight: 700, 
+                                                            color: '#166534', 
+                                                            outline: 'none',
+                                                            MozAppearance: 'textfield', // Firefox
+                                                            WebkitAppearance: 'none' // Chrome/Safari
+                                                        }}
+                                                    />
+                                                    <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '1.1rem' }}>%</span>
+                                                </div>
+                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Calculado sobre a economia bruta gerada</p>
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Fixa Extra (R$)</label>
+                                                <div style={{ position: 'relative', background: 'white', borderRadius: '10px', border: '1px solid #bbf7d0', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 600, color: '#16a34a', marginRight: '0.4rem' }}>R$</span>
+                                                    <input
+                                                        value={formatCurrency(formData.service_values?.['Gestão']).replace('R$', '').trim()}
+                                                        onChange={(e) => handleServiceValueChange('Gestão', e.target.value)}
+                                                        placeholder="0,00"
+                                                        style={{ width: '100%', border: 'none', fontSize: '1.1rem', fontWeight: 700, color: '#166534', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Adicionado ao valor percentual no fechamento</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
-                                    <label style={{ display: 'block', fontSize: '1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Serviços de Manutenção e Gestão</label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-                                        {serviceOptions.map(s => {
+                                    {/* Sub-tabs for Financeiro */}
+                                    <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setActiveFinanceTab('servicos')}
+                                            style={{
+                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                background: activeFinanceTab === 'servicos' ? '#eff6ff' : 'transparent',
+                                                color: activeFinanceTab === 'servicos' ? '#2563eb' : '#64748b',
+                                                fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
+                                            }}
+                                        >
+                                            Serviços Contratados
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setActiveFinanceTab('lancamentos')}
+                                            style={{
+                                                padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                                background: activeFinanceTab === 'lancamentos' ? '#eff6ff' : 'transparent',
+                                                color: activeFinanceTab === 'lancamentos' ? '#2563eb' : '#64748b',
+                                                fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
+                                            }}
+                                        >
+                                            Extrato de Lançamentos
+                                        </button>
+                                    </div>
+
+                                    {activeFinanceTab === 'servicos' && (
+                                        <div style={{ animation: 'fadeIn 0.2s' }}>
+                                            <label style={{ display: 'block', fontSize: '1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 700 }}>Parâmetros Mensais</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+                                                {serviceOptions.filter(s => s !== 'Gestão').map(s => {
                                             const isSelected = formData.servicos_contratados.includes(s);
                                             return (
                                                 <div key={s} style={{
@@ -1353,7 +1606,131 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             );
                                         })}
                                     </div>
-                                </div>
+                                    </div>
+                                )}
+
+                                {activeFinanceTab === 'lancamentos' && (
+                                    <div style={{ animation: 'fadeIn 0.2s' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '8px', color: '#2563eb' }}>
+                                                    <Calendar size={20} />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Mês de Referência</label>
+                                                    <input 
+                                                        type="month" 
+                                                        value={referenceMonth}
+                                                        onChange={(e) => setReferenceMonth(e.target.value)}
+                                                        style={{ background: 'transparent', border: 'none', outline: 'none', fontWeight: 700, color: '#1e293b', fontSize: '1rem', padding: 0 }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total de Serviços do Mês</span>
+                                                <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#166534' }}>
+                                                    {formatCurrency((monthlyDetails?.manutencao || 0) + (monthlyDetails?.arrendamento || 0) + (monthlyDetails?.gestao_reais || 0) + (monthlyDetails?.servicos || 0))}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 1fr) 2fr', gap: '1.5rem' }}>
+                                            {/* Extract / Sidebar info */}
+                                            <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+                                                <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <FileText size={18} color="#3b82f6" /> Extrato do Mês
+                                                </h4>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                                                        <span style={{ color: '#64748b' }}>Gestão B2W</span>
+                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.gestao_reais || 0)}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                                                        <span style={{ color: '#64748b' }}>Manutenção</span>
+                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.manutencao || 0)}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                                                        <span style={{ color: '#64748b' }}>Arrendamento</span>
+                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.arrendamento || 0)}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+                                                        <span style={{ color: '#64748b' }}>Outros (Internet/Ag/En)</span>
+                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.servicos || 0)}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#fff7ed', borderRadius: '12px', border: '1px solid #ffedd5' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9a3412', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                                                        <AlertCircle size={16} /> STATUS
+                                                    </div>
+                                                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', textTransform: 'uppercase' }}>
+                                                        {monthlyDetails?.status === 'liquidado' ? 'FECHAMENTO REALIZADO' : 'PENDENTE DE FECHAMENTO'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Posting Inputs */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Manutenção</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
+                                                            onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
+                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Arrendamento</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
+                                                            onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
+                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Gestão Extra (Fixo)</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
+                                                            onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
+                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Outros Serviços</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={formatCurrency(monthlyDetails?.servicos).replace('R$', '').trim()}
+                                                            onChange={e => setMonthlyDetails({...monthlyDetails, servicos: parseCurrency(e.target.value)})}
+                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ marginTop: 'auto', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={handleFechamento}
+                                                        disabled={monthlyDetails?.status === 'liquidado'}
+                                                        style={{ 
+                                                            display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 2rem', 
+                                                            background: monthlyDetails?.status === 'liquidado' ? '#94a3b8' : '#16a34a', 
+                                                            color: 'white', borderRadius: '10px', border: 'none', 
+                                                            cursor: monthlyDetails?.status === 'liquidado' ? 'not-allowed' : 'pointer', 
+                                                            fontWeight: 800, boxShadow: monthlyDetails?.status === 'liquidado' ? 'none' : '0 4px 10px rgba(22, 163, 74, 0.2)',
+                                                            transition: '0.2s'
+                                                        }}
+                                                    >
+                                                        <CheckCircle size={20} /> {monthlyDetails?.status === 'liquidado' ? 'Mês Encerrado' : 'Encerrar Lançamentos e Gravar no Razão'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
