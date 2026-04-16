@@ -414,14 +414,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // ----------------------------------------------
 
             const processedData = (data || []).map(inv => {
-                if (inv.status && !['pago', 'cancelado', 'erro'].includes(inv.status.toLowerCase())) {
+                if (inv.status === 'a_vencer') {
                     if (inv.vencimento) {
                         const [y, m, d] = inv.vencimento.split('-');
                         const dueDate = new Date(Number(y), Number(m) - 1, Number(d));
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         
-                        inv.status = dueDate < today ? 'atrasado' : 'a_vencer';
+                        if (dueDate < today) {
+                            inv.status = 'atrasado';
+                        }
                     }
                 }
                 return inv;
