@@ -413,7 +413,21 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
             // ----------------------------------------------
 
-            setInvoices(data || []);
+            const processedData = (data || []).map(inv => {
+                if (inv.status && !['pago', 'cancelado', 'erro'].includes(inv.status.toLowerCase())) {
+                    if (inv.vencimento) {
+                        const [y, m, d] = inv.vencimento.split('-');
+                        const dueDate = new Date(Number(y), Number(m) - 1, Number(d));
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        
+                        inv.status = dueDate < today ? 'atrasado' : 'a_vencer';
+                    }
+                }
+                return inv;
+            });
+            
+            setInvoices(processedData);
 
             const { data: unpaidSum, error: sumError } = await supabase
                 .from('invoices')
