@@ -419,7 +419,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // Helper to add entry pair (Debit Investor, Credit Revenue/Liability)
             const addPosting = (accountCode, amount, desc) => {
                 if (amount <= 0) return;
-                // Debit Investor (Positive)
+                // Debit Investor (Positive) - Liability to Power Plant
                 entries.push({
                     transaction_id: transactionId,
                     account_code: '2.1.1', // Obrigações Usinas
@@ -441,7 +441,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 });
             };
 
-            if (gestaoTotal > 0) addPosting('3.1.1', gestaoTotal, 'Taxa de Gestão B2W');
+            // Gestão Fixa as "Despesa Extra" (2.1.4)
+            if (gestaoFixo > 0) addPosting('2.1.4', gestaoFixo, 'Taxa Fixa Gestão B2W');
+            // Gestão Variável as primary Management Fee (3.1.1)
+            if (gestaoVar > 0) addPosting('3.1.1', gestaoVar, 'Taxa Variável Gestão B2W');
+            
             if (maintenance > 0) addPosting('3.1.3', maintenance, 'Receita Manutenção Usina');
             if (rent > 0) addPosting('3.1.4', rent, 'Receita Arrendamento Usina');
             
@@ -1675,88 +1679,96 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     </h4>
                                                 </div>
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                    {/* Row: Gestão */}
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
-                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Gestão B2W</span>
-                                                        </div>
-                                                        <div style={{ position: 'relative', width: '120px' }}>
-                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                            <input 
-                                                                type="text"
-                                                                value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
-                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Row: Manutenção */}
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Manutenção</span>
-                                                        </div>
-                                                        <div style={{ position: 'relative', width: '120px' }}>
-                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                            <input 
-                                                                type="text"
-                                                                value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
-                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Row: Arrendamento */}
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
-                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Arrendamento</span>
-                                                        </div>
-                                                        <div style={{ position: 'relative', width: '120px' }}>
-                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                            <input 
-                                                                type="text"
-                                                                value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
-                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Individualized Others: Internet, Água, Energia */}
-                                                    {['Internet', 'Água', 'Energia'].map((serv) => (
-                                                        <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                 {/* Row: Gestão */}
+                                                    {(monthlyDetails?.gestao_reais > 0) && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
-                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>{serv}</span>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Gestão B2W</span>
                                                             </div>
                                                             <div style={{ position: 'relative', width: '120px' }}>
                                                                 <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
                                                                 <input 
                                                                     type="text"
-                                                                    value={formatCurrency(monthlyDetails?.details?.[serv] || 0).replace('R$', '').trim()}
-                                                                    onChange={e => {
-                                                                        const val = parseCurrency(e.target.value);
-                                                                        const newDetails = { ...(monthlyDetails?.details || {}), [serv]: val };
-                                                                        // Recalculate 'servicos' as the sum of all other services
-                                                                        const totalOthers = Object.values(newDetails).reduce((acc, curr) => acc + curr, 0);
-                                                                        setMonthlyDetails({
-                                                                            ...monthlyDetails, 
-                                                                            details: newDetails,
-                                                                            servicos: totalOthers
-                                                                        });
-                                                                    }}
+                                                                    value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
+                                                                    onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
                                                                     style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
                                                                 />
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                    )}
+
+                                                    {/* Row: Manutenção */}
+                                                    {(monthlyDetails?.manutencao > 0) && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Manutenção</span>
+                                                            </div>
+                                                            <div style={{ position: 'relative', width: '120px' }}>
+                                                                <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                <input 
+                                                                    type="text"
+                                                                    value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
+                                                                    onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
+                                                                    style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Row: Arrendamento */}
+                                                    {(monthlyDetails?.arrendamento > 0) && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
+                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Arrendamento</span>
+                                                            </div>
+                                                            <div style={{ position: 'relative', width: '120px' }}>
+                                                                <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                <input 
+                                                                    type="text"
+                                                                    value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
+                                                                    onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
+                                                                    style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Individualized Others: Internet, Água, Energia */}
+                                                    {['Internet', 'Água', 'Energia'].map((serv) => {
+                                                        const val = monthlyDetails?.details?.[serv] || 0;
+                                                        if (val <= 0) return null;
+                                                        return (
+                                                            <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
+                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>{serv}</span>
+                                                                </div>
+                                                                <div style={{ position: 'relative', width: '120px' }}>
+                                                                    <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={formatCurrency(val).replace('R$', '').trim()}
+                                                                        onChange={e => {
+                                                                            const newVal = parseCurrency(e.target.value);
+                                                                            const newDetails = { ...(monthlyDetails?.details || {}), [serv]: newVal };
+                                                                            // Recalculate 'servicos' as the sum of all other services
+                                                                            const totalOthers = Object.values(newDetails).reduce((acc, curr) => acc + curr, 0);
+                                                                            setMonthlyDetails({
+                                                                                ...monthlyDetails, 
+                                                                                details: newDetails,
+                                                                                servicos: totalOthers
+                                                                            });
+                                                                        }}
+                                                                        style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            </div>
 
                                             {/* Status and Action Sidebar */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
