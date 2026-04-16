@@ -707,6 +707,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 entityId={lead.id} 
                                 limit={5} 
                                 showHeader={false} 
+                                isInline={true}
                             />
                         </div>
                     </div>
@@ -720,6 +721,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     entityId={lead.id}
                     entityName={formData.name}
                     onClose={() => setShowHistory(false)}
+                    isInline={true}
                 />
             )}
         </div>

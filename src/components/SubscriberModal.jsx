@@ -2926,6 +2926,7 @@ Associado`;
                     entityId={subscriber.id}
                     entityName={formData.name}
                     onClose={() => setShowHistory(false)}
+                    isInline={true}
                 />
             )}
 

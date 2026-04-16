@@ -340,18 +340,26 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (error) throw error;
             
             if (data) {
-                setMonthlyDetails(data);
+                setMonthlyDetails({
+                    ...data,
+                    details: data.service_details || {}
+                });
             } else {
-                // Initialize placeholder for the month based on current usina settings
+                // Initialize placeholder from defaults
+                const defaultDetails = {
+                    'Internet': parseCurrency(formData.service_values?.['Internet']),
+                    'Água': parseCurrency(formData.service_values?.['Água']),
+                    'Energia': parseCurrency(formData.service_values?.['Energia'])
+                };
+                
                 setMonthlyDetails({
                     usina_id: usina.id,
                     mes_referencia: firstDay,
                     manutencao: parseCurrency(formData.service_values?.['Manutenção']),
                     arrendamento: parseCurrency(formData.service_values?.['Arrendamento']),
                     gestao_reais: (formData.servicos_contratados.includes('Gestão') ? parseCurrency(formData.service_values?.['Gestão']) : 0),
-                    servicos: Object.entries(formData.service_values || {})
-                        .filter(([k]) => k !== 'Manutenção' && k !== 'Arrendamento' && k !== 'Gestão')
-                        .reduce((acc, [_, v]) => acc + parseCurrency(v), 0),
+                    details: defaultDetails,
+                    servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
                     status: 'pendente'
                 });
             }
@@ -385,10 +393,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const totalDespesas = maintenance + rent + gestaoTotal + otherServices;
 
             // 2. Upsert generation_production
+            const { details, ...mainData } = monthlyDetails;
             const { error: prodError } = await supabase
                 .from('generation_production')
                 .upsert({
-                    ...monthlyDetails,
+                    ...mainData,
+                    service_details: details || {},
                     gestao_reais: gestaoTotal,
                     total_despesas: totalDespesas,
                     fechamento: new Date().toISOString().split('T')[0],
@@ -429,7 +439,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (gestaoTotal > 0) addPosting('3.1.1', gestaoTotal, 'Taxa de Gestão B2W');
             if (maintenance > 0) addPosting('3.1.3', maintenance, 'Receita Manutenção Usina');
             if (rent > 0) addPosting('3.1.4', rent, 'Receita Arrendamento Usina');
-            if (otherServices > 0) addPosting('2.1.4', otherServices, 'Despesas Operacionais (Internet/Água)');
+            
+            // Separate Ledger entries for detailed services
+            if (details) {
+                Object.entries(details).forEach(([name, val]) => {
+                    if (val > 0) {
+                        addPosting('2.1.4', val, `Serviço ${name}`);
+                    }
+                });
+            }
 
             if (entries.length > 0) {
                 const { data: accountsData } = await supabase.from('ledger_accounts').select('id, code');
@@ -1496,7 +1514,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 />
                                                 <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '1.1rem' }}>%</span>
                                             </div>
-                                            <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Calculado sobre a economia bruta gerada</p>
+                                            <p style={{ margin: '0.4rem 0 0', fontSize: '0.7rem', color: '#16a34a' }}>*Calculado sobre o valor liquido pago pelo assinante.</p>
                                         </div>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Taxa Fixa Extra (R$)</label>
@@ -1591,121 +1609,189 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                                 {activeFinanceTab === 'lancamentos' && (
                                     <div style={{ animation: 'fadeIn 0.2s' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '8px', color: '#2563eb' }}>
-                                                    <Calendar size={20} />
-                                                </div>
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Mês de Referência</label>
-                                                    <input 
-                                                        type="month" 
-                                                        value={referenceMonth}
-                                                        onChange={(e) => setReferenceMonth(e.target.value)}
-                                                        style={{ background: 'transparent', border: 'none', outline: 'none', fontWeight: 700, color: '#1e293b', fontSize: '1rem', padding: 0 }}
-                                                    />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const [year, month] = referenceMonth.split('-').map(Number);
+                                                            const date = new Date(year, month - 2, 1);
+                                                            setReferenceMonth(date.toISOString().slice(0, 7));
+                                                        }}
+                                                        style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                    >
+                                                        <ChevronUp style={{ transform: 'rotate(-90deg)' }} size={18} />
+                                                    </button>
+                                                    
+                                                    <div style={{ textAlign: 'center', minWidth: '180px' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Mês de Referência</label>
+                                                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', textTransform: 'capitalize' }}>
+                                                            {new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                        </div>
+                                                    </div>
+
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const [year, month] = referenceMonth.split('-').map(Number);
+                                                            const date = new Date(year, month, 1);
+                                                            setReferenceMonth(date.toISOString().slice(0, 7));
+                                                        }}
+                                                        style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                    >
+                                                        <ChevronUp style={{ transform: 'rotate(90deg)' }} size={18} />
+                                                    </button>
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right' }}>
                                                 <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total de Serviços do Mês</span>
-                                                <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#166534' }}>
-                                                    {formatCurrency((monthlyDetails?.manutencao || 0) + (monthlyDetails?.arrendamento || 0) + (monthlyDetails?.gestao_reais || 0) + (monthlyDetails?.servicos || 0))}
+                                                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#166534' }}>
+                                                    {formatCurrency(
+                                                        (monthlyDetails?.manutencao || 0) + 
+                                                        (monthlyDetails?.arrendamento || 0) + 
+                                                        (monthlyDetails?.gestao_reais || 0) + 
+                                                        (monthlyDetails?.servicos || 0)
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(250px, 1fr) 2fr', gap: '1.5rem' }}>
-                                            {/* Extract / Sidebar info */}
-                                            <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
-                                                <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <FileText size={18} color="#3b82f6" /> Extrato do Mês
-                                                </h4>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                                                        <span style={{ color: '#64748b' }}>Gestão B2W</span>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.gestao_reais || 0)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                                                        <span style={{ color: '#64748b' }}>Manutenção</span>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.manutencao || 0)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                                                        <span style={{ color: '#64748b' }}>Arrendamento</span>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.arrendamento || 0)}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.5rem 0' }}>
-                                                        <span style={{ color: '#64748b' }}>Outros (Internet/Ag/En)</span>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.servicos || 0)}</span>
-                                                    </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 1.5fr) 1fr', gap: '1.5rem', alignItems: 'start' }}>
+                                            {/* Extract: Detailed and Editable */}
+                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                        <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
+                                                            <FileText size={20} />
+                                                        </div>
+                                                        Extrato Detalhado de Lançamentos
+                                                    </h4>
                                                 </div>
 
-                                                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#fff7ed', borderRadius: '12px', border: '1px solid #ffedd5' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9a3412', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                                                        <AlertCircle size={16} /> STATUS
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                    {/* Row: Gestão */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Gestão B2W</span>
+                                                        </div>
+                                                        <div style={{ position: 'relative', width: '120px' }}>
+                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                            <input 
+                                                                type="text"
+                                                                value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
+                                                                onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
+                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', textTransform: 'uppercase' }}>
-                                                        {monthlyDetails?.status === 'liquidado' ? 'FECHAMENTO REALIZADO' : 'PENDENTE DE FECHAMENTO'}
+
+                                                    {/* Row: Manutenção */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Manutenção</span>
+                                                        </div>
+                                                        <div style={{ position: 'relative', width: '120px' }}>
+                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                            <input 
+                                                                type="text"
+                                                                value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
+                                                                onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
+                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                            />
+                                                        </div>
                                                     </div>
+
+                                                    {/* Row: Arrendamento */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
+                                                            <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Arrendamento</span>
+                                                        </div>
+                                                        <div style={{ position: 'relative', width: '120px' }}>
+                                                            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                            <input 
+                                                                type="text"
+                                                                value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
+                                                                onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
+                                                                style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Individualized Others: Internet, Água, Energia */}
+                                                    {['Internet', 'Água', 'Energia'].map((serv) => (
+                                                        <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
+                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>{serv}</span>
+                                                            </div>
+                                                            <div style={{ position: 'relative', width: '120px' }}>
+                                                                <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                <input 
+                                                                    type="text"
+                                                                    value={formatCurrency(monthlyDetails?.details?.[serv] || 0).replace('R$', '').trim()}
+                                                                    onChange={e => {
+                                                                        const val = parseCurrency(e.target.value);
+                                                                        const newDetails = { ...(monthlyDetails?.details || {}), [serv]: val };
+                                                                        // Recalculate 'servicos' as the sum of all other services
+                                                                        const totalOthers = Object.values(newDetails).reduce((acc, curr) => acc + curr, 0);
+                                                                        setMonthlyDetails({
+                                                                            ...monthlyDetails, 
+                                                                            details: newDetails,
+                                                                            servicos: totalOthers
+                                                                        });
+                                                                    }}
+                                                                    style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
 
-                                            {/* Posting Inputs */}
+                                            {/* Status and Action Sidebar */}
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Manutenção</label>
-                                                        <input 
-                                                            type="text"
-                                                            value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
-                                                            onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
-                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                        />
+                                                <div style={{ padding: '1.5rem', background: monthlyDetails?.status === 'liquidado' ? '#f0fdf4' : '#fff7ed', borderRadius: '20px', border: `1px solid ${monthlyDetails?.status === 'liquidado' ? '#bbf7d0' : '#ffedd5'}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', fontSize: '0.85rem', fontWeight: 800, marginBottom: '1rem', textTransform: 'uppercase' }}>
+                                                        {monthlyDetails?.status === 'liquidado' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
+                                                        Status do Mês
                                                     </div>
-                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Arrendamento</label>
-                                                        <input 
-                                                            type="text"
-                                                            value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
-                                                            onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
-                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                        />
+                                                    <div style={{ fontSize: '1.25rem', fontWeight: 900, lineHeight: 1.2, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412' }}>
+                                                        {monthlyDetails?.status === 'liquidado' ? 'FECHAMENTO REALIZADO' : 'PENDENTE DE FECHAMENTO'}
                                                     </div>
-                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Gestão Extra (Fixo)</label>
-                                                        <input 
-                                                            type="text"
-                                                            value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
-                                                            onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
-                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                        />
-                                                    </div>
-                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Outros Serviços</label>
-                                                        <input 
-                                                            type="text"
-                                                            value={formatCurrency(monthlyDetails?.servicos).replace('R$', '').trim()}
-                                                            onChange={e => setMonthlyDetails({...monthlyDetails, servicos: parseCurrency(e.target.value)})}
-                                                            style={{ width: '100%', border: 'none', background: '#f8fafc', padding: '0.6rem', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                        />
-                                                    </div>
+                                                    {monthlyDetails?.fechamento && (
+                                                        <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
+                                                            Encerrado em: {new Date(monthlyDetails.fechamento).toLocaleDateString('pt-BR')}
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                <div style={{ marginTop: 'auto', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={handleFechamento}
-                                                        disabled={monthlyDetails?.status === 'liquidado'}
-                                                        style={{ 
-                                                            display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 2rem', 
-                                                            background: monthlyDetails?.status === 'liquidado' ? '#94a3b8' : '#16a34a', 
-                                                            color: 'white', borderRadius: '10px', border: 'none', 
-                                                            cursor: monthlyDetails?.status === 'liquidado' ? 'not-allowed' : 'pointer', 
-                                                            fontWeight: 800, boxShadow: monthlyDetails?.status === 'liquidado' ? 'none' : '0 4px 10px rgba(22, 163, 74, 0.2)',
-                                                            transition: '0.2s'
-                                                        }}>
-                                                        <CheckCircle size={20} /> {monthlyDetails?.status === 'liquidado' ? 'Mês Encerrado' : 'Encerrar Lançamentos e Gravar no Razão'}
-                                                    </button>
-                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleFechamento}
+                                                    disabled={monthlyDetails?.status === 'liquidado'}
+                                                    style={{ 
+                                                        width: '100%',
+                                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '1.5rem', 
+                                                        background: monthlyDetails?.status === 'liquidado' ? '#94a3b8' : '#16a34a', 
+                                                        color: 'white', borderRadius: '20px', border: 'none', 
+                                                        cursor: monthlyDetails?.status === 'liquidado' ? 'not-allowed' : 'pointer', 
+                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                        boxShadow: monthlyDetails?.status === 'liquidado' ? 'none' : '0 10px 15px -3px rgba(22, 163, 74, 0.3)'
+                                                    }}>
+                                                    <CheckCircle size={32} />
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
+                                                            {monthlyDetails?.status === 'liquidado' ? 'Mês Liquidado' : 'Efetuar Fechamento'}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.2rem' }}>
+                                                            Gravar lançamentos no Razão
+                                                        </div>
+                                                    </div>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

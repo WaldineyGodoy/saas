@@ -446,6 +446,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                 entityId={originator.id} 
                                 limit={showHistory ? 20 : 5}
                                 showHeader={false}
+                                isInline={true}
                             />
                         </div>
                     )}

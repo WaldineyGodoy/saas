@@ -481,6 +481,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 entityId={supplier.id} 
                                 limit={showHistory ? 20 : 5}
                                 showHeader={false}
+                                isInline={true}
                             />
                         </div>
                     )}
