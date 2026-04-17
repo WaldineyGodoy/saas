@@ -1,13 +1,15 @@
 ---
 
- ## [2026-04-17] - Fix: Paginação e Captura de Contratos Autentique (10:30)
+ ## [2026-04-17] - Fix: Paginação e Captura de Contratos Autentique (10:45)
 
  ### Atualizações Registradas:
  1. **Correção de Truncagem de PDF**:
      - **Estabilização de Renderização**: Implementação de delay de 1500ms antes da captura para garantir que o DOM esteja totalmente montado antes do processamento pelo `html2canvas`.
      - **Lógica de Paginação (Split)**: Refatoração da função de divisão de conteúdo utilizando Regex robusta (`CLÁUSULA\s+7/i`) para garantir a quebra correta entre as 3 páginas do contrato principal.
      - **Garantia de 4 Páginas**: Ajuste no loop de captura para assegurar a inclusão obrigatória da Procuração (Página 4) e das seções intermediárias do contrato.
- 2. **Melhorias de Visual e Rastreabilidade**:
+ 2. **Infraestrutura e Segurança**:
+     - **Fix de JWT**: Resolvido o erro `Unsupported JWT algorithm ES256` na Edge Function `create-autentique-document` através da desativação da validação de JWT no Gateway (`verify_jwt: false`), contornando incompatibilidades de algoritmo de assinatura.
+ 3. **Melhorias de Visual e Rastreabilidade**:
      - **Design Premium**: Aumento de padding, logos e tipografia nas páginas ocultas para gerar PDFs com estética profissional e respiro visual.
      - **Telemetria de Erros**: Adição de logs de console detalhados no frontend e logs de tamanho de payload (Base64) na Edge Function para monitoramento de integridade.
  3. **Correção de Build**:
