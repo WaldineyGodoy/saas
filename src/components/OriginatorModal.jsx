@@ -1,3 +1,8 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchAddressByCep } from '../lib/api';
+import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import { 
     History, User, MapPin, Wallet, Link as LinkIcon, 
     X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
