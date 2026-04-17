@@ -1,5 +1,37 @@
 ---
 
+ ## [2026-04-16] - Refatoração Originadores e Automação Financeira (23:30)
+
+ ### Atualizações Registradas:
+ 1. **Refatoração Premium: Modal de Originadores**:
+     - **Visual**: Reestruturação completa para o padrão "Premium Layout" com menu horizontal por abas (**Geral**, **Endereço**, **Financeiro**, **Indicação**, **Histórico**).
+     - **UI/UX**: Uso de gradientes de fundo no header, cards com sombras suaves e tipografia moderna.
+     - **Indicação**: Card exclusivo para link de convite com funcionalidade de cópia rápida e metadados dinâmicos.
+     - **Histórico**: Integração da timeline de auditoria diretamente no modal (`isInline`).
+ 2. **Automação Financeira (Usinas)**:
+     - **Transferência de Valores**: Valores recorrentes de "Serviços Contratados" são agora transportados automaticamente para o extrato de lançamentos ao iniciar um novo mês.
+     - **Transparência no Ledger**: Separação automática da "Gestão B2W" no fechamento do mês; Taxas fixas (despesas extras) na conta **2.1.4** e taxas variáveis na conta **3.1.1**.
+     - **Gatilho de Fechamento**: O botão "Efetuar Fechamento" agora altera o status do mês para **"MÊS FECHADO"** e consolida todos os lançamentos no Livro Razão.
+     - **Limpeza de Extrato**: Itens com valor bruto zerado são ocultados automaticamente do extrato de detalhamento, evitando poluição visual.
+
+ ---
+
+ ## [2026-04-16] - Automação de Comissões e Estabilização de Interface (21:30)
+ 
+ ### Atualizações Registradas:
+ 1. **Estabilização de Interface (Fix Navegação)**:
+     - **Correção de Overlay Crítico**: Resolvido o bug onde o `HistoryTimeline` "sequestrava" a interface ao abrir como overlay de tela cheia dentro de modais.
+     - **Padrão Inline**: Implementação de `isInline={true}` no componente de histórico nos modais de **Originador**, **Fornecedor**, **Unidade Consumidora**, **Leads** e **Assinantes**.
+ 2. **Funcionalidades Contábeis (Ledger)**:
+     - **Split de Comissão Automatizado**: Sistema agora diferencia automaticamente **Primeira Fatura (Start + Recorrente)** de **Faturas Mensais (Recorrente)**.
+     - **Base de Cálculo**: Padronização da base de comissão sobre `(Valor Pago - Conta de Energia)`.
+     - **Liquidação Integrada**: Automação de contas a pagar (Água, Internet, Luz) da usina e baixa automática de dívida da concessionária no Ledger ao realizar o pagamento via CRM.
+ 3. **Gatilhos e Banco de Dados**:
+     - **Trigger `handle_invoice_paid_ledger`**: Atualizado para processar os novos splits e descontos (Start descontado do Fornecedor, Recorrente da B2W).
+     - **Views de Saldo**: Criação de `view_originator_balance` e `view_investor_balance` para rastreabilidade financeira imediata.
+
+ ---
+
  ## [2026-04-16] - Módulo de Billing: Livro Razão e Extrato Detalhado (18:15)
  
  ### Atualizações Registradas:
