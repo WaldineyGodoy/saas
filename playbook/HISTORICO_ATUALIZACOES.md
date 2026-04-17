@@ -1,20 +1,43 @@
 ---
 
- ## [2026-04-16] - Refatoração Originadores e Automação Financeira (23:30)
+ ## [2026-04-17] - Fix: Paginação e Captura de Contratos Autentique (10:30)
 
  ### Atualizações Registradas:
- 1. **Refatoração Premium: Modal de Originadores**:
-     - **Visual**: Reestruturação completa para o padrão "Premium Layout" com menu horizontal por abas (**Geral**, **Endereço**, **Financeiro**, **Indicação**, **Histórico**).
-     - **UI/UX**: Uso de gradientes de fundo no header, cards com sombras suaves e tipografia moderna.
-     - **Indicação**: Card exclusivo para link de convite com funcionalidade de cópia rápida e metadados dinâmicos.
-     - **Histórico**: Integração da timeline de auditoria diretamente no modal (`isInline`).
- 2. **Automação Financeira (Usinas)**:
-     - **Transferência de Valores**: Valores recorrentes de "Serviços Contratados" são agora transportados automaticamente para o extrato de lançamentos ao iniciar um novo mês.
-     - **Transparência no Ledger**: Separação automática da "Gestão B2W" no fechamento do mês; Taxas fixas (despesas extras) na conta **2.1.4** e taxas variáveis na conta **3.1.1**.
-     - **Gatilho de Fechamento**: O botão "Efetuar Fechamento" agora altera o status do mês para **"MÊS FECHADO"** e consolida todos os lançamentos no Livro Razão.
-     - **Limpeza de Extrato**: Itens com valor bruto zerado são ocultados automaticamente do extrato de detalhamento, evitando poluição visual.
+ 1. **Correção de Truncagem de PDF**:
+     - **Estabilização de Renderização**: Implementação de delay de 1500ms antes da captura para garantir que o DOM esteja totalmente montado antes do processamento pelo `html2canvas`.
+     - **Lógica de Paginação (Split)**: Refatoração da função de divisão de conteúdo utilizando Regex robusta (`CLÁUSULA\s+7/i`) para garantir a quebra correta entre as 3 páginas do contrato principal.
+     - **Garantia de 4 Páginas**: Ajuste no loop de captura para assegurar a inclusão obrigatória da Procuração (Página 4) e das seções intermediárias do contrato.
+ 2. **Melhorias de Visual e Rastreabilidade**:
+     - **Design Premium**: Aumento de padding, logos e tipografia nas páginas ocultas para gerar PDFs com estética profissional e respiro visual.
+     - **Telemetria de Erros**: Adição de logs de console detalhados no frontend e logs de tamanho de payload (Base64) na Edge Function para monitoramento de integridade.
+ 3. **Correção de Build**:
+     - Verificação e garantia da exportação de `shortenLink` em `api.js`, resolvendo erros de deploy de CI/CD.
+
+---
+
+ ## [2026-04-16] - Refinamento Contábil: Split de Receitas, Comissões e Rastreabilidade (20:30)
+
+ ### Atualizações Registradas:
+ 1. **Visual e UI/UX (Ledger)**:
+     - **Rastreabilidade Consolidada**: O filtro "Origem/Destino" agora busca em um campo unificado de **Entidade**, abrangendo Assinantes, Usinas, Fornecedores e Originadores.
+     - **Rótulos Precisos**: Atualização dos nomes das contas contábeis para refletir a realidade dos contratos (ex: de "Obrigações Usina" para `2.1.1 - Repasse para o Investidor`).
+     - **Extrato Detalhado**: Cada item de serviço da usina (Água, Energia, Internet, Manutenção, Arrendamento) agora possui sua própria linha no extrato, extinguindo lançamentos agrupados.
+
+ 2. **Funcionalidades e Regras de Negócio**:
+     - **Inteligência de Split (Originador)**: Implementação da lógica de comissão **Start** (descontada do investidor na 1ª fatura) e **Recorrente** (descontada da receita GESTÃO B2W em todas as faturas).
+     - **Gestão de Custos Operacionais**: Separação automática de despesas da usina (Água, Luz, Net) que são provisionadas na conta `2.1.4` para pagamento a terceiros.
+     - **Receitas Próprias B2W**: Categorização individualizada de Manutenção e Arrendamento como receitas da empresa.
+     - **Automação de Taxa Asaas**: Lançamento compulsório de R$ 0,99 (ou R$ 1,99 pós 19/04/2026) como despesa de taxa bancária para cada boleto recebido.
+     - **Fluxo de Resgate**: Implementação de rastreio por `supplier_id` e `originator_id` no Ledger, permitindo que parceiros consultem e solicitem resgate de seus saldos credores acumulados.
+
+ 3. **Gatilhos e Lógica de Banco (Back-end)**:
+     - **Trigger `handle_invoice_paid_ledger`**: Refatoração completa para suportar o split multi-beneficiário e detecção de primeira fatura.
+     - **Liquidação Automática de Concessionária**: Integração do RPC `liquidate_concessionaria_payment` ao botão "Pagar" do financeiro, dando baixa automática no passivo da concessionária ao efetuar o pagamento do boleto.
+     - **Views de Auditoria**: Criação de `view_investor_balances` e `view_originator_balances` para monitoramento de dívidas com parceiros em tempo real.
 
  ---
+
+ ## [2026-04-16] - Refatoração Originadores e Automação Financeira (23:30)
 
  ## [2026-04-16] - Automação de Comissões e Estabilização de Interface (21:30)
  
@@ -46,6 +69,23 @@
      - Dashboards compactos com somatórios de saldo no topo da área do extrato.
 
 ---
+
+ ## [2026-04-16] - Automação Financeira e Estabilização de Webhooks (21:30)
+ 
+ ### Atualizações Registradas:
+ 1. **Automação de Pagamento de Contas (Bills)**:
+     - Implementação do motor de liquidação automática para contas de concessionária via API Asaas.
+     - **Regra de Gatilho**: O pagamento é disparado no `asaas-webhook` assim que a fatura do assinante é confirmada como `pago`.
+     - **Fix de Endpoint**: Correção crítica do endpoint de `/v3/bills` para `/v3/bill` e campo `identification` para `identificationField`.
+ 2. **Segurança e Estabilização**:
+     - **Token de Acesso**: Implementada validação de `asaas-access-token` via banco de dados (`integrations_config`).
+     - **Tratamento de Erros**: Adicionado log de resposta bruta para evitar crash de JSON em respostas vazias da API.
+     - **Deploy CI/CD**: Inclusão das funções `asaas-webhook` e `pay-asaas-bill` no workflow de deploy do GitHub.
+ 3. **Manutenção e Recuperação**:
+     - **Guarauto (Guanabara Auto Diesel)**: Execução manual de pagamentos de energia pendentes via API (Protocolos registrados na timeline).
+     - **Ledger Entries**: Regularização manual do livro razão para faturas liquidadas durante a queda do webhook.
+
+ ---
 
  ## [2026-04-15] - Sincronização Definitiva de Webhooks e Harmonização (20:30)
  

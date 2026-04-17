@@ -163,16 +163,27 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const handleSendContract = async () => {
         if (!subscriber?.id) return;
         setIsCreatingContract(true);
+        console.log('Iniciando geração de contrato para:', formData.name);
+        
         try {
+            // Aguarda a renderização dos elementos ocultos
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
             // 1. Capture Sections individually for fixed paging
             const sectionIds = ['contract-page-1', 'contract-page-2', 'contract-page-3', 'contract-page-4'];
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = 210;
+            const pageHeight = 297;
             
+            let capturedPages = 0;
             for (let i = 0; i < sectionIds.length; i++) {
                 const element = document.getElementById(sectionIds[i]);
-                if (!element) continue;
+                if (!element) {
+                    console.warn(`Elemento ${sectionIds[i]} não encontrado no DOM.`);
+                    continue;
+                }
 
+                console.log(`Capturando página ${i + 1}: ${sectionIds[i]}...`);
                 const canvas = await html2canvas(element, {
                     scale: 2,
                     useCORS: true,
@@ -180,16 +191,24 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                     backgroundColor: '#ffffff'
                 });
 
+                const imgData = canvas.toDataURL('image/png');
                 const imgWidth = pageWidth;
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
                 
-                if (i > 0) pdf.addPage();
+                if (capturedPages > 0) pdf.addPage();
                 
-                // Add image to the top of the page
-                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+                // Centraliza verticalmente se for menor que a página, ou cola no topo
+                const yPos = 0;
+                pdf.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight, undefined, 'FAST');
+                capturedPages++;
             }
 
+            if (capturedPages === 0) throw new Error('Nenhuma página do contrato pôde ser capturada.');
+
+            console.log(`PDF gerado com ${capturedPages} páginas.`);
             const pdfBase64 = pdf.output('datauristring').split(',')[1];
+            console.log('Tamanho do Base64:', pdfBase64.length);
+            
             const fileName = `Contrato_${formData.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
 
             // 4. Send to Autentique
@@ -1641,14 +1660,23 @@ Associado`;
     const renderHiddenFullContract = () => {
         // Logic to split the contract into 3 parts based on Clauses 7 and 14
         const splitContent = (text) => {
-            const c7Index = text.search(/CLÁUSULA 7/i);
-            const c14Index = text.search(/CLÁUSULA 14/i);
+            if (!text) return ["", "", ""];
+            
+            // Busca insensível a maiúsculas/minúsculas e flexível com espaços
+            const c7Regex = /CLÁUSULA\s+7/i;
+            const c14Regex = /CLÁUSULA\s+14/i;
+            
+            const c7Match = text.match(c7Regex);
+            const c14Match = text.match(c14Regex);
+            
+            const c7Index = c7Match ? c7Match.index : -1;
+            const c14Index = c14Match ? c14Match.index : -1;
             
             let p1 = text;
             let p2 = "";
             let p3 = "";
 
-            if (c7Index !== -1 && c14Index !== -1) {
+            if (c7Index !== -1 && c14Index !== -1 && c14Index > c7Index) {
                 p1 = text.substring(0, c7Index);
                 p2 = text.substring(c7Index, c14Index);
                 p3 = text.substring(c14Index);
@@ -1664,25 +1692,47 @@ Associado`;
 
         const PageWrapper = ({ children, id }) => (
             <div id={id} style={{ 
-                width: '210mm', minHeight: '297mm', background: 'white', padding: '15mm',
-                border: `4mm solid ${branding?.primary_color || '#003366'}`, boxSizing: 'border-box',
-                color: '#1e293b', fontFamily: 'serif', position: 'relative', marginBottom: '10mm'
+                width: '210mm', 
+                minHeight: '297mm', 
+                background: 'white', 
+                padding: '20mm', // Aumentado para mais respiro
+                border: `4mm solid ${branding?.primary_color || '#003366'}`, 
+                boxSizing: 'border-box',
+                color: '#1e293b', 
+                fontFamily: 'serif', 
+                position: 'relative', 
+                marginBottom: '10mm',
+                display: 'flex',
+                flexDirection: 'column'
             }}>
                 {/* Header / Logo */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8mm' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
                     {branding?.logo_url ? (
-                        <img src={branding.logo_url} style={{ height: '22mm', objectFit: 'contain' }} alt="Logo" />
+                        <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
                     ) : (
-                        <div style={{ height: '22mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '24px', color: branding?.primary_color || '#003366' }}>
+                        <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '28px', color: branding?.primary_color || '#003366' }}>
                             {branding?.company_name || 'B2W ENERGIA'}
                         </div>
                     )}
                 </div>
 
-                {children}
+                <div style={{ flex: 1 }}>
+                    {children}
+                </div>
 
                 {/* Footer fixed per page */}
-                <div style={{ position: 'absolute', bottom: '10mm', left: '15mm', right: '15mm', fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '4mm', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ 
+                    position: 'absolute', 
+                    bottom: '10mm', 
+                    left: '20mm', 
+                    right: '20mm', 
+                    fontSize: '9px', 
+                    color: '#94a3b8', 
+                    borderTop: '1px solid #e2e8f0', 
+                    paddingTop: '4mm', 
+                    display: 'flex', 
+                    justifyContent: 'space-between' 
+                }}>
                     <span>Documento gerado eletronicamente via CRM B2W Energia</span>
                     <span>Associação de Usinas B2W Energia</span>
                 </div>
@@ -1690,59 +1740,65 @@ Associado`;
         );
 
         return (
-            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+            <div style={{ 
+                position: 'absolute', 
+                left: '-9999px', 
+                top: 0, 
+                width: '210mm',
+                zIndex: -1
+            }}>
                 {/* Page 1: Intro + Clauses 1-6 */}
                 <PageWrapper id="contract-page-1">
-                    <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '8mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    <h1 style={{ fontSize: '20px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' }}>
                         TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
                     </h1>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
                         {part1}
                     </div>
                 </PageWrapper>
 
                 {/* Page 2: Clause 7 to 13 */}
                 <PageWrapper id="contract-page-2">
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
                         {part2}
                     </div>
                 </PageWrapper>
 
                 {/* Page 3: Clause 14 to 17 + Signatures */}
                 <PageWrapper id="contract-page-3">
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
                         {part3}
                     </div>
                 </PageWrapper>
 
                 {/* Page 4: Procuração */}
                 <PageWrapper id="contract-page-4">
-                    <h1 style={{ fontSize: '18px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    <h1 style={{ fontSize: '20px', textAlign: 'center', marginBottom: '12mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' }}>
                         PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
                     </h1>
                     
-                    <div style={{ fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify' }}>
+                    <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
                         <p><strong>OUTORGANTE:</strong> {formData.name}, inscrito no CPF/CNPJ sob o nº {formData.cpf_cnpj}, residente e domiciliado à {formData.rua}, nº {formData.numero} {formData.complemento ? `- ${formData.complemento}` : ''}, {formData.bairro}, {formData.cidade}/{formData.uf}, CEP {formData.cep}, doravante denominado "ASSOCIADO".</p>
-                        <p style={{ marginTop: '6mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, inscrito no CNPJ sob nº 64.561.352/0001-07, com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, doravante denominada "ASSOCIAÇÃO".</p>
+                        <p style={{ marginTop: '8mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, inscrito no CNPJ sob nº 64.561.352/0001-07, com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, doravante denominada "ASSOCIAÇÃO".</p>
                         
-                        <p style={{ marginTop: '8mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
+                        <p style={{ marginTop: '10mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
                         
-                        <div style={{ marginTop: '10mm', padding: '5mm', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                            <p style={{ fontWeight: 'bold', marginBottom: '4mm', fontSize: '11px' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
+                        <div style={{ marginTop: '12mm', padding: '6mm', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                            <p style={{ fontWeight: 'bold', marginBottom: '5mm', fontSize: '12px', color: '#475569', textTransform: 'uppercase' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
                             <table style={{ width: '100%', fontSize: '10pt', borderCollapse: 'collapse' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Nº Unidade (UC)</th>
-                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Concessionária</th>
-                                        <th style={{ textAlign: 'left', padding: '2mm 0' }}>Localidade</th>
+                                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Nº Unidade (UC)</th>
+                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Concessionária</th>
+                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Localidade</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {consumerUnits.map(uc => (
                                         <tr key={uc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '3mm 0' }}>{uc.numero_uc}</td>
-                                            <td style={{ padding: '3mm 0' }}>{uc.concessionaria}</td>
-                                            <td style={{ padding: '3mm 0' }}>{uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}</td>
+                                            <td style={{ padding: '4mm 0', fontWeight: 'bold' }}>{uc.numero_uc}</td>
+                                            <td style={{ padding: '4mm 0' }}>{uc.concessionaria}</td>
+                                            <td style={{ padding: '4mm 0' }}>{uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1750,8 +1806,8 @@ Associado`;
                         </div>
                     </div>
 
-                    <div style={{ marginTop: '20mm', textAlign: 'center', fontStyle: 'italic', color: '#64748b' }}>
-                        <p>Assinado eletronicamente via plataforma Autentique.</p>
+                    <div style={{ marginTop: '25mm', textAlign: 'center', fontStyle: 'italic', color: '#94a3b8', fontSize: '10px' }}>
+                        <p>Documento gerado eletronicamente para fins de assinatura digital na plataforma Autentique.</p>
                     </div>
                 </PageWrapper>
             </div>

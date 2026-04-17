@@ -68,7 +68,7 @@ Funil de entrada de novos assinantes.
 - **Normalização de Contatos**: O sistema obrigatoriamente adiciona o prefixo **55** (DDI Brasil) a todos os números de WhatsApp antes do envio via Evolution API para prevenir erros de entrega.
 - **Registro de Comunicados**: Mensagens enviadas manualmente via aba "Comunicados" são registradas na `crm_history` com o link do anexo (se houver).
 - **Inadimplência Automática**: 15 dias (`Inadimplente`) e 60 dias (`Cancelamento Crítico`).
-- **Liquidação Automática (Conta de Energia)**: Quando o toggle **"Pagamento Automático"** está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas.
+- **Liquidação Automática (Conta de Energia)**: Quando o toggle **"Pagamento Automático"** está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas. O sistema utiliza o endpoint `/v3/bill` (singular) e valida a resposta em texto bruto para evitar erros de parsing de JSON.
 
 ---
 

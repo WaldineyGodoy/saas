@@ -30,6 +30,8 @@ serve(async (req) => {
         const body = await req.json().catch(() => ({}));
         const { documentName, signers, fileBase64, signerId, signerType } = body;
 
+        console.log(`Recebido documento: ${documentName} (${fileBase64?.length || 0} chars base64)`);
+
         if (!documentName || !signers || !fileBase64 || !signerId || !signerType) {
             throw new Error('Parâmetros obrigatórios ausentes.');
         }
