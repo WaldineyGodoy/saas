@@ -9,6 +9,7 @@
      - **Garantia de 4 Páginas**: Ajuste no loop de captura para assegurar a inclusão obrigatória da Procuração (Página 4) e das seções intermediárias do contrato.
  2. **Infraestrutura e Segurança**:
      - **Fix de JWT**: Resolvido o erro `Unsupported JWT algorithm ES256` na Edge Function `create-autentique-document` através da desativação da validação de JWT no Gateway (`verify_jwt: false`), contornando incompatibilidades de algoritmo de assinatura.
+     - **Fix de Importação**: Corrigido o `ReferenceError: shortenLink is not defined` no `SubscriberModal.jsx` através da inclusão do import faltante da função no destructuring de `../lib/api`.
  3. **Melhorias de Visual e Rastreabilidade**:
      - **Design Premium**: Aumento de padding, logos e tipografia nas páginas ocultas para gerar PDFs com estética profissional e respiro visual.
      - **Telemetria de Erros**: Adição de logs de console detalhados no frontend e logs de tamanho de payload (Base64) na Edge Function para monitoramento de integridade.
