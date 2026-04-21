@@ -1586,10 +1586,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Tab Content: Financeiro */}
+                        {/* Tab Content: Financeiro */}
                     {activeTab === 'financeiro' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
