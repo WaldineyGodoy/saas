@@ -19,6 +19,7 @@ export default function IntegrationSettings({ serviceName, title, description })
         environment: 'production',
         variables: [] // Array of { key, value } for UI
     });
+    const [allowAutoRedemption, setAllowAutoRedemption] = useState(false);
 
     // Custom Confirmation Modal State
     const [confirmModal, setConfirmModal] = useState({
@@ -58,6 +59,10 @@ export default function IntegrationSettings({ serviceName, title, description })
                 variables: varsArray
             });
 
+            if (serviceName === 'financial_api') {
+                setAllowAutoRedemption(!!data.variables?.allow_auto_redemption);
+            }
+
             // Inicializa o telefone/email de teste se houver salvo nas variáveis
             const savedTestValue = varsArray.find(v => v.key === 'test_phone')?.value || '';
             if (savedTestValue) setTestPhone(savedTestValue);
@@ -89,6 +94,10 @@ export default function IntegrationSettings({ serviceName, title, description })
             variables: varsObject,
             updated_at: new Date().toISOString()
         };
+
+        if (serviceName === 'financial_api') {
+            payload.variables.allow_auto_redemption = allowAutoRedemption;
+        }
 
         // Upsert based on service_name
         const { error } = await supabase
@@ -553,6 +562,9 @@ export default function IntegrationSettings({ serviceName, title, description })
                             // Hide explicit Resend fields from generic list
                             if (serviceName === 'resend_api' && (v.key === 'from_email' || v.key === 'from_name' || v.key === 'test_email')) return null;
 
+                            // Hide allow_auto_redemption from generic list
+                            if (serviceName === 'financial_api' && v.key === 'allow_auto_redemption') return null;
+
                             return (
                                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'center' }}>
                                     <input
@@ -580,6 +592,57 @@ export default function IntegrationSettings({ serviceName, title, description })
                         })}
                     </div>
                 </div>
+
+                {/* Specific Fields for Financial API (Asaas) */}
+                {serviceName === 'financial_api' && (
+                    <div style={{ 
+                        marginTop: '1rem',
+                        marginBottom: '2rem', 
+                        padding: '1.5rem', 
+                        background: '#f8fafc', 
+                        borderRadius: '12px', 
+                        border: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div>
+                            <h4 style={{ margin: '0 0 0.25rem 0', color: '#1e293b', fontWeight: 600 }}>Permitir resgate automático</h4>
+                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', maxWidth: '450px' }}>
+                                Quando ativado, habilita a função de resgate automático do saldo via PIX para fornecedores.
+                            </p>
+                        </div>
+
+                        <button 
+                            type="button"
+                            onClick={() => setAllowAutoRedemption(!allowAutoRedemption)}
+                            style={{
+                                width: '56px',
+                                height: '28px',
+                                borderRadius: '99px',
+                                background: allowAutoRedemption ? '#10b981' : '#cbd5e1',
+                                border: 'none',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                padding: 0
+                            }}
+                            title={allowAutoRedemption ? "Desativar" : "Ativar"}
+                        >
+                            <div style={{
+                                width: '22px',
+                                height: '22px',
+                                background: 'white',
+                                borderRadius: '50%',
+                                position: 'absolute',
+                                top: '3px',
+                                left: allowAutoRedemption ? '31px' : '3px',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }} />
+                        </button>
+                    </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
                     <button
