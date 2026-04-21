@@ -2,17 +2,23 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { fetchCpfCnpjData } from '../lib/api';
-import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
-import { History } from 'lucide-react';
+import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
+import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
+import { 
+    History, User, MapPin, Wallet, X, Save, Trash2, 
+    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft 
+} from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
     const { showAlert, showConfirm } = useUI();
     const [loading, setLoading] = useState(false);
-    const [showHistory, setShowHistory] = useState(false);
-    const [usinas, setUsinas] = useState([]); // To display linked usinas
+    const [searchingCep, setSearchingCep] = useState(false);
+    const [activeTab, setActiveTab] = useState('geral');
+    const [usinas, setUsinas] = useState([]);
+    const [ledgerEntries, setLedgerEntries] = useState([]);
+    const [ledgerLoading, setLedgerLoading] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -55,14 +61,33 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 uf: supplier.address?.uf || ''
             });
 
-            // Fetch linked usinas
             fetchLinkedUsinas(supplier.id);
+            fetchLedgerStatement(supplier.name);
         }
     }, [supplier]);
 
     const fetchLinkedUsinas = async (supplierId) => {
         const { data } = await supabase.from('usinas').select('id, name, status').eq('supplier_id', supplierId);
         setUsinas(data || []);
+    };
+
+    const fetchLedgerStatement = async (supplierName) => {
+        if (!supplierName) return;
+        setLedgerLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('view_ledger_enriched')
+                .select('*')
+                .ilike('description', `%${supplierName}%`)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setLedgerEntries(data || []);
+        } catch (err) {
+            console.error('Error fetching ledger:', err);
+        } finally {
+            setLedgerLoading(false);
+        }
     };
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
@@ -94,7 +119,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         phone: data.telefone || prev.phone,
                         legal_partner_name: data.legal_partner?.nome || prev.legal_partner_name,
                         legal_partner_cpf: data.legal_partner?.cpf || prev.legal_partner_cpf,
-                        // Address
                         cep: data.address?.cep || prev.cep,
                         rua: data.address?.logradouro || prev.rua,
                         numero: data.address?.numero || prev.numero,
@@ -109,6 +133,29 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 showAlert('Erro ao buscar CNPJ. Verifique se o número está correto.', 'error');
             } finally {
                 setLoading(false);
+            }
+        }
+    };
+
+    const handleCepBlur = async () => {
+        const cep = cleanDigits(formData.cep);
+        if (cep.length === 8) {
+            setSearchingCep(true);
+            try {
+                const data = await fetchAddressByCep(cep);
+                if (data && !data.erro) {
+                    setFormData(prev => ({
+                        ...prev,
+                        rua: data.logradouro || prev.rua,
+                        bairro: data.bairro || prev.bairro,
+                        cidade: data.localidade || prev.cidade,
+                        uf: data.uf || prev.uf
+                    }));
+                }
+            } catch (error) {
+                console.error('Erro CEP:', error);
+            } finally {
+                setSearchingCep(false);
             }
         }
     };
@@ -249,244 +296,524 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }
     };
 
+    const inputStyle = {
+        width: '100%',
+        padding: '0.8rem 1rem',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
+        fontSize: '0.95rem',
+        transition: 'all 0.2s',
+        backgroundColor: '#f8fafc',
+        outline: 'none'
+    };
+
+    const labelStyle = {
+        display: 'block',
+        fontSize: '0.85rem',
+        fontWeight: '700',
+        color: '#64748b',
+        marginBottom: '0.5rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.025em'
+    };
+
+    const sectionStyle = {
+        background: 'white',
+        padding: '1.5rem',
+        borderRadius: '20px',
+        border: '1px solid #f1f5f9',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+        marginBottom: '1.5rem'
+    };
+
+    const formatCurrency = (val) => {
+        return Math.abs(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    const formatDate = (dateStr) => {
+        return new Date(dateStr).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    };
+
+    const ledgerBalance = ledgerEntries.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+            backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', width: '90%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
-                <h3 style={{ marginBottom: '1.5rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                    {supplier ? 'Editar Fornecedor' : 'Novo Fornecedor'}
-                </h3>
-
-                <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CNPJ * (Busca Automática)</label>
-                        <input
-                            value={formData.cnpj}
-                            onChange={e => setFormData({ ...formData, cnpj: e.target.value })}
-                            onBlur={handleCnpjBlur}
-                            placeholder="00.000.000/0000-00"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: '#f8fafc' }}
-                        />
-                    </div>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Razão Social / Nome *</label>
-                        <input
-                            required
-                            value={formData.name}
-                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
+            <div style={{ 
+                background: '#f8fafc', 
+                borderRadius: '30px', 
+                width: '95%', 
+                maxWidth: '850px', 
+                maxHeight: '90vh', 
+                overflow: 'hidden',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
+                {/* Premium Header */}
+                <div style={{
+                    background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                    padding: '1.5rem 2rem',
+                    color: 'white',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                }}>
                     <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Nome Sócio Adm</label>
-                        <input
-                            value={formData.legal_partner_name}
-                            onChange={e => setFormData({ ...formData, legal_partner_name: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
+                        <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.025em' }}>
+                            {supplier ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+                        </h3>
+                        <p style={{ margin: 0, opacity: 0.8, fontSize: '0.9rem' }}>
+                            Gestão de parceiros e infraestrutura energética
+                        </p>
                     </div>
+                    <button 
+                        onClick={onClose}
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            color: 'white',
+                            padding: '0.5rem',
+                            borderRadius: '12px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <X size={24} />
+                    </button>
+                </div>
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CPF Sócio Adm</label>
-                        <input
-                            value={formData.legal_partner_cpf}
-                            onChange={e => setFormData({ ...formData, legal_partner_cpf: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '0.5rem', color: 'var(--color-blue)' }}>Contato e Financeiro</div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CPF/CNPJ</label>
-                        <input
-                            value={formData.cnpj}
-                            onChange={e => setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) })}
-                            onBlur={handleCnpjBlur}
-                            placeholder="00.000.000/0000-00"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px', background: '#f8fafc' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Telefone</label>
-                        <input
-                            value={formData.phone}
-                            onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                            placeholder="(00) 00000-0000"
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Email</label>
-                        <input
-                            type="email"
-                            value={formData.email}
-                            onChange={e => setFormData({ ...formData, email: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Tipo Chave Pix</label>
-                        <select
-                            value={formData.pix_key_type}
-                            onChange={handlePixTypeChange}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                {/* Horizontal Navigation */}
+                <div style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    padding: '0.75rem 2rem',
+                    background: 'white',
+                    borderBottom: '1px solid #e2e8f0',
+                    overflowX: 'auto'
+                }}>
+                    {[
+                        { id: 'geral', label: 'Geral', icon: User },
+                        { id: 'endereco', label: 'Endereço', icon: MapPin },
+                        { id: 'financeiro', label: 'Financeiro', icon: Wallet },
+                        { id: 'extrato', label: 'Extrato', icon: ArrowUpDown },
+                        { id: 'historico', label: 'Histórico', icon: History }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '0.6rem 1.2rem',
+                                borderRadius: '14px',
+                                border: 'none',
+                                background: activeTab === tab.id ? '#eff6ff' : 'transparent',
+                                color: activeTab === tab.id ? '#3b82f6' : '#64748b',
+                                fontWeight: activeTab === tab.id ? '700' : '500',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
                         >
-                            <option value="cpf">CPF</option>
-                            <option value="cnpj">CNPJ</option>
-                            <option value="email">Email</option>
-                            <option value="telefone">Telefone</option>
-                            <option value="aleatoria">Aleatória</option>
-                        </select>
-                    </div>
+                            <tab.icon size={18} />
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Chave Pix</label>
-                        <input
-                            value={formData.pix_key}
-                            onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
+                <div style={{ padding: '2rem', overflowY: 'auto', flex: 1 }}>
+                    <form onSubmit={handleSubmit}>
+                        
+                        {activeTab === 'geral' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <User size={20} color="#3b82f6" /> Dados da Empresa
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={labelStyle}>CNPJ (Busca Automática)</label>
+                                            <input
+                                                style={{ ...inputStyle, borderStyle: 'dashed', borderWidth: '2px' }}
+                                                value={formData.cnpj}
+                                                onChange={e => setFormData({ ...formData, cnpj: maskCpfCnpj(e.target.value) })}
+                                                onBlur={handleCnpjBlur}
+                                                placeholder="00.000.000/0000-00"
+                                            />
+                                        </div>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={labelStyle}>Razão Social / Nome Fantasia *</label>
+                                            <input
+                                                style={inputStyle}
+                                                required
+                                                value={formData.name}
+                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Status</label>
-                        <select
-                            value={formData.status}
-                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        >
-                            <option value="ativacao">Em Ativação</option>
-                            <option value="ativo">Ativo</option>
-                            <option value="inativo">Inativo</option>
-                        </select>
-                    </div>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <CheckCircle size={20} color="#34d399" /> Sócio Administrador
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={labelStyle}>Nome Completo</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.legal_partner_name}
+                                                onChange={e => setFormData({ ...formData, legal_partner_name: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>CPF</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.legal_partner_cpf}
+                                                onChange={e => setFormData({ ...formData, legal_partner_cpf: maskCpfCnpj(e.target.value) })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                    <div style={{ gridColumn: '1 / -1', fontWeight: 'bold', marginTop: '0.5rem', color: 'var(--color-blue)' }}>Endereço</div>
+                        {activeTab === 'endereco' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <MapPin size={20} color="#ef4444" /> Localização
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={labelStyle}>CEP</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.cep}
+                                                onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                                onBlur={handleCepBlur}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Logradouro / Rua</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.rua}
+                                                onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Número</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.numero}
+                                                onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Bairro</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.bairro}
+                                                onChange={e => setFormData({ ...formData, bairro: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Cidade</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.cidade}
+                                                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>UF</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.uf}
+                                                onChange={e => setFormData({ ...formData, uf: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>CEP</label>
-                        <input
-                            value={formData.cep}
-                            onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Rua</label>
-                        <input
-                            value={formData.rua}
-                            onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Número</label>
-                        <input
-                            value={formData.numero}
-                            onChange={e => setFormData({ ...formData, numero: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Complemento</label>
-                        <input
-                            value={formData.complemento}
-                            onChange={e => setFormData({ ...formData, complemento: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Bairro</label>
-                        <input
-                            value={formData.bairro}
-                            onChange={e => setFormData({ ...formData, bairro: e.target.value })}
-                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                    </div>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem' }}>Cidade/Estado</label>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <input
-                                value={formData.cidade}
-                                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                placeholder="Cidade"
-                                style={{ flex: 2, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            />
-                            <input
-                                value={formData.uf}
-                                onChange={e => setFormData({ ...formData, uf: e.target.value })}
-                                placeholder="UF"
-                                style={{ flex: 1, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-                            />
-                        </div>
-                    </div>
+                        {activeTab === 'financeiro' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <Wallet size={20} color="#f59e0b" /> Pagamentos e Contatos
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={labelStyle}>Email</label>
+                                            <input
+                                                style={inputStyle}
+                                                type="email"
+                                                value={formData.email}
+                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Telefone</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.phone}
+                                                onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Chave PIX</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.pix_key}
+                                                onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Tipo de Chave</label>
+                                            <select
+                                                style={inputStyle}
+                                                value={formData.pix_key_type}
+                                                onChange={handlePixTypeChange}
+                                            >
+                                                <option value="cpf">CPF</option>
+                                                <option value="cnpj">CNPJ</option>
+                                                <option value="email">Email</option>
+                                                <option value="telefone">Telefone</option>
+                                                <option value="aleatoria">Aleatória</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={labelStyle}>Status Operacional</label>
+                                            <select
+                                                style={{ ...inputStyle, fontWeight: 'bold' }}
+                                                value={formData.status}
+                                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                            >
+                                                <option value="ativacao">🟠 Em Ativação</option>
+                                                <option value="ativo">🟢 Ativo</option>
+                                                <option value="inativo">🔴 Inativo</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    {supplier && usinas.length > 0 && (
-                        <div style={{ gridColumn: '1 / -1', marginTop: '1rem', background: '#f0f9ff', padding: '1rem', borderRadius: '8px' }}>
-                            <h4 style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0369a1' }}>Usinas Vinculadas</h4>
-                            <ul style={{ paddingLeft: '1.5rem', fontSize: '0.9rem' }}>
-                                {usinas.map(u => (
-                                    <li key={u.id}>{u.name} - <span style={{ opacity: 0.7 }}>{u.status}</span></li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+                                {supplier && usinas.length > 0 && (
+                                    <div style={{ ...sectionStyle, background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#0369a1' }}>Usinas Vinculadas</h4>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                            {usinas.map(u => (
+                                                <div key={u.id} style={{
+                                                    background: 'white',
+                                                    padding: '0.6rem 1rem',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.85rem',
+                                                    border: '1px solid #e0f2fe',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem'
+                                                }}>
+                                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: u.status === 'ativo' ? '#10b981' : '#f59e0b' }}></div>
+                                                    <strong>{u.name}</strong>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
-                        <div>
-                            {supplier && onDelete && (
-                                <button type="button" onClick={handleDelete} style={{ padding: '0.5rem 1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '4px', border: '1px solid #fecaca' }}>
-                                    Excluir
-                                </button>
-                            )}
-                        </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="button" onClick={onClose} style={{ padding: '0.5rem 1rem', background: '#ccc', borderRadius: '4px' }}>Cancelar</button>
-                            <button type="submit" disabled={loading} style={{ padding: '0.5rem 1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '4px' }}>
-                                {loading ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        </div>
-                    </div>
+                        {activeTab === 'extrato' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                {/* Balance Card */}
+                                <div style={{
+                                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                                    padding: '2rem',
+                                    borderRadius: '24px',
+                                    color: 'white',
+                                    marginBottom: '2rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
+                                        <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(255,255,255,0.2)', padding: '1rem', borderRadius: '20px' }}>
+                                        <ArrowUpDown size={32} />
+                                    </div>
+                                </div>
 
-                    {supplier && (
-                        <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, color: '#444' }}>
-                                    <History size={18} style={{ color: 'var(--color-blue)' }} /> Histórico de Alterações
-                                </h4>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <Search size={20} color="#3b82f6" /> Lançamentos Recentes
+                                    </h4>
+                                    
+                                    {ledgerLoading ? (
+                                        <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando extrato...</div>
+                                    ) : ledgerEntries.length === 0 ? (
+                                        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '16px' }}>
+                                            Nenhum lançamento encontrado para este fornecedor.
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                <thead>
+                                                    <tr style={{ borderBottom: '2px solid #f1f5f9', textAlign: 'left' }}>
+                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b' }}>Data</th>
+                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b' }}>Descrição</th>
+                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b', textAlign: 'right' }}>Valor</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {ledgerEntries.map(entry => {
+                                                        const isDebit = entry.amount > 0;
+                                                        return (
+                                                            <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                                <td style={{ padding: '1rem 0.5rem', whiteSpace: 'nowrap' }}>{formatDate(entry.created_at)}</td>
+                                                                <td style={{ padding: '1rem 0.5rem' }}>
+                                                                    <div style={{ fontWeight: '600' }}>{entry.account_name}</div>
+                                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.description}</div>
+                                                                </td>
+                                                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
+                                                                    <div style={{
+                                                                        fontWeight: 'bold',
+                                                                        color: isDebit ? '#ef4444' : '#10b981',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'flex-end',
+                                                                        gap: '0.3rem'
+                                                                    }}>
+                                                                        {isDebit ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                                                                        {formatCurrency(entry.amount)}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'historico' && supplier && (
+                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <History size={20} color="#3b82f6" /> Timeline de Auditoria
+                                    </h4>
+                                    <HistoryTimeline 
+                                        entityType="supplier" 
+                                        entityId={supplier.id} 
+                                        limit={20}
+                                        showHeader={false}
+                                        isInline={true}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Modal Footer Actions */}
+                        <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            marginTop: '2rem',
+                            paddingTop: '2rem',
+                            borderTop: '1px solid #e2e8f0'
+                        }}>
+                            <div>
+                                {supplier && (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleDelete}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            padding: '0.75rem 1.25rem',
+                                            background: '#fee2e2',
+                                            color: '#dc2626',
+                                            border: 'none',
+                                            borderRadius: '14px',
+                                            fontWeight: '700',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <Trash2 size={18} /> Excluir
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
                                 <button 
-                                    type="button"
-                                    onClick={() => setShowHistory(!showHistory)}
+                                    type="button" 
+                                    onClick={onClose}
                                     style={{
-                                        fontSize: '0.8rem', padding: '0.3rem 0.6rem',
-                                        background: '#f1f5f9', border: '1px solid #e2e8f0',
-                                        borderRadius: '4px', cursor: 'pointer', color: '#64748b'
+                                        padding: '0.75rem 1.5rem',
+                                        background: 'white',
+                                        color: '#64748b',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '14px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer'
                                     }}
                                 >
-                                    {showHistory ? 'Ocultar' : 'Ver Tudo'}
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={loading}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.75rem 2rem',
+                                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '14px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.3)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {loading ? (
+                                        'Processando...'
+                                    ) : (
+                                        <><Save size={18} /> Salvar Alterações</>
+                                    )}
                                 </button>
                             </div>
-                            
-                            <HistoryTimeline 
-                                entityType="supplier" 
-                                entityId={supplier.id} 
-                                limit={showHistory ? 20 : 5}
-                                showHeader={false}
-                                isInline={true}
-                            />
                         </div>
-                    )}
-                </form>
+                    </form>
+                </div>
             </div>
+
+            <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 }

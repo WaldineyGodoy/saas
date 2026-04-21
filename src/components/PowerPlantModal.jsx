@@ -6,7 +6,7 @@ import { useUI } from '../contexts/UIContext';
 import { 
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
-    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle
+    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw
 } from 'lucide-react';
 import {
     DndContext,
@@ -507,6 +507,29 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const entries = [];
             const supplierId = formData.supplier_id; // Reference for account 2.1.1
             
+            // 0. Gross Faturamento - Increases Liability to Usina (Credit)
+            if (faturamento > 0) {
+                entries.push({
+                    transaction_id: transactionId,
+                    account_code: '2.1.1',
+                    amount: -faturamento, // Credit (Increases liability)
+                    description: `Faturamento Mensal - ${usina.name} - ${referenceMonth}`,
+                    reference_type: 'supplier',
+                    reference_id: supplierId,
+                    is_sandbox: false
+                });
+                // Balancing entry: Debit to Revenue (reducing B2W's gross revenue by the part that belongs to the plant)
+                entries.push({
+                    transaction_id: transactionId,
+                    account_code: '3.1.0', 
+                    amount: faturamento, // Debit
+                    description: `Provisão Repasse Usina - ${usina.name} - ${referenceMonth}`,
+                    reference_type: 'supplier',
+                    reference_id: supplierId,
+                    is_sandbox: false
+                });
+            }
+
             // Helper to add entry pair (Debit Investor, Credit Revenue/Liability)
             const addPosting = (accountCode, amount, desc) => {
                 if (amount <= 0) return;
@@ -516,7 +539,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     account_code: '2.1.1', // Obrigações Usinas
                     amount: amount,
                     description: `${desc} - ${referenceMonth}`,
-                    reference_type: 'usina_month',
+                    reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
                 });
@@ -526,7 +549,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     account_code: accountCode,
                     amount: -amount,
                     description: `${desc} - ${referenceMonth}`,
-                    reference_type: 'usina_month',
+                    reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
                 });
@@ -1919,20 +1942,21 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 <button 
                                                     type="button"
                                                     onClick={handleFechamento}
-                                                    disabled={monthlyDetails?.status === 'liquidado'}
+                                                    disabled={loading}
                                                     style={{ 
                                                         width: '100%',
                                                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '1.5rem', 
-                                                        background: monthlyDetails?.status === 'liquidado' ? '#94a3b8' : '#16a34a', 
+                                                        background: monthlyDetails?.status === 'liquidado' ? '#3b82f6' : '#16a34a', 
                                                         color: 'white', borderRadius: '20px', border: 'none', 
-                                                        cursor: monthlyDetails?.status === 'liquidado' ? 'not-allowed' : 'pointer', 
+                                                        cursor: 'pointer', 
                                                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                        boxShadow: monthlyDetails?.status === 'liquidado' ? 'none' : '0 10px 15px -3px rgba(22, 163, 74, 0.3)'
+                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                                                        opacity: loading ? 0.7 : 1
                                                     }}>
-                                                    <CheckCircle size={32} />
+                                                    {monthlyDetails?.status === 'liquidado' ? <RefreshCcw size={32} /> : <CheckCircle size={32} />}
                                                     <div style={{ textAlign: 'center' }}>
                                                         <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                                                            {monthlyDetails?.status === 'liquidado' ? 'Mês Liquidado' : 'Efetuar Fechamento'}
+                                                            {monthlyDetails?.status === 'liquidado' ? 'Reenviar Lançamentos' : 'Efetuar Fechamento'}
                                                         </div>
                                                         <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.2rem' }}>
                                                             Gravar lançamentos no Razão
