@@ -72,13 +72,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     };
 
     const fetchLedgerStatement = async (supplierName) => {
-        if (!supplierName) return;
+        if (!supplierName || !supplier?.id) return;
         setLedgerLoading(true);
         try {
+            // Fetch entries where the supplier is the reference_id or mentioned in description
             const { data, error } = await supabase
                 .from('view_ledger_enriched')
                 .select('*')
-                .ilike('description', `%${supplierName}%`)
+                .or(`reference_id.eq.${supplier.id},description.ilike.%${supplierName}%`)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;

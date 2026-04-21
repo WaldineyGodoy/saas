@@ -1,6 +1,28 @@
+# Histórico de Atualizações - CRM B2W Energia
+
 ---
 
- ## [2026-04-17] - Fix: Paginação e Captura de Contratos Autentique (10:45)
+## [21/04/2026] - Refatoração Premium e Integração Financeira (Fornecedores e Originadores)
+
+### 🎨 Visual e Interface (Premium UI/UX)
+- **Refatoração do Modal de Fornecedores**: Implementação do design "Premium" com navegação por abas horizontais (Geral, Endereço, Financeiro, Extrato, Histórico).
+- **Padronização Visual**: Aplicação de cantos arredondados (30px), gradientes de alta fidelidade (Slate 800/900), e overlays com blur (backdrop-filter).
+- **Identidade Visual Premium**: Criada a skill `premium_visual_identity.skill.md` com tokens de design para modos Light e Dark, garantindo consistência em todo o ecossistema B2W.
+- **Histórico Inline**: Integração da timeline de auditoria diretamente nos modais (`isInline={true}`), facilitando o rastreio de alterações sem sair da tela principal.
+
+### 💰 Funcionalidades Financeiras e Automação
+- **Extrato de Faturamento (Fornecedores)**: Nova seção que exibe em tempo real os lançamentos do Livro Razão e o saldo acumulado do fornecedor (Conta 2.1.1 - Obrigações Usinas).
+- **Automação de Gestão B2W**: Lançamentos de "Taxa Fixa Gestão B2W" agora são calculados e registrados automaticamente como despesas extras (Conta 2.1.4) no fechamento mensal.
+- **Filtros Inteligentes no Extrato**: Implementada lógica de ocultação de valores zerados para reduzir poluição visual nos extratos financeiros.
+- **Busca por Referência**: Refinamento na busca de lançamentos contábeis para identificar entidades tanto por ID de referência quanto por descrição.
+
+### 🛠️ Estabilidade e Infraestrutura
+- **Correção de Imports**: Resolvido erro de `useAuth` e `useState` não definidos em modais refatorados.
+- **Melhoria no Cadastro**: Adicionada busca automática de endereço por CEP e integração aprimorada com API de dados de CNPJ no modal de fornecedores.
+
+---
+
+## [2026-04-17] - Fix: Paginação e Captura de Contratos Autentique (10:45)
 
  ### Atualizações Registradas:
  1. **Correção de Truncagem de PDF**:
