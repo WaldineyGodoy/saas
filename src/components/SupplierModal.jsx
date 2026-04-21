@@ -849,7 +849,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                             return (
                                                                                                 <div key={detail.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
                                                                                                     <div>
-                                                                                                        <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>{detail.account_name}</div>
+                                                                                                        <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>{detail.entity_name || detail.account_name}</div>
                                                                                                         <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{detail.description}</div>
                                                                                                     </div>
                                                                                                     <div style={{ fontWeight: '700', color: detail.amount > 0 ? '#10b981' : '#ef4444' }}>

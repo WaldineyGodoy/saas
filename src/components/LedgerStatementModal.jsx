@@ -201,8 +201,8 @@ export default function LedgerStatementModal({ onClose }) {
                             <thead>
                                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #f1f5f9' }}>
                                     <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600, width: '180px' }}>Data/Hora</th>
-                                    <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600 }}>Conta</th>
-                                    <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600 }}>Descrição / Motivo</th>
+                                    <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600 }}>Entidade / Tipo</th>
+                                    <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600 }}>Descrição do Lançamento</th>
                                     <th style={{ padding: '1rem 0.5rem', color: '#64748b', fontWeight: 600, textAlign: 'right', width: '150px' }}>Valor (R$)</th>
                                 </tr>
                             </thead>
@@ -213,16 +213,12 @@ export default function LedgerStatementModal({ onClose }) {
                                         <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }}>
                                             <td style={{ padding: '1rem 0.5rem', color: '#334155' }}>{formatDate(entry.created_at)}</td>
                                             <td style={{ padding: '1rem 0.5rem' }}>
-                                                <div style={{ fontWeight: 600, color: '#1e293b' }}>{entry.account_name}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.account_code}</div>
+                                                <div style={{ color: '#1e293b', fontWeight: 500 }}>{entry.entity_name || '-'}</div>
+                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{entry.reference_type_pt} #{entry.reference_id?.substring(0, 8)}</div>
                                             </td>
                                             <td style={{ padding: '1rem 0.5rem' }}>
-                                                <div style={{ color: '#475569' }}>{entry.description}</div>
-                                                {entry.reference_type && (
-                                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f8fafc', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                                                        {entry.reference_type.toUpperCase()} #{entry.reference_id?.substring(0, 8)}
-                                                    </span>
-                                                )}
+                                                <div style={{ color: '#475569', fontWeight: 600 }}>{entry.description}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.account_name} ({entry.account_code})</div>
                                             </td>
                                             <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
                                                 <div style={{

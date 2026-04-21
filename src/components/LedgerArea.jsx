@@ -229,9 +229,8 @@ export default function LedgerArea() {
                             <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
                                 <tr>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Data/Hora</th>
-                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Conta</th>
-                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Entidade</th>
-                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Descrição</th>
+                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Entidade / Tipo</th>
+                                    <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none' }}>Descrição do Lançamento</th>
                                     <th style={{ padding: '1rem 1.5rem', color: '#64748b', fontWeight: 600, borderTop: 'none', textAlign: 'right' }}>Valor (R$)</th>
                                 </tr>
                             </thead>
@@ -246,15 +245,12 @@ export default function LedgerArea() {
                                                 {formatDate(entry.created_at)}
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', verticalAlign: 'middle' }}>
-                                                <div style={{ fontWeight: 600, color: '#1e293b' }}>{entry.account_name}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.account_code}</div>
-                                            </td>
-                                            <td style={{ padding: '1rem 1.5rem', verticalAlign: 'middle' }}>
                                                 <div style={{ color: '#1e293b', fontWeight: 500 }}>{entityName}</div>
-                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{entry.reference_type?.toUpperCase()}</div>
+                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{entry.reference_type_pt} #{entry.reference_id?.substring(0, 8)}</div>
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', verticalAlign: 'middle' }}>
-                                                <div style={{ color: '#475569', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={entry.description}>{entry.description}</div>
+                                                <div style={{ color: '#475569', fontWeight: 600 }}>{entry.description}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.account_name} ({entry.account_code})</div>
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', textAlign: 'right', verticalAlign: 'middle' }}>
                                                 <div style={{
