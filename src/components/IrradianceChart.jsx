@@ -73,9 +73,9 @@ export default function IrradianceChart({ ibgeCode, potenciaKwp, onCalculate }) 
 
     useEffect(() => {
         if (!loading && onCalculate && averageMonthly > 0) {
-            onCalculate(Math.round(averageMonthly));
+            onCalculate(Math.round(averageMonthly), data);
         }
-    }, [averageMonthly, onCalculate, loading]);
+    }, [averageMonthly, onCalculate, loading, data]);
 
     if (!ibgeCode || !potenciaKwp) return null;
     if (loading) return <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>Calculando estimativa de geração...</div>;

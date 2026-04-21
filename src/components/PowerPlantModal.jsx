@@ -319,17 +319,49 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
     const [monthlyDetails, setMonthlyDetails] = useState(null);
     const [loadingMonthly, setLoadingMonthly] = useState(false);
+    const [monthlyEstimates, setMonthlyEstimates] = useState([]);
+
+    const handleChartCalculation = useCallback((avgGeneration, monthlyData) => {
+        if (avgGeneration) {
+            setFormData(prev => {
+                if (avgGeneration !== Number(prev.geracao_estimada_kwh)) {
+                    return { ...prev, geracao_estimada_kwh: avgGeneration };
+                }
+                return prev;
+            });
+        }
+        if (monthlyData) {
+            setMonthlyEstimates(monthlyData);
+        }
+    }, []);
 
     useEffect(() => {
         if (activeFinanceTab === 'lancamentos' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeFinanceTab, referenceMonth, usina?.id]);
+    }, [activeFinanceTab, referenceMonth, usina?.id, selectedUCs]);
 
     const fetchMonthlyDetails = async () => {
         setLoadingMonthly(true);
         try {
             const firstDay = `${referenceMonth}-01`;
+            
+            // 1. Fetch sum of "Energia Compensada" from invoices for linked UCs
+            let totalCompensada = 0;
+            if (selectedUCs.length > 0) {
+                const { data: energyData } = await supabase
+                    .from('invoices')
+                    .select('consumo_compensado')
+                    .in('uc_id', selectedUCs.map(uc => uc.id))
+                    .eq('mes_referencia', firstDay);
+                
+                totalCompensada = energyData?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
+            }
+
+            // 2. Get prediction for the specific month from chart data
+            const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
+            const prediction = monthlyEstimates[monthIdx]?.geracao || 0;
+
             const { data, error } = await supabase
                 .from('generation_production')
                 .select('*')
@@ -342,7 +374,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (data) {
                 setMonthlyDetails({
                     ...data,
-                    details: data.service_details || {}
+                    details: data.service_details || {},
+                    // Update calculated fields if they are 0/null in existing record? 
+                    // Or keep what's in DB. User said "deve ser a soma...", so maybe default it.
+                    energia_compensada: data.energia_compensada || totalCompensada,
+                    geracao_prevista: data.geracao_prevista || prediction
                 });
             } else {
                 // Initialize placeholder from defaults
@@ -369,7 +405,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
                     status: 'pendente',
                     geracao_mensal_kwh: 0,
-                    energia_compensada: 0,
+                    geracao_prevista: prediction,
+                    energia_compensada: totalCompensada,
                     faturamento_mensal: 0,
                     custo_disponibilidade: 0
                 });
@@ -394,9 +431,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const rent = monthlyDetails.arrendamento || 0;
             const gestaoFixo = monthlyDetails.gestao_reais || 0;
             // Gestão Percentual calculation: (Faturamento - Concessionária) * %
-            // For now, if faturamento_mensal and custo_disponibilidade are not set, gestao_var is 0
             const faturamento = monthlyDetails.faturamento_mensal || 0;
-            const concessionaria = monthlyDetails.custo_disponibilidade || 0;
+            const concessionaria = monthlyDetails.details?.['Energia'] || monthlyDetails.custo_disponibilidade || 0;
             const gestaoVar = Math.max(0, (faturamento - concessionaria) * (Number(formData.gestao_percentual) / 100));
             const gestaoTotal = gestaoFixo + gestaoVar;
             const otherServices = monthlyDetails.servicos || 0;
@@ -410,6 +446,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 .upsert({
                     ...mainData,
                     service_details: details || {},
+                    custo_disponibilidade: concessionaria, // Ensure energy cost is mapped
                     gestao_reais: gestaoTotal,
                     total_despesas: totalDespesas,
                     fechamento: new Date().toISOString().split('T')[0],
@@ -620,17 +657,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             }
         }
     };
-
-    const handleChartCalculation = useCallback((avgGeneration) => {
-        if (avgGeneration) {
-            setFormData(prev => {
-                if (avgGeneration !== Number(prev.geracao_estimada_kwh)) {
-                    return { ...prev, geracao_estimada_kwh: avgGeneration };
-                }
-                return prev;
-            });
-        }
-    }, []);
 
     const handleDragEnd = (event) => {
         const { active, over } = event;
@@ -1470,16 +1496,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Geração Estimada Mensal (KWh)</label>
-                                    <input
-                                        type="number"
-                                        value={formData.geracao_estimada_kwh}
-                                        onChange={e => setFormData({ ...formData, geracao_estimada_kwh: e.target.value })}
-                                        placeholder="Automático via gráfico"
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', background: '#f0fdf4', color: '#166534', fontWeight: 700, outline: 'none' }}
-                                    />
-                                </div>
                             </div>
 
                             {/* Exclusive Gestão Block */}
@@ -1696,6 +1712,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             />
                                                         </div>
                                                         <div>
+                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista para o Mês (kWh)</label>
+                                                            <input 
+                                                                type="number"
+                                                                value={monthlyDetails?.geracao_prevista || ''}
+                                                                onChange={e => setMonthlyDetails({...monthlyDetails, geracao_prevista: Number(e.target.value)})}
+                                                                placeholder="0"
+                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#166534', background: '#f0fdf4', outline: 'none' }}
+                                                            />
+                                                        </div>
+                                                        <div>
                                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Injetada (kWh)</label>
                                                             <input 
                                                                 type="number"
@@ -1711,16 +1737,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                 type="text"
                                                                 value={formatCurrency(monthlyDetails?.faturamento_mensal).replace('R$', '').trim()}
                                                                 onChange={e => setMonthlyDetails({...monthlyDetails, faturamento_mensal: parseCurrency(e.target.value)})}
-                                                                placeholder="0,00"
-                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Custo Disponibilidade (R$)</label>
-                                                            <input 
-                                                                type="text"
-                                                                value={formatCurrency(monthlyDetails?.custo_disponibilidade).replace('R$', '').trim()}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, custo_disponibilidade: parseCurrency(e.target.value)})}
                                                                 placeholder="0,00"
                                                                 style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
                                                             />
@@ -1805,7 +1821,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                 <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                                                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
-                                                                        <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>{serv}</span>
+                                                                        <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>
+                                                                            {serv === 'Energia' ? 'Energia - Custo de Disponibilidade' : serv}
+                                                                        </span>
                                                                     </div>
                                                                     <div style={{ position: 'relative', width: '120px' }}>
                                                                         <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>

@@ -106,6 +106,24 @@ serve(async (req) => {
                 .in('id', invoicesToProcess.map(i => i.id));
             
             if (updateError) console.error('Error updating invoices:', updateError);
+
+            // NEW: Register Consolidated Bank Fee if applicable
+            if (newStatus === 'pago' && isConsolidated) {
+                const { data: consolidated } = await supabase
+                    .from('consolidated_invoices')
+                    .select('id')
+                    .eq('asaas_payment_id', payment.id)
+                    .single();
+
+                if (consolidated) {
+                    const taxaValue = (new Date() < new Date('2026-04-19')) ? 0.99 : 1.99;
+                    await supabase.rpc('register_consolidated_fee', {
+                        p_consolidated_invoice_id: consolidated.id,
+                        p_amount: taxaValue,
+                        p_is_sandbox: finConfig.environment === 'sandbox'
+                    });
+                }
+            }
         }
 
         // 4. Automation: Auto Payment of Energy Bill
@@ -177,6 +195,14 @@ serve(async (req) => {
                                 content: `Pagamento automático da conta de energia realizado via Asaas. Protocolo: ${billData.id}`,
                                 metadata: { asaas_id: billData.id, value: valorParaPagar }
                             });
+
+                            // NEW: Register Liquidation in Ledger
+                            const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
+                                p_invoice_id: inv.id,
+                                p_amount: valorParaPagar
+                            });
+                            
+                            if (ledgerError) console.error(`Ledger Liquidation Error for ${inv.id}:`, ledgerError);
 
                         } catch (err) {
                             console.error(`Auto Payment Failed for Invoice ${inv.id}:`, err.message);
