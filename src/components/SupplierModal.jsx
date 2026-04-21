@@ -126,6 +126,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const handlePayPix = async () => {
         if (!supplier?.id) return;
         
+        const canPay = ['superadmin', 'admin', 'gerente'].includes(profile?.role);
+        if (!canPay) {
+            showAlert('Você não tem permissão para realizar pagamentos.', 'error');
+            return;
+        }
+
         // Only enable if we owe money (ledgerBalance < 0 in passivo account 2.1.1)
         if (ledgerBalance >= 0) {
             showAlert('Não há saldo devedor para este fornecedor.', 'info');
@@ -839,7 +845,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     <button 
                                         type="button"
                                         onClick={handlePayPix}
-                                        disabled={paying || ledgerBalance >= 0}
+                                        disabled={paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))}
                                         style={{ 
                                             background: 'white', 
                                             padding: '1rem 2rem', 
@@ -848,15 +854,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             color: '#1d4ed8',
                                             fontWeight: '800',
                                             fontSize: '1rem',
-                                            cursor: (paying || ledgerBalance >= 0) ? 'not-allowed' : 'pointer',
+                                            cursor: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
                                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '0.75rem',
-                                            opacity: (paying || ledgerBalance >= 0) ? 0.7 : 1,
+                                            opacity: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
                                             transition: 'transform 0.2s'
                                         }}
-                                        onMouseEnter={(e) => { if (!paying && ledgerBalance < 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                        onMouseEnter={(e) => { 
+                                            if (!paying && ledgerBalance < 0 && ['superadmin', 'admin', 'gerente'].includes(profile?.role)) {
+                                                e.currentTarget.style.transform = 'scale(1.05)'; 
+                                            }
+                                        }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                                     >
                                         <Wallet size={20} />
