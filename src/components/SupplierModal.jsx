@@ -868,50 +868,50 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 {txLoading ? (
                                                                                     <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Carregando detalhes...</div>
                                                                                 ) : (
-                                                                                {(() => {
-                                                                                    // Filter out the supplier's own account (2.1.1) to avoid confusing mirrored entries
-                                                                                    const filtered = txDetails.filter(d => d.account_code !== '2.1.1');
-                                                                                    
-                                                                                    // Group by description and entity to consolidate multiple entries (like taxes or splits)
-                                                                                    const grouped = filtered.reduce((acc, curr) => {
-                                                                                        const key = `${curr.description}-${curr.entity_name}`;
-                                                                                        if (!acc[key]) {
-                                                                                            acc[key] = { ...curr };
-                                                                                            // Invert sign because these are contra-entries (offsets) to the main line
-                                                                                            acc[key].amount = -curr.amount;
-                                                                                        } else {
-                                                                                            acc[key].amount -= curr.amount;
+                                                                                    (() => {
+                                                                                        // Filter out the supplier's own account (2.1.1) to avoid confusing mirrored entries
+                                                                                        const filtered = txDetails.filter(d => d.account_code !== '2.1.1');
+                                                                                        
+                                                                                        // Group by description and entity to consolidate multiple entries (like taxes or splits)
+                                                                                        const grouped = filtered.reduce((acc, curr) => {
+                                                                                            const key = `${curr.description}-${curr.entity_name}`;
+                                                                                            if (!acc[key]) {
+                                                                                                acc[key] = { ...curr };
+                                                                                                // Invert sign because these are contra-entries (offsets) to the main line
+                                                                                                acc[key].amount = -curr.amount;
+                                                                                            } else {
+                                                                                                acc[key].amount -= curr.amount;
+                                                                                            }
+                                                                                            return acc;
+                                                                                        }, {});
+
+                                                                                        const finalDetails = Object.values(grouped);
+
+                                                                                        if (finalDetails.length === 0) {
+                                                                                            return <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Detalhes não disponíveis para esta visualização.</div>;
                                                                                         }
-                                                                                        return acc;
-                                                                                    }, {});
 
-                                                                                    const finalDetails = Object.values(grouped);
-
-                                                                                    if (finalDetails.length === 0) {
-                                                                                        return <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Detalhes não disponíveis para esta visualização.</div>;
-                                                                                    }
-
-                                                                                    return (
-                                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                                                            {finalDetails.map((detail, idx) => {
-                                                                                                const isRevenue = detail.amount < 0; // Negative in Supplier view means "they receive"
-                                                                                                return (
-                                                                                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                                                                                                        <div>
-                                                                                                            <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>
-                                                                                                                {translateEntity(detail.entity_name || detail.account_name)}
+                                                                                        return (
+                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                                                                {finalDetails.map((detail, idx) => {
+                                                                                                    const isRevenue = detail.amount < 0; // Negative in Supplier view means "they receive"
+                                                                                                    return (
+                                                                                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                                                                                                            <div>
+                                                                                                                <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>
+                                                                                                                    {translateEntity(detail.entity_name || detail.account_name)}
+                                                                                                                </div>
+                                                                                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{detail.description}</div>
                                                                                                             </div>
-                                                                                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{detail.description}</div>
+                                                                                                            <div style={{ fontWeight: '700', color: detail.amount < 0 ? '#10b981' : '#ef4444' }}>
+                                                                                                                {detail.amount < 0 ? '+' : '-'}{formatCurrency(detail.amount)}
+                                                                                                            </div>
                                                                                                         </div>
-                                                                                                        <div style={{ fontWeight: '700', color: detail.amount < 0 ? '#10b981' : '#ef4444' }}>
-                                                                                                            {detail.amount < 0 ? '+' : '-'}{formatCurrency(detail.amount)}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                );
-                                                                                            })}
-                                                                                        </div>
-                                                                                    );
-                                                                                })()}
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })()
                                                                                 )}
                                                                             </div>
                                                                         </td>
