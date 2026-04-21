@@ -244,6 +244,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal'
     const [showExpandedUCs, setShowExpandedUCs] = useState(false);
+    const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1262,9 +1263,32 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     </div>
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Potência Instalada</span>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#14532d' }}>{potenciaKwp} kWp</div>
+                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                <div>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Potência Instalada</span>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#14532d' }}>{potenciaKwp} kWp</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                                    style={{
+                                        background: 'white',
+                                        border: '1px solid #bbf7d0',
+                                        borderRadius: '50%',
+                                        width: '40px',
+                                        height: '40px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#166534',
+                                        cursor: 'pointer',
+                                        transition: '0.2s',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                    }}
+                                    title={showTechnicalDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
+                                >
+                                    {showTechnicalDetails ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                </button>
                             </div>
                         </div>
                     )}
@@ -1463,7 +1487,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {/* Tab Content: Técnico */}
                     {activeTab === 'tecnico' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+                            {showTechnicalDetails && (
+                                <div style={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                                    gap: '1.5rem',
+                                    animation: 'slideDown 0.3s ease-out',
+                                    marginBottom: '2rem',
+                                    padding: '1.5rem',
+                                    background: '#f8fafc',
+                                    borderRadius: '16px',
+                                    border: '1px solid #e2e8f0'
+                                }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
                                     <select
@@ -1533,8 +1568,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
                                     </select>
                                 </div>
+                            )}
 
-                                <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
+                            <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#166534', fontWeight: 700, marginBottom: '1rem' }}>
                                         <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '8px' }}>
                                             <BarChart size={20} />
