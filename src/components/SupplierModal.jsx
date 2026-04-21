@@ -22,6 +22,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [expandedTx, setExpandedTx] = useState(null);
     const [txDetails, setTxDetails] = useState([]);
     const [txLoading, setTxLoading] = useState(false);
+    const [paying, setPaying] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -116,6 +117,55 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             console.error('Error fetching tx details:', err);
         } finally {
             setTxLoading(false);
+        }
+    };
+
+    const handlePayPix = async () => {
+        if (!supplier?.id) return;
+        if (ledgerBalance <= 0) {
+            showAlert('Não há saldo devedor para este fornecedor.', 'info');
+            return;
+        }
+
+        if (!formData.pix_key || !formData.pix_key_type) {
+            showAlert('Chave PIX não cadastrada para este fornecedor.', 'warning');
+            return;
+        }
+
+        const confirm = await showConfirm(`Deseja realizar o pagamento de ${formatCurrency(ledgerBalance)} via PIX para este fornecedor?`);
+        if (!confirm) return;
+
+        setPaying(true);
+        try {
+            // Invoke the edge function. Assuming name is 'transfer-asaas-pix' based on file name
+            const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
+                body: {
+                    value: ledgerBalance,
+                    pix_key: formData.pix_key,
+                    pix_key_type: formData.pix_key_type,
+                    description: `Pagamento Fornecedor: ${formData.name}`,
+                    operationType: 'PIX'
+                }
+            });
+
+            if (error) throw error;
+            if (data && data.success === false) throw new Error(data.error);
+
+            showAlert('Pagamento PIX solicitado com sucesso! Aguardando confirmação.', 'success');
+            
+            await addHistory('supplier', supplier.id, 'payment_requested', {
+                amount: ledgerBalance,
+                type: 'PIX',
+                asaas_id: data?.data?.id
+            }, `Solicitado pagamento de ${formatCurrency(ledgerBalance)} via PIX`);
+
+            // Refresh ledger
+            fetchLedgerStatement();
+        } catch (err) {
+            console.error('Erro no pagamento:', err);
+            showAlert('Erro ao processar pagamento: ' + err.message, 'error');
+        } finally {
+            setPaying(false);
         }
     };
 
@@ -763,9 +813,32 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
                                         <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
                                     </div>
-                                    <div style={{ background: 'rgba(255,255,255,0.2)', padding: '1rem', borderRadius: '20px' }}>
-                                        <ArrowUpDown size={32} />
-                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={handlePayPix}
+                                        disabled={paying || ledgerBalance <= 0}
+                                        style={{ 
+                                            background: 'white', 
+                                            padding: '1rem 2rem', 
+                                            borderRadius: '20px',
+                                            border: 'none',
+                                            color: '#1d4ed8',
+                                            fontWeight: '800',
+                                            fontSize: '1rem',
+                                            cursor: (paying || ledgerBalance <= 0) ? 'not-allowed' : 'pointer',
+                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.75rem',
+                                            opacity: (paying || ledgerBalance <= 0) ? 0.7 : 1,
+                                            transition: 'transform 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => { if (!paying && ledgerBalance > 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                                    >
+                                        <Wallet size={20} />
+                                        {paying ? 'Processando...' : 'Pagar Agora'}
+                                    </button>
                                 </div>
 
                                 <div style={sectionStyle}>
