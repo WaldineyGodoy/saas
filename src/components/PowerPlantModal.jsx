@@ -1544,6 +1544,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     <IrradianceChart
                                         ibgeCode={formData.ibge_code}
                                         potenciaKwp={potenciaKwp}
+                                        usinaId={usina?.id}
+                                        selectedUCs={selectedUCs}
                                         onCalculate={handleChartCalculation}
                                     />
                                 </div>
