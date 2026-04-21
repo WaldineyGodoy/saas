@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
@@ -19,6 +19,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [usinas, setUsinas] = useState([]);
     const [ledgerEntries, setLedgerEntries] = useState([]);
     const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [expandedTx, setExpandedTx] = useState(null);
+    const [txDetails, setTxDetails] = useState([]);
+    const [txLoading, setTxLoading] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -89,6 +92,30 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             console.error('Error fetching ledger:', err);
         } finally {
             setLedgerLoading(false);
+        }
+    };
+
+    const fetchTransactionDetails = async (transactionId) => {
+        if (expandedTx === transactionId) {
+            setExpandedTx(null);
+            return;
+        }
+
+        setExpandedTx(transactionId);
+        setTxLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('view_ledger_enriched')
+                .select('*')
+                .eq('transaction_id', transactionId)
+                .order('amount', { ascending: false });
+
+            if (error) throw error;
+            setTxDetails(data || []);
+        } catch (err) {
+            console.error('Error fetching tx details:', err);
+        } finally {
+            setTxLoading(false);
         }
     };
 
@@ -752,44 +779,92 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         const isRevenue = entry.amount < 0;
 
                                                         return (
-                                                            <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                                <td style={{ padding: '1.25rem 0.5rem', whiteSpace: 'nowrap' }}>
-                                                                    <div style={{ color: '#64748b', fontWeight: '500' }}>{formatDate(entry.created_at)}</div>
-                                                                </td>
-                                                                <td style={{ padding: '1.25rem 0.5rem' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                            <React.Fragment key={entry.id}>
+                                                                <tr 
+                                                                    onClick={() => fetchTransactionDetails(entry.transaction_id)}
+                                                                    style={{ 
+                                                                        borderBottom: '1px solid #f1f5f9', 
+                                                                        cursor: 'pointer',
+                                                                        transition: 'background 0.2s'
+                                                                    }}
+                                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                                >
+                                                                    <td style={{ padding: '1.25rem 0.5rem', whiteSpace: 'nowrap' }}>
+                                                                        <div style={{ color: '#64748b', fontWeight: '500' }}>{formatDate(entry.created_at)}</div>
+                                                                    </td>
+                                                                    <td style={{ padding: '1.25rem 0.5rem' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                            <div style={{
+                                                                                width: '32px',
+                                                                                height: '32px',
+                                                                                borderRadius: '10px',
+                                                                                background: isRevenue ? '#f0fdf4' : '#fef2f2',
+                                                                                color: isRevenue ? '#10b981' : '#ef4444',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center'
+                                                                            }}>
+                                                                                {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                    {entry.description}
+                                                                                </div>
+                                                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+                                                                                    {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
                                                                         <div style={{
-                                                                            width: '32px',
-                                                                            height: '32px',
-                                                                            borderRadius: '10px',
-                                                                            background: isRevenue ? '#f0fdf4' : '#fef2f2',
-                                                                            color: isRevenue ? '#10b981' : '#ef4444',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center'
+                                                                            fontWeight: '800',
+                                                                            fontSize: '1.05rem',
+                                                                            color: isRevenue ? '#10b981' : '#ef4444'
                                                                         }}>
-                                                                            {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
+                                                                            {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
                                                                         </div>
-                                                                        <div>
-                                                                            <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem' }}>
-                                                                                {entry.description}
+                                                                    </td>
+                                                                </tr>
+                                                                
+                                                                {expandedTx === entry.transaction_id && (
+                                                                    <tr>
+                                                                        <td colSpan={3} style={{ padding: '0 0.5rem 1rem 0.5rem' }}>
+                                                                            <div style={{ 
+                                                                                background: '#f8fafc', 
+                                                                                borderRadius: '16px', 
+                                                                                padding: '1.5rem',
+                                                                                border: '1px solid #e2e8f0',
+                                                                                animation: 'fadeIn 0.2s ease-out'
+                                                                            }}>
+                                                                                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '1rem', letterSpacing: '0.05em' }}>
+                                                                                    Composição do Lançamento
+                                                                                </div>
+                                                                                {txLoading ? (
+                                                                                    <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Carregando detalhes...</div>
+                                                                                ) : (
+                                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                                                        {txDetails.map(detail => {
+                                                                                            return (
+                                                                                                <div key={detail.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                                                                                                    <div>
+                                                                                                        <div style={{ fontWeight: '600', color: '#334155', fontSize: '0.85rem' }}>{detail.account_name}</div>
+                                                                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{detail.description}</div>
+                                                                                                    </div>
+                                                                                                    <div style={{ fontWeight: '700', color: detail.amount > 0 ? '#10b981' : '#ef4444' }}>
+                                                                                                        {detail.amount > 0 ? '+' : ''}{formatCurrency(detail.amount)}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em' }}>
-                                                                                {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
-                                                                    <div style={{
-                                                                        fontWeight: '800',
-                                                                        fontSize: '1.05rem',
-                                                                        color: isRevenue ? '#10b981' : '#ef4444'
-                                                                    }}>
-                                                                        {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </React.Fragment>
                                                         );
                                                     })}
                                                 </tbody>
