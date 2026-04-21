@@ -315,7 +315,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const [loadingUCs, setLoadingUCs] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [activeFinanceTab, setActiveFinanceTab] = useState('servicos');
+    const [activeFinanceTab, setActiveFinanceTab] = useState('lancamentos');
     const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
     const [monthlyDetails, setMonthlyDetails] = useState(null);
     const [loadingMonthly, setLoadingMonthly] = useState(false);
@@ -339,7 +339,55 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         if (activeFinanceTab === 'lancamentos' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeFinanceTab, referenceMonth, usina?.id, selectedUCs]);
+    }, [activeFinanceTab, referenceMonth, usina?.id, selectedUCs, monthlyEstimates]);
+
+    useEffect(() => {
+        const fetchMonthlyEstimates = async () => {
+            if (!formData.ibge_code || !potenciaKwp) return;
+            
+            try {
+                const { data: result, error } = await supabase
+                    .from('irradiancia')
+                    .select('*')
+                    .eq('"cod.ibge"', formData.ibge_code)
+                    .single();
+
+                if (error) throw error;
+                if (!result) return;
+
+                const months = [
+                    { name: 'Jan', key: 'jan.khw' },
+                    { name: 'Fev', key: 'fev.khw' },
+                    { name: 'Mar', key: 'mar.kwh' },
+                    { name: 'Abr', key: 'abr.kwh' },
+                    { name: 'Mai', key: 'mai.kwh' },
+                    { name: 'Jun', key: 'jun.kwh' },
+                    { name: 'Jul', key: 'jul.kwh' },
+                    { name: 'Ago', key: 'ago.kwh' },
+                    { name: 'Set', key: 'set.kwh' },
+                    { name: 'Out', key: 'out.kwh' },
+                    { name: 'Nov', key: 'nov.kwh' },
+                    { name: 'Dez', key: 'dez.khw' },
+                ];
+
+                const chartData = months.map(m => {
+                    const factor = Number(result[m.key]);
+                    const generation = factor ? (potenciaKwp * factor) : 0;
+                    return {
+                        name: m.name,
+                        geracao: Math.round(generation),
+                        factor
+                    };
+                });
+
+                setMonthlyEstimates(chartData);
+            } catch (err) {
+                console.error('Error fetching monthly estimates:', err);
+            }
+        };
+
+        fetchMonthlyEstimates();
+    }, [formData.ibge_code, potenciaKwp]);
 
     const fetchMonthlyDetails = async () => {
         setLoadingMonthly(true);
@@ -1570,18 +1618,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
                                     <button 
                                         type="button" 
-                                        onClick={() => setActiveFinanceTab('servicos')}
-                                        style={{
-                                            padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
-                                            background: activeFinanceTab === 'servicos' ? '#eff6ff' : 'transparent',
-                                            color: activeFinanceTab === 'servicos' ? '#2563eb' : '#64748b',
-                                            fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
-                                        }}
-                                    >
-                                        Serviços Contratados
-                                    </button>
-                                    <button 
-                                        type="button" 
                                         onClick={() => setActiveFinanceTab('lancamentos')}
                                         style={{
                                             padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
@@ -1591,6 +1627,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         }}
                                     >
                                         Extrato de Lançamentos
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setActiveFinanceTab('servicos')}
+                                        style={{
+                                            padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                                            background: activeFinanceTab === 'servicos' ? '#eff6ff' : 'transparent',
+                                            color: activeFinanceTab === 'servicos' ? '#2563eb' : '#64748b',
+                                            fontWeight: 600, fontSize: '0.9rem', transition: '0.2s'
+                                        }}
+                                    >
+                                        Serviços Contratados
                                     </button>
                                 </div>
 
@@ -1712,7 +1760,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista para o Mês (kWh)</label>
+                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista (kWh)</label>
                                                             <input 
                                                                 type="number"
                                                                 value={monthlyDetails?.geracao_prevista || ''}
