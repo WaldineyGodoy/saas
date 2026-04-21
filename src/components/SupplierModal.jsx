@@ -122,7 +122,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const handlePayPix = async () => {
         if (!supplier?.id) return;
-        if (ledgerBalance <= 0) {
+        const absBalance = Math.abs(ledgerBalance);
+        
+        if (absBalance <= 0) {
             showAlert('Não há saldo devedor para este fornecedor.', 'info');
             return;
         }
@@ -132,7 +134,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
-        const confirm = await showConfirm(`Deseja realizar o pagamento de ${formatCurrency(ledgerBalance)} via PIX para este fornecedor?`);
+        const confirm = await showConfirm(`Deseja realizar o pagamento de ${formatCurrency(absBalance)} via PIX para este fornecedor?`);
         if (!confirm) return;
 
         setPaying(true);
@@ -140,7 +142,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             // Invoke the edge function. Assuming name is 'transfer-asaas-pix' based on file name
             const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
                 body: {
-                    value: ledgerBalance,
+                    value: absBalance,
                     pix_key: formData.pix_key,
                     pix_key_type: formData.pix_key_type,
                     description: `Pagamento Fornecedor: ${formData.name}`,
@@ -816,7 +818,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     <button 
                                         type="button"
                                         onClick={handlePayPix}
-                                        disabled={paying || ledgerBalance <= 0}
+                                        disabled={paying || Math.abs(ledgerBalance) <= 0}
                                         style={{ 
                                             background: 'white', 
                                             padding: '1rem 2rem', 
@@ -825,15 +827,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             color: '#1d4ed8',
                                             fontWeight: '800',
                                             fontSize: '1rem',
-                                            cursor: (paying || ledgerBalance <= 0) ? 'not-allowed' : 'pointer',
+                                            cursor: (paying || Math.abs(ledgerBalance) <= 0) ? 'not-allowed' : 'pointer',
                                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '0.75rem',
-                                            opacity: (paying || ledgerBalance <= 0) ? 0.7 : 1,
+                                            opacity: (paying || Math.abs(ledgerBalance) <= 0) ? 0.7 : 1,
                                             transition: 'transform 0.2s'
                                         }}
-                                        onMouseEnter={(e) => { if (!paying && ledgerBalance > 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                        onMouseEnter={(e) => { if (!paying && Math.abs(ledgerBalance) > 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                                     >
                                         <Wallet size={20} />
