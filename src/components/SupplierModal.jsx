@@ -6,7 +6,7 @@ import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import { 
     History, User, MapPin, Wallet, X, Save, Trash2, 
-    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft 
+    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 
@@ -62,7 +62,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             });
 
             fetchLinkedUsinas(supplier.id);
-            fetchLedgerStatement(supplier.name);
+            fetchLedgerStatement();
         }
     }, [supplier]);
 
@@ -71,15 +71,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         setUsinas(data || []);
     };
 
-    const fetchLedgerStatement = async (supplierName) => {
-        if (!supplierName || !supplier?.id) return;
+    const fetchLedgerStatement = async () => {
+        if (!supplier?.id) return;
         setLedgerLoading(true);
         try {
-            // Fetch entries where the supplier is the reference_id or mentioned in description
+            // Fetch entries where the supplier is the reference_id or mentioned in supplier_id column
             const { data, error } = await supabase
                 .from('view_ledger_enriched')
                 .select('*')
-                .or(`reference_id.eq.${supplier.id},description.ilike.%${supplierName}%`)
+                .or(`reference_id.eq.${supplier.id},supplier_id.eq.${supplier.id}`)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -521,22 +521,24 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <MapPin size={20} color="#ef4444" /> Localização
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div>
-                                            <label style={labelStyle}>CEP</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.cep}
-                                                onChange={e => setFormData({ ...formData, cep: e.target.value })}
-                                                onBlur={handleCepBlur}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>Logradouro / Rua</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.rua}
-                                                onChange={e => setFormData({ ...formData, rua: e.target.value })}
-                                            />
+                                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem' }}>
+                                            <div>
+                                                <label style={labelStyle}>CEP</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    value={formData.cep}
+                                                    onChange={e => setFormData({ ...formData, cep: e.target.value })}
+                                                    onBlur={handleCepBlur}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>Logradouro / Rua</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    value={formData.rua}
+                                                    onChange={e => setFormData({ ...formData, rua: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
                                         <div>
                                             <label style={labelStyle}>Número</label>
@@ -554,21 +556,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 onChange={e => setFormData({ ...formData, bairro: e.target.value })}
                                             />
                                         </div>
-                                        <div>
-                                            <label style={labelStyle}>Cidade</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.cidade}
-                                                onChange={e => setFormData({ ...formData, cidade: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>UF</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.uf}
-                                                onChange={e => setFormData({ ...formData, uf: e.target.value })}
-                                            />
+                                        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+                                            <div>
+                                                <label style={labelStyle}>Cidade</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    value={formData.cidade}
+                                                    onChange={e => setFormData({ ...formData, cidade: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>UF</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    value={formData.uf}
+                                                    onChange={e => setFormData({ ...formData, uf: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -582,13 +586,40 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <Wallet size={20} color="#f59e0b" /> Dados Bancários e PIX
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div>
+                                        <div style={{ position: 'relative' }}>
                                             <label style={labelStyle}>Chave PIX</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.pix_key}
-                                                onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
-                                            />
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    style={{ ...inputStyle, paddingRight: '3.5rem' }}
+                                                    value={formData.pix_key}
+                                                    onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(formData.pix_key);
+                                                        showAlert('Chave PIX copiada!', 'success');
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: '8px',
+                                                        top: '50%',
+                                                        transform: 'translateY(-50%)',
+                                                        background: 'white',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '8px',
+                                                        padding: '0.4rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: '#64748b'
+                                                    }}
+                                                    title="Copiar Chave PIX"
+                                                >
+                                                    <Copy size={16} />
+                                                </button>
+                                            </div>
                                         </div>
                                         <div>
                                             <label style={labelStyle}>Tipo de Chave</label>
@@ -604,6 +635,41 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 <option value="aleatoria">Aleatória</option>
                                             </select>
                                         </div>
+                                        <div style={{ 
+                                            gridColumn: '1 / -1', 
+                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                            padding: '1.25rem',
+                                            borderRadius: '16px',
+                                            border: '1px solid #e2e8f0',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            marginBottom: '0.5rem'
+                                        }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Saldo Acumulado</div>
+                                                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: ledgerBalance >= 0 ? '#10b981' : '#ef4444' }}>
+                                                    {formatCurrency(ledgerBalance)}
+                                                </div>
+                                            </div>
+                                            <button 
+                                                type="button"
+                                                onClick={() => setActiveTab('extrato')}
+                                                style={{
+                                                    background: 'white',
+                                                    border: '1px solid #e2e8f0',
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '10px',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '600',
+                                                    color: '#3b82f6',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Ver Detalhes
+                                            </button>
+                                        </div>
+
                                         <div style={{ gridColumn: '1 / -1' }}>
                                             <label style={labelStyle}>Status Operacional</label>
                                             <select
@@ -690,25 +756,44 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 </thead>
                                                 <tbody>
                                                     {ledgerEntries.map(entry => {
-                                                        const isDebit = entry.amount > 0;
+                                                        const isDebit = entry.amount < 0; // Negative amount is payment to supplier (Debit for company, Credit for supplier?)
+                                                        // Wait, ledger_entries: positive amount is usually "increase in account". 
+                                                        // If it's a liability account (Supplier Payable), positive amount means we owe more.
+                                                        // Negative amount means we paid them.
+                                                        const isIncrease = entry.amount > 0;
+
                                                         return (
                                                             <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                                <td style={{ padding: '1rem 0.5rem', whiteSpace: 'nowrap' }}>{formatDate(entry.created_at)}</td>
-                                                                <td style={{ padding: '1rem 0.5rem' }}>
-                                                                    <div style={{ fontWeight: '600' }}>{entry.account_name}</div>
-                                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.description}</div>
+                                                                <td style={{ padding: '1.25rem 0.5rem', whiteSpace: 'nowrap' }}>
+                                                                    <div style={{ color: '#64748b', fontWeight: '500' }}>{formatDate(entry.created_at)}</div>
                                                                 </td>
-                                                                <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
+                                                                <td style={{ padding: '1.25rem 0.5rem' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                        <div style={{
+                                                                            width: '32px',
+                                                                            height: '32px',
+                                                                            borderRadius: '10px',
+                                                                            background: isIncrease ? '#fef2f2' : '#f0fdf4',
+                                                                            color: isIncrease ? '#ef4444' : '#10b981',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center'
+                                                                        }}>
+                                                                            {isIncrease ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '700', color: '#1e293b' }}>{entry.account_name}</div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.description}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
                                                                     <div style={{
-                                                                        fontWeight: 'bold',
-                                                                        color: isDebit ? '#ef4444' : '#10b981',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'flex-end',
-                                                                        gap: '0.3rem'
+                                                                        fontWeight: '800',
+                                                                        fontSize: '1rem',
+                                                                        color: isIncrease ? '#ef4444' : '#10b981'
                                                                     }}>
-                                                                        {isDebit ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-                                                                        {formatCurrency(entry.amount)}
+                                                                        {isIncrease ? '+' : ''}{formatCurrency(entry.amount)}
                                                                     </div>
                                                                 </td>
                                                             </tr>
