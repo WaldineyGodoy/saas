@@ -5,6 +5,8 @@
 ## [21/04/2026] - Refatoração Premium e Integração Financeira (Fornecedores e Originadores)
 
 ### 🎨 Visual e Interface (Premium UI/UX)
+- **Reorganização do Modal de Fornecedores**: Movidos campos de Contato (Telefone e Email) para a aba **Geral**, centralizando as informações básicas.
+- **Seção Financeira Refinada**: Foco exclusivo em **Dados Bancários e PIX** na aba Financeiro, otimizando o fluxo de gestão de pagamentos.
 - **Refatoração da Listagem de Fornecedores**: Modernização completa da tela de lista (`SupplierList.jsx`) para seguir o padrão visual da área de Assinantes.
 - **Cards de Resumo**: Adicionados cards premium no topo com métricas em tempo real (Total de Fornecedores, Ativos, Em Ativação).
 - **Toolbar de Busca**: Implementada barra de pesquisa dinâmica com filtragem por Nome, CNPJ e Email.

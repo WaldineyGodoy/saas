@@ -486,6 +486,31 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
                                 </div>
+
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <Search size={20} color="#3b82f6" /> Informações de Contato
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={labelStyle}>Email</label>
+                                            <input
+                                                style={inputStyle}
+                                                type="email"
+                                                value={formData.email}
+                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={labelStyle}>Telefone</label>
+                                            <input
+                                                style={inputStyle}
+                                                value={formData.phone}
+                                                onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -554,26 +579,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <Wallet size={20} color="#f59e0b" /> Pagamentos e Contatos
+                                        <Wallet size={20} color="#f59e0b" /> Dados Bancários e PIX
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                        <div>
-                                            <label style={labelStyle}>Email</label>
-                                            <input
-                                                style={inputStyle}
-                                                type="email"
-                                                value={formData.email}
-                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>Telefone</label>
-                                            <input
-                                                style={inputStyle}
-                                                value={formData.phone}
-                                                onChange={e => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                                            />
-                                        </div>
                                         <div>
                                             <label style={labelStyle}>Chave PIX</label>
                                             <input
