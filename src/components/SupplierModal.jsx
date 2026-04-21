@@ -75,11 +75,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         if (!supplier?.id) return;
         setLedgerLoading(true);
         try {
-            // Fetch entries where the supplier is the reference_id or mentioned in supplier_id column
+            // Fetch entries where the supplier is the reference_id and account is 2.1.1
             const { data, error } = await supabase
                 .from('view_ledger_enriched')
                 .select('*')
-                .or(`reference_id.eq.${supplier.id},supplier_id.eq.${supplier.id}`)
+                .eq('account_code', '2.1.1')
+                .eq('reference_id', supplier.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -176,9 +177,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 autoValue = formData.cnpj;
                 break;
             case 'cpf':
-                // If we had a specific CPF field for the company (usually CNPJ), or use partner CPF?
-                // Assuming maybe legal_partner_cpf if it's a person? 
-                // Let's stick to what we have.
                 if (formData.legal_partner_cpf) autoValue = formData.legal_partner_cpf;
                 break;
             default:
@@ -195,7 +193,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Validate using correct field names
         if (formData.cnpj && !validateDocument(formData.cnpj)) {
             showAlert('CNPJ inválido!', 'warning');
             return;
@@ -205,11 +202,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
-
         setLoading(true);
 
         try {
-            console.log('Submitting payload:', formData); // Debug log
             const payload = {
                 name: formData.name,
                 cnpj: formData.cnpj,
@@ -233,8 +228,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 }
             };
 
-            console.log('Payload ready:', payload); // Debug log
-
             let result;
             if (supplier?.id) {
                 result = await supabase.from('suppliers').update(payload).eq('id', supplier.id).select().single();
@@ -242,11 +235,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 result = await supabase.from('suppliers').insert(payload).select().single();
             }
 
-            console.log('Supabase result:', result); // Debug log
-
             if (result.error) throw result.error;
 
-            // Log history
             if (supplier?.id) {
                 await addHistory('supplier', supplier.id, 'supplier_updated', {
                     name: formData.name,
@@ -756,11 +746,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 </thead>
                                                 <tbody>
                                                     {ledgerEntries.map(entry => {
-                                                        const isDebit = entry.amount < 0; // Negative amount is payment to supplier (Debit for company, Credit for supplier?)
-                                                        // Wait, ledger_entries: positive amount is usually "increase in account". 
-                                                        // If it's a liability account (Supplier Payable), positive amount means we owe more.
-                                                        // Negative amount means we paid them.
-                                                        const isIncrease = entry.amount > 0;
+                                                        // In the vision of the Supplier (Account 2.1.1 - Liability):
+                                                        // Credit (Negative amount) = Money they have to receive (Revenue/Positive for them)
+                                                        // Debit (Positive amount) = Money deducted from them (Expense/Negative for them)
+                                                        const isRevenue = entry.amount < 0;
 
                                                         return (
                                                             <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -773,27 +762,31 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                             width: '32px',
                                                                             height: '32px',
                                                                             borderRadius: '10px',
-                                                                            background: isIncrease ? '#fef2f2' : '#f0fdf4',
-                                                                            color: isIncrease ? '#ef4444' : '#10b981',
+                                                                            background: isRevenue ? '#f0fdf4' : '#fef2f2',
+                                                                            color: isRevenue ? '#10b981' : '#ef4444',
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center'
                                                                         }}>
-                                                                            {isIncrease ? <ArrowUpRight size={16} /> : <ArrowDownLeft size={16} />}
+                                                                            {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                                                         </div>
                                                                         <div>
-                                                                            <div style={{ fontWeight: '700', color: '#1e293b' }}>{entry.account_name}</div>
-                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{entry.description}</div>
+                                                                            <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                {entry.description}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+                                                                                {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
                                                                     <div style={{
                                                                         fontWeight: '800',
-                                                                        fontSize: '1rem',
-                                                                        color: isIncrease ? '#ef4444' : '#10b981'
+                                                                        fontSize: '1.05rem',
+                                                                        color: isRevenue ? '#10b981' : '#ef4444'
                                                                     }}>
-                                                                        {isIncrease ? '+' : ''}{formatCurrency(entry.amount)}
+                                                                        {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
                                                                     </div>
                                                                 </td>
                                                             </tr>
