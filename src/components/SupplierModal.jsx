@@ -23,6 +23,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [txDetails, setTxDetails] = useState([]);
     const [txLoading, setTxLoading] = useState(false);
     const [paying, setPaying] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState(0);
+    const [isPartial, setIsPartial] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -122,9 +125,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const handlePayPix = async () => {
         if (!supplier?.id) return;
-        const absBalance = Math.abs(ledgerBalance);
         
-        if (absBalance <= 0) {
+        // Only enable if we owe money (ledgerBalance < 0 in passivo account 2.1.1)
+        if (ledgerBalance >= 0) {
             showAlert('Não há saldo devedor para este fornecedor.', 'info');
             return;
         }
@@ -134,15 +137,33 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
-        const confirm = await showConfirm(`Deseja realizar o pagamento de ${formatCurrency(absBalance)} via PIX para este fornecedor?`);
-        if (!confirm) return;
+        const absBalance = Math.abs(ledgerBalance);
+        setPaymentAmount(absBalance);
+        setIsPartial(false);
+        setShowPaymentModal(true);
+    };
+
+    const confirmPixPayment = async () => {
+        const amountToPay = Number(paymentAmount);
+        const absBalance = Math.abs(ledgerBalance);
+
+        if (amountToPay <= 0) {
+            showAlert('O valor do pagamento deve ser maior que zero.', 'warning');
+            return;
+        }
+
+        if (amountToPay > absBalance) {
+            showAlert('O valor do pagamento não pode ser superior ao saldo devedor.', 'warning');
+            return;
+        }
 
         setPaying(true);
+        setShowPaymentModal(false);
+        
         try {
-            // Invoke the edge function. Assuming name is 'transfer-asaas-pix' based on file name
             const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
                 body: {
-                    value: absBalance,
+                    value: amountToPay,
                     pix_key: formData.pix_key,
                     pix_key_type: formData.pix_key_type,
                     description: `Pagamento Fornecedor: ${formData.name}`,
@@ -156,10 +177,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             showAlert('Pagamento PIX solicitado com sucesso! Aguardando confirmação.', 'success');
             
             await addHistory('supplier', supplier.id, 'payment_requested', {
-                amount: ledgerBalance,
+                amount: amountToPay,
                 type: 'PIX',
                 asaas_id: data?.data?.id
-            }, `Solicitado pagamento de ${formatCurrency(ledgerBalance)} via PIX`);
+            }, `Solicitado pagamento de ${formatCurrency(amountToPay)} via PIX`);
 
             // Refresh ledger
             fetchLedgerStatement();
@@ -818,7 +839,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     <button 
                                         type="button"
                                         onClick={handlePayPix}
-                                        disabled={paying || Math.abs(ledgerBalance) <= 0}
+                                        disabled={paying || ledgerBalance >= 0}
                                         style={{ 
                                             background: 'white', 
                                             padding: '1rem 2rem', 
@@ -827,15 +848,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             color: '#1d4ed8',
                                             fontWeight: '800',
                                             fontSize: '1rem',
-                                            cursor: (paying || Math.abs(ledgerBalance) <= 0) ? 'not-allowed' : 'pointer',
+                                            cursor: (paying || ledgerBalance >= 0) ? 'not-allowed' : 'pointer',
                                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '0.75rem',
-                                            opacity: (paying || Math.abs(ledgerBalance) <= 0) ? 0.7 : 1,
+                                            opacity: (paying || ledgerBalance >= 0) ? 0.7 : 1,
                                             transition: 'transform 0.2s'
                                         }}
-                                        onMouseEnter={(e) => { if (!paying && Math.abs(ledgerBalance) > 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                        onMouseEnter={(e) => { if (!paying && ledgerBalance < 0) e.currentTarget.style.transform = 'scale(1.05)'; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                                     >
                                         <Wallet size={20} />
@@ -1104,6 +1125,88 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
+
+            {/* Custom Payment Modal */}
+            {showPaymentModal && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)',
+                    zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '24px', width: '90%', maxWidth: '400px',
+                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{ 
+                            width: '64px', height: '64px', borderRadius: '50%', background: '#eff6ff', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem',
+                            color: '#3b82f6'
+                        }}>
+                            <Wallet size={32} />
+                        </div>
+                        <h4 style={{ margin: '0 0 1rem', fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Confirmação</h4>
+                        
+                        {!isPartial ? (
+                            <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: '1.5', marginBottom: '2rem' }}>
+                                Deseja realizar o pagamento total de <strong style={{ color: '#1e293b' }}>{formatCurrency(paymentAmount)}</strong> via PIX para este fornecedor?
+                            </p>
+                        ) : (
+                            <div style={{ marginBottom: '2rem' }}>
+                                <label style={{ ...labelStyle, textAlign: 'left', marginBottom: '0.5rem' }}>Valor do Pagamento Parcial</label>
+                                <div style={{ position: 'relative' }}>
+                                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#64748b' }}>R$</span>
+                                    <input 
+                                        type="number"
+                                        style={{ ...inputStyle, paddingLeft: '3rem', fontWeight: '800', color: '#1e293b' }}
+                                        value={paymentAmount}
+                                        onChange={(e) => setPaymentAmount(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem', textAlign: 'left' }}>
+                                    Limite máximo: {formatCurrency(Math.abs(ledgerBalance))}
+                                </p>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button 
+                                onClick={confirmPixPayment}
+                                style={{
+                                    padding: '0.8rem', background: '#1e293b', color: 'white', borderRadius: '12px',
+                                    border: 'none', fontWeight: '700', cursor: 'pointer'
+                                }}
+                            >
+                                Confirmar Pagamento
+                            </button>
+                            
+                            {!isPartial && (
+                                <button 
+                                    onClick={() => setIsPartial(true)}
+                                    style={{
+                                        padding: '0.8rem', background: '#f1f5f9', color: '#475569', borderRadius: '12px',
+                                        border: 'none', fontWeight: '700', cursor: 'pointer'
+                                    }}
+                                >
+                                    Outro Valor
+                                </button>
+                            )}
+
+                            <button 
+                                onClick={() => setShowPaymentModal(false)}
+                                style={{
+                                    padding: '0.8rem', background: 'white', color: '#94a3b8', borderRadius: '12px',
+                                    border: '1px solid #e2e8f0', fontWeight: '600', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
