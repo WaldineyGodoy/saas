@@ -11,30 +11,36 @@ SELECT
     le.description,
     le.reference_type,
     le.reference_id,
+    le.external_id,
     le.created_at,
-    -- Derive Originator ID: Invoice -> UC -> Subscriber -> Originator
+    CASE
+        WHEN (le.reference_type = 'subscriber'::text) THEN ( SELECT name FROM public.subscribers WHERE id = le.reference_id)
+        WHEN (le.reference_type = 'supplier'::text) THEN ( SELECT name FROM public.suppliers WHERE id = le.reference_id)
+        WHEN (le.reference_type = 'originator'::text) THEN ( SELECT name FROM public.originators_v2 WHERE id = le.reference_id)
+        WHEN (le.reference_type = 'invoice'::text) THEN ( 
+            SELECT s.name 
+            FROM public.subscribers s 
+            JOIN public.consumer_units cu ON cu.subscriber_id = s.id 
+            JOIN public.invoices i ON i.uc_id = cu.id 
+            WHERE i.id = le.reference_id
+        )
+        ELSE NULL::text
+    END AS entity_name,
+    le.is_sandbox,
     CASE
         WHEN le.reference_type = 'invoice' THEN s.originator_id
         WHEN le.reference_type = 'payout_originator' THEN ft.destination_id
         ELSE NULL
     END as originator_id,
-    -- Derive Supplier ID: Invoice -> UC -> Usina -> Supplier
     CASE
         WHEN le.reference_type = 'invoice' THEN u.supplier_id
         WHEN le.reference_type = 'payout_usina' THEN ft.destination_id
         ELSE NULL
-    END as supplier_id,
-    -- Derive Usina ID
-    CASE
-        WHEN le.reference_type = 'invoice' THEN cu.usina_id 
-        WHEN le.reference_type = 'payout_usina' THEN NULL 
-        ELSE NULL
-    END as usina_id
+    END as supplier_id
 FROM public.ledger_entries le
 JOIN public.ledger_accounts la ON le.account_id = la.id
 LEFT JOIN public.invoices i ON le.reference_type = 'invoice' AND le.reference_id = i.id
 LEFT JOIN public.financial_transfers ft ON le.reference_type LIKE 'payout_%' AND le.reference_id = ft.id
--- Joins for derivation
 LEFT JOIN public.consumer_units cu ON i.uc_id = cu.id
 LEFT JOIN public.subscribers s ON cu.subscriber_id = s.id
 LEFT JOIN public.usinas u ON cu.usina_id = u.id;
