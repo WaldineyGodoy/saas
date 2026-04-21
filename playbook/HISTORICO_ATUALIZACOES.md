@@ -5,6 +5,10 @@
 ## [21/04/2026] - Refatoração Premium e Integração Financeira (Fornecedores e Originadores)
 
 ### 🎨 Visual e Interface (Premium UI/UX)
+- **Refatoração da Listagem de Fornecedores**: Modernização completa da tela de lista (`SupplierList.jsx`) para seguir o padrão visual da área de Assinantes.
+- **Cards de Resumo**: Adicionados cards premium no topo com métricas em tempo real (Total de Fornecedores, Ativos, Em Ativação).
+- **Toolbar de Busca**: Implementada barra de pesquisa dinâmica com filtragem por Nome, CNPJ e Email.
+- **Tabela Premium**: Refatoração da tabela com cabeçalhos estilizados, badges de status refinados e botões de ação intuitivos (Visualizar e Editar) com ícones `lucide-react`.
 - **Refatoração do Modal de Fornecedores**: Implementação do design "Premium" com navegação por abas horizontais (Geral, Endereço, Financeiro, Extrato, Histórico).
 - **Padronização Visual**: Aplicação de cantos arredondados (30px), gradientes de alta fidelidade (Slate 800/900), e overlays com blur (backdrop-filter).
 - **Identidade Visual Premium**: Criada a skill `premium_visual_identity.skill.md` com tokens de design para modos Light e Dark, garantindo consistência em todo o ecossistema B2W.
