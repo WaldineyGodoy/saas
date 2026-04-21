@@ -438,7 +438,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 // Create details only for selected services
                 const defaultDetails = {};
                 (formData.servicos_contratados || []).forEach(s => {
-                    if (s !== 'Gestão') {
+                    if (!['Gestão', 'Manutenção', 'Arrendamento'].includes(s)) {
                         defaultDetails[s] = getVal(s);
                     }
                 });
@@ -1864,7 +1864,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         {/* Individualized Services from Details JSONB */}
                                                         {Object.keys(monthlyDetails?.details || {}).map((serv) => {
                                                             const val = monthlyDetails?.details?.[serv] || 0;
-                                                            if (val <= 0) return null;
+                                                            if (val <= 0 || ['Manutenção', 'Arrendamento', 'Gestão'].includes(serv)) return null;
                                                             return (
                                                                 <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
