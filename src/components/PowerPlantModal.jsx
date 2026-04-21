@@ -1568,7 +1568,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
                                     </select>
                                 </div>
-                            )}
+                            </div>
+                        )}
 
                             <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#166534', fontWeight: 700, marginBottom: '1rem' }}>
