@@ -34,13 +34,13 @@ export default function IrradianceChart({ ibgeCode, potenciaKwp, usinaId, select
             // 2. Fetch Actual Generation (if usinaId exists)
             let actualGenData = [];
             if (usinaId) {
-                const { data: genData } = await supabase
+                const { data: productionData } = await supabase
                     .from('generation_production')
-                    .select('mes_referencia, geracao_real')
+                    .select('mes_referencia, geracao_mensal_kwh')
                     .eq('usina_id', usinaId)
                     .gte('mes_referencia', `${new Date().getFullYear()}-01-01`)
                     .lte('mes_referencia', `${new Date().getFullYear()}-12-01`);
-                actualGenData = genData || [];
+                actualGenData = productionData || [];
             }
 
             // 3. Fetch Consumption (if selectedUCs exist)
@@ -91,7 +91,7 @@ export default function IrradianceChart({ ibgeCode, potenciaKwp, usinaId, select
                     return {
                         name: m.name,
                         estimativa: estimativa,
-                        geracaoReal: actual ? Number(actual.geracao_real) : null,
+                        geracaoReal: actual ? Number(actual.geracao_mensal_kwh) : null,
                         consumo: cons ? Math.round(cons.valor) : null,
                         comprometimento: totalCommitment > 0 ? totalCommitment : null
                     };
