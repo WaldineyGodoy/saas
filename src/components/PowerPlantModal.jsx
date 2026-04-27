@@ -453,7 +453,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     details: defaultDetails,
                     servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
                     status: 'pendente',
-                    geracao_mensal_kwh: 0,
+                    geracao_real: 0,
                     geracao_prevista: prediction,
                     energia_compensada: totalCompensada,
                     faturamento_mensal: 0,
@@ -1814,8 +1814,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal (kWh)</label>
                                                             <input 
                                                                 type="number"
-                                                                value={monthlyDetails?.geracao_mensal_kwh || ''}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, geracao_mensal_kwh: Number(e.target.value)})}
+                                                                value={monthlyDetails?.geracao_real || ''}
+                                                                onChange={e => setMonthlyDetails({...monthlyDetails, geracao_real: Number(e.target.value)})}
                                                                 placeholder="0"
                                                                 style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
                                                             />
