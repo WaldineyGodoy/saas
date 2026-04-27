@@ -476,7 +476,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     gestao_reais: (formData.servicos_contratados.includes('Gestão') ? getVal('Gestão') : 0),
                     details: defaultDetails,
                     servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
-                    status: 'pendente',
+                    status: 'em_producao',
                     geracao_mensal_kwh: 0,
                     geracao_prevista: prediction,
                     energia_compensada: totalCompensada,
