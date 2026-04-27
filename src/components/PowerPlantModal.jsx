@@ -395,16 +395,40 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         try {
             const firstDay = `${referenceMonth}-01`;
             
-            // 1. Fetch sum of "Energia Compensada" from invoices for linked UCs
+            // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
             let totalCompensada = 0;
+            let totalFaturamento = 0;
             if (selectedUCs.length > 0) {
+                const ucIds = selectedUCs.map(uc => uc.id);
+
                 const { data: energyData } = await supabase
                     .from('invoices')
                     .select('consumo_compensado')
-                    .in('uc_id', selectedUCs.map(uc => uc.id))
-                    .eq('mes_referencia', firstDay);
+                    .in('uc_id', ucIds)
+                    .eq('mes_referencia', firstDay)
+                    .neq('status', 'cancelado');
                 
                 totalCompensada = energyData?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
+
+                // Faturamento based on vencimento in the referenceMonth
+                const [year, month] = referenceMonth.split('-');
+                let y = parseInt(year);
+                let m = parseInt(month) + 1;
+                if (m > 12) {
+                    m = 1;
+                    y++;
+                }
+                const nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
+
+                const { data: faturamentoData } = await supabase
+                    .from('invoices')
+                    .select('valor_a_pagar')
+                    .in('uc_id', ucIds)
+                    .gte('vencimento', firstDay)
+                    .lt('vencimento', nextMonthStr)
+                    .neq('status', 'cancelado');
+                
+                totalFaturamento = faturamentoData?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
             }
 
             // 2. Get prediction for the specific month from chart data
@@ -427,6 +451,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     // Update calculated fields if they are 0/null in existing record? 
                     // Or keep what's in DB. User said "deve ser a soma...", so maybe default it.
                     energia_compensada: data.energia_compensada || totalCompensada,
+                    faturamento_mensal: data.faturamento_mensal || totalFaturamento,
                     geracao_prevista: data.geracao_prevista || prediction
                 });
             } else {
@@ -456,7 +481,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     geracao_real: 0,
                     geracao_prevista: prediction,
                     energia_compensada: totalCompensada,
-                    faturamento_mensal: 0,
+                    faturamento_mensal: totalFaturamento,
                     custo_disponibilidade: 0
                 });
             }
@@ -1139,6 +1164,29 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             .eq('id', uc.id)
                     );
                     await Promise.all(updatePromises);
+                }
+
+                // If monthly generation is inputted, save it to generation_production
+                if (monthlyDetails && monthlyDetails.geracao_real !== undefined) {
+                    const { data: existingProd } = await supabase.from('generation_production')
+                        .select('id')
+                        .eq('usina_id', usinaId)
+                        .eq('mes_referencia', `${referenceMonth}-01`)
+                        .maybeSingle();
+
+                    if (existingProd) {
+                        await supabase.from('generation_production')
+                            .update({ geracao_real: monthlyDetails.geracao_real })
+                            .eq('id', existingProd.id);
+                    } else {
+                        await supabase.from('generation_production')
+                            .insert({
+                                usina_id: usinaId,
+                                mes_referencia: `${referenceMonth}-01`,
+                                geracao_real: monthlyDetails.geracao_real,
+                                status: 'pendente'
+                            });
+                    }
                 }
             }
 
