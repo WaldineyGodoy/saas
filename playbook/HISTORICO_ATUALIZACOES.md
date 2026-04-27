@@ -2,6 +2,14 @@
 
 ---
 
+## [27/04/2026] - Correção na Sincronização e Persistência de Dados (Usinas)
+
+### 📈 Analytics e Inteligência (Usina)
+- **Sincronização de Geração Prevista (`PowerPlantModal`)**: Atualizada a lógica de `fetchMonthlyDetails` para garantir que o campo "Geração Prevista (kWh)" reflita sempre, e de forma dinâmica, a previsão calculada com base na Irradiação Local (IBGE) e Potência da Usina (`potenciaKwp`), espelhando precisamente os dados do `IrradianceChart`.
+- **Persistência Consolidada de Geração Real (`PowerPlantModal`)**: Ajustada a função `handleSubmit` (botão "Salvar Usina") para utilizar uma operação robusta de `upsert` em toda a estrutura de `monthlyDetails`. Isso garante que a "Geração Mensal (kWh)" informada e outros campos da aba Financeiro sejam salvos corretamente no banco de dados (`generation_production`), mesmo sem realizar o fechamento mensal completo.
+
+---
+
 ## [21/04/2026] - Refatoração Premium e Integração Financeira (Fornecedores e Originadores)
 
 ### 🎨 Visual e Interface (Premium UI/UX)
