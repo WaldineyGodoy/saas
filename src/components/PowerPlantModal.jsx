@@ -433,7 +433,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             // 2. Get prediction for the specific month from chart data
             const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
-            const prediction = monthlyEstimates[monthIdx]?.geracao || 0;
+            const estimateObj = monthlyEstimates[monthIdx] || {};
+            const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
 
             const { data, error } = await supabase
                 .from('generation_production')
