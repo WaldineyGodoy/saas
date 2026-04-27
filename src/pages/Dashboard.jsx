@@ -19,6 +19,7 @@ import InvoiceListManager from './dashboards/InvoiceListManager';
 import ConsumerUnitList from './dashboards/ConsumerUnitList';
 import BillingList from './dashboards/BillingList';
 import SettingsLayout from './dashboards/SettingsLayout';
+import GridMap from './dashboards/GridMap';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
@@ -106,6 +107,7 @@ export default function Dashboard() {
         // 7. Usinas
         if (suppliersAllowed.includes(role)) {
             items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
+            items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
         }
 
         // 8. Billing
@@ -141,6 +143,7 @@ export default function Dashboard() {
             case 'invoices': return <InvoiceListManager />;
             case 'billing': return <BillingList />;
             case 'settings': return <SettingsLayout />;
+            case 'grid_map': return <GridMap />;
             default:
                 return <div style={{ padding: '2rem' }}><h2>Bem-vindo, {profile?.name}</h2><p>Selecione uma opção no menu.</p></div>;
         }

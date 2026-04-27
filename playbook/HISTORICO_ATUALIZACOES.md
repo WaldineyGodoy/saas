@@ -7,24 +7,39 @@
 ### 🎨 Visual e Interface (Premium UI/UX)
 - **Reorganização do Modal de Fornecedores**: Movidos campos de Contato (Telefone e Email) para a aba **Geral**, centralizando as informações básicas.
 - **Seção Financeira Refinada**: Foco exclusivo em **Dados Bancários e PIX** na aba Financeiro, otimizando o fluxo de gestão de pagamentos.
+- **Layout de Endereço Compacto**: Agrupamento de campos (Cidade/UF e CEP/Rua) em linhas únicas para uma interface mais limpa e produtiva.
+- **Botão Copiar PIX**: Integração de funcionalidade de cópia no clipboard diretamente no campo da chave PIX com feedback de sucesso.
+- **Saldo Acumulado no Financeiro**: Inclusão de card informativo com o saldo total a receber diretamente na aba de dados bancários, facilitando a consulta rápida.
 - **Refatoração da Listagem de Fornecedores**: Modernização completa da tela de lista (`SupplierList.jsx`) para seguir o padrão visual da área de Assinantes.
 - **Cards de Resumo**: Adicionados cards premium no topo com métricas em tempo real (Total de Fornecedores, Ativos, Em Ativação).
 - **Toolbar de Busca**: Implementada barra de pesquisa dinâmica com filtragem por Nome, CNPJ e Email.
 - **Tabela Premium**: Refatoração da tabela com cabeçalhos estilizados, badges de status refinados e botões de ação intuitivos (Visualizar e Editar) com ícones `lucide-react`.
-- **Refatoração do Modal de Fornecedores**: Implementação do design "Premium" com navegação por abas horizontais (Geral, Endereço, Financeiro, Extrato, Histórico).
+- **Navegação por Abas**: Implementação do design "Premium" com navegação por abas horizontais (Geral, Endereço, Financeiro, Extrato, Histórico).
 - **Padronização Visual**: Aplicação de cantos arredondados (30px), gradientes de alta fidelidade (Slate 800/900), e overlays com blur (backdrop-filter).
-- **Identidade Visual Premium**: Criada a skill `premium_visual_identity.skill.md` com tokens de design para modos Light e Dark, garantindo consistência em todo o ecossistema B2W.
-- **Histórico Inline**: Integração da timeline de auditoria diretamente nos modais (`isInline={true}`), facilitando o rastreio de alterações sem sair da tela principal.
+- **Sistema de Temas (Dark/Light Mode)**: Implementação global com o componente `ThemeToggle`, persistência via `localStorage` e tokens CSS dinâmicos no `index.css`.
+- **Responsividade Adaptativa**: Reestruturação de Dashboards com grids inteligentes e `max-width` global para visualização otimizada em monitores Ultra-Wide e dispositivos mobile.
+- **Extrato Visual Refinado**: Redesign completo das linhas da tabela de extrato com ícones coloridos (`ArrowUpRight` / `ArrowDownLeft`) para distinguir aumentos de saldo e pagamentos.
+- **Modernização da Usina (`PowerPlantModal`)**: Transição para navegação em abas (Geral, Analytics, Unidades), inclusão de card de resumo flutuante e sincronização de dados de performance em tempo real.
+- **Status de Atraso Dinâmico**: Implementação de lógica de recálculo no frontend para exibir faturas como "atrasado" com base na data atual, complementando o status oficial do Asaas.
+
+### 📈 Analytics e Inteligência (Usina)
+- **Refatoração do PlantAnalyticsModal**: Novo seletor de períodos (1, 3, 6, 12 meses) e KPIs dinâmicos baseados no faturamento real do CRM e consumo das faturas.
+- **Gráficos Híbridos (ComposedChart)**: Implementação de visualização mista (Barras/Área) com linhas de projeção de geração e teto de franquia das UCs.
+- **Cálculo de Vacância e Rentabilidade**: Fórmulas corrigidas para refletir o benefício real gerado pela usina comparado ao valor investido.
 
 ### 💰 Funcionalidades Financeiras e Automação
-- **Extrato de Faturamento (Fornecedores)**: Nova seção que exibe em tempo real os lançamentos do Livro Razão e o saldo acumulado do fornecedor (Conta 2.1.1 - Obrigações Usinas).
+- **Otimização de Consulta do Ledger**: Refatoração da query no `SupplierModal.jsx` para buscar por `supplier_id` e `reference_id` na view `view_ledger_enriched`, garantindo 100% de precisão nos lançamentos financeiros vinculados.
+- **Segurança em Transações PIX**: Adicionada a exibição visual da **Chave PIX e Tipo** (CPF/CNPJ) nos modais de confirmação de pagamento (CRM) e resgate (App), prevenindo envios para contas incorretas.
+- **Resgate Condicional (App do Fornecedor)**: Implementada lógica de visibilidade para o botão **"Resgatar Agora"**. O botão agora é ocultado automaticamente se a configuração `allow_auto_redemption` estiver desativada no CRM.
+- **Paridade Financeira CRM vs App**: Ajuste na query `view_ledger_enriched` para utilizar `reference_id` e `account_code: '2.1.1'`, garantindo que o investidor visualize exatamente o mesmo saldo e extrato que o administrador.
+- **Extrato de Faturamento (Fornecedores)**: Nova seção que exibe em tempo real os lançamentos do Livro Razão e o saldo acumulado do fornecedor.
 - **Automação de Gestão B2W**: Lançamentos de "Taxa Fixa Gestão B2W" agora são calculados e registrados automaticamente como despesas extras (Conta 2.1.4) no fechamento mensal.
 - **Filtros Inteligentes no Extrato**: Implementada lógica de ocultação de valores zerados para reduzir poluição visual nos extratos financeiros.
 - **Busca por Referência**: Refinamento na busca de lançamentos contábeis para identificar entidades tanto por ID de referência quanto por descrição.
-
-### 🛠️ Estabilidade e Infraestrutura
-- **Correção de Imports**: Resolvido erro de `useAuth` e `useState` não definidos em modais refatorados.
+- **Deploy Automático**: Integração e deploy das atualizações no repositório `saas` via Git.
 - **Melhoria no Cadastro**: Adicionada busca automática de endereço por CEP e integração aprimorada com API de dados de CNPJ no modal de fornecedores.
+- **Correção de Lançamento de Produção**: Fix da persistência de dados de performance (coluna `mes_referencia`) ao efetuar lançamentos mensais da usina.
+- **Enriquecimento de Dados de Performance**: Suporte à captura de Geração Real, Energia Injetada e Custo de Disponibilidade por competência.
 
 ---
 

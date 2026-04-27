@@ -40,6 +40,12 @@ Cadastramento e acompanhamento de parceiros estratégicos.
 - **Paridade de Auditoria**: Possuem a mesma aba **Comunicados** e **Timeline de Histórico** que os Assinantes.
 - **Auditoria de Cadastro**: Logs automáticos para criação, edição e ativação de perfis.
 
+### 🏭 Gestão de Usinas (Power Plants)
+Monitoramento de geração e performance de ativos solares.
+- **Interface Premium (`PowerPlantModal`)**: Navegação por abas (**Geral**, **Analytics**, **Unidades Vinculadas**) e card de resumo flutuante para KPIs rápidos.
+- **Analytics Detalhado**: Gráficos híbridos (Barras/Área) com seletor de períodos (1-12 meses) para análise de geração vs franquia.
+- **Lançamentos de Performance**: Captura mensal de Geração Real, Energia Injetada e Custo de Disponibilidade por competência.
+
 ### 🎯 Prospecção (Leads)
 Funil de entrada de novos assinantes.
 - **Histórico de Contato**: Timeline dedicada para registrar ligações, visitas e envios de proposta via WhatsApp.
@@ -52,6 +58,7 @@ Funil de entrada de novos assinantes.
 ### ⚖️ Cálculo de Indicadores e Tarifas
 - **Total no Mês**: Baseado na **Data de Vencimento** (inclui `atrasado` e `a_vencer`).
 - **Recálculo Dinâmico**: Tarifas mínimas e descontos baseados no tipo de ligação (**Mono/Bi/Trifásico**).
+- **Status de Atraso em Tempo Real**: O sistema recalcula o status para `atrasado` no frontend se a data atual for superior ao `dia_vencimento`, garantindo visibilidade imediata mesmo antes do processamento do webhook financeiro.
 - **Self-Healing (Auto-Correção)**: Detecção e limpeza de faturas órfãs no Asaas.
 - **Normalização de Status**: Todas as verificações financeiras utilizam `.trim().toLowerCase()` para garantir compatibilidade entre banco de dados e interface.
 
@@ -69,6 +76,7 @@ Funil de entrada de novos assinantes.
 - **Registro de Comunicados**: Mensagens enviadas manualmente via aba "Comunicados" são registradas na `crm_history` com o link do anexo (se houver).
 - **Inadimplência Automática**: 15 dias (`Inadimplente`) e 60 dias (`Cancelamento Crítico`).
 - **Liquidação Automática (Conta de Energia)**: Quando o toggle **"Pagamento Automático"** está ativo nas Configurações, o sistema dispara a ordem de pagamento da fatura da concessionária imediatamente após a compensação da fatura do assinante no Asaas. O sistema utiliza o endpoint `/v3/bill` (singular) e valida a resposta em texto bruto para evitar erros de parsing de JSON.
+- **Permissão de Resgate Automático**: Controle global que habilita ou desabilita a funcionalidade de solicitação de saque via PIX diretamente no Dashboard do Fornecedor, baseando-se na configuração `allow_auto_redemption` do módulo financeiro.
 
 ---
 
@@ -80,7 +88,7 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Perfil de Usuários (`Users`)**: Gestão de acessos e permissões (Roles).
 - **Evolution API (`Code`)**: Instância e chaves do WhatsApp para mensageria.
 - **Serviço de e-mail (`Mail`)**: Credenciais do Resend para notificações transacionais.
-- **Integração Financeira (`CreditCard`)**: Centraliza o endpoint e as chaves do Asaas (Sandbox/Produção). Os dados são consumidos dinamicamente pelas Edge Functions da tabela `integrations_config` (serviço: `financial_api`).
+- **Integração Financeira (`CreditCard`)**: Centraliza o endpoint e as chaves do Asaas (Sandbox/Produção). Os dados são consumidos dinamicamente pelas Edge Functions da tabela `integrations_config` (serviço: `financial_api`). Inclui o controle de **Resgate Automático** para parceiros.
 - **Conta de Energia (`Zap`)**: Regras de faturamento e **Pagamento Automático**.
 - **Audit de Webhooks (`Telescope`)**: Interface de monitoramento de logs da tabela `webhook_logs` (captura payloads brutos, headers e erros de integração).
 
@@ -100,6 +108,8 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Tipografia**: Fonte **Manrope**.
 - **Branding**: Azul Marinho, Laranja e Verde.
 - **Selo de Qualidade**: **"Eficiência Energética Nível A+"**.
+- **Sistema de Temas (Dark/Light Mode)**: Suporte global com o componente `ThemeToggle`, persistência via `localStorage` e tokens CSS dinâmicos (HSL-based) no `index.css`.
+- **Responsividade Adaptativa**: Layout estruturado com `max-width` e grids inteligentes para visualização otimizada em monitores Ultra-Wide (PC) e dispositivos mobile.
 
 ---
 
@@ -165,6 +175,13 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 ---
 
 ## 11. Log de Atualizações Recentes
+
+### 📅 21 de Abril de 2026 (20:45)
+- **Modernização de Interface**: Implementação do sistema de Temas (Dark/Light) e Refatoração do `PlantAnalyticsModal` com KPIs baseados em faturamento real e gráficos híbridos.
+- **Gestão de Usinas Premium**: Transição do `PowerPlantModal` para sistema de abas e resumo flutuante.
+- **Status Dinâmico**: Lógica de "overdue" em tempo real no frontend para faturas vencidas.
+- **Fix Financeiro**: Correção da coluna `mes_referencia` para persistência de dados de produção das usinas.
+- **Dashboards Responsivos**: Reestruturação de grids para suportar visualização em resoluções PC superiores a 1920px.
 
 ### 📅 15 de Abril de 2026 (20:30)
 - **Assinante Vinculado à UC**: Select adicionado na Aba de Vínculos da UC, explicitando o real dono daquele ponto de energia.

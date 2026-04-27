@@ -19,7 +19,12 @@ export const BrandingProvider = ({ children }) => {
                 .select('*')
                 .single();
 
-            if (error && error.code !== 'PGRST116') throw error;
+            if (error && error.code !== 'PGRST116') {
+                if (error.code === 'PGRST303' || (error.message && error.message.includes('JWT expired'))) {
+                    supabase.auth.signOut();
+                }
+                throw error;
+            }
             if (data) {
                 setBranding(data);
                 applyColors(data.primary_color, data.secondary_color);
