@@ -448,11 +448,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 setMonthlyDetails({
                     ...data,
                     details: data.service_details || {},
-                    // Update calculated fields if they are 0/null in existing record? 
-                    // Or keep what's in DB. User said "deve ser a soma...", so maybe default it.
                     energia_compensada: data.energia_compensada || totalCompensada,
                     faturamento_mensal: data.faturamento_mensal || totalFaturamento,
-                    geracao_prevista: data.geracao_prevista || prediction
+                    geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
             } else {
                 // Initialize placeholder from defaults
@@ -1166,27 +1164,19 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     await Promise.all(updatePromises);
                 }
 
-                // If monthly generation is inputted, save it to generation_production
-                if (monthlyDetails && monthlyDetails.geracao_real !== undefined) {
-                    const { data: existingProd } = await supabase.from('generation_production')
-                        .select('id')
-                        .eq('usina_id', usinaId)
-                        .eq('mes_referencia', `${referenceMonth}-01`)
-                        .maybeSingle();
-
-                    if (existingProd) {
-                        await supabase.from('generation_production')
-                            .update({ geracao_real: monthlyDetails.geracao_real })
-                            .eq('id', existingProd.id);
-                    } else {
-                        await supabase.from('generation_production')
-                            .insert({
-                                usina_id: usinaId,
-                                mes_referencia: `${referenceMonth}-01`,
-                                geracao_real: monthlyDetails.geracao_real,
-                                status: 'pendente'
-                            });
-                    }
+                // If monthly details are populated, save them to generation_production
+                if (monthlyDetails) {
+                    const { details, ...mainData } = monthlyDetails;
+                    const { error: prodError } = await supabase.from('generation_production')
+                        .upsert({
+                            ...mainData,
+                            usina_id: usinaId,
+                            mes_referencia: `${referenceMonth}-01`,
+                            service_details: details || {},
+                            status: mainData.status || 'pendente'
+                        });
+                    
+                    if (prodError) throw prodError;
                 }
             }
 
