@@ -50,12 +50,23 @@ export default function EnergyAccountSettings() {
     const fetchConcessionarias = async () => {
         setLoadingCons(true);
         try {
+            console.log('Iniciando busca de concessionárias...');
             const { data, error } = await supabase
                 .from('Concessionaria')
-                .select('Concessionaria, UF, Municipio, TE, TUSD, "Fio B", "Tarifa Concessionaria", "Desconto Assinante"')
-                .order('Concessionaria', { ascending: true });
+                .select('*');
 
-            if (error) throw error;
+            if (error) {
+                console.error('Erro Supabase:', error);
+                throw error;
+            }
+
+            console.log('Dados recebidos:', data?.length);
+
+            if (!data || data.length === 0) {
+                console.warn('Nenhum dado encontrado na tabela Concessionaria');
+                setConcessionarias([]);
+                return;
+            }
 
             // Group by Concessionaria and UF in memory
             const groups = {};
@@ -76,9 +87,12 @@ export default function EnergyAccountSettings() {
                 }
             });
 
-            setConcessionarias(Object.values(groups));
+            const result = Object.values(groups);
+            console.log('Grupos criados:', result.length);
+            setConcessionarias(result);
         } catch (err) {
-            console.error('Error fetching concessionarias:', err);
+            console.error('Erro ao buscar concessionárias:', err);
+            showAlert('Erro ao carregar concessionárias: ' + (err.message || 'Erro desconhecido'), 'error');
         } finally {
             setLoadingCons(false);
         }
@@ -381,54 +395,64 @@ export default function EnergyAccountSettings() {
                         <p>Carregando concessionárias...</p>
                     </div>
                 ) : (
-                    <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                        gap: '1.5rem' 
-                    }}>
-                        {filteredCons.map((cons, index) => (
-                            <div 
-                                key={index} 
-                                className="premium-card" 
-                                style={{ padding: '1.5rem', position: 'relative' }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                        <div style={{ padding: '0.5rem', background: '#f1f5f9', borderRadius: '10px' }}>
-                                            <Building2 size={20} color="#64748b" />
+                    <>
+                        {filteredCons.length === 0 ? (
+                            <div style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8', background: 'white', borderRadius: '20px', border: '1px dashed #cbd5e1' }}>
+                                <Building2 size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+                                <p style={{ fontWeight: 600 }}>Nenhuma concessionária encontrada.</p>
+                                <p style={{ fontSize: '0.85rem' }}>Tente ajustar os filtros de busca.</p>
+                            </div>
+                        ) : (
+                            <div style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                                gap: '1.5rem' 
+                            }}>
+                                {filteredCons.map((cons, index) => (
+                                    <div 
+                                        key={index} 
+                                        className="premium-card" 
+                                        style={{ padding: '1.5rem', position: 'relative' }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <div style={{ padding: '0.5rem', background: '#f1f5f9', borderRadius: '10px' }}>
+                                                    <Building2 size={20} color="#64748b" />
+                                                </div>
+                                                <div>
+                                                    <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>{cons.Concessionaria}</h4>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#64748b', fontSize: '0.75rem' }}>
+                                                        <MapPin size={12} /> {cons.UF}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => openEditModal(cons)}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', padding: '0.4rem' }}
+                                            >
+                                                <Edit2 size={18} />
+                                            </button>
                                         </div>
-                                        <div>
-                                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>{cons.Concessionaria}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#64748b', fontSize: '0.75rem' }}>
-                                                <MapPin size={12} /> {cons.UF}
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div style={{ background: '#f8fafc', padding: '0.8rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Tarifa Conces.</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                                                    R$ {Number(cons["Tarifa Concessionaria"] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}
+                                                </div>
+                                            </div>
+                                            <div style={{ background: '#f0fdf4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
+                                                <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Desconto Assin.</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
+                                                    {Number(cons["Desconto Assinante"] || 0)}%
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={() => openEditModal(cons)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', padding: '0.4rem' }}
-                                    >
-                                        <Edit2 size={18} />
-                                    </button>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div style={{ background: '#f8fafc', padding: '0.8rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                                        <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Tarifa Conces.</div>
-                                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                                            R$ {Number(cons["Tarifa Concessionaria"] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}
-                                        </div>
-                                    </div>
-                                    <div style={{ background: '#f0fdf4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
-                                        <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Desconto Assin.</div>
-                                        <div style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
-                                            {Number(cons["Desconto Assinante"] || 0)}%
-                                        </div>
-                                    </div>
-                                </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        )}
+                    </>
                 )}
             </div>
 
