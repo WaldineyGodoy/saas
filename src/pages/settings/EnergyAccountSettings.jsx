@@ -174,19 +174,6 @@ export default function EnergyAccountSettings() {
         }
     };
 
-    const [filterCity, setFilterCity] = useState('');
-    const [filterUF, setFilterUF] = useState('');
-
-    const filteredCons = useMemo(() => {
-        return concessionarias.filter(c => {
-            const matchCons = !searchTerm || c.Concessionaria?.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchUF = !filterUF || c.UF?.toLowerCase().includes(filterUF.toLowerCase());
-            const matchCity = !filterCity || c.Municipios.some(m => m.includes(filterCity.toLowerCase()));
-            
-            return matchCons && matchUF && matchCity;
-        });
-    }, [concessionarias, searchTerm, filterUF, filterCity]);
-
     if (loading) return (
         <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
             <div className="spinner-border spinner-border-sm me-2" role="status"></div>
@@ -595,28 +582,5 @@ export default function EnergyAccountSettings() {
                 </div>
             )}
         </div>
-    );
-}
-
-function RefreshCw({ size, className, style }) {
-    return (
-        <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width={size} 
-            height={size} 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            className={className}
-            style={style}
-        >
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-            <path d="M21 3v5h-5" />
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-            <path d="M8 16H3v5" />
-        </svg>
     );
 }
