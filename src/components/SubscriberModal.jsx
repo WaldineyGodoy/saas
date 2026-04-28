@@ -777,7 +777,8 @@ Associado`;
         try {
             const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
             const cleanName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
-            const fileName = `Fatura_${cleanName}_${monthYear}.pdf`;
+            const ucNumber = inv.consumer_units?.numero_uc || '';
+            const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
             // OTIMIZAÇÃO: Tentar recuperar do Storage (Ignorar se for apenas o boleto bruto do Asaas)
