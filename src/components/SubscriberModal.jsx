@@ -629,7 +629,9 @@ Associado`;
         // Não definir setConsolidatedToDownload(consolidated) aqui para evitar crash no renderizador que espera .items
 
         try {
-            const fileName = `Fatura_Consolidada_${consolidated.id}.pdf`;
+            const monthYear = consolidated.mes_referencia ? consolidated.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const fileName = `Fatura_Consolidada_${cleanName}_${monthYear}.pdf`;
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir (Mas ignorar se for apenas o boleto bruto do Asaas)
             const isRawAsaas = consolidated.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
@@ -773,7 +775,9 @@ Associado`;
         setInvoiceToDownload(inv);
 
         try {
-            const fileName = `Fatura_${inv.id}.pdf`;
+            const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const fileName = `Fatura_${cleanName}_${monthYear}.pdf`;
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
             // OTIMIZAÇÃO: Tentar recuperar do Storage (Ignorar se for apenas o boleto bruto do Asaas)

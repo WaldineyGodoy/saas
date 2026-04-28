@@ -11,7 +11,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { summaryBase64, asaasUrl, energyBillUrl, energyBillUrls, asaasPdfStorageUrl } = await req.json()
+    const { summaryBase64, asaasUrl, energyBillUrl, energyBillUrls, asaasPdfStorageUrl, fileName } = await req.json()
 
     if (!summaryBase64 || (!asaasUrl && !asaasPdfStorageUrl)) {
       throw new Error('Demonstrativo e URL do Boleto são obrigatórios.')
@@ -156,7 +156,8 @@ serve(async (req) => {
       headers: { 
         ...corsHeaders, 
         'Content-Type': 'application/pdf',
-        'Content-Length': mergedBytes.length.toString()
+        'Content-Length': mergedBytes.length.toString(),
+        'Content-Disposition': `attachment; filename="${fileName || 'fatura_unificada.pdf'}"`
       } 
     })
 

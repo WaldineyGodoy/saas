@@ -128,7 +128,8 @@ export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf',
     const body = { 
         summaryBase64, 
         asaasUrl, 
-        asaasPdfStorageUrl 
+        asaasPdfStorageUrl,
+        fileName
     };
 
     // Suporta tanto uma única URL (string) quanto várias (array)

@@ -337,7 +337,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         console.log('Generating Combined PDF for invoice:', inv.id, 'Energy Bill URL:', inv.concessionaria_pdf_url);
 
         try {
-            const fileName = `Fatura_${inv.id}.pdf`;
+            const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (selectedUc?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const fileName = `Fatura_${cleanName}_${monthYear}.pdf`;
 
             // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir (Ignorar se for apenas o boleto bruto do Asaas)
             const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
