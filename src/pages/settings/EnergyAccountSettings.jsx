@@ -52,46 +52,30 @@ export default function EnergyAccountSettings() {
     const fetchConcessionarias = async () => {
         setLoadingCons(true);
         try {
-            console.log('Iniciando busca de concessionárias...');
+            console.log('Iniciando busca de concessionárias via View...');
             const { data, error } = await supabase
-                .from('Concessionaria')
+                .from('view_concessionarias_resumo')
                 .select('*')
-                .range(0, 10000);
+                .order('Concessionaria', { ascending: true });
 
             if (error) {
                 console.error('Erro Supabase:', error);
                 throw error;
             }
 
-            console.log('Dados recebidos:', data?.length);
+            console.log('Dados recebidos da View:', data?.length);
 
             if (!data || data.length === 0) {
-                console.warn('Nenhum dado encontrado na tabela Concessionaria');
                 setConcessionarias([]);
                 return;
             }
 
-            // Group by Concessionaria and UF in memory
-            const groups = {};
+            // Map Municipios_str back to array for filtering
+            const result = data.map(item => ({
+                ...item,
+                Municipios: item.Municipios_str ? item.Municipios_str.toLowerCase().split(', ') : []
+            }));
 
-            data.forEach(item => {
-                const ufTrim = item.UF?.trim() || '';
-                const key = `${item.Concessionaria}-${ufTrim}`;
-                
-                if (!groups[key]) {
-                    groups[key] = {
-                        ...item,
-                        UF: ufTrim,
-                        Municipios: []
-                    };
-                }
-                if (item.Municipio) {
-                    groups[key].Municipios.push(item.Municipio.toLowerCase());
-                }
-            });
-
-            const result = Object.values(groups);
-            console.log('Grupos criados:', result.length);
             setConcessionarias(result);
         } catch (err) {
             console.error('Erro ao buscar concessionárias:', err);

@@ -880,10 +880,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         <label style={{ display: 'block', fontSize: '0.7rem', color: '#075985', marginBottom: '0.25rem', fontWeight: 600 }}>{f.label}</label>
                                                         <input
                                                             type="text"
+                                                            disabled
                                                             value={formData[f.id]}
-                                                            onChange={e => handleCurrencyChange(f.id, e.target.value)}
-                                                            placeholder="R$ 0,0000"
-                                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '8px', outline: 'none' }}
+                                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #7dd3fc', borderRadius: '8px', outline: 'none', background: '#f8fafc', cursor: 'not-allowed' }}
                                                         />
                                                     </div>
                                                 ))}
