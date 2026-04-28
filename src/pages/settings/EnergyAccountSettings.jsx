@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Zap, Save, Search, Edit2, X, Building2, MapPin, Percent, DollarSign } from 'lucide-react';
+import { Zap, Save, Search, Edit2, X, Building2, MapPin, Percent, DollarSign, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
 export default function EnergyAccountSettings() {
@@ -13,6 +13,8 @@ export default function EnergyAccountSettings() {
     const [concessionarias, setConcessionarias] = useState([]);
     const [loadingCons, setLoadingCons] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterCity, setFilterCity] = useState('');
+    const [filterUF, setFilterUF] = useState('');
     const [selectedCons, setSelectedCons] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalData, setModalData] = useState({
@@ -97,6 +99,15 @@ export default function EnergyAccountSettings() {
             setLoadingCons(false);
         }
     };
+
+    const filteredCons = useMemo(() => {
+        return concessionarias.filter(c => {
+            const matchCons = !searchTerm || c.Concessionaria?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchUF = !filterUF || c.UF?.toLowerCase().includes(filterUF.toLowerCase());
+            const matchCity = !filterCity || c.Municipios?.some(m => m.includes(filterCity.toLowerCase()));
+            return matchCons && matchUF && matchCity;
+        });
+    }, [concessionarias, searchTerm, filterUF, filterCity]);
 
     const handleToggle = () => {
         setAutoPayment(!autoPayment);
