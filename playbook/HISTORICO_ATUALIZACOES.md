@@ -2,18 +2,21 @@
 
 ---
 
-## [28/04/2026] - Gestão Global de Tarifas e Filtros Avançados
+## [28/04/2026] - Otimização de Performance, Segurança e Gestão de Tarifas
 
-### 💰 Funcionalidades Financeiras e Automação
-- **Seção "Tarifas Concessionárias"**: Implementada nova área centralizada em `EnergyAccountSettings.jsx` para gestão de parâmetros financeiros das distribuidoras de energia.
-- **Edição Global de Tarifas**: Novo modal premium para ajuste de **TE**, **TUSD**, **Fio B**, **Tarifa Final da Concessionária** e **Desconto Padrão Assinante**. 
-- **Atualização em Lote**: Lógica de persistência que sincroniza as alterações para todos os municípios atendidos pela mesma concessionária e estado simultaneamente.
-- **Filtros Avançados de Busca**: Adicionada barra de filtragem tripla permitindo buscas simultâneas por:
-    - **Concessionária** (Nome da distribuidora)
-    - **Cidade / Município** (Busca inteligente dentro da base de milhares de municípios)
-    - **Estado (UF)**
-- **Cards Premium de Distribuidoras**: Visualização em grade com cards informativos exibindo métricas principais e status de tarifa em tempo real.
-- **Regras Gerais de Energia**: Reorganização da área de configurações com inclusão de toggle premium para **Pagamento Automático** de contas de concessionária.
+### 💰 Funcionalidades Financeiras e Tarifas
+- **View SQL de Resumo (`view_concessionarias_resumo`)**: Implementada lógica de agregação no servidor para gerenciar mais de 5.200 registros de municípios, resolvendo a limitação de exibição de cards (agora exibe todas as 85 concessionárias únicas/UF).
+- **Cálculo Automático de Tarifa Final**: Implementada soma em tempo real de **TE + TUSD** no modal de edição e nos cards, garantindo precisão matemática.
+- **Normalização de Descontos**: Corrigida a formatação de exibição do Desconto Assinante (ex: de 0.2% para 20%) para conformidade com o padrão de mercado.
+- **Filtros Inteligentes**: Refinamento da busca por Concessionária, Município e UF utilizando a base consolidada da View SQL.
+
+### 🛡️ Segurança e Infraestrutura (DevOps)
+- **Migração para GitHub Secrets**: Transição das chaves sensíveis (`VITE_MAPBOX_TOKEN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) para o cofre do GitHub, removendo a dependência de arquivos `.env` locais no CI/CD.
+- **Deploy Resiliente**: Atualização do workflow `deploy.yml` para injetar variáveis de ambiente durante o build do Vite, garantindo que mapas e conexão com banco funcionem imediatamente após o deploy.
+- **Proteção de Código**: Inclusão de `.env` no `.gitignore` e remoção do rastreamento de segredos no repositório.
+
+### 🛠️ Estabilização de Build
+- **Fix de Duplicação**: Resolvidos erros de build causados por declarações duplicadas de variáveis de estado em `EnergyAccountSettings.jsx`.
 
 ---
 

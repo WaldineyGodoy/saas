@@ -177,6 +177,11 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 
 ## 11. Log de Atualizações Recentes
 
+### 📅 28 de Abril de 2026 (20:00)
+- **Otimização de Performance (Tarifas)**: Criação da View SQL `view_concessionarias_resumo` para processar o agrupamento de concessionárias no servidor, permitindo a gestão fluida de 5.200+ municípios no frontend.
+- **Segurança de Segredos (GitHub)**: Migração total de segredos (Mapbox e Supabase) para o GitHub Secrets e atualização do workflow de deploy para injeção em tempo de build.
+- **Cálculos Automáticos**: Automação da soma TE + TUSD para o campo "Tarifa Final" e correção da exibição percentual de descontos.
+
 ### 📅 21 de Abril de 2026 (20:45)
 - **Modernização de Interface**: Implementação do sistema de Temas (Dark/Light) e Refatoração do `PlantAnalyticsModal` com KPIs baseados em faturamento real e gráficos híbridos.
 - **Gestão de Usinas Premium**: Transição do `PowerPlantModal` para sistema de abas e resumo flutuante.
