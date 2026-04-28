@@ -18,7 +18,9 @@
 
 ### 🏭 Gestão de Usinas (Power Plants)
 - **Persistência de Geração Mensal**: Correção crítica no `PowerPlantModal.jsx` para mapear corretamente o campo de interface para a coluna do banco de dados (`geracao_mensal_kwh`), resolvendo o erro de coluna inexistente.
-- **Sincronização de Analytics**: Geração prevista agora reflete dinamicamente a projeção calculada pelo `IrradianceChart` com base na potência da usina.
+- **Normalização de Status de Produção**: Correção do valor padrão de status de `"pendente"` para `"em_producao"` no `PowerPlantModal.jsx`, adequando-se às restrições de `enum` do banco de dados e evitando falhas de salvamento.
+- **Compatibilidade de Chaves de Analytics**: Implementada lógica de fallback no `PowerPlantModal.jsx` para suportar tanto a chave `geracao` quanto `estimativa` no objeto de performance, garantindo que o campo "Geração Prevista" nunca fique zerado devido a inconsistências entre componentes.
+- **Sincronização de Analytics (IrradianceChart)**: Atualização do `IrradianceChart.jsx` para utilizar a coluna `geracao_mensal_kwh` em vez da depreciada `geracao_real`, restaurando a exibição de dados reais nos gráficos de performance.
 
 ### 🛡️ Segurança e Infraestrutura (DevOps)
 - **Migração para GitHub Secrets**: Transição das chaves sensíveis (`VITE_MAPBOX_TOKEN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) para o cofre do GitHub.
@@ -27,12 +29,13 @@
 
 ---
 
+## [24/04/2026] - Inteligência Geoespacial e Rede de Distribuição
 
-## [27/04/2026] - Correção na Sincronização e Persistência de Dados (Usinas)
-
-### 📈 Analytics e Inteligência (Usina)
-- **Sincronização de Geração Prevista (`PowerPlantModal`)**: Atualizada a lógica de `fetchMonthlyDetails` para garantir que o campo "Geração Prevista (kWh)" reflita sempre, e de forma dinâmica, a previsão calculada com base na Irradiação Local (IBGE) e Potência da Usina (`potenciaKwp`), espelhando precisamente os dados do `IrradianceChart`.
-- **Persistência Consolidada de Geração Real (`PowerPlantModal`)**: Ajustada a função `handleSubmit` (botão "Salvar Usina") para utilizar uma operação robusta de `upsert` em toda a estrutura de `monthlyDetails`. Isso garante que a "Geração Mensal (kWh)" informada e outros campos da aba Financeiro sejam salvos corretamente no banco de dados (`generation_production`), mesmo sem realizar o fechamento mensal completo.
+### 🗺️ Mapeamento e Expansão
+- **Módulo de Rede de Distribuição**: Implementação de sistema de busca geoespacial para prospecção de subestações de energia.
+- **Geoprocessamento (PostGIS)**: Ativação da extensão PostGIS no Supabase e criação de funções de busca por proximidade (Srid: 4326).
+- **Integração Mapbox GL**: Novo componente `GridMap.jsx` com visualização premium em modo Dark, exibindo subestações e raios de cobertura.
+- **ETL Automático**: Script de ingestão de dados ANEEL/EPE para popular tabelas de subestações com coordenadas geográficas.
 
 ---
 

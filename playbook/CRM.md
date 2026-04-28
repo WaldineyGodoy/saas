@@ -52,6 +52,12 @@ Funil de entrada de novos assinantes.
 - **Histórico de Contato**: Timeline dedicada para registrar ligações, visitas e envios de proposta via WhatsApp.
 - **Conversão Direta**: Fluxo simplificado de transformação de Lead em Assinante com preservação do histórico de auditoria.
 
+### 🗺️ Rede de Distribuição (Grid Map)
+Prospecção técnica de subestações para expansão de projetos.
+- **Mapa Geoespacial**: Visualização via Mapbox GL com suporte a filtros de proximidade.
+- **Análise de Capacidade**: Exibição das subestações mais próximas com cálculo de distância linear (PostGIS).
+- **Dados Oficiais**: Integração com base de dados ANEEL/EPE para localização precisa de ativos da rede.
+
 ---
 
 ## 2. Regras de Negócio e Lógica Financeira
@@ -185,8 +191,12 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 - **Otimização de Performance (Tarifas)**: Criação da View SQL `view_concessionarias_resumo` para processar o agrupamento de concessionárias no servidor, permitindo a gestão fluida de 5.200+ municípios no frontend.
 - **Segurança de Segredos (GitHub)**: Migração total de segredos (Mapbox e Supabase) para o GitHub Secrets e atualização do workflow de deploy para injeção em tempo de build.
 - **Cálculos Automáticos**: Automação da soma TE + TUSD para o campo "Tarifa Final" e correção da exibição percentual de descontos.
-- **Fix de Usinas**: Correção da persistência de geração mensal (`geracao_mensal_kwh`) e sincronização com projeções do `IrradianceChart`.
+- **Fix de Usinas**: Correção da persistência de geração mensal (`geracao_mensal_kwh`), normalização de status de produção (`em_producao`) e sincronização com projeções do `IrradianceChart` (suporte a chaves `geracao`/`estimativa`).
 - **Estabilização de Funções**: Migração de imports `esm.sh` para `npm` specifiers em todas as Edge Functions críticas.
+
+### 📅 24 de Abril de 2026 (11:00)
+- **Módulo de Distribuição**: Lançamento do mapa de subestações com integração PostGIS e Mapbox.
+- **ETL Geográfico**: Automação de importação de dados de rede elétrica.
 
 ### 📅 21 de Abril de 2026 (20:45)
 - **Modernização de Interface**: Implementação do sistema de Temas (Dark/Light) e Refatoração do `PlantAnalyticsModal` com KPIs baseados em faturamento real e gráficos híbridos.
