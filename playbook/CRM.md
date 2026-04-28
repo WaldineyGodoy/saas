@@ -19,6 +19,7 @@ Monitoramento técnico e operacional de leituras.
 - **Interface Modernizada (`ConsumerUnitModal`)**: Navegação por 4 abas superiores.
 - **Visualização Padrão**: Definida como **Calendário** para facilitar o acompanhamento das datas de leitura e status de extração.
 - **Edição Direta**: Os cards de UC no Modal do Assinante possuem botão de edição rápida (ícone Lápis) para acesso completo aos dados.
+- **Campos Informativos (Read-only)**: Os componentes tarifários (Tarifa, TE, TUSD e Fio B) no modal de UC são configurados como apenas leitura para evitar edições manuais inconsistentes com a tabela global de tarifas.
 
 ### 💰 Gestão de Faturas (Billing)
 Faturamento mensal, integração bancária e automação de cobrança.
@@ -99,6 +100,7 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 
 ### 📐 Estrutura de Documentos (PDF Consolidado)
 1. **Capa (Resumo B2W)**: Design em cards por UC.
+    - **Nomenclatura Padrão**: Downloads seguem o padrão `Fatura_Cliente_UC_Mes_Ano.pdf` (Individuais) ou `Fatura_Consolidada_Cliente_Mes_Ano.pdf` (Consolidadas).
     - **Captura Técnica**: Timeout de **2000ms** obrigatório para garantir o carregamento total de logotipos e fontes externas (Manrope).
     - **Safe Access**: Mapeamento de itens de fatura com navegação segura (`?.`) para evitar crashes `undefined`.
     - **Tipografia**: Nome do Assinante em **18px (Extra-Bold)** | Economia em **14px (Extra-Bold)**.
@@ -178,9 +180,13 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 ## 11. Log de Atualizações Recentes
 
 ### 📅 28 de Abril de 2026 (20:00)
+- **Nomenclatura de Documentos**: Implementação de nomes de arquivos descritivos e higienização de strings para downloads de PDF.
+- **Proteção de Tarifas**: Bloqueio de edição manual nos campos de componentes tarifários no modal de UC.
 - **Otimização de Performance (Tarifas)**: Criação da View SQL `view_concessionarias_resumo` para processar o agrupamento de concessionárias no servidor, permitindo a gestão fluida de 5.200+ municípios no frontend.
 - **Segurança de Segredos (GitHub)**: Migração total de segredos (Mapbox e Supabase) para o GitHub Secrets e atualização do workflow de deploy para injeção em tempo de build.
 - **Cálculos Automáticos**: Automação da soma TE + TUSD para o campo "Tarifa Final" e correção da exibição percentual de descontos.
+- **Fix de Usinas**: Correção da persistência de geração mensal (`geracao_mensal_kwh`) e sincronização com projeções do `IrradianceChart`.
+- **Estabilização de Funções**: Migração de imports `esm.sh` para `npm` specifiers em todas as Edge Functions críticas.
 
 ### 📅 21 de Abril de 2026 (20:45)
 - **Modernização de Interface**: Implementação do sistema de Temas (Dark/Light) e Refatoração do `PlantAnalyticsModal` com KPIs baseados em faturamento real e gráficos híbridos.

@@ -2,23 +2,31 @@
 
 ---
 
-## [28/04/2026] - Otimização de Performance, Segurança e Gestão de Tarifas
+## [28/04/2026] - Refinamento de Documentos, UX e Gestão de Tarifas
 
-### 💰 Funcionalidades Financeiras e Tarifas
+### 💰 Funcionalidades Financeiras e PDF
+- **Nomenclatura Inteligente de Arquivos**: Implementada lógica de nomes descritivos para downloads de PDF.
+    - **Faturas Individuais**: `Fatura_NomeDoCliente_NumerodaUC_Mes_Ano.pdf`.
+    - **Faturas Consolidadas**: `Fatura_Consolidada_NomeDoCliente_Mes_Ano.pdf`.
+    - **Normalização**: Nomes são higienizados (sem acentos ou caracteres especiais) para compatibilidade universal.
+- **Header Content-Disposition**: Atualização da Edge Function `merge-pdf` para retornar o nome do arquivo nos headers HTTP, garantindo que o navegador identifique o arquivo corretamente mesmo em downloads diretos.
+
+### ⚡ Unidades Consumidoras e Tarifas
+- **Proteção de Dados Tarifários**: No modal de Unidades Consumidoras (`ConsumerUnitModal.jsx`), a seção de **Componentes Tarifários** (Tarifa, TE, TUSD, Fio B) agora é estritamente **Informativa/Read-only**. Isso previne alterações manuais que poderiam conflitar com o motor de cálculo global.
 - **View SQL de Resumo (`view_concessionarias_resumo`)**: Implementada lógica de agregação no servidor para gerenciar mais de 5.200 registros de municípios, resolvendo a limitação de exibição de cards (agora exibe todas as 85 concessionárias únicas/UF).
 - **Cálculo Automático de Tarifa Final**: Implementada soma em tempo real de **TE + TUSD** no modal de edição e nos cards, garantindo precisão matemática.
-- **Normalização de Descontos**: Corrigida a formatação de exibição do Desconto Assinante (ex: de 0.2% para 20%) para conformidade com o padrão de mercado.
-- **Filtros Inteligentes**: Refinamento da busca por Concessionária, Município e UF utilizando a base consolidada da View SQL.
+
+### 🏭 Gestão de Usinas (Power Plants)
+- **Persistência de Geração Mensal**: Correção crítica no `PowerPlantModal.jsx` para mapear corretamente o campo de interface para a coluna do banco de dados (`geracao_mensal_kwh`), resolvendo o erro de coluna inexistente.
+- **Sincronização de Analytics**: Geração prevista agora reflete dinamicamente a projeção calculada pelo `IrradianceChart` com base na potência da usina.
 
 ### 🛡️ Segurança e Infraestrutura (DevOps)
-- **Migração para GitHub Secrets**: Transição das chaves sensíveis (`VITE_MAPBOX_TOKEN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) para o cofre do GitHub, removendo a dependência de arquivos `.env` locais no CI/CD.
-- **Deploy Resiliente**: Atualização do workflow `deploy.yml` para injetar variáveis de ambiente durante o build do Vite, garantindo que mapas e conexão com banco funcionem imediatamente após o deploy.
-- **Proteção de Código**: Inclusão de `.env` no `.gitignore` e remoção do rastreamento de segredos no repositório.
-
-### 🛠️ Estabilização de Build
-- **Fix de Duplicação**: Resolvidos erros de build causados por declarações duplicadas de variáveis de estado em `EnergyAccountSettings.jsx`.
+- **Migração para GitHub Secrets**: Transição das chaves sensíveis (`VITE_MAPBOX_TOKEN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) para o cofre do GitHub.
+- **Deploy Resiliente**: Atualização do workflow `deploy.yml` para injeção de variáveis em tempo de build.
+- **Fix de Imports Edge Functions**: Substituição de imports `esm.sh` por especificadores `npm` estáveis para evitar falhas de runtime.
 
 ---
+
 
 ## [27/04/2026] - Correção na Sincronização e Persistência de Dados (Usinas)
 
