@@ -2,6 +2,21 @@
 
 ---
 
+## [28/04/2026] - Gestão Global de Tarifas e Filtros Avançados
+
+### 💰 Funcionalidades Financeiras e Automação
+- **Seção "Tarifas Concessionárias"**: Implementada nova área centralizada em `EnergyAccountSettings.jsx` para gestão de parâmetros financeiros das distribuidoras de energia.
+- **Edição Global de Tarifas**: Novo modal premium para ajuste de **TE**, **TUSD**, **Fio B**, **Tarifa Final da Concessionária** e **Desconto Padrão Assinante**. 
+- **Atualização em Lote**: Lógica de persistência que sincroniza as alterações para todos os municípios atendidos pela mesma concessionária e estado simultaneamente.
+- **Filtros Avançados de Busca**: Adicionada barra de filtragem tripla permitindo buscas simultâneas por:
+    - **Concessionária** (Nome da distribuidora)
+    - **Cidade / Município** (Busca inteligente dentro da base de milhares de municípios)
+    - **Estado (UF)**
+- **Cards Premium de Distribuidoras**: Visualização em grade com cards informativos exibindo métricas principais e status de tarifa em tempo real.
+- **Regras Gerais de Energia**: Reorganização da área de configurações com inclusão de toggle premium para **Pagamento Automático** de contas de concessionária.
+
+---
+
 ## [27/04/2026] - Correção na Sincronização e Persistência de Dados (Usinas)
 
 ### 📈 Analytics e Inteligência (Usina)

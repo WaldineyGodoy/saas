@@ -89,7 +89,8 @@ O CRM centraliza as chaves de integração e regras de processamento em um paine
 - **Evolution API (`Code`)**: Instância e chaves do WhatsApp para mensageria.
 - **Serviço de e-mail (`Mail`)**: Credenciais do Resend para notificações transacionais.
 - **Integração Financeira (`CreditCard`)**: Centraliza o endpoint e as chaves do Asaas (Sandbox/Produção). Os dados são consumidos dinamicamente pelas Edge Functions da tabela `integrations_config` (serviço: `financial_api`). Inclui o controle de **Resgate Automático** para parceiros.
-- **Conta de Energia (`Zap`)**: Regras de faturamento e **Pagamento Automático**.
+- **Conta de Energia (`Zap`)**: Regras de faturamento, **Pagamento Automático** e **Tarifas Concessionárias**.
+- **Tarifas Concessionárias**: Área dedicada para o gerenciamento global de tarifas (TE, TUSD, Fio B) e descontos por distribuidora. Possui filtros avançados por Concessionária, Cidade e UF, com atualização em lote para todos os municípios atendidos.
 - **Audit de Webhooks (`Telescope`)**: Interface de monitoramento de logs da tabela `webhook_logs` (captura payloads brutos, headers e erros de integração).
 
 ---
