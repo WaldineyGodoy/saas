@@ -55,7 +55,8 @@ export default function EnergyAccountSettings() {
             console.log('Iniciando busca de concessionárias...');
             const { data, error } = await supabase
                 .from('Concessionaria')
-                .select('*');
+                .select('*')
+                .range(0, 10000);
 
             if (error) {
                 console.error('Erro Supabase:', error);
@@ -98,6 +99,16 @@ export default function EnergyAccountSettings() {
         } finally {
             setLoadingCons(false);
         }
+    };
+
+    const handleModalInputChange = (field, value) => {
+        setModalData(prev => {
+            const newData = { ...prev, [field]: value };
+            if (field === 'te' || field === 'tusd') {
+                newData.tarifa_concessionaria = Number((newData.te + newData.tusd).toFixed(4));
+            }
+            return newData;
+        });
     };
 
     const filteredCons = useMemo(() => {
@@ -436,13 +447,13 @@ export default function EnergyAccountSettings() {
                                             <div style={{ background: '#f8fafc', padding: '0.8rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
                                                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Tarifa Conces.</div>
                                                 <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                                                    R$ {Number(cons["Tarifa Concessionaria"] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}
+                                                    R$ {(Number(cons.TE || 0) + Number(cons.TUSD || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}
                                                 </div>
                                             </div>
                                             <div style={{ background: '#f0fdf4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
                                                 <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.2rem' }}>Desconto Assin.</div>
                                                 <div style={{ fontSize: '1rem', fontWeight: 800, color: '#166534' }}>
-                                                    {Number(cons["Desconto Assinante"] || 0)}%
+                                                    {Number(cons["Desconto Assinante"] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%
                                                 </div>
                                             </div>
                                         </div>
@@ -486,7 +497,7 @@ export default function EnergyAccountSettings() {
                                             type="number"
                                             step="0.0001"
                                             value={modalData.te}
-                                            onChange={e => setModalData({...modalData, te: parseFloat(e.target.value)})}
+                                            onChange={e => handleModalInputChange('te', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
                                     </div>
@@ -499,7 +510,7 @@ export default function EnergyAccountSettings() {
                                             type="number"
                                             step="0.0001"
                                             value={modalData.tusd}
-                                            onChange={e => setModalData({...modalData, tusd: parseFloat(e.target.value)})}
+                                            onChange={e => handleModalInputChange('tusd', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
                                     </div>
@@ -512,21 +523,21 @@ export default function EnergyAccountSettings() {
                                             type="number"
                                             step="0.0001"
                                             value={modalData.fio_b}
-                                            onChange={e => setModalData({...modalData, fio_b: parseFloat(e.target.value)})}
+                                            onChange={e => handleModalInputChange('fio_b', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem' }}>Tarifa Final Concessionária</label>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem' }}>Tarifa Final (Soma Automática)</label>
                                     <div style={{ position: 'relative' }}>
                                         <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>R$</div>
                                         <input 
                                             type="number"
                                             step="0.0001"
                                             value={modalData.tarifa_concessionaria}
-                                            onChange={e => setModalData({...modalData, tarifa_concessionaria: parseFloat(e.target.value)})}
-                                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none', background: '#f8fafc' }}
+                                            readOnly
+                                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 800, outline: 'none', background: '#f1f5f9', color: '#1e293b' }}
                                         />
                                     </div>
                                 </div>
