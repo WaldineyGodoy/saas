@@ -2,15 +2,16 @@
 
 ---
 
-## [29/04/2026] - Central de Notificações e Trigger Message
+## [29/04/2026] - Refinamento da Central de Notificações (Engine v2)
 
-### 🔔 Automação e Comunicação
-- **Central de Notificações**: Renomeado o menu "Evolution API" para "Central de Notificações", consolidando a gestão técnica e de automação em um único lugar.
-- **Trigger Message**: Implementado dashboard de gatilhos configuráveis por entidade do CRM (Leads, Assinantes, Fornecedores, etc.).
-- **Mensagens Dinâmicas**: Criado suporte para variáveis dinâmicas (`{{nome}}`, `{{valor}}`, etc.) no corpo das mensagens automáticas.
-- **Gatilhos Complexos**: Modal de configuração agora suporta a separação de **Status** (ex: Ativação) e **Evento** (ex: Contrato Assinado) para disparos mais precisos.
-- **Banco de Dados**: Criada a tabela `notification_triggers` no Supabase com suporte a RLS e versionamento de anexos.
-- **Interface Horizontal**: Implementada navegação por abas horizontais para separar a configuração técnica da API do WhatsApp da configuração de gatilhos de negócio.
+### 🔔 Automação e Comunicação Avançada
+- **Engine de Gatilhos**: Reestruturada a lógica de disparo para priorizar **Evento** antes de **Status**, com adição de operadores lógicos (**E / OU / NÃO**) configuráveis pelo administrador.
+- **Suporte Multicanal**: Agora é possível selecionar múltiplos canais de envio simultâneos (**WhatsApp e E-mail**) para o mesmo gatilho.
+- **Agendamento Inteligente**: Substituído o delay em minutos por agendamento em **Dias**, com suporte a lembretes **Antes do Vencimento**, **Após o Vencimento** ou **Dias após Evento**.
+- **Editor de Mensagem**: Implementado sistema de **Autocomplete** de variáveis dinâmicas com menu de sugestões específico para cada tipo de entidade (Lead, Assinante, UC, etc.).
+- **Auditoria de Status**: Sincronizados todos os status dinâmicos do modal de gatilhos com os quadros Kanban reais do sistema (ex: `indicado`, `em_negociacao`, `ativo_inadimplente`).
+- **Dashboard Visual**: Cards de gatilho atualizados para exibir de forma clara a lógica sequencial, os canais ativos e o cronograma de agendamento.
+
 
 ---
 

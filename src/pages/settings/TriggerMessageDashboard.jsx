@@ -78,53 +78,76 @@ export default function TriggerMessageDashboard() {
             background: 'white',
             borderRadius: '12px',
             border: '1px solid #e2e8f0',
-            padding: '1rem',
+            padding: '1.25rem',
             marginBottom: '1rem',
             boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-            transition: 'transform 0.2s',
-            cursor: 'default'
+            transition: 'all 0.2s',
+            cursor: 'default',
+            position: 'relative'
         }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                <h5 style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b', fontWeight: 700 }}>{trigger.name}</h5>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <button onClick={() => { setEditingTrigger(trigger); setIsModalOpen(true); }} style={{ padding: '0.3rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Edit2 size={14} /></button>
-                    <button onClick={() => deleteTrigger(trigger.id)} style={{ padding: '0.3rem', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>{trigger.name}</h5>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button onClick={() => { setEditingTrigger(trigger); setIsModalOpen(true); }} style={{ padding: '0.4rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#64748b' }} title="Editar"><Edit2 size={14} /></button>
+                    <button onClick={() => deleteTrigger(trigger.id)} style={{ padding: '0.4rem', background: '#fee2e2', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#ef4444' }} title="Excluir"><Trash2 size={14} /></button>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                {trigger.trigger_status && (
-                    <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
-                        Status: {trigger.trigger_status}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {trigger.trigger_event && (
+                        <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                            {trigger.trigger_event}
+                        </span>
+                    )}
+                    
+                    {trigger.trigger_event && trigger.trigger_status && (
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 800 }}>
+                            {trigger.logic_operator === 'and' ? 'E' : trigger.logic_operator === 'or' ? 'OU' : 'NÃO'}
+                        </span>
+                    )}
+
+                    {trigger.trigger_status && (
+                        <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                            Status: {trigger.trigger_status}
+                        </span>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <Clock size={12} /> 
+                        {trigger.delay_type === 'immediate' ? 'Envio Imediato' : 
+                         trigger.delay_type === 'before_due' ? `${trigger.delay_days} dias antes` : 
+                         trigger.delay_type === 'after_due' ? `${trigger.delay_days} dias após` : 
+                         `${trigger.delay_days} dias após evento`}
                     </span>
-                )}
-                {trigger.trigger_event && (
-                    <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>
-                        Evento: {trigger.trigger_event}
-                    </span>
-                )}
+                </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', color: '#94a3b8' }}>
-                    {['whatsapp', 'both'].includes(trigger.channel) && <MessageSquare size={14} />}
-                    {['email', 'both'].includes(trigger.channel) && <Mail size={14} />}
-                    {trigger.delay_minutes > 0 && <span style={{ fontSize: '0.75rem' }}>{trigger.delay_minutes}min</span>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    {(trigger.channels || [trigger.channel]).map(ch => (
+                        <div key={ch} style={{ color: ch === 'whatsapp' ? '#22c55e' : '#0284c7' }} title={ch === 'whatsapp' ? 'WhatsApp' : 'E-mail'}>
+                            {ch === 'whatsapp' ? <MessageSquare size={16} /> : <Mail size={16} />}
+                        </div>
+                    ))}
                 </div>
                 <button 
                     onClick={() => toggleTriggerStatus(trigger.id, trigger.is_active)}
                     style={{
-                        padding: '0.25rem 0.5rem',
+                        padding: '0.3rem 0.6rem',
                         borderRadius: '6px',
                         border: 'none',
-                        background: trigger.is_active ? '#dcfce7' : '#fee2e2',
-                        color: trigger.is_active ? '#166534' : '#991b1b',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
+                        background: trigger.is_active ? '#dcfce7' : '#f1f5f9',
+                        color: trigger.is_active ? '#166534' : '#64748b',
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.3rem'
+                        gap: '0.4rem',
+                        transition: 'all 0.2s'
                     }}
                 >
                     <Power size={10} /> {trigger.is_active ? 'ATIVO' : 'INATIVO'}
@@ -132,6 +155,7 @@ export default function TriggerMessageDashboard() {
             </div>
         </div>
     );
+
 
     return (
         <div style={{ height: '100%' }}>
