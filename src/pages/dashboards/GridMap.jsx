@@ -86,11 +86,16 @@ export default function GridMap() {
                         // Tenta extrair colunas com nomes genéricos (qgis, excel, aneel padrao)
                         const lat = parseFloat(row.Y || row.latitude || row.LAT || row.NumLatitude || row.LATITUDE);
                         const lng = parseFloat(row.X || row.longitude || row.LONG || row.NumLongitude || row.LONGITUDE);
-                        const nome = row.nome || row.NomSubestacao || row.NOME || row.Nome || 'Desconhecido';
-                        const codigo = row.codigo_aneel || row.CodSubestacao || row.COD_ID || `IMP-${Date.now()}-${Math.random()}`;
-                        const distribuidora = row.distribuidora || row.SigDistribuidora || row.DISTRIBUIDORA || '';
-                        const tensao = parseFloat(row.tensao_kv || row.NumTensaoKv) || null;
-                        const capacidade = parseFloat(row.capacidade_mva || row.NumCapacidadeMva) || null;
+                        
+                        // Busca o Nome/Código (prioriza COD_ID ou NOM que são o padrão ANEEL)
+                        const nome = row.nome || row.NOM || row.COD_ID || row.NomSubestacao || row.NOME || row.Nome || 'Transformador';
+                        
+                        const codigo = row.codigo_aneel || row.COD_ID || row.CodSubestacao || `IMP-${Date.now()}-${Math.random()}`;
+                        const distribuidora = row.distribuidora || row.DISTRIBUID || row.SigDistribuidora || row.DISTRIBUIDORA || '';
+                        
+                        // Tensão e Potência (padrão ANEEL: TEN_NOM e POT_NOM)
+                        const tensao = parseFloat(row.tensao_kv || row.TEN_NOM || row.NumTensaoKv) || null;
+                        const capacidade = parseFloat(row.capacidade_mva || row.POT_NOM || row.NumCapacidadeMva) || null;
 
                         if (isNaN(lat) || isNaN(lng)) return null;
 
