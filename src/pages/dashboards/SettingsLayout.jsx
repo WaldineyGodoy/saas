@@ -13,7 +13,7 @@ export default function SettingsLayout() {
     const menuItems = [
         { id: 'users', label: 'Perfil de Usuários', icon: Users, desc: 'Gerenciar usuários e acesso' },
         { id: 'notifications', label: 'Central de Notificações', icon: Bell, desc: 'Configuração de WhatsApp e Gatilhos' },
-        { id: 'email_service', label: 'Serviço de e-mail', icon: Mail, desc: 'Configuração do Resend (E-mail)' },
+
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
         { id: 'energy', label: 'Conta de Energia', icon: Zap, desc: 'Regras de Faturamento' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
@@ -26,8 +26,7 @@ export default function SettingsLayout() {
                 return <UserProfilesSettings />;
             case 'notifications':
                 return <NotificationHubSettings />;
-            case 'email_service':
-                return <IntegrationSettings serviceName="resend_api" title="Serviço de E-mail" description="Configuração de envio via Resend" />;
+
             case 'financial':
                 return <IntegrationSettings serviceName="financial_api" title="Integração Financeira" description="Gateways de Pagamento (Asaas, etc)" />;
             case 'energy':
