@@ -2,7 +2,14 @@
 
 ---
 
-## [29/04/2026] - Automação de Notificações e Rastreabilidade Dual
+## [29/04/2026] - Modernização de Interface e Comunicação (UC)
+
+### 🎨 Visual e Interface (ConsumerUnitModal)
+- **Refatoração Premium**: O modal de Unidade Consumidora (`ConsumerUnitModal.jsx`) foi completamente reestruturado para um sistema de navegação por abas (**Geral**, **Técnico**, **Financeiro**, **Comunicados**).
+- **Organização de Dados**: Centralização de informações básicas (Assinante, Localização) na aba Geral; Status e Dados Operacionais na aba Técnico; e Tarifas/Faturamento na aba Financeiro.
+- **Aba de Comunicados (WhatsApp)**: Integração de compositor de mensagens manual com suporte a anexos (PDF/Imagens), permitindo comunicação direta com o assinante a partir da UC.
+- **Histórico de Interações**: Implementação de log automático via `addHistory` para cada mensagem enviada, integrando as comunicações manuais à timeline do CRM.
+- **Estabilização de Tarifas**: Reforço da lógica de campos *read-only* para componentes tarifários provenientes do motor de cálculo, garantindo integridade dos dados financeiros.
 
 ### 💬 Mensageria e Notificações
 - **Notificação Automática (Faturas Individuais)**: O sistema agora dispara automaticamente o combo E-mail + WhatsApp com o PDF anexo no momento em que um boleto individual é gerado no `InvoiceFormModal.jsx`. 

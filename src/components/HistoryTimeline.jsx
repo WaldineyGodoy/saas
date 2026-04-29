@@ -142,10 +142,11 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
         borderRadius: '12px',
         width: '90%',
         maxWidth: '600px',
-        height: '80vh',
+        maxHeight: '85vh',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        animation: 'modalSlideUp 0.3s ease-out'
     };
 
     const wrapperStyle = isInline ? {
@@ -154,8 +155,8 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
         flexDirection: 'column'
     } : {
         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100,
-        backdropFilter: 'blur(4px)'
+        backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000,
+        backdropFilter: 'blur(8px)'
     };
 
     return (
@@ -173,15 +174,20 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                     borderTopRightRadius: '12px'
                 }}>
                     <div>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Histórico / Timeline</h3>
+                        <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 700 }}>Histórico / Timeline</h3>
                         <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{entityName}</p>
                     </div>
-                    {!isInline && (
+                    {onClose && (
                         <button onClick={onClose} style={{
-                            background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.5rem',
-                            transition: 'color 0.2s'
-                        }}>
-                            <X size={24} />
+                            background: '#f1f5f9', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.6rem',
+                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        >
+                            <X size={20} />
                         </button>
                     )}
                 </div>
