@@ -100,6 +100,9 @@ serve(async (req) => {
         } else if (['PAYMENT_OVERDUE'].includes(event)) {
             newStatus = 'atrasado';
             asaasStatus = 'OVERDUE';
+        } else if (event === 'PAYMENT_DELETED') {
+            newStatus = 'cancelado';
+            asaasStatus = 'CANCELLED';
         }
 
         if (newStatus) {

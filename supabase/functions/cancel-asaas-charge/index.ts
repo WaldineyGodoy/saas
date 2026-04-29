@@ -23,10 +23,10 @@ serve(async (req) => {
             throw new Error("ID da fatura não fornecido.");
         }
 
-        // 1. Buscar a fatura para pegar o asaas_payment_id
+        // 1. Buscar a fatura para verificar status e asaas_payment_id
         const { data: invoice, error: invoiceError } = await supabase
             .from('invoices')
-            .select('asaas_payment_id')
+            .select('status, asaas_payment_id')
             .eq('id', invoice_id)
             .single()
 
@@ -34,8 +34,13 @@ serve(async (req) => {
             throw new Error("Fatura não encontrada.");
         }
 
-        // 2. Se houver asaas_payment_id, tentar cancelar no Asaas
-        if (invoice.asaas_payment_id) {
+        // Bloquear cancelamento de faturas já liquidadas ou confirmadas
+        if (['confirmado', 'pago'].includes(invoice.status)) {
+            throw new Error(`Não é possível cancelar uma fatura com status "${invoice.status}".`);
+        }
+
+        // 2. Se houver asaas_payment_id e o status NÃO for 'ag_emissao_boleto', tentar cancelar no Asaas
+        if (invoice.asaas_payment_id && invoice.status !== 'ag_emissao_boleto') {
             const { data: configData, error: configError } = await supabase
                 .from('integrations_config')
                 .select('api_key, endpoint_url, sandbox_api_key, sandbox_endpoint_url, environment')
@@ -58,21 +63,24 @@ serve(async (req) => {
 
                     const deleteData = await deleteRes.json();
 
-                    // Se não for 200, logamos mas prosseguimos com o cancelamento local? 
-                    // Se o erro for "Pagamento não encontrado", podemos ignorar e seguir.
-                    if (!deleteRes.ok && deleteData.errors?.[0]?.code !== 'not_found') {
+                    // Se não for 200, logamos. Se o erro for "Pagamento não encontrado", podemos ignorar.
+                    if (!deleteRes.ok && deleteData.errors?.[0]?.code !== 'not_found' && deleteRes.status !== 404) {
                         throw new Error(`Erro Asaas: ${deleteData.errors?.[0]?.description || 'Falha ao cancelar no Asaas'}`);
                     }
                 }
             }
         }
 
-        // 3. Atualizar status no Banco de Dados
+        // 3. Atualizar status no Banco de Dados e limpar metadados do Asaas
         const { error: updateError } = await supabase
             .from('invoices')
             .update({
                 status: 'cancelado',
-                asaas_status: 'CANCELLED'
+                asaas_status: 'CANCELLED',
+                asaas_payment_id: null,
+                asaas_boleto_url: null,
+                linha_digitavel: null,
+                pix_string: null
             })
             .eq('id', invoice_id)
 

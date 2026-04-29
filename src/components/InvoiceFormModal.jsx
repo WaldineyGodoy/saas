@@ -1319,7 +1319,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     {/* Footer Actions */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
                         <div>
-                            {invoice?.id && invoice.status !== 'cancelado' && canManageStatus && (
+                            {invoice?.id && invoice.status !== 'cancelado' && !['confirmado', 'pago'].includes(invoice.status) && canManageStatus && (
                                 <button
                                     type="button"
                                     onClick={handleCancel}
