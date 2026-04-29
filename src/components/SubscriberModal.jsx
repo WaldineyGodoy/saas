@@ -1015,6 +1015,7 @@ Associado`;
                 pdfBlob: pdfBlob,
                 fileName: fileName,
                 subscriberId: subscriber.id,
+                ucId: !isConsolidated ? invoice.uc_id : null, // Novo: Registro na UC
                 profileId: profile?.id,
                 isConsolidated: isConsolidated
             });

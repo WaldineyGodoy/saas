@@ -310,6 +310,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 pdfBlob: pdfBlob,
                 fileName: fileName,
                 subscriberId: subscriber?.id,
+                ucId: inv.uc_id, // Registro na UC para histórico
                 profileId: profile?.id
             });
 
@@ -323,9 +324,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         }
     };
 
-    const handleDownloadCombined = async (invToUse) => {
+    const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null) => {
         const inv = invToUse || invoice;
-        const currentBoletoUrl = localBoletoUrl; // Use STRICTLY the local state
+        const currentBoletoUrl = forcedBoletoUrl || localBoletoUrl; // Prioritize forced URL (important for automatic notification)
         
         if (!inv || !currentBoletoUrl) {
             showAlert('Boleto não disponível para esta fatura.', 'warning');
@@ -394,7 +395,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
             const summaryBase64 = pdfSummary.output('datauristring');
-            const asaasUrl = localBoletoUrl; 
+            const asaasUrl = currentBoletoUrl; 
             if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
             const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
             
@@ -738,10 +739,16 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         if (subData) {
                             showAlert('Gerando PDF para notificações...', 'info');
                             // handleDownloadCombined returns the blob and handles browser download
-                            const pdfBlob = await handleDownloadCombined(currentInv);
+                            // IMPORTANT: Pass the finalBoletoUrl directly because state update is async
+                            const pdfBlob = await handleDownloadCombined(currentInv, finalBoletoUrl);
                             
                             if (pdfBlob) {
                                 showAlert('Enviando notificações (E-mail/WhatsApp)...', 'info');
+                                const monthYearStr = currentInv.mes_referencia ? currentInv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+                                const cleanSubName = (subData.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+                                const ucNum = selectedUc?.numero_uc || '';
+                                const descriptiveFileName = `Fatura_${cleanSubName}_${ucNum}_${monthYearStr}.pdf`;
+
                                 await sendCombinedNotification({
                                     recipientEmail: subData.email,
                                     recipientPhone: subData.phone,
@@ -749,8 +756,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     dueDate: new Date(currentInv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR'),
                                     value: Number(currentInv.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                                     pdfBlob: pdfBlob,
-                                    fileName: `Fatura_${currentInv.id}.pdf`,
+                                    fileName: descriptiveFileName,
                                     subscriberId: subData.id,
+                                    ucId: currentInv.uc_id,
                                     profileId: profile?.id
                                 });
                                 showAlert('Notificações enviadas com sucesso!', 'success');

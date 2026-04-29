@@ -184,6 +184,7 @@ export const sendCombinedNotification = async ({
     pdfBlob,
     fileName,
     subscriberId,
+    ucId = null, // Novo: ID da UC para registro de histórico
     profileId,
     isConsolidated = false
 }) => {
@@ -262,7 +263,10 @@ https://app.b2wenergia.com.br
 
                 const [emailRes, waRes] = await Promise.all([emailPromise, waPromise]);
 
-                await supabase.from('crm_history').insert({
+                const historyPromises = [];
+                
+                // Registro no Assinante
+                historyPromises.push(supabase.from('crm_history').insert({
                     entity_type: 'subscriber',
                     entity_id: subscriberId,
                     content: `Envio de Fatura: Email [${emailRes.error ? 'falhou' : 'enviado'}] | WhatsApp [${waRes.error ? 'falhou' : 'enviado'}]`,
@@ -275,7 +279,26 @@ https://app.b2wenergia.com.br
                         error_details: { email: emailRes.error, wa: waRes.error }
                     },
                     created_by: profileId
-                });
+                }));
+
+                // Registro na UC (se fornecido)
+                if (ucId) {
+                    historyPromises.push(supabase.from('crm_history').insert({
+                        entity_type: 'consumer_unit',
+                        entity_id: ucId,
+                        content: `Envio de Fatura Individual: Email [${emailRes.error ? 'falhou' : 'enviado'}] | WhatsApp [${waRes.error ? 'falhou' : 'enviado'}]`,
+                        metadata: {
+                            email_status: emailRes.error ? 'error' : 'sent',
+                            wa_status: waRes.error ? 'error' : (waRes.skipped ? 'skipped' : 'sent'),
+                            recipient_email: targetEmailForLog,
+                            recipient_phone: targetPhone,
+                            error_details: { email: emailRes.error, wa: waRes.error }
+                        },
+                        created_by: profileId
+                    }));
+                }
+
+                await Promise.all(historyPromises);
 
                 resolve({ emailRes, waRes, isSandbox, targetEmailForLog, targetPhone });
             };
