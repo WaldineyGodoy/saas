@@ -2,6 +2,18 @@
 
 ---
 
+## [29/04/2026] - Central de Notificações e Trigger Message
+
+### 🔔 Automação e Comunicação
+- **Central de Notificações**: Renomeado o menu "Evolution API" para "Central de Notificações", consolidando a gestão técnica e de automação em um único lugar.
+- **Trigger Message**: Implementado dashboard de gatilhos configuráveis por entidade do CRM (Leads, Assinantes, Fornecedores, etc.).
+- **Mensagens Dinâmicas**: Criado suporte para variáveis dinâmicas (`{{nome}}`, `{{valor}}`, etc.) no corpo das mensagens automáticas.
+- **Gatilhos Complexos**: Modal de configuração agora suporta a separação de **Status** (ex: Ativação) e **Evento** (ex: Contrato Assinado) para disparos mais precisos.
+- **Banco de Dados**: Criada a tabela `notification_triggers` no Supabase com suporte a RLS e versionamento de anexos.
+- **Interface Horizontal**: Implementada navegação por abas horizontais para separar a configuração técnica da API do WhatsApp da configuração de gatilhos de negócio.
+
+---
+
 ## [29/04/2026] - Reorganização de Configurações e Integração Financeira
 
 ### ⚙️ Configurações e Workflow

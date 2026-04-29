@@ -58,6 +58,17 @@ Prospecção técnica de subestações para expansão de projetos.
 - **Análise de Capacidade**: Exibição das subestações mais próximas com cálculo de distância linear (PostGIS).
 - **Dados Oficiais**: Integração com base de dados ANEEL/EPE para localização precisa de ativos da rede.
 
+### 🔔 Central de Notificações (Notification Hub)
+Gestão centralizada de comunicações e automações de mensagens.
+- **Integração Técnica**: Aba dedicada para configuração da **Evolution API** (WhatsApp) e **Resend** (E-mail).
+- **Gatilhos de Mensagem (Trigger Message)**: Sistema de automação baseado em regras de negócio organizadas por entidade.
+- **Configuração Dinâmica**: Modal `MessageTrigger` para definição de:
+    - **Filtros Combinados**: Disparo baseado em **Status** (ex: Qualificação) e **Evento** (ex: Documento Assinado).
+    - **Timing**: Suporte a envio imediato ou com atraso programado (delay em minutos).
+    - **Templates Dinâmicos**: Mensagens com placeholders `{{nome}}`, `{{valor}}`, `{{vencimento}}` e `{{empresa}}`.
+    - **Gestão de Anexos**: Integração com Supabase Storage para envio automático de PDFs e Imagens.
+- **Dashboard Colunar**: Visualização Kanban de regras por área (Leads, Assinantes, Fornecedores, etc.).
+
 ---
 
 ## 2. Regras de Negócio e Lógica Financeira

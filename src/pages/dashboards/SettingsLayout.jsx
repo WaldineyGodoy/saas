@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette, Mail, Zap } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail, Zap, Bell } from 'lucide-react';
 
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
 import CustomizationSettings from '../settings/CustomizationSettings';
 import EnergyAccountSettings from '../settings/EnergyAccountSettings';
+import NotificationHubSettings from '../settings/NotificationHubSettings';
 
 export default function SettingsLayout() {
     const [activeTab, setActiveTab] = useState('users');
 
     const menuItems = [
         { id: 'users', label: 'Perfil de Usuários', icon: Users, desc: 'Gerenciar usuários e acesso' },
-        { id: 'evolution', label: 'Evolution API', icon: Code, desc: 'Configuração da API WhatsApp' },
+        { id: 'notifications', label: 'Central de Notificações', icon: Bell, desc: 'Configuração de WhatsApp e Gatilhos' },
         { id: 'email_service', label: 'Serviço de e-mail', icon: Mail, desc: 'Configuração do Resend (E-mail)' },
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
         { id: 'energy', label: 'Conta de Energia', icon: Zap, desc: 'Regras de Faturamento' },
@@ -23,8 +24,8 @@ export default function SettingsLayout() {
         switch (activeTab) {
             case 'users':
                 return <UserProfilesSettings />;
-            case 'evolution':
-                return <IntegrationSettings serviceName="evolution_api" title="Evolution API" description="Configuração da API de WhatsApp" />;
+            case 'notifications':
+                return <NotificationHubSettings />;
             case 'email_service':
                 return <IntegrationSettings serviceName="resend_api" title="Serviço de E-mail" description="Configuração de envio via Resend" />;
             case 'financial':
