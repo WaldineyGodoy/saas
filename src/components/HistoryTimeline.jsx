@@ -236,7 +236,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                             )}
                         </div>
                     </div>
-                )}</div>
+                )}
 
                 {/* Timeline content */}
                 <div style={{ 
