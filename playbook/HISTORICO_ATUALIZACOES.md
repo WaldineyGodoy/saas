@@ -2,6 +2,15 @@
 
 ---
 
+## [29/04/2026] - Reorganização de Configurações e Integração Financeira
+
+### ⚙️ Configurações e Workflow
+- **Migração de Regras Gerais**: A seção "Regras Gerais" (Pagamento Automático) foi movida de "Conta de Energia" para "Integração Financeira".
+- **Consolidação Financeira**: O bloco "Permitir resgate automático" foi integrado à nova seção "Regras Gerais" dentro das configurações de Integração Financeira (Asaas).
+- **Otimização de Webhook**: A Edge Function `asaas-webhook` foi atualizada para ler a flag `auto_payment` diretamente da configuração da API financeira, reduzindo latência e consolidando a lógica de negócio.
+- **Limpeza de Interface**: Removidos estados e funções obsoletos em `EnergyAccountSettings.jsx`.
+
+
 ## [29/04/2026] - Implementação de Fluxo Kanban e Status de Faturas
  
 ### 📊 Gestão de Faturas e Kanban

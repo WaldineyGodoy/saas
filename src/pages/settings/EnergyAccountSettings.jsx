@@ -7,7 +7,7 @@ export default function EnergyAccountSettings() {
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [autoPayment, setAutoPayment] = useState(false);
+
     
     // Concessionarias States
     const [concessionarias, setConcessionarias] = useState([]);
@@ -40,7 +40,7 @@ export default function EnergyAccountSettings() {
                 .single();
 
             if (data && data.variables) {
-                setAutoPayment(!!data.variables.auto_payment);
+                // Configurações foram movidas para integração financeira
             }
         } catch (err) {
             console.error('Error fetching energy rules:', err);
@@ -104,30 +104,7 @@ export default function EnergyAccountSettings() {
         });
     }, [concessionarias, searchTerm, filterUF, filterCity]);
 
-    const handleToggle = () => {
-        setAutoPayment(!autoPayment);
-    };
 
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            const { error } = await supabase
-                .from('integrations_config')
-                .upsert({
-                    service_name: 'energy_rules',
-                    variables: { auto_payment: autoPayment },
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'service_name' });
-
-            if (error) throw error;
-            showAlert('Configurações salvas com sucesso!', 'success');
-        } catch (err) {
-            console.error('Error saving energy rules:', err);
-            showAlert('Erro ao salvar: ' + err.message, 'error');
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const openEditModal = (cons) => {
         setSelectedCons(cons);
@@ -222,88 +199,7 @@ export default function EnergyAccountSettings() {
                 }
             `}</style>
 
-            {/* General Rules Section */}
-            <div className="premium-card" style={{ marginBottom: '2.5rem', overflow: 'hidden' }}>
-                <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ padding: '0.5rem', background: '#fff', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-                        <Zap size={20} color="#eab308" />
-                    </div>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', fontWeight: 800 }}>Regras Gerais</h3>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Configure o comportamento automatizado do sistema.</p>
-                    </div>
-                </div>
 
-                <div style={{ padding: '2rem' }}>
-                    <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between', 
-                        padding: '1.5rem', 
-                        background: '#f8fafc', 
-                        borderRadius: '16px', 
-                        border: '1px solid #e2e8f0',
-                        marginBottom: '1.5rem'
-                    }}>
-                        <div>
-                            <h4 style={{ margin: '0 0 0.25rem 0', color: '#1e293b', fontWeight: 700 }}>Pagamento Automático</h4>
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', maxWidth: '450px' }}>
-                                Liquidação automática da conta da concessionária após confirmação do pagamento do assinante.
-                            </p>
-                        </div>
-
-                        <button 
-                            onClick={handleToggle}
-                            style={{
-                                width: '56px',
-                                height: '28px',
-                                borderRadius: '99px',
-                                background: autoPayment ? '#10b981' : '#cbd5e1',
-                                border: 'none',
-                                position: 'relative',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                padding: 0
-                            }}
-                        >
-                            <div style={{
-                                width: '22px',
-                                height: '22px',
-                                background: 'white',
-                                borderRadius: '50%',
-                                position: 'absolute',
-                                top: '3px',
-                                left: autoPayment ? '31px' : '3px',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                            }} />
-                        </button>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.75rem 1.8rem',
-                                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.3)',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {saving ? 'Salvando...' : <><Save size={18} /> Salvar Regras</>}
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             {/* Tariffs Section */}
             <div>

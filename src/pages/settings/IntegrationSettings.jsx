@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, Eye, EyeOff, Plus, Trash2, Server, HelpCircle, X } from 'lucide-react';
+import { Save, Eye, EyeOff, Plus, Trash2, Server, HelpCircle, X, Zap } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
 export default function IntegrationSettings({ serviceName, title, description }) {
@@ -20,6 +20,7 @@ export default function IntegrationSettings({ serviceName, title, description })
         variables: [] // Array of { key, value } for UI
     });
     const [allowAutoRedemption, setAllowAutoRedemption] = useState(false);
+    const [autoPayment, setAutoPayment] = useState(false);
 
     // Custom Confirmation Modal State
     const [confirmModal, setConfirmModal] = useState({
@@ -61,6 +62,7 @@ export default function IntegrationSettings({ serviceName, title, description })
 
             if (serviceName === 'financial_api') {
                 setAllowAutoRedemption(!!data.variables?.allow_auto_redemption);
+                setAutoPayment(!!data.variables?.auto_payment);
             }
 
             // Inicializa o telefone/email de teste se houver salvo nas variáveis
@@ -97,6 +99,7 @@ export default function IntegrationSettings({ serviceName, title, description })
 
         if (serviceName === 'financial_api') {
             payload.variables.allow_auto_redemption = allowAutoRedemption;
+            payload.variables.auto_payment = autoPayment;
         }
 
         // Upsert based on service_name
@@ -595,52 +598,110 @@ export default function IntegrationSettings({ serviceName, title, description })
 
                 {/* Specific Fields for Financial API (Asaas) */}
                 {serviceName === 'financial_api' && (
-                    <div style={{ 
-                        marginTop: '1rem',
-                        marginBottom: '2rem', 
-                        padding: '1.5rem', 
-                        background: '#f8fafc', 
-                        borderRadius: '12px', 
-                        border: '1px solid #e2e8f0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <div>
-                            <h4 style={{ margin: '0 0 0.25rem 0', color: '#1e293b', fontWeight: 600 }}>Permitir resgate automático</h4>
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', maxWidth: '450px' }}>
-                                Quando ativado, habilita a função de resgate automático do saldo via PIX para fornecedores.
-                            </p>
+                    <div className="premium-card" style={{ marginBottom: '2.5rem', overflow: 'hidden', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                        <div style={{ padding: '1.25rem', borderBottom: '1px solid #e2e8f0', background: '#fff', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ padding: '0.4rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                <Zap size={18} color="#eab308" />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800 }}>Regras Gerais</h4>
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Configure o comportamento automatizado do sistema.</p>
+                            </div>
                         </div>
 
-                        <button 
-                            type="button"
-                            onClick={() => setAllowAutoRedemption(!allowAutoRedemption)}
-                            style={{
-                                width: '56px',
-                                height: '28px',
-                                borderRadius: '99px',
-                                background: allowAutoRedemption ? '#10b981' : '#cbd5e1',
-                                border: 'none',
-                                position: 'relative',
-                                cursor: 'pointer',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                padding: 0
-                            }}
-                            title={allowAutoRedemption ? "Desativar" : "Ativar"}
-                        >
-                            <div style={{
-                                width: '22px',
-                                height: '22px',
-                                background: 'white',
-                                borderRadius: '50%',
-                                position: 'absolute',
-                                top: '3px',
-                                left: allowAutoRedemption ? '31px' : '3px',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                            }} />
-                        </button>
+                        <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Pagamento Automático */}
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'space-between', 
+                                padding: '1rem', 
+                                background: 'white', 
+                                borderRadius: '12px', 
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.15rem 0', color: '#1e293b', fontSize: '0.9rem', fontWeight: 700 }}>Pagamento Automático</h4>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', maxWidth: '400px' }}>
+                                        Liquidação automática da conta da concessionária após confirmação do pagamento do assinante.
+                                    </p>
+                                </div>
+
+                                <button 
+                                    type="button"
+                                    onClick={() => setAutoPayment(!autoPayment)}
+                                    style={{
+                                        width: '48px',
+                                        height: '24px',
+                                        borderRadius: '99px',
+                                        background: autoPayment ? '#10b981' : '#cbd5e1',
+                                        border: 'none',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        padding: 0
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        background: 'white',
+                                        borderRadius: '50%',
+                                        position: 'absolute',
+                                        top: '3px',
+                                        left: autoPayment ? '27px' : '3px',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }} />
+                                </button>
+                            </div>
+
+                            {/* Permitir Resgate Automático */}
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'space-between', 
+                                padding: '1rem', 
+                                background: 'white', 
+                                borderRadius: '12px', 
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <div>
+                                    <h4 style={{ margin: '0 0 0.15rem 0', color: '#1e293b', fontSize: '0.9rem', fontWeight: 700 }}>Permitir resgate automático</h4>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', maxWidth: '400px' }}>
+                                        Quando ativado, habilita a função de resgate automático do saldo via PIX para fornecedores.
+                                    </p>
+                                </div>
+
+                                <button 
+                                    type="button"
+                                    onClick={() => setAllowAutoRedemption(!allowAutoRedemption)}
+                                    style={{
+                                        width: '48px',
+                                        height: '24px',
+                                        borderRadius: '99px',
+                                        background: allowAutoRedemption ? '#10b981' : '#cbd5e1',
+                                        border: 'none',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        padding: 0
+                                    }}
+                                >
+                                    <div style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        background: 'white',
+                                        borderRadius: '50%',
+                                        position: 'absolute',
+                                        top: '3px',
+                                        left: allowAutoRedemption ? '27px' : '3px',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }} />
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 

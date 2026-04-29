@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 
@@ -226,6 +226,7 @@ export default function InvoiceListManager() {
     const getStatusBadge = (status) => {
         const map = {
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
+            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado', icon: CheckCircle2 },
             'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: TicketMinus },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
@@ -937,10 +938,11 @@ export default function InvoiceListManager() {
                         </div>
                     ) : viewMode === 'kanban' ? (
                         <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'pago'].map(status => {
+                            {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago'].map(status => {
                                 const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
                                 const statusMap = { 
                                     'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto' },
+                                    'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
                                     'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
                                     'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
                                     'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 

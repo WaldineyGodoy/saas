@@ -91,9 +91,12 @@ serve(async (req) => {
         let newStatus = '';
         let asaasStatus = '';
 
-        if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
+        if (event === 'PAYMENT_CONFIRMED') {
+            newStatus = 'confirmado';
+            asaasStatus = 'CONFIRMED';
+        } else if (event === 'PAYMENT_RECEIVED') {
             newStatus = 'pago';
-            asaasStatus = 'PAID';
+            asaasStatus = 'RECEIVED';
         } else if (['PAYMENT_OVERDUE'].includes(event)) {
             newStatus = 'atrasado';
             asaasStatus = 'OVERDUE';
@@ -107,8 +110,8 @@ serve(async (req) => {
             
             if (updateError) console.error('Error updating invoices:', updateError);
 
-            // NEW: Register Consolidated Bank Fee if applicable
-            if (newStatus === 'pago' && isConsolidated) {
+            // NEW: Register Consolidated Bank Fee if applicable (Only on definitive payment)
+            if (event === 'PAYMENT_RECEIVED' && isConsolidated) {
                 const { data: consolidated } = await supabase
                     .from('consolidated_invoices')
                     .select('id')
@@ -126,16 +129,9 @@ serve(async (req) => {
             }
         }
 
-        // 4. Automation: Auto Payment of Energy Bill
-        if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
-            // Get Energy Rules
-            const { data: rules } = await supabase
-                .from('integrations_config')
-                .select('*')
-                .eq('service_name', 'energy_rules')
-                .single();
-
-            const isAutoPaymentEnabled = rules?.variables?.auto_payment === true;
+        // 4. Automation: Auto Payment of Energy Bill (STRICTLY ON PAYMENT_RECEIVED)
+        if (event === 'PAYMENT_RECEIVED') {
+            const isAutoPaymentEnabled = finConfig?.variables?.auto_payment === true;
 
             if (isAutoPaymentEnabled) {
                 const isSandbox = finConfig.environment === 'sandbox';
