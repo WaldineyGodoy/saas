@@ -17,8 +17,13 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         delay_type: 'immediate', // immediate, before_due, after_due, after_event
         delay_days: 0,
         is_active: true,
-        attachments: []
+        attachments: [],
+        timezone: 'America/Sao_Paulo',
+        start_time: '09:00',
+        end_time: '18:00',
+        allowed_days: [1, 2, 3, 4, 5, 6] // 0-6 (DOM-SAB)
     });
+
 
     const entities = [
         { id: 'lead', label: 'Lead' },
@@ -96,6 +101,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 delay_type: trigger.delay_type || 'immediate',
                 delay_days: trigger.delay_days || 0,
                 logic_operator: trigger.logic_operator || 'and',
+                start_time: trigger.start_time || '09:00',
+                end_time: trigger.end_time || '18:00',
+                allowed_days: trigger.allowed_days || [1, 2, 3, 4, 5, 6],
                 attachments: trigger.attachments || []
             });
         } else {
@@ -109,10 +117,14 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 message_body: '',
                 delay_type: 'immediate',
                 delay_days: 0,
+                start_time: '09:00',
+                end_time: '18:00',
+                allowed_days: [1, 2, 3, 4, 5, 6],
                 is_active: true,
                 attachments: []
             });
         }
+
     }, [trigger, isOpen]);
 
 
@@ -213,7 +225,81 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 </div>
 
                 <form onSubmit={handleSave} style={{ padding: '2rem' }}>
+                    {/* Time Zone Section */}
+                    <div style={{ 
+                        background: '#f8fafc', 
+                        borderRadius: '16px', 
+                        padding: '1.5rem', 
+                        marginBottom: '2rem',
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                            <div style={{ padding: '0.5rem', background: '#0284c7', borderRadius: '8px', color: 'white' }}>
+                                <Clock size={18} />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 700 }}>Janela de Envio (Time Zone)</h4>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>Defina os horários e dias em que as mensagens podem ser disparadas.</p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '2rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <input 
+                                    type="time" 
+                                    value={formData.start_time}
+                                    onChange={e => setFormData({ ...formData, start_time: e.target.value })}
+                                    style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                                <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>até</span>
+                                <input 
+                                    type="time" 
+                                    value={formData.end_time}
+                                    onChange={e => setFormData({ ...formData, end_time: e.target.value })}
+                                    style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                {[
+                                    { id: 1, label: 'SEG' },
+                                    { id: 2, label: 'TER' },
+                                    { id: 3, label: 'QUA' },
+                                    { id: 4, label: 'QUI' },
+                                    { id: 5, label: 'SEX' },
+                                    { id: 6, label: 'SAB' },
+                                    { id: 0, label: 'DOM' }
+                                ].map(day => {
+                                    const isActive = formData.allowed_days.includes(day.id);
+                                    return (
+                                        <button
+                                            key={day.id}
+                                            type="button"
+                                            onClick={() => {
+                                                const newDays = isActive 
+                                                    ? formData.allowed_days.filter(d => d !== day.id)
+                                                    : [...formData.allowed_days, day.id];
+                                                setFormData({ ...formData, allowed_days: newDays });
+                                            }}
+                                            style={{
+                                                flex: 1, padding: '0.5rem 0.2rem', borderRadius: '6px', border: '1px solid',
+                                                borderColor: isActive ? '#0284c7' : '#e2e8f0',
+                                                background: isActive ? '#0284c7' : 'white',
+                                                color: isActive ? 'white' : '#64748b',
+                                                fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            {day.label}
+                                            {day.id === 0 && !isActive && <span style={{ marginLeft: '2px' }}> (X)</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+
                         {/* Column 1: Config */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div>
