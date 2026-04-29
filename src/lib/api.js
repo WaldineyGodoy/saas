@@ -284,7 +284,7 @@ https://app.b2wenergia.com.br
                 // Registro na UC (se fornecido)
                 if (ucId) {
                     historyPromises.push(supabase.from('crm_history').insert({
-                        entity_type: 'consumer_unit',
+                        entity_type: 'uc',
                         entity_id: ucId,
                         content: `Envio de Fatura Individual: Email [${emailRes.error ? 'falhou' : 'enviado'}] | WhatsApp [${waRes.error ? 'falhou' : 'enviado'}]`,
                         metadata: {

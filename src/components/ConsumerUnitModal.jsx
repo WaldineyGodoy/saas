@@ -304,7 +304,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.tarifa_concessionaria, formData.tipo_ligacao]);
 
     const fetchSubscribers = async () => {
-        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj, portal_credentials').order('name');
+        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj, portal_credentials, phone').order('name');
         setSubscribers(data || []);
     };
 

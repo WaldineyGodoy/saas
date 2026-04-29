@@ -14,7 +14,10 @@
 ### 💬 Mensageria e Notificações
 - **Notificação Automática (Faturas Individuais)**: O sistema agora dispara automaticamente o combo E-mail + WhatsApp com o PDF anexo no momento em que um boleto individual é gerado no `InvoiceFormModal.jsx`. 
 - **Sincronização de Estado (React Fix)**: Resolvido problema onde a notificação automática falhava por tentar usar a URL do boleto antes da atualização do estado local. Agora, a URL é passada diretamente para o motor de geração de PDF.
-- **Histórico Unificado**: Implementada a gravação de logs de envio na entidade `consumer_unit`. Isso permite que o histórico de comunicações apareça diretamente no modal de faturas da UC (`UCInvoicesModal.jsx` / `ConsumerUnitModal.jsx`), além do perfil do assinante.
+- [FIX] **Sincronização de Histórico na UC**: Corrigido o mismatch de `entity_type` (`consumer_unit` -> `uc`) que impedia a visualização de logs de notificação na timeline da Unidade Consumidora.
+- [FIX] **Nome do Assinante no PDF**: Resolvida a omissão do nome do assinante no detalhamento da fatura (PDF) através da propagação direta do estado do assinante no template de captura.
+- [FIX] **Exibição de Telefone (UC)**: Corrigida a consulta de assinantes no `ConsumerUnitModal.jsx` para incluir o campo `phone`, resolvendo a exibição de "N/A" e "Sem Telefone" nas abas Geral e Comunicados.
+- **Histórico Unificado**: Implementada a gravação de logs de envio na entidade `uc` (unificada). Isso permite que o histórico de comunicações apareça diretamente no modal de faturas da UC (`UCInvoicesModal.jsx` / `ConsumerUnitModal.jsx`), além do perfil do assinante.
 
 ### 🛠️ Refatoração de API
 - **sendCombinedNotification (api.js)**: Atualizada para suportar o parâmetro opcional `ucId`, permitindo o registro de auditoria em múltiplas entidades simultaneamente.

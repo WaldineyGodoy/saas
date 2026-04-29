@@ -187,7 +187,9 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 
 ### 📅 29 de Abril de 2026 (09:00)
 - **Automação de Notificações (Fatura Individual)**: Ativação do envio automático de E-mail e WhatsApp para faturas individuais no `InvoiceFormModal.jsx`.
-- **Rastreabilidade Dual**: Logs de notificação agora são registrados tanto no Assinante quanto na Unidade Consumidora, facilitando a auditoria no `UCInvoicesModal.jsx`.
+- **Rastreabilidade Dual (Unificada)**: Logs de notificação agora são registrados tanto no Assinante quanto na Unidade Consumidora (`entity_type: uc`), garantindo visualização na timeline de comunicados da UC.
+- **Correção de PDF**: Garantida a exibição do nome do assinante no detalhamento da fatura (PDF) através da propagação do estado `subscriber`.
+- **Exibição de Contato**: Corrigido carregamento do telefone do assinante no modal de UC.
 
 ### 📅 28 de Abril de 2026 (20:00)
 - **Nomenclatura de Documentos**: Implementação de nomes de arquivos descritivos e higienização de strings para downloads de PDF.

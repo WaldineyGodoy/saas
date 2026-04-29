@@ -489,7 +489,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         <div className="detail-section dark">
                             <div className="detail-item">
                                 <label>ASSINANTE</label>
-                                <span style={{ textTransform: 'uppercase' }}>{selectedUc?.subscribers?.name || 'Assinante'}</span>
+                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || selectedUc?.subscribers?.name || selectedUc?.titular_conta || 'Assinante'}</span>
                             </div>
                             <div className="detail-row">
                                 <div className="detail-item">
