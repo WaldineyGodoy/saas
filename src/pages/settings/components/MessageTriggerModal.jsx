@@ -364,7 +364,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                             fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem'
                                         }}
                                     >
-                                        <Info size={14} /> Variáveis {{}}
+                                        <Info size={14} /> Variáveis {'{{}}'}
                                     </button>
                                 </div>
 
