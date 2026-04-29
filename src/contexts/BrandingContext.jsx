@@ -21,7 +21,9 @@ export const BrandingProvider = ({ children }) => {
 
             if (error && error.code !== 'PGRST116') {
                 if (error.code === 'PGRST303' || (error.message && error.message.includes('JWT expired'))) {
-                    supabase.auth.signOut();
+                    supabase.auth.signOut().finally(() => {
+                        window.location.href = '/login';
+                    });
                 }
                 throw error;
             }

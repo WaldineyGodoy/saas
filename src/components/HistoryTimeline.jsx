@@ -52,8 +52,7 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
         </div>
     );
 };
-
-export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false }) {
+export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false, compact = false, hideHeader = false }) {
     const { profile } = useAuth();
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
@@ -62,7 +61,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [expandedItems, setExpandedItems] = useState({});
-    const CHARACTER_LIMIT = 150;
+    const CHARACTER_LIMIT = compact ? 80 : 150;
 
     useEffect(() => {
         fetchHistory();
@@ -131,11 +130,12 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
     const containerStyle = isInline ? {
         background: 'white',
         padding: '0',
-        borderRadius: '12px',
+        borderRadius: compact ? '0' : '12px',
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        border: '1px solid #e2e8f0'
+        border: compact ? 'none' : '1px solid #e2e8f0',
+        height: '100%'
     } : {
         background: 'white',
         padding: '0',
@@ -151,6 +151,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
 
     const wrapperStyle = isInline ? {
         width: '100%',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column'
     } : {
@@ -163,75 +164,79 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
         <div style={wrapperStyle}>
             <div style={containerStyle}>
                 {/* Header */}
-                <div style={{
-                    padding: '1.25rem 1.5rem',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#f8fafc',
-                    borderTopLeftRadius: '12px',
-                    borderTopRightRadius: '12px'
-                }}>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 700 }}>Histórico / Timeline</h3>
-                        <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{entityName}</p>
-                    </div>
-                    {onClose && (
-                        <button onClick={onClose} style={{
-                            background: '#f1f5f9', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.6rem',
-                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'all 0.2s',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                        }}
-                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
-                        onMouseOut={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                        >
-                            <X size={20} />
-                        </button>
-                    )}
-                </div>
-
-                {/* Search Bar */}
-                <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #e2e8f0', background: 'white' }}>
-                    <div style={{ position: 'relative' }}>
-                        <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Pesquisar por tipo, data ou texto..."
-                            style={{
-                                width: '100%',
-                                padding: '0.6rem 1rem 0.6rem 2.5rem',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '8px',
-                                fontSize: '0.9rem',
-                                outline: 'none',
+                {!hideHeader && (
+                    <div style={{
+                        padding: compact ? '0.75rem 1rem' : '1.25rem 1.5rem',
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#f8fafc',
+                        borderTopLeftRadius: compact ? '0' : '12px',
+                        borderTopRightRadius: compact ? '0' : '12px'
+                    }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: compact ? '1rem' : '1.25rem', color: '#1e293b', fontWeight: 700 }}>Histórico / Timeline</h3>
+                            {!compact && <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{entityName}</p>}
+                        </div>
+                        {onClose && (
+                            <button onClick={onClose} style={{
+                                background: '#f1f5f9', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.6rem',
+                                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 transition: 'all 0.2s',
-                                background: '#f8fafc'
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                             }}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = 'var(--color-blue)';
-                                e.target.style.background = 'white';
-                                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = '#e2e8f0';
-                                e.target.style.background = '#f8fafc';
-                                e.target.style.boxShadow = 'none';
-                            }}
-                        />
-                        {searchTerm && (
-                            <button 
-                                onClick={() => setSearchTerm('')}
-                                style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            onMouseOver={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                            onMouseOut={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
                             >
-                                <X size={14} />
+                                <X size={20} />
                             </button>
                         )}
                     </div>
-                </div>
+                )}
+
+                {/* Search Bar */}
+                {!compact && (
+                    <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #e2e8f0', background: 'white' }}>
+                        <div style={{ position: 'relative' }}>
+                            <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Pesquisar por tipo, data ou texto..."
+                                style={{
+                                    width: '100%',
+                                    padding: '0.6rem 1rem 0.6rem 2.5rem',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    fontSize: '0.9rem',
+                                    outline: 'none',
+                                    transition: 'all 0.2s',
+                                    background: '#f8fafc'
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = 'var(--color-blue)';
+                                    e.target.style.background = 'white';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = '#e2e8f0';
+                                    e.target.style.background = '#f8fafc';
+                                    e.target.style.boxShadow = 'none';
+                                }}
+                            />
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => setSearchTerm('')}
+                                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}</div>
 
                 {/* Timeline content */}
                 <div style={{ 

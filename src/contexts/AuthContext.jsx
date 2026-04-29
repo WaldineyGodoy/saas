@@ -46,7 +46,9 @@ export const AuthProvider = ({ children }) => {
             if (error) {
                 console.error('Error fetching profile:', error);
                 if (error.code === 'PGRST303' || (error.message && error.message.includes('JWT expired'))) {
-                    supabase.auth.signOut();
+                    supabase.auth.signOut().finally(() => {
+                        window.location.href = '/login';
+                    });
                 }
             } else {
                 setProfile(data);

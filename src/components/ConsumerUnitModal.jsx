@@ -1057,7 +1057,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     entityId={consumerUnit.id}
                     entityName={`UC: ${formData.numero_uc} - ${subscriberName}`}
                     onClose={() => setShowHistory(false)}
-                    isInline={true}
+                    isInline={false}
                 />
             )}
 
