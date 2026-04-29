@@ -185,6 +185,10 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 
 ## 11. Log de Atualizações Recentes
 
+### 📅 29 de Abril de 2026 (09:00)
+- **Automação de Notificações (Fatura Individual)**: Ativação do envio automático de E-mail e WhatsApp para faturas individuais no `InvoiceFormModal.jsx`.
+- **Rastreabilidade Dual**: Logs de notificação agora são registrados tanto no Assinante quanto na Unidade Consumidora, facilitando a auditoria no `UCInvoicesModal.jsx`.
+
 ### 📅 28 de Abril de 2026 (20:00)
 - **Nomenclatura de Documentos**: Implementação de nomes de arquivos descritivos e higienização de strings para downloads de PDF.
 - **Proteção de Tarifas**: Bloqueio de edição manual nos campos de componentes tarifários no modal de UC.

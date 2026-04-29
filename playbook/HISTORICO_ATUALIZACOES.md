@@ -2,6 +2,18 @@
 
 ---
 
+## [29/04/2026] - Automação de Notificações e Rastreabilidade Dual
+
+### 💬 Mensageria e Notificações
+- **Notificação Automática (Faturas Individuais)**: O sistema agora dispara automaticamente o combo E-mail + WhatsApp com o PDF anexo no momento em que um boleto individual é gerado no `InvoiceFormModal.jsx`. 
+- **Sincronização de Estado (React Fix)**: Resolvido problema onde a notificação automática falhava por tentar usar a URL do boleto antes da atualização do estado local. Agora, a URL é passada diretamente para o motor de geração de PDF.
+- **Histórico Unificado**: Implementada a gravação de logs de envio na entidade `consumer_unit`. Isso permite que o histórico de comunicações apareça diretamente no modal de faturas da UC (`UCInvoicesModal.jsx` / `ConsumerUnitModal.jsx`), além do perfil do assinante.
+
+### 🛠️ Refatoração de API
+- **sendCombinedNotification (api.js)**: Atualizada para suportar o parâmetro opcional `ucId`, permitindo o registro de auditoria em múltiplas entidades simultaneamente.
+
+---
+
 ## [28/04/2026] - Refinamento de Documentos, UX e Gestão de Tarifas
 
 ### 💰 Funcionalidades Financeiras e PDF
