@@ -84,8 +84,8 @@ export default function GridMap() {
                 try {
                     const recordsToInsert = results.data.map(row => {
                         // Tenta extrair colunas com nomes genéricos (qgis, excel, aneel padrao)
-                        const lat = parseFloat(row.latitude || row.LAT || row.NumLatitude || row.LATITUDE);
-                        const lng = parseFloat(row.longitude || row.LONG || row.NumLongitude || row.LONGITUDE);
+                        const lat = parseFloat(row.Y || row.latitude || row.LAT || row.NumLatitude || row.LATITUDE);
+                        const lng = parseFloat(row.X || row.longitude || row.LONG || row.NumLongitude || row.LONGITUDE);
                         const nome = row.nome || row.NomSubestacao || row.NOME || row.Nome || 'Desconhecido';
                         const codigo = row.codigo_aneel || row.CodSubestacao || row.COD_ID || `IMP-${Date.now()}-${Math.random()}`;
                         const distribuidora = row.distribuidora || row.SigDistribuidora || row.DISTRIBUIDORA || '';
