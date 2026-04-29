@@ -21,8 +21,12 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         timezone: 'America/Sao_Paulo',
         start_time: '09:00',
         end_time: '18:00',
-        allowed_days: [1, 2, 3, 4, 5, 6] // 0-6 (DOM-SAB)
+        allowed_days: [1, 2, 3, 4, 5, 6], // 0-6 (DOM-SAB)
+        email_subject: '',
+        email_body: '',
+        active_content_tab: 'whatsapp' // whatsapp ou email
     });
+
 
 
     const entities = [
@@ -104,6 +108,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 start_time: trigger.start_time || '09:00',
                 end_time: trigger.end_time || '18:00',
                 allowed_days: trigger.allowed_days || [1, 2, 3, 4, 5, 6],
+                email_subject: trigger.email_subject || '',
+                email_body: trigger.email_body || '',
+                active_content_tab: 'whatsapp',
                 attachments: trigger.attachments || []
             });
         } else {
@@ -120,10 +127,14 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 start_time: '09:00',
                 end_time: '18:00',
                 allowed_days: [1, 2, 3, 4, 5, 6],
+                email_subject: '',
+                email_body: '',
+                active_content_tab: 'whatsapp',
                 is_active: true,
                 attachments: []
             });
         }
+
 
     }, [trigger, isOpen]);
 
@@ -435,77 +446,122 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                             </div>
                         </div>
 
-                        {/* Column 2: Message */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                    <label style={{ fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Mensagem</label>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setShowVariables(!showVariables)}
-                                        style={{ 
-                                            fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '6px', 
-                                            border: '1px solid #0284c7', background: showVariables ? '#0284c7' : 'white', 
-                                            color: showVariables ? 'white' : '#0284c7', cursor: 'pointer',
-                                            fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem'
-                                        }}
-                                    >
-                                        <Info size={14} /> Variáveis {'{{}}'}
-                                    </button>
-                                </div>
+                        {/* Column 2: Content (Tabs) */}
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', marginBottom: '1.5rem', gap: '0.5rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, active_content_tab: 'whatsapp' })}
+                                    style={{
+                                        padding: '0.75rem 1.25rem', border: 'none', borderBottom: `2px solid ${formData.active_content_tab === 'whatsapp' ? '#22c55e' : 'transparent'}`,
+                                        background: 'transparent', color: formData.active_content_tab === 'whatsapp' ? '#22c55e' : '#64748b',
+                                        fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <MessageSquare size={18} /> WhatsApp
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, active_content_tab: 'email' })}
+                                    style={{
+                                        padding: '0.75rem 1.25rem', border: 'none', borderBottom: `2px solid ${formData.active_content_tab === 'email' ? '#0284c7' : 'transparent'}`,
+                                        background: 'transparent', color: formData.active_content_tab === 'email' ? '#0284c7' : '#64748b',
+                                        fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <Mail size={18} /> E-mail
+                                </button>
+                            </div>
 
-                                {showVariables && (
-                                    <div style={{ 
-                                        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', 
-                                        padding: '1rem', marginBottom: '1rem', animation: 'fadeIn 0.2s ease-out'
-                                    }}>
-                                        <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#0369a1', fontWeight: 600 }}>Clique para inserir na mensagem:</p>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                            {(availableVariables[formData.entity_type] || []).map(v => (
-                                                <button 
-                                                    key={v} 
-                                                    type="button" 
-                                                    onClick={() => insertVariable(v)}
-                                                    style={{ 
-                                                        fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '6px', 
-                                                        border: '1px solid #e2e8f0', background: 'white', color: '#334155', 
-                                                        cursor: 'pointer', transition: 'all 0.2s', fontWeight: 500
-                                                    }}
-                                                    onMouseOver={e => e.currentTarget.style.borderColor = '#0284c7'}
-                                                    onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-                                                >
-                                                    {`{{${v}}}`}
-                                                </button>
-                                            ))}
+                            {formData.active_content_tab === 'whatsapp' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                            <label style={{ fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Mensagem (WhatsApp)</label>
+                                            <button 
+                                                type="button"
+                                                onClick={() => setShowVariables(!showVariables)}
+                                                style={{ 
+                                                    background: '#f1f5f9', border: 'none', padding: '0.3rem 0.6rem', borderRadius: '6px', 
+                                                    cursor: 'pointer', fontSize: '0.75rem', color: '#475569', 
+                                                    fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem'
+                                                }}
+                                            >
+                                                <Info size={14} /> Variáveis {'{{}}'}
+                                            </button>
                                         </div>
+
+                                        {showVariables && (
+                                            <div style={{ 
+                                                position: 'absolute', top: '2.5rem', right: 0, zIndex: 10,
+                                                background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px',
+                                                padding: '1rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', width: '300px'
+                                            }}>
+                                                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Clique para inserir:</p>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                    {availableVariables[formData.entity_type]?.map(v => (
+                                                        <button 
+                                                            key={v} 
+                                                            type="button" 
+                                                            onClick={() => insertVariable(v)}
+                                                            style={{ 
+                                                                fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '6px', 
+                                                                border: '1px solid #e2e8f0', background: 'white', color: '#334155', 
+                                                                cursor: 'pointer', transition: 'all 0.2s', fontWeight: 500
+                                                            }}
+                                                        >
+                                                            {`{{${v}}}`}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <textarea
+                                            id="message_body_textarea"
+                                            value={formData.message_body}
+                                            onChange={e => setFormData({ ...formData, message_body: e.target.value })}
+                                            placeholder="Digite sua mensagem de WhatsApp..."
+                                            style={{ width: '100%', height: '300px', padding: '1rem', borderRadius: '12px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '0.95rem', lineHeight: '1.5' }}
+                                        />
                                     </div>
-                                )}
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Assunto do E-mail</label>
+                                        <input
+                                            type="text"
+                                            value={formData.email_subject}
+                                            onChange={e => setFormData({ ...formData, email_subject: e.target.value })}
+                                            placeholder="Ex: Confirmação de Cadastro"
+                                            style={{ width: '100%', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1' }}
+                                        />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Corpo do E-mail (HTML)</label>
+                                        <textarea
+                                            value={formData.email_body}
+                                            onChange={e => setFormData({ ...formData, email_body: e.target.value })}
+                                            placeholder="Cole aqui o seu código HTML para o e-mail..."
+                                            style={{ width: '100%', height: '240px', padding: '1rem', borderRadius: '12px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '0.85rem', fontFamily: 'monospace', background: '#f8fafc' }}
+                                        />
+                                        <p style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#94a3b8' }}>Você pode usar variáveis {'{{nome}}'} também no HTML.</p>
+                                    </div>
+                                </div>
+                            )}
 
-                                <textarea
-                                    id="message_body_textarea"
-                                    required
-                                    value={formData.message_body}
-                                    onChange={e => setFormData({ ...formData, message_body: e.target.value })}
-                                    onFocus={() => setShowVariables(false)}
-                                    placeholder="Digite sua mensagem aqui... Use {{variavel}} para campos dinâmicos."
-                                    style={{ width: '100%', height: '240px', padding: '1rem', borderRadius: '12px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '0.95rem', lineHeight: '1.5', transition: 'border-color 0.2s' }}
-                                />
-                            </div>
-
-                            <div>
+                            <div style={{ marginTop: '1.5rem' }}>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Anexos</label>
-                                <div style={{
-                                    border: '2px dashed #e2e8f0', borderRadius: '12px', padding: '1.5rem',
-                                    textAlign: 'center', background: '#f8fafc', color: '#94a3b8', fontSize: '0.85rem',
-                                    cursor: 'pointer'
-                                }}>
+                                <div style={{ border: '2px dashed #e2e8f0', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', background: '#f8fafc', color: '#94a3b8', cursor: 'pointer' }}>
                                     <Upload size={24} style={{ marginBottom: '0.5rem' }} />
-                                    <p style={{ margin: 0 }}>Clique para carregar arquivos (PDF/IMG)</p>
-                                    <p style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Máx: 5MB</p>
+                                    <p style={{ margin: 0, fontSize: '0.8rem' }}>Carregar PDF/IMG (Máx: 5MB)</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: 'auto' }}>
                                 <input
                                     type="checkbox"
                                     id="is_active"
@@ -515,9 +571,6 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                 />
                                 <label htmlFor="is_active" style={{ fontSize: '0.95rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>Gatilho Ativo</label>
                             </div>
-                        </div>
-                    </div>
-
                     {/* Actions */}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '3rem', borderTop: '1px solid #f1f5f9', paddingTop: '2rem' }}>
                         <button
