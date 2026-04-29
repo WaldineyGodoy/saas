@@ -831,7 +831,7 @@ export default function InvoiceListManager() {
                                                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                             <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
-                                                            {inv.asaas_boleto_url && (
+                                                            {inv.asaas_boleto_url && inv.status !== 'pago' && (
                                                                 <a 
                                                                     href={inv.asaas_boleto_url} 
                                                                     target="_blank" 
