@@ -16,6 +16,7 @@ export default function GridMap() {
     const [mapStyle, setMapStyle] = useState('mapbox://styles/mapbox/dark-v11');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+    const [cursorMode, setCursorMode] = useState('crosshair'); // 'crosshair' para busca, 'grab' para mover
     const fileInputRef = useRef(null);
 
     // Estado da view do mapa inicial (focado no Ceará, por exemplo)
@@ -31,18 +32,28 @@ export default function GridMap() {
         fetchSubstations();
     }, []);
 
-    const fetchSubstations = async () => {
+    const fetchSubstations = async (lat = null, lng = null) => {
         setLoading(true);
         try {
-            // Como é um mock/teste inicial, vamos buscar as 50 primeiras
-            // Quando integrarmos com RPC (Nearest), isso será dinâmico baseado na localização clicada
-            const { data, error } = await supabase
-                .from('distribuicao_subestacoes')
-                .select('*')
-                .limit(50);
-
-            if (error) throw error;
-            setSubstations(data || []);
+            // Se tiver coordenadas, busca num raio de 20km via RPC
+            if (lat && lng) {
+                const { data, error } = await supabase.rpc('get_nearest_substations', {
+                    p_latitude: lat,
+                    p_longitude: lng,
+                    p_limit: 150, // Limite de pontos na tela para performance
+                    p_max_distance_meters: 20000 // 20km
+                });
+                if (error) throw error;
+                setSubstations(data || []);
+            } else {
+                // Busca inicial padrão
+                const { data, error } = await supabase
+                    .from('distribuicao_subestacoes')
+                    .select('*')
+                    .limit(50);
+                if (error) throw error;
+                setSubstations(data || []);
+            }
         } catch (err) {
             console.error('Erro ao buscar subestações:', err);
             setError(err.message);
@@ -52,32 +63,11 @@ export default function GridMap() {
     };
 
     const handleMapClick = async (event) => {
-        // Exemplo: Quando o usuário clica no mapa, chamamos a RPC para pegar as 3 mais próximas
+        // Se estiver no modo mão, não busca ao clicar
+        if (cursorMode === 'grab') return;
+
         const { lngLat } = event;
-        const lat = lngLat.lat;
-        const lng = lngLat.lng;
-
-        try {
-            const { data, error } = await supabase.rpc('get_nearest_substations', {
-                p_latitude: lat,
-                p_longitude: lng,
-                p_limit: 3,
-                p_max_distance_meters: 100000 // 100km
-            });
-
-            if (error) throw error;
-            if (data && data.length > 0) {
-                // Atualiza as subestações na tela apenas para as 3 mais próximas
-                setSubstations(data);
-                
-                // Abre o popup da mais próxima
-                setSelectedSubstation(data[0]);
-            } else {
-                alert('Nenhuma subestação encontrada no raio de 100km.');
-            }
-        } catch (err) {
-            console.error('Erro ao buscar próximas:', err);
-        }
+        fetchSubstations(lngLat.lat, lngLat.lng);
     };
 
     const handleFileUpload = (event) => {
@@ -120,14 +110,21 @@ export default function GridMap() {
                         throw new Error("Nenhum dado válido foi encontrado. O CSV precisa ter colunas claras de Latitude e Longitude (ex: 'latitude', 'LAT', etc).");
                     }
 
-                    // Inserindo no Supabase
-                    const { error: dbError } = await supabase
-                        .from('distribuicao_subestacoes')
-                        .insert(recordsToInsert);
+                    // Inserindo no Supabase em lotes (batching) para evitar limites de payload
+                    const CHUNK_SIZE = 1000;
+                    let insertedCount = 0;
 
-                    if (dbError) throw dbError;
+                    for (let i = 0; i < recordsToInsert.length; i += CHUNK_SIZE) {
+                        const chunk = recordsToInsert.slice(i, i + CHUNK_SIZE);
+                        const { error: dbError } = await supabase
+                            .from('distribuicao_subestacoes')
+                            .insert(chunk);
 
-                    alert(`Sucesso! ${recordsToInsert.length} subestações foram importadas para a base real.`);
+                        if (dbError) throw dbError;
+                        insertedCount += chunk.length;
+                    }
+
+                    alert(`Sucesso! ${insertedCount} registros foram importados para a base real.`);
                     fetchSubstations(); // Recarrega o mapa
                 } catch (err) {
                     setError(`Erro ao importar CSV: ${err.message}`);
@@ -166,6 +163,8 @@ export default function GridMap() {
         });
         setSearchResults([]);
         setSearchQuery(feature.place_name);
+        // Busca subestações automaticamente ao selecionar local da pesquisa
+        fetchSubstations(lat, lng);
     };
 
     if (!MAPBOX_TOKEN) {
@@ -224,11 +223,31 @@ export default function GridMap() {
                     onClick={handleMapClick}
                     mapStyle={mapStyle}
                     mapboxAccessToken={MAPBOX_TOKEN}
-                    cursor="crosshair"
+                    cursor={cursorMode}
                 >
                     <FullscreenControl position="top-right" />
                     <NavigationControl position="top-right" />
                     <ScaleControl />
+
+                    {/* Ferramenta de Alternância: Mão vs Seleção (Top Right abaixo do Nav) */}
+                    <div style={{ position: 'absolute', top: '120px', right: '10px', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <button 
+                            className={`btn btn-sm ${cursorMode === 'crosshair' ? 'btn-primary' : 'btn-light'}`}
+                            title="Modo Seleção (Clique para buscar)"
+                            onClick={() => setCursorMode('crosshair')}
+                            style={{ width: '30px', height: '30px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                        >
+                            <i className="bi bi-cursor-fill"></i>
+                        </button>
+                        <button 
+                            className={`btn btn-sm ${cursorMode === 'grab' ? 'btn-primary' : 'btn-light'}`}
+                            title="Modo Mão (Arrastar mapa)"
+                            onClick={() => setCursorMode('grab')}
+                            style={{ width: '30px', height: '30px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}
+                        >
+                            <i className="bi bi-hand-index-thumb"></i>
+                        </button>
+                    </div>
 
                     {/* Floating Search Bar (Top Left) */}
                     <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, width: '350px', maxWidth: '90%' }}>
