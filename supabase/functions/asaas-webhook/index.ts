@@ -192,6 +192,11 @@ serve(async (req) => {
                                 metadata: { asaas_id: billData.id, value: valorParaPagar }
                             });
 
+                            // Update energy_bill_status to paid
+                            await supabase.from('invoices').update({ 
+                                energy_bill_status: 'pago' 
+                            }).eq('id', inv.id);
+
                             // NEW: Register Liquidation in Ledger
                             const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
                                 p_invoice_id: inv.id,

@@ -865,7 +865,7 @@ export default function InvoiceListManager() {
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                             <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
                                                             <div style={{ minWidth: '85px' }}>
-                                                                {inv.status === 'pago' ? (
+                                                                {inv.energy_bill_status === 'pago' ? (
                                                                     <span style={{ 
                                                                         display: 'block',
                                                                         textAlign: 'center',
