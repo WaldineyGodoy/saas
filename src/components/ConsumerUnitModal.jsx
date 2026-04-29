@@ -599,10 +599,36 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     <div style={{ 
                         display: 'flex', 
                         gap: '1.5rem', 
-                        padding: '0.5rem 2rem 0', 
+                        padding: '0 2rem', 
                         borderBottom: '1px solid #eee',
-                        background: '#f8fafc'
+                        background: '#f8fafc',
+                        alignItems: 'center'
                     }}>
+                        {/* Status Badge */}
+                        {consumerUnit?.id && (
+                            <div style={{
+                                padding: '0.25rem 0.75rem',
+                                borderRadius: '20px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.025em',
+                                marginRight: '1rem',
+                                background: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#ecfdf5' : 
+                                           statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#eff6ff' :
+                                           statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#fff1f2' : '#f1f5f9',
+                                color: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#059669' : 
+                                       statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#2563eb' :
+                                       statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#e11d48' : '#475569',
+                                border: `1px solid ${
+                                    statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#d1fae5' : 
+                                    statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#dbeafe' :
+                                    statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#ffe4e6' : '#e2e8f0'
+                                }`
+                            }}>
+                                {statusOptions.find(o => o.value === formData.status)?.label || formData.status}
+                            </div>
+                        )}
                         {[
                             { id: 'geral', label: 'Geral', icon: User },
                             { id: 'tecnico', label: 'Técnico', icon: Zap },

@@ -6,6 +6,7 @@
 
 ### 🎨 Visual e Interface (ConsumerUnitModal)
 - **Refatoração Premium**: O modal de Unidade Consumidora (`ConsumerUnitModal.jsx`) foi completamente reestruturado para um sistema de navegação por abas (**Geral**, **Técnico**, **Financeiro**, **Comunicados**).
+- **Status em Destaque**: Adicionado um badge de status dinâmico à esquerda do menu de abas no modal de UC, permitindo visualização imediata do estado da unidade (Ativo, Em Ativação, etc.) independente da aba selecionada.
 - **Organização Lógica**: O bloco **Gestão de Faturas** foi movido da aba Técnica para a aba **Financeiro**, alinhando-se melhor ao fluxo de trabalho do usuário.
 - **Correção de Histórico (Timeline)**: O botão "Histórico" no cabeçalho agora abre um modal dedicado com formatação aprimorada, corrigindo o erro de layout "sequestrado" que ocorria anteriormente.
 - **Hotfix de Build**: Resolvido erro de sintaxe JSX em `HistoryTimeline.jsx` (`Unterminated regular expression`) que impedia o build de produção.
