@@ -858,8 +858,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Vencimento</label>
                                                     <select
                                                         value={formData.dia_vencimento}
-                                                        disabled
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
+                                                        onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                     >
                                                         {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
                                                     </select>
@@ -870,8 +870,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         <input
                                                             type="number" step="0.01"
                                                             value={formData.desconto_assinante}
-                                                            readOnly
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
+                                                            onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                         />
                                                     </div>
                                                     <div>
@@ -879,8 +879,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         <input
                                                             type="number"
                                                             value={formData.franquia}
-                                                            readOnly
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
+                                                            onChange={e => setFormData({ ...formData, franquia: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                         />
                                                     </div>
                                                 </div>
@@ -907,8 +907,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </div>
                                             <div style={{ marginTop: '1rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                                    <input type="checkbox" checked={formData.saldo_remanescente} disabled id="saldo_rem" />
-                                                    <label htmlFor="saldo_rem" style={{ fontSize: '0.85rem', color: '#0369a1', fontWeight: 500, cursor: 'not-allowed' }}>Utilizar Saldo Remanescente</label>
+                                                    <input type="checkbox" checked={formData.saldo_remanescente} onChange={e => setFormData({ ...formData, saldo_remanescente: e.target.checked })} id="saldo_rem" />
+                                                    <label htmlFor="saldo_rem" style={{ fontSize: '0.85rem', color: '#0369a1', fontWeight: 500, cursor: 'pointer' }}>Utilizar Saldo Remanescente</label>
                                                 </div>
                                             </div>
                                         </div>

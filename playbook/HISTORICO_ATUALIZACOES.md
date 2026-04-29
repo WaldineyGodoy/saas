@@ -25,8 +25,8 @@
 
 ### 💰 Financeiro e Tarifas (Fixes Críticos)
 - [FIX] **Normalização de Desconto (%)**: Corrigida a lógica de exibição do percentual de desconto no `ConsumerUnitModal.jsx`. O sistema agora detecta e normaliza automaticamente valores decimais (ex: 0.20 -> 20.00%) tanto no carregamento inicial quanto na busca via CEP, prevenindo o erro de exibição de "2.000%".
-- **Campos Informativos (Faturamento)**: Conforme diretriz de integridade de dados, os campos de **Dia de Vencimento**, **Desconto**, **Franquia** e **Saldo Remanescente** na aba Financeiro da UC tornaram-se estritamente informativos (*read-only*), garantindo que os valores reflitam a realidade contratada e evitem edições acidentais fora do fluxo administrativo principal.
 - **Consistência de Dados**: Garantida a integridade na gravação do `desconto_assinante` como valor numérico absoluto, alinhando o frontend com as regras de negócio do banco de dados.
+- **Campos Editáveis (Faturamento)**: Reativada a edição dos campos de **Dia de Vencimento**, **Desconto**, **Franquia** e **Saldo Remanescente** na aba Financeiro da UC, permitindo ajustes diretos conforme necessário.
 
 ---
 
