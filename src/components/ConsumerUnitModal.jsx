@@ -269,7 +269,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 tusd: formatCurrency(consumerUnit.tusd),
                 fio_b: formatCurrency(consumerUnit.fio_b),
                 tarifa_minima: '', // Recalculated on render
-                desconto_assinante: consumerUnit.desconto_assinante || '',
+                desconto_assinante: (() => {
+                    const val = consumerUnit.desconto_assinante;
+                    // Normalize decimal to percentage for display (e.g. 0.20 -> 20.00)
+                    if (val && !isNaN(val) && Number(val) > 0 && Number(val) <= 1) {
+                        return (Number(val) * 100).toFixed(2);
+                    }
+                    return val || '';
+                })(),
                 dia_vencimento: consumerUnit.dia_vencimento || 10,
                 cep: maskCEP(consumerUnit.address?.cep || ''),
                 rua: consumerUnit.address?.rua || '',
@@ -373,8 +380,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     const offer = await fetchOfferData(addr.ibge);
                     if (offer) {
                         let discountVal = offer['Desconto Assinante'] || 0;
-                        if (discountVal <= 1) {
-                            discountVal = discountVal * 100;
+                        // Normalize safely: only multiply if it's clearly a decimal (e.g. 0.20)
+                        // and not already a percentage (e.g. 20)
+                        if (discountVal && !isNaN(discountVal) && Number(discountVal) > 0 && Number(discountVal) <= 1) {
+                            discountVal = Number(discountVal) * 100;
                         }
 
                         setFormData(prev => ({
@@ -833,24 +842,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </div>
                                     </div>
 
-                                    {consumerUnit?.id && (
-                                        <div style={{ background: '#f1f5f9', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <FileText size={18} color="var(--color-blue)" /> Gestão de Faturas
-                                            </h4>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                                                <button type="button" onClick={() => setShowInvoicesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
-                                                    <FileSearch size={18} /> Ver Faturas
-                                                </button>
-                                                <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                    <Upload size={18} /> Upload Conta
-                                                </button>
-                                                <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                    <PlusCircle size={18} /> Fatura Avulsa
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
@@ -867,8 +858,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Vencimento</label>
                                                     <select
                                                         value={formData.dia_vencimento}
-                                                        onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                        disabled
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
                                                     >
                                                         {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
                                                     </select>
@@ -879,8 +870,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         <input
                                                             type="number" step="0.01"
                                                             value={formData.desconto_assinante}
-                                                            onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                            readOnly
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
                                                         />
                                                     </div>
                                                     <div>
@@ -888,8 +879,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         <input
                                                             type="number"
                                                             value={formData.franquia}
-                                                            onChange={e => setFormData({ ...formData, franquia: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                            readOnly
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f8fafc', color: '#64748b' }}
                                                         />
                                                     </div>
                                                 </div>
@@ -916,12 +907,30 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </div>
                                             <div style={{ marginTop: '1rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                                    <input type="checkbox" checked={formData.saldo_remanescente} onChange={e => setFormData({ ...formData, saldo_remanescente: e.target.checked })} id="saldo_rem" />
-                                                    <label htmlFor="saldo_rem" style={{ fontSize: '0.85rem', color: '#0369a1', fontWeight: 500, cursor: 'pointer' }}>Utilizar Saldo Remanescente</label>
+                                                    <input type="checkbox" checked={formData.saldo_remanescente} disabled id="saldo_rem" />
+                                                    <label htmlFor="saldo_rem" style={{ fontSize: '0.85rem', color: '#0369a1', fontWeight: 500, cursor: 'not-allowed' }}>Utilizar Saldo Remanescente</label>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
+                                    {consumerUnit?.id && (
+                                        <div style={{ background: '#f1f5f9', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <FileText size={18} color="var(--color-blue)" /> Gestão de Faturas
+                                            </h4>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                                                <button type="button" onClick={() => setShowInvoicesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+                                                    <FileSearch size={18} /> Ver Faturas
+                                                </button>
+                                                <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                    <Upload size={18} /> Upload Conta
+                                                </button>
+                                                <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                    <PlusCircle size={18} /> Fatura Avulsa
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

@@ -6,6 +6,10 @@
 
 ### 🎨 Visual e Interface (ConsumerUnitModal)
 - **Refatoração Premium**: O modal de Unidade Consumidora (`ConsumerUnitModal.jsx`) foi completamente reestruturado para um sistema de navegação por abas (**Geral**, **Técnico**, **Financeiro**, **Comunicados**).
+- **Organização Lógica**: O bloco **Gestão de Faturas** foi movido da aba Técnica para a aba **Financeiro**, alinhando-se melhor ao fluxo de trabalho do usuário.
+- **Correção de Histórico (Timeline)**: O botão "Histórico" no cabeçalho agora abre um modal dedicado com formatação aprimorada, corrigindo o erro de layout "sequestrado" que ocorria anteriormente.
+- **Hotfix de Build**: Resolvido erro de sintaxe JSX em `HistoryTimeline.jsx` (`Unterminated regular expression`) que impedia o build de produção.
+- **Redirecionamento de Sessão**: Implementado redirecionamento automático para a página de login em caso de expiração de JWT (`PGRST303`), eliminando o travamento na tela de carregamento de perfil.
 - **Organização de Dados**: Centralização de informações básicas (Assinante, Localização) na aba Geral; Status e Dados Operacionais na aba Técnico; e Tarifas/Faturamento na aba Financeiro.
 - **Aba de Comunicados (WhatsApp)**: Integração de compositor de mensagens manual com suporte a anexos (PDF/Imagens), permitindo comunicação direta com o assinante a partir da UC.
 - **Histórico de Interações**: Implementação de log automático via `addHistory` para cada mensagem enviada, integrando as comunicações manuais à timeline do CRM.
@@ -19,8 +23,10 @@
 - [FIX] **Exibição de Telefone (UC)**: Corrigida a consulta de assinantes no `ConsumerUnitModal.jsx` para incluir o campo `phone`, resolvendo a exibição de "N/A" e "Sem Telefone" nas abas Geral e Comunicados.
 - **Histórico Unificado**: Implementada a gravação de logs de envio na entidade `uc` (unificada). Isso permite que o histórico de comunicações apareça diretamente no modal de faturas da UC (`UCInvoicesModal.jsx` / `ConsumerUnitModal.jsx`), além do perfil do assinante.
 
-### 🛠️ Refatoração de API
-- **sendCombinedNotification (api.js)**: Atualizada para suportar o parâmetro opcional `ucId`, permitindo o registro de auditoria em múltiplas entidades simultaneamente.
+### 💰 Financeiro e Tarifas (Fixes Críticos)
+- [FIX] **Normalização de Desconto (%)**: Corrigida a lógica de exibição do percentual de desconto no `ConsumerUnitModal.jsx`. O sistema agora detecta e normaliza automaticamente valores decimais (ex: 0.20 -> 20.00%) tanto no carregamento inicial quanto na busca via CEP, prevenindo o erro de exibição de "2.000%".
+- **Campos Informativos (Faturamento)**: Conforme diretriz de integridade de dados, os campos de **Dia de Vencimento**, **Desconto**, **Franquia** e **Saldo Remanescente** na aba Financeiro da UC tornaram-se estritamente informativos (*read-only*), garantindo que os valores reflitam a realidade contratada e evitem edições acidentais fora do fluxo administrativo principal.
+- **Consistência de Dados**: Garantida a integridade na gravação do `desconto_assinante` como valor numérico absoluto, alinhando o frontend com as regras de negócio do banco de dados.
 
 ---
 
