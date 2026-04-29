@@ -131,13 +131,20 @@ serve(async (req) => {
             consolidatedId = cons.id;
         }
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const [y, m, d] = dueDate.split('-');
+        const dueDateObj = new Date(Number(y), Number(m) - 1, Number(d));
+        const newStatus = dueDateObj < today ? 'atrasado' : 'a_vencer';
+
         await supabase.from('invoices')
             .update({
                 asaas_payment_id: chargeData.id,
                 asaas_boleto_url: boletoUrl,
                 asaas_status: 'PENDING',
                 consolidated_invoice_id: consolidatedId,
-                vencimento: dueDate // Sincronizar data de vencimento
+                vencimento: dueDate, // Sincronizar data de vencimento
+                status: newStatus // Transição automática de status
             })
             .in('id', invoiceIds);
 

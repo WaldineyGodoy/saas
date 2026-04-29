@@ -226,6 +226,7 @@ export default function InvoiceListManager() {
     const getStatusBadge = (status) => {
         const map = {
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
+            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: TicketMinus },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
@@ -936,10 +937,15 @@ export default function InvoiceListManager() {
                         </div>
                     ) : viewMode === 'kanban' ? (
                         <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['a_vencer', 'atrasado', 'pago'].map(status => {
+                            {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'pago'].map(status => {
                                 const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
-                                const statusMap = { 'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } };
-                                const s = statusMap[status] || statusMap['a_vencer'];
+                                const statusMap = { 
+                                    'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto' },
+                                    'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
+                                    'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
+                                    'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
+                                };
+                                const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
                                 return (
                                     <div key={status} style={{ minWidth: '320px', flex: 1, background: 'var(--color-bg-light)', borderRadius: 'var(--radius-md)', padding: '0.5rem', borderTop: `4px solid ${s.color}`, boxShadow: 'var(--shadow-sm)' }}>
                                         <h4 style={{ padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', color: s.color }}>

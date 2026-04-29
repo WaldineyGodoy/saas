@@ -32,7 +32,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         linha_digitavel: '',
         pix_string: '',
         valor_concessionaria: 0,
-        status: 'a_vencer',
+        status: 'ag_emissao_boleto',
 
         // Calculated/Display fields
         valor_a_pagar: '',
@@ -92,7 +92,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 linha_digitavel: invoice.linha_digitavel || '',
                 pix_string: invoice.pix_string || '',
                 valor_concessionaria: invoice.valor_concessionaria || invoice.valor_a_pagar || 0,
-                status: invoice.status || 'a_vencer'
+                status: invoice.status || 'ag_emissao_boleto'
             });
             // Find UC to set tariff info
             if (ucs) {
@@ -1029,7 +1029,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-full">
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status da Fatura</label>
                                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                                {['a_vencer', 'pago', 'atrasado'].map((status) => (
+                                                {['ag_emissao_boleto', 'a_vencer', 'pago', 'atrasado'].map((status) => (
                                                     <button
                                                         key={status}
                                                         type="button"
@@ -1039,9 +1039,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                             padding: '0.75rem',
                                                             borderRadius: '8px',
                                                             border: '1px solid',
-                                                            borderColor: formData.status === status ? (status === 'pago' ? '#22c55e' : status === 'atrasado' ? '#dc2626' : '#2563eb') : '#cbd5e1',
-                                                            background: formData.status === status ? (status === 'pago' ? '#f0fdf4' : status === 'atrasado' ? '#fef2f2' : '#eff6ff') : 'white',
-                                                            color: formData.status === status ? (status === 'pago' ? '#166534' : status === 'atrasado' ? '#991b1b' : '#1e40af') : '#64748b',
+                                                            borderColor: formData.status === status ? (status === 'pago' ? '#22c55e' : status === 'atrasado' ? '#dc2626' : status === 'ag_emissao_boleto' ? '#2563eb' : '#2563eb') : '#cbd5e1',
+                                                            background: formData.status === status ? (status === 'pago' ? '#f0fdf4' : status === 'atrasado' ? '#fef2f2' : status === 'ag_emissao_boleto' ? '#eff6ff' : '#eff6ff') : 'white',
+                                                            color: formData.status === status ? (status === 'pago' ? '#166534' : status === 'atrasado' ? '#991b1b' : status === 'ag_emissao_boleto' ? '#1e40af' : '#1e40af') : '#64748b',
                                                             fontWeight: 'bold',
                                                             fontSize: '0.9rem',
                                                             cursor: 'pointer',
@@ -1054,8 +1054,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                     >
                                                         {status === 'pago' && <CheckCircle size={16} />}
                                                         {status === 'atrasado' && <AlertCircle size={16} />}
+                                                        {status === 'ag_emissao_boleto' && <TicketMinus size={16} />}
                                                         {status === 'a_vencer' && <Calculator size={16} />}
-                                                        {status === 'a_vencer' ? 'A Vencer' : status === 'pago' ? 'Pago' : 'Atrasado'}
+                                                        {status === 'ag_emissao_boleto' ? 'Ag. Emissão' : status === 'a_vencer' ? 'A Vencer' : status === 'pago' ? 'Pago' : 'Atrasado'}
                                                     </button>
                                                 ))}
                                             </div>

@@ -2,6 +2,19 @@
 
 ---
 
+## [29/04/2026] - Implementação de Fluxo Kanban e Status de Faturas
+ 
+### 📊 Gestão de Faturas e Kanban
+- **Novo Status "Ag. Emissão de Boleto"**: Introduzido um novo estado no ciclo de vida das faturas para identificar documentos gerados que ainda não possuem cobrança vinculada no Asaas.
+- **Coluna Kanban Dedicada**: O painel de faturas (`InvoiceListManager.jsx`) agora conta com uma quarta coluna à esquerda, específica para o status "Ag. Emissão de Boleto", com somatórios financeiros em tempo real.
+- **Automação de Transição**: 
+    - Faturas recém-criadas agora possuem o status padrão `"ag_emissao_boleto"`.
+    - Implementada lógica na Edge Function `create-asaas-charge` para transicionar automaticamente o status para `"a_vencer"` ou `"atrasado"` imediatamente após a criação bem-sucedida da cobrança no Asaas.
+- **Interface Refinada (Badge)**: Adicionado suporte visual ao novo status com ícone dedicado (`TicketMinus`) e cores em tons de azul para fácil identificação.
+- **Controle Manual**: O modal de edição de faturas (`InvoiceFormModal.jsx`) agora permite a alteração manual para o novo status na aba Geral, com botões de seleção estilizados.
+
+---
+
 ## [29/04/2026] - Modernização de Interface e Comunicação (UC)
 
 ### 🎨 Visual e Interface (ConsumerUnitModal)
