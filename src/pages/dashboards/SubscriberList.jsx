@@ -360,6 +360,7 @@ export default function SubscriberList() {
         return (
             <div
                 ref={setNodeRef}
+                className="kanban-card"
                 style={style}
                 {...(!isOverlay ? attributes : {})}
                 {...(!isOverlay ? listeners : {})}
@@ -386,30 +387,22 @@ export default function SubscriberList() {
         return (
             <div
                 ref={setNodeRef}
+                className="kanban-column"
                 style={{
-                    minWidth: '280px',
-                    flex: 1,
-                    background: isOver ? '#e2e8f0' : 'var(--color-bg-light)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '0.5rem',
                     borderTop: `4px solid ${color}`,
-                    boxShadow: 'var(--shadow-sm)',
+                    background: isOver ? '#e2e8f0' : '#f8fafc',
                     transition: 'background 0.2s ease'
                 }}
             >
-                <h4 style={{
-                    padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
-                    color: color
-                }}>
+                <div className="kanban-column-header" style={{ color: color }}>
                     <span style={{ textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 'bold' }}>
                         {label.replace('_', ' ')}
                     </span>
                     <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
                         {subs.length}
                     </span>
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '100px' }}>
+                </div>
+                <div className="kanban-column-content">
                     <SortableContext
                         items={subs.map(s => s.id)}
                         strategy={verticalListSortingStrategy}
@@ -730,17 +723,19 @@ export default function SubscriberList() {
                             onDragEnd={handleDragEnd}
                             onDragCancel={() => { setActiveId(null); fetchSubscribers(); }}
                         >
-                            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                                {['ativacao', 'ativo', 'ativo_inadimplente', 'transferido', 'cancelado', 'cancelado_inadimplente'].map(status => (
-                                    <KanbanColumn
-                                        key={status}
-                                        status={status}
-                                        label={status}
-                                        color={statusColors[status] || '#64748b'}
-                                        subscribers={filteredSubscribers.filter(s => s.status === status)}
-                                        onCardClick={(sub) => { setEditingSubscriber(sub); setIsModalOpen(true); }}
-                                    />
-                                ))}
+                            <div className="kanban-box">
+                                <div className="kanban-board">
+                                    {['ativacao', 'ativo', 'ativo_inadimplente', 'transferido', 'cancelado', 'cancelado_inadimplente'].map(status => (
+                                        <KanbanColumn
+                                            key={status}
+                                            status={status}
+                                            label={status}
+                                            color={statusColors[status] || '#64748b'}
+                                            subscribers={filteredSubscribers.filter(s => s.status === status)}
+                                            onCardClick={(sub) => { setEditingSubscriber(sub); setIsModalOpen(true); }}
+                                        />
+                                    ))}
+                                </div>
                             </div>
 
                             <DragOverlay>

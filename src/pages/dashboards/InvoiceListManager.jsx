@@ -937,43 +937,45 @@ export default function InvoiceListManager() {
                             </table>
                         </div>
                     ) : viewMode === 'kanban' ? (
-                        <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                            {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago'].map(status => {
-                                const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
-                                const statusMap = { 
-                                    'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto' },
-                                    'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
-                                    'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
-                                    'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
-                                    'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
-                                };
-                                const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
-                                return (
-                                    <div key={status} style={{ minWidth: '320px', flex: 1, background: 'var(--color-bg-light)', borderRadius: 'var(--radius-md)', padding: '0.5rem', borderTop: `4px solid ${s.color}`, boxShadow: 'var(--shadow-sm)' }}>
-                                        <h4 style={{ padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', color: s.color }}>
-                                            <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
-                                            <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>{formatCurrency(invoicesInStatus.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0))}</span>
-                                        </h4>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            {invoicesInStatus.map(inv => (
-                                                <div key={inv.id} onClick={() => handleEdit(inv)} style={{ background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', border: '1px solid transparent', transition: '0.2s' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                        <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
-                                                        <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
-                                                    </div>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>{inv.consumer_units?.subscribers?.name}</div>
-                                                    {inv.consumer_units?.titular_fatura?.name && (
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
-                                                            {inv.consumer_units.titular_fatura.name}
+                        <div className="kanban-box">
+                            <div className="kanban-board">
+                                {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago'].map(status => {
+                                    const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
+                                    const statusMap = { 
+                                        'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto' },
+                                        'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
+                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
+                                        'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
+                                        'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
+                                    };
+                                    const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
+                                    return (
+                                        <div key={status} className="kanban-column" style={{ borderTop: `4px solid ${s.color}` }}>
+                                            <div className="kanban-column-header" style={{ color: s.color }}>
+                                                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
+                                                <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>{formatCurrency(invoicesInStatus.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0))}</span>
+                                            </div>
+                                            <div className="kanban-column-content">
+                                                {invoicesInStatus.map(inv => (
+                                                    <div key={inv.id} onClick={() => handleEdit(inv)} className="kanban-card">
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                                            <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
+                                                            <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
                                                         </div>
-                                                    )}
-                                                    <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
-                                                </div>
-                                            ))}
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>{inv.consumer_units?.subscribers?.name}</div>
+                                                        {inv.consumer_units?.titular_fatura?.name && (
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
+                                                                {inv.consumer_units.titular_fatura.name}
+                                                            </div>
+                                                        )}
+                                                        <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     ) : viewMode === 'calendar' ? (
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>

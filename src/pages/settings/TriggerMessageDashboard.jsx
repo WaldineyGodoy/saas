@@ -189,50 +189,111 @@ export default function TriggerMessageDashboard() {
             {loading ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Carregando gatilhos...</div>
             ) : (
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                    gap: '1.5rem',
-                    paddingBottom: '2rem',
-                    overflowX: 'auto'
-                }}>
-                    {columns.map(col => (
-                        <div key={col.id} style={{ 
-                            background: '#f8fafc', 
-                            borderRadius: '16px', 
-                            padding: '1.25rem',
-                            minHeight: '400px',
-                            border: '1px solid #f1f5f9'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    {col.label}
-                                </h4>
-                                <span style={{ background: '#e2e8f0', color: '#64748b', fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: '10px', fontWeight: 700 }}>
-                                    {triggers.filter(t => t.entity_type === col.id).length}
-                                </span>
+                <div className="kanban-box">
+                    <div className="kanban-board" style={{ height: 'auto' }}>
+                        {columns.map(col => (
+                            <div key={col.id} className="kanban-column">
+                                <div className="kanban-column-header">
+                                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        {col.label}
+                                    </h4>
+                                    <span style={{ background: '#e2e8f0', color: '#64748b', fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: '10px', fontWeight: 700 }}>
+                                        {triggers.filter(t => t.entity_type === col.id).length}
+                                    </span>
+                                </div>
+                                
+                                <div className="kanban-column-content">
+                                    {triggers
+                                        .filter(t => t.entity_type === col.id)
+                                        .map(trigger => (
+                                            <div key={trigger.id} className="kanban-card" style={{ cursor: 'default' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>{trigger.name}</h5>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button onClick={() => { setEditingTrigger(trigger); setIsModalOpen(true); }} style={{ padding: '0.4rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#64748b' }} title="Editar"><Edit2 size={14} /></button>
+                                                        <button onClick={() => deleteTrigger(trigger.id)} style={{ padding: '0.4rem', background: '#fee2e2', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#ef4444' }} title="Excluir"><Trash2 size={14} /></button>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                        {trigger.trigger_event && (
+                                                            <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                                                                {trigger.trigger_event}
+                                                            </span>
+                                                        )}
+                                                        
+                                                        {trigger.trigger_event && trigger.trigger_status && (
+                                                            <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 800 }}>
+                                                                {trigger.logic_operator === 'and' ? 'E' : trigger.logic_operator === 'or' ? 'OU' : 'NÃO'}
+                                                            </span>
+                                                        )}
+
+                                                        {trigger.trigger_status && (
+                                                            <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                                                                Status: {trigger.trigger_status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                            {/* Fixed missing Clock import/usage if needed, but assuming it exists or replacing with generic icon if not found in imports */}
+                                                            {trigger.delay_type === 'immediate' ? 'Envio Imediato' : 
+                                                             trigger.delay_type === 'before_due' ? `${trigger.delay_days} dias antes` : 
+                                                             trigger.delay_type === 'after_due' ? `${trigger.delay_days} dias após` : 
+                                                             `${trigger.delay_days} dias após evento`}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                                                    <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                        {(trigger.channels || [trigger.channel]).map(ch => (
+                                                            <div key={ch} style={{ color: ch === 'whatsapp' ? '#22c55e' : '#0284c7' }} title={ch === 'whatsapp' ? 'WhatsApp' : 'E-mail'}>
+                                                                {ch === 'whatsapp' ? <MessageSquare size={16} /> : <Mail size={16} />}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => toggleTriggerStatus(trigger.id, trigger.is_active)}
+                                                        style={{
+                                                            padding: '0.3rem 0.6rem',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            background: trigger.is_active ? '#dcfce7' : '#f1f5f9',
+                                                            color: trigger.is_active ? '#166534' : '#64748b',
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.4rem',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Power size={10} /> {trigger.is_active ? 'ATIVO' : 'INATIVO'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                    {triggers.filter(t => t.entity_type === col.id).length === 0 && (
+                                        <div style={{ 
+                                            textAlign: 'center', 
+                                            padding: '3rem 1rem', 
+                                            color: '#94a3b8', 
+                                            fontSize: '0.85rem',
+                                            border: '2px dashed #e2e8f0',
+                                            borderRadius: '12px'
+                                        }}>
+                                            Nenhuma regra para {col.label}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            
-                            <div style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                                {triggers
-                                    .filter(t => t.entity_type === col.id)
-                                    .map(trigger => renderCard(trigger))
-                                }
-                                {triggers.filter(t => t.entity_type === col.id).length === 0 && (
-                                    <div style={{ 
-                                        textAlign: 'center', 
-                                        padding: '3rem 1rem', 
-                                        color: '#94a3b8', 
-                                        fontSize: '0.85rem',
-                                        border: '2px dashed #e2e8f0',
-                                        borderRadius: '12px'
-                                    }}>
-                                        Nenhuma regra para {col.label}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 

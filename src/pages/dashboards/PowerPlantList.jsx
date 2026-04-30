@@ -43,12 +43,6 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.3 : 1,
-        background: 'white',
-        padding: '1rem',
-        borderRadius: 'var(--radius-sm)',
-        boxShadow: isOverlay ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
-        cursor: isOverlay ? 'grabbing' : 'grab',
-        border: '1px solid transparent',
         zIndex: isDragging ? 1000 : 1,
         position: 'relative',
         overflow: 'hidden',
@@ -58,6 +52,7 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
     return (
         <div
             ref={setNodeRef}
+            className="kanban-card"
             style={style}
             {...(!isOverlay ? attributes : {})}
             {...(!isOverlay ? listeners : {})}
@@ -130,7 +125,7 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
     );
 }
 
-function KanbanColumn({ status, label, color, bg, plants, onCardClick, onClosingsClick }) {
+function KanbanColumn({ status, label, color, plants, onCardClick, onClosingsClick }) {
     const { setNodeRef, isOver } = useDroppable({
         id: status,
     });
@@ -138,30 +133,22 @@ function KanbanColumn({ status, label, color, bg, plants, onCardClick, onClosing
     return (
         <div
             ref={setNodeRef}
+            className="kanban-column"
             style={{
-                minWidth: '300px',
-                flex: 1,
-                background: isOver ? '#e2e8f0' : 'var(--color-bg-light)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.5rem',
                 borderTop: `4px solid ${color}`,
-                boxShadow: 'var(--shadow-sm)',
+                background: isOver ? '#e2e8f0' : '#f8fafc',
                 transition: 'background 0.2s ease'
             }}
         >
-            <h4 style={{
-                padding: '0.8rem', borderBottom: '1px solid var(--color-border)', background: 'white', borderRadius: 'var(--radius-sm)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem',
-                color: color
-            }}>
+            <div className="kanban-column-header" style={{ color: color }}>
                 <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>
                     {label}
                 </span>
                 <span style={{ fontSize: '0.8rem', background: color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
                     {plants.length}
                 </span>
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minHeight: '100px' }}>
+            </div>
+            <div className="kanban-column-content">
                 <SortableContext
                     items={plants.map(p => p.id)}
                     strategy={verticalListSortingStrategy}
@@ -413,22 +400,23 @@ export default function PowerPlantList() {
                             onDragEnd={handleDragEnd}
                             onDragCancel={() => setActiveId(null)}
                         >
-                            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem' }}>
-                                {KANBAN_STATUSES.map(({ status, label, color, bg }) => {
-                                    const usinasInStatus = filteredUsinas.filter(u => u.status === status);
-                                    return (
-                                        <KanbanColumn
-                                            key={status}
-                                            status={status}
-                                            label={label}
-                                            color={color}
-                                            bg={bg}
-                                            plants={usinasInStatus}
-                                            onCardClick={(u) => { setEditingUsina(u); setIsModalOpen(true); }}
-                                            onClosingsClick={(u) => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
-                                        />
-                                    );
-                                })}
+                            <div className="kanban-box">
+                                <div className="kanban-board">
+                                    {KANBAN_STATUSES.map(({ status, label, color }) => {
+                                        const usinasInStatus = filteredUsinas.filter(u => u.status === status);
+                                        return (
+                                            <KanbanColumn
+                                                key={status}
+                                                status={status}
+                                                label={label}
+                                                color={color}
+                                                plants={usinasInStatus}
+                                                onCardClick={(u) => { setEditingUsina(u); setIsModalOpen(true); }}
+                                                onClosingsClick={(u) => { setSelectedUsinaForClosings(u); setIsClosingsModalOpen(true); }}
+                                            />
+                                        );
+                                    })}
+                                </div>
                             </div>
                             <DragOverlay adjustScale={true}>
                                 {activeId ? (
