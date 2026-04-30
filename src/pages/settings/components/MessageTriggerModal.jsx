@@ -24,7 +24,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         allowed_days: [1, 2, 3, 4, 5, 6], // 0-6 (DOM-SAB)
         email_subject: '',
         email_body: '',
-        active_content_tab: 'whatsapp' // whatsapp ou email
+        active_content_tab: 'whatsapp', // whatsapp ou email
+        recipient_types: ['self'],
+        custom_recipients: ''
     });
 
 
@@ -120,7 +122,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 email_subject: trigger.email_subject || '',
                 email_body: trigger.email_body || '',
                 active_content_tab: 'whatsapp',
-                attachments: trigger.attachments || []
+                attachments: trigger.attachments || [],
+                recipient_types: trigger.recipient_types || ['self'],
+                custom_recipients: trigger.custom_recipients || ''
             });
         } else {
             setFormData({
@@ -140,7 +144,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                 email_body: '',
                 active_content_tab: 'whatsapp',
                 is_active: true,
-                attachments: []
+                attachments: [],
+                recipient_types: ['self'],
+                custom_recipients: ''
             });
         }
 
@@ -433,6 +439,58 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                     <option value="">Nenhum Status</option>
                                     {entityStatusOptions[formData.entity_type]?.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                                 </select>
+                            </div>
+
+                            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Destinatários</label>
+                                
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                                    {[
+                                        { id: 'self', label: 'O Próprio (Lead/Assinante)' },
+                                        { id: 'subscriber', label: 'Assinante Vinculado' },
+                                        { id: 'originator', label: 'Originador' }
+                                    ].map(type => {
+                                        // Filtra opções irrelevantes baseado na entidade
+                                        if (formData.entity_type === 'lead' && type.id === 'subscriber') return null;
+                                        if (formData.entity_type === 'originator' && type.id !== 'self') return null;
+
+                                        const isSelected = formData.recipient_types?.includes(type.id);
+                                        return (
+                                            <button
+                                                key={type.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    const newTypes = isSelected
+                                                        ? formData.recipient_types.filter(t => t !== type.id)
+                                                        : [...(formData.recipient_types || []), type.id];
+                                                    setFormData({ ...formData, recipient_types: newTypes });
+                                                }}
+                                                style={{
+                                                    padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid',
+                                                    borderColor: isSelected ? '#0284c7' : '#e2e8f0',
+                                                    background: isSelected ? '#0284c710' : 'white',
+                                                    color: isSelected ? '#0284c7' : '#64748b',
+                                                    fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {type.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#64748b', fontSize: '0.75rem' }}>
+                                        Números Extras (Separe por ponto e vírgula)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.custom_recipients}
+                                        onChange={e => setFormData({ ...formData, custom_recipients: e.target.value })}
+                                        placeholder="5511999999999; 5511888888888"
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                    />
+                                </div>
                             </div>
 
                             <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem', marginTop: '0.5rem' }}>
