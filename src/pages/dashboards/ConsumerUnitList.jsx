@@ -33,7 +33,7 @@ const KANBAN_STATUSES = [
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
     { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' },
     { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' },
-    { status: 'desconectado', label: 'Desconectado', color: '#f43f5e' },
+    { status: 'desconectado', label: 'Desconectado', color: '#8b5cf6' },
     { status: 'cancelado', label: 'Cancelado', color: '#ef4444' },
     { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' }
 ];
@@ -301,13 +301,13 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                 dayUnits.map(uc => (
                                     <div key={uc.id} onClick={() => onCardClick(uc)} style={{
                                         padding: '0.6rem', borderRadius: '8px',
-                                        background: uc.status === 'desconectado' ? '#fff1f2' :
+                                        background: uc.status === 'desconectado' ? '#f5f3ff' :
                                                     uc.displayStatus === 'success' ? '#f0fdf4' : 
                                                     uc.displayStatus === 'processing' ? '#eff6ff' :
                                                     uc.displayStatus === 'pending' ? '#fff7ed' :
                                                     uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                         borderLeft: `5px solid ${
-                                            uc.status === 'desconectado' ? '#f43f5e' :
+                                            uc.status === 'desconectado' ? '#8b5cf6' :
                                             uc.displayStatus === 'success' ? '#22c55e' : 
                                             uc.displayStatus === 'processing' ? '#3b82f6' :
                                             uc.displayStatus === 'pending' ? '#f97316' :
@@ -536,7 +536,7 @@ export default function ConsumerUnitList() {
         const isCurrentMonthSelected = filterYear === currentYearNum && filterMonth === currentMonthNum;
         
         const stats = {
-            month: { success: 0, error: 0, not_available: 0, processing: 0, pending: 0 },
+            month: { success: 0, error: 0, not_available: 0, processing: 0, pending: 0, desconectado: 0 },
             year: { success: 0, error: 0, not_available: 0, pending: 0 }
         };
 
@@ -581,7 +581,11 @@ export default function ConsumerUnitList() {
                     monthStatus = 'pending';
                 }
             }
-            if (stats.month[monthStatus] !== undefined) stats.month[monthStatus]++;
+            if (unit.status === 'desconectado') {
+                stats.month.desconectado++;
+            } else if (stats.month[monthStatus] !== undefined) {
+                stats.month[monthStatus]++;
+            }
 
             // Cálculo do Ano Accumulado (até o mês selecionado)
             for (let m = 1; m <= filterMonth; m++) {
@@ -792,6 +796,10 @@ export default function ConsumerUnitList() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
                             <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Processando: {stats.month.processing}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#8b5cf6' }}></div>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Desconectado: {stats.month.desconectado}</span>
                         </div>
                     </div>
                 )}
