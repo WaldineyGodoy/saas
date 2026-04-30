@@ -19,10 +19,10 @@ export default function GridMap() {
     const [cursorMode, setCursorMode] = useState('crosshair'); // 'crosshair' para busca, 'grab' para mover
     const fileInputRef = useRef(null);
 
-    // Estado da view do mapa inicial (focado no Ceará, por exemplo)
+    // Estado da view do mapa inicial (focado no Rio Grande do Norte)
     const [viewState, setViewState] = useState({
-        longitude: -38.5267,
-        latitude: -3.7319,
+        longitude: -36.5,
+        latitude: -5.8,
         zoom: 7,
         bearing: 0,
         pitch: 0
@@ -144,6 +144,15 @@ export default function GridMap() {
                 if(fileInputRef.current) fileInputRef.current.value = '';
             }
         });
+    };
+
+    // Função para definir a cor do marcador baseada na potência (kVA)
+    const getMarkerColor = (potencia) => {
+        if (!potencia) return '#666'; // Cinza se não houver dados
+        if (potencia <= 30) return '#ff4d4f'; // Vermelho
+        if (potencia <= 75) return '#faad14'; // Laranja
+        if (potencia <= 112) return '#fadb14'; // Amarelo
+        return '#52c41a'; // Verde
     };
 
     const handleSearch = async (e) => {
@@ -312,7 +321,14 @@ export default function GridMap() {
                             }}
                         >
                             <div style={{ cursor: 'pointer', transform: 'translate(0, -10px)' }}>
-                                <i className="bi bi-geo-alt-fill" style={{ fontSize: '2rem', color: '#ff4d4f', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}></i>
+                                <i 
+                                    className="bi bi-geo-alt-fill" 
+                                    style={{ 
+                                        fontSize: '2rem', 
+                                        color: getMarkerColor(sub.capacidade_mva), 
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.5)' 
+                                    }}
+                                ></i>
                             </div>
                         </Marker>
                     ))}
@@ -331,7 +347,17 @@ export default function GridMap() {
                                 <div style={{ fontSize: '0.85rem' }}>
                                     <p style={{ margin: '2px 0' }}><strong>Distribuidora:</strong> {selectedSubstation.distribuidora}</p>
                                     <p style={{ margin: '2px 0' }}><strong>Tensão:</strong> {selectedSubstation.tensao_kv} kV</p>
-                                    <p style={{ margin: '2px 0' }}><strong>Capacidade:</strong> {selectedSubstation.capacidade_mva} MVA</p>
+                                    <p style={{ margin: '2px 0' }}>
+                                        <strong>Potência:</strong> {selectedSubstation.capacidade_mva} kVA
+                                        <span style={{ 
+                                            display: 'inline-block', 
+                                            width: '10px', 
+                                            height: '10px', 
+                                            borderRadius: '50%', 
+                                            marginLeft: '8px', 
+                                            backgroundColor: getMarkerColor(selectedSubstation.capacidade_mva) 
+                                        }}></span>
+                                    </p>
                                     {selectedSubstation.distancia_metros && (
                                         <p style={{ margin: '2px 0', color: '#ff4d4f' }}>
                                             <strong>Distância:</strong> {(selectedSubstation.distancia_metros / 1000).toFixed(1)} km
