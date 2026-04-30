@@ -301,11 +301,13 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                 dayUnits.map(uc => (
                                     <div key={uc.id} onClick={() => onCardClick(uc)} style={{
                                         padding: '0.6rem', borderRadius: '8px',
-                                        background: uc.displayStatus === 'success' ? '#f0fdf4' : 
+                                        background: uc.status === 'desconectado' ? '#fff1f2' :
+                                                    uc.displayStatus === 'success' ? '#f0fdf4' : 
                                                     uc.displayStatus === 'processing' ? '#eff6ff' :
                                                     uc.displayStatus === 'pending' ? '#fff7ed' :
                                                     uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                         borderLeft: `5px solid ${
+                                            uc.status === 'desconectado' ? '#f43f5e' :
                                             uc.displayStatus === 'success' ? '#22c55e' : 
                                             uc.displayStatus === 'processing' ? '#3b82f6' :
                                             uc.displayStatus === 'pending' ? '#f97316' :
