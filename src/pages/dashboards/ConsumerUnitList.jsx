@@ -28,6 +28,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 const KANBAN_STATUSES = [
     { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' },
+    { status: 'em_transf_titularidade', label: 'Em Transf. de Titularidade', color: '#8b5cf6' },
     { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
     { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' },

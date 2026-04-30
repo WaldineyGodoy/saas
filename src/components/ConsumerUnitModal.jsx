@@ -67,6 +67,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // Status Options
     const statusOptions = [
         { value: 'em_ativacao', label: 'Em Ativação' },
+        { value: 'em_transf_titularidade', label: 'Em Transf. de Titularidade' },
         { value: 'aguardando_conexao', label: 'Aguardando Conexão' },
         { value: 'ativo', label: 'Ativo' },
         { value: 'sem_geracao', label: 'Sem Geração' },

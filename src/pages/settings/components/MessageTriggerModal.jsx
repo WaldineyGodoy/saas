@@ -66,6 +66,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         ],
         consumer_unit: [
             { id: 'em_ativacao', label: 'Em Ativação' },
+            { id: 'em_transf_titularidade', label: 'Em Transf. de Titularidade' },
             { id: 'aguardando_conexao', label: 'Aguardando Conexão' },
             { id: 'ativo', label: 'Ativo' },
             { id: 'sem_geracao', label: 'Sem Geração' },
