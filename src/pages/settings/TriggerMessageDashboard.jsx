@@ -15,10 +15,12 @@ export default function TriggerMessageDashboard() {
         { id: 'lead', label: 'Leads' },
         { id: 'originator', label: 'Originadores' },
         { id: 'subscriber', label: 'Assinantes' },
-        { id: 'consumer_unit', label: 'UCs Faturas' },
+        { id: 'consumer_unit', label: 'Unidades Consumidoras' },
+        { id: 'invoice', label: 'Faturas' },
         { id: 'supplier', label: 'Fornecedores' },
         { id: 'power_plant', label: 'Usinas' }
     ];
+
 
     useEffect(() => {
         fetchTriggers();

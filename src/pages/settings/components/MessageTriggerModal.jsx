@@ -33,10 +33,12 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         { id: 'lead', label: 'Lead' },
         { id: 'originator', label: 'Originador' },
         { id: 'subscriber', label: 'Assinante' },
-        { id: 'consumer_unit', label: 'UC Fatura' },
+        { id: 'consumer_unit', label: 'Unidade Consumidora' },
+        { id: 'invoice', label: 'Fatura' },
         { id: 'supplier', label: 'Fornecedor' },
         { id: 'power_plant', label: 'Usina' }
     ];
+
 
     // Status dinâmicos auditados conforme os quadros Kanban/Listas
     const entityStatusOptions = {
@@ -67,9 +69,14 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'aguardando_conexao', label: 'Aguardando Conexão' },
             { id: 'ativo', label: 'Ativo' },
             { id: 'sem_geracao', label: 'Sem Geração' },
+            { id: 'cancelado', label: 'Cancelado' }
+        ],
+        invoice: [
+            { id: 'pendente', label: 'Pendente' },
+            { id: 'paga', label: 'Paga' },
+            { id: 'vencida', label: 'Vencida' },
             { id: 'em_atraso', label: 'Em Atraso' },
-            { id: 'cancelado', label: 'Cancelado' },
-            { id: 'cancelado_inadimplente', label: 'Cancelado (Inadimplente)' }
+            { id: 'erro', label: 'Erro no Processamento' }
         ],
         supplier: [
             { id: 'ativo', label: 'Ativo' },
@@ -177,10 +184,12 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         lead: ['nome', 'email', 'telefone', 'empresa', 'status', 'origem', 'vendedor'],
         subscriber: ['nome', 'cpf_cnpj', 'email', 'telefone', 'plano', 'valor_assinatura', 'data_adesao', 'nome_originador'],
         consumer_unit: ['numero_uc', 'nome_titular', 'endereco', 'distribuidora', 'status_ativacao'],
+        invoice: ['numero_fatura', 'valor_total', 'data_vencimento', 'link_boleto', 'link_fatura', 'status_pagamento'],
         originator: ['nome', 'email', 'telefone', 'codigo_indica', 'total_assinantes'],
         supplier: ['nome_fantasia', 'razao_social', 'cnpj', 'categoria'],
         power_plant: ['nome_usina', 'potencia_kwp', 'tecnologia', 'localizacao']
     };
+
 
     const insertVariable = (variable) => {
         const textarea = document.getElementById('message_body_textarea');
