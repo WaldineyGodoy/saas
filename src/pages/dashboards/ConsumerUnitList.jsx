@@ -305,6 +305,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                                     uc.displayStatus === 'processing' ? '#eff6ff' :
                                                     uc.displayStatus === 'pending' ? '#fff7ed' :
                                                     uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
+                                        borderLeft: `5px solid ${
                                             uc.displayStatus === 'success' ? '#22c55e' : 
                                             uc.displayStatus === 'processing' ? '#3b82f6' :
                                             uc.displayStatus === 'pending' ? '#f97316' :
