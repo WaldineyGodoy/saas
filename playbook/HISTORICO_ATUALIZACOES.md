@@ -2,6 +2,20 @@
 
 ---
 
+## [30/04/2026] - Estabilização de Contratos e Correção de Timeline
+
+### 📝 Gestão de Contratos e Documentos
+- **Correção de Paginação de Contratos (Autentique)**: Refatorada a captura de PDFs para assinatura eletrônica, implementando um delay de 1500ms e detecção robusta de quebras de página via Regex. Agora o sistema captura corretamente o contrato completo (4 páginas), incluindo cláusulas e procuração.
+- **Fix de JWT na Edge Function**: Desativada a verificação estrita de JWT (`verify_jwt: false`) na função `create-autentique-document` para contornar incompatibilidade de algoritmos (ES256) com a biblioteca do Supabase, restaurando o envio de documentos.
+- **Encurtamento de Links**: Corrigido o `ReferenceError: shortenLink is not defined` no `SubscriberModal.jsx`, garantindo que o link de assinatura seja encurtado antes de ser salvo/enviado.
+
+### 🕒 Histórico e Timeline (Fix Crítico)
+- **Correção de Formulários Aninhados**: Resolvido bug crítico onde o botão "Postar" no `HistoryTimeline` causava o recarregamento da página (404) e o fechamento do modal pai.
+- **Refatoração do HistoryTimeline**: Substituída a tag `<form>` por `<div>` no componente de histórico, com implementação de submissão manual via botão e tecla Enter, eliminando conflitos de submissão em modais de Assinantes, UCs e Leads.
+- **Persistência de Comentários**: Garantido que o envio de comentários no histórico não resulte em perda de contexto ou navegação indesejada para o dashboard.
+
+---
+
 ## [29/04/2026] - Refinamento da Central de Notificações (Engine v2)
 
 ### 🔔 Automação e Comunicação Avançada
