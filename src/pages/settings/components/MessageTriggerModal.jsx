@@ -155,12 +155,14 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         try {
             const { data: { user } } = await supabase.auth.getUser();
             
+            const { active_content_tab, ...cleanFormData } = formData;
+            
             const payload = {
-                ...formData,
+                ...cleanFormData,
                 created_by: user?.id,
-                // Garantir compatibilidade com colunas legadas se necessário
                 channel: formData.channels.length > 1 ? 'both' : formData.channels[0]
             };
+
 
             const { error } = trigger 
                 ? await supabase.from('notification_triggers').update(payload).eq('id', trigger.id)
