@@ -70,6 +70,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'aguardando_conexao', label: 'Aguardando Conexão' },
             { id: 'ativo', label: 'Ativo' },
             { id: 'sem_geracao', label: 'Sem Geração' },
+            { id: 'desconectado', label: 'Desconectado' },
             { id: 'cancelado', label: 'Cancelado' }
         ],
         invoice: [

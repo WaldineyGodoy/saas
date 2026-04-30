@@ -33,6 +33,7 @@ const KANBAN_STATUSES = [
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
     { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' },
     { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' },
+    { status: 'desconectado', label: 'Desconectado', color: '#f43f5e' },
     { status: 'cancelado', label: 'Cancelado', color: '#ef4444' },
     { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' }
 ];
@@ -147,11 +148,11 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
     const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    // 1. Filtrar apenas Ativas para o Calendário
-    const activeUnits = units.filter(u => u.status === 'ativo');
+    // 1. Filtrar Ativas e Desconectadas (que ainda podem ter leituras/faturas) para o Calendário
+    const calendarUnits = units.filter(u => u.status === 'ativo' || u.status === 'desconectado');
 
     // 2. Agrupar e Calcular Status
-    const groupedUnits = activeUnits.reduce((acc, unit) => {
+    const groupedUnits = calendarUnits.reduce((acc, unit) => {
         const unitDate = new Date(unit.created_at);
         const unitYear = unitDate.getFullYear();
         const unitMonth = unitDate.getMonth() + 1;
@@ -304,12 +305,12 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                                     uc.displayStatus === 'processing' ? '#eff6ff' :
                                                     uc.displayStatus === 'pending' ? '#fff7ed' :
                                                     uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
-                                        borderLeft: `5px solid ${
                                             uc.displayStatus === 'success' ? '#22c55e' : 
                                             uc.displayStatus === 'processing' ? '#3b82f6' :
                                             uc.displayStatus === 'pending' ? '#f97316' :
                                             uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                         }`,
+                                        opacity: uc.status === 'desconectado' ? 0.7 : 1,
                                         cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                     }}>
                                         <div style={{ 

@@ -72,6 +72,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         { value: 'ativo', label: 'Ativo' },
         { value: 'sem_geracao', label: 'Sem Geração' },
         { value: 'em_atraso', label: 'Em Atraso' },
+        { value: 'desconectado', label: 'Desconectado' },
         { value: 'cancelado', label: 'Cancelado' },
         { value: 'cancelado_inadimplente', label: 'Cancelado (Inadimplente)' }
     ];
