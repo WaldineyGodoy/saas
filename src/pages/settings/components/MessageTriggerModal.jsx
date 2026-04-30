@@ -181,18 +181,56 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
 
     const [showVariables, setShowVariables] = useState(false);
 
+    // Mapeamento de Variáveis Amigáveis para os Gatilhos
+    // Observação: Estas chaves amigáveis devem ser tratadas no backend para substituição pelos valores reais.
     const availableVariables = {
-        lead: ['nome', 'email', 'telefone', 'empresa', 'status', 'origem', 'vendedor'],
-        subscriber: ['nome', 'cpf_cnpj', 'email', 'telefone', 'plano', 'valor_assinatura', 'data_adesao', 'nome_originador'],
-        consumer_unit: ['numero_uc', 'nome_titular', 'endereco', 'distribuidora', 'status_ativacao'],
-        invoice: ['numero_fatura', 'valor_total', 'data_vencimento', 'link_boleto', 'link_fatura', 'status_pagamento'],
-        originator: ['nome', 'email', 'telefone', 'codigo_indica', 'total_assinantes'],
-        supplier: ['nome_fantasia', 'razao_social', 'cnpj', 'categoria'],
-        power_plant: ['nome_usina', 'potencia_kwp', 'tecnologia', 'localizacao']
+        lead: [
+            { label: 'Nome do Lead', key: 'Nome do Lead' },
+            { label: 'Nome Completo do Lead', key: 'Nome Completo do Lead' },
+            { label: 'Status do Lead', key: 'Status do Lead' },
+            { label: 'Email', key: 'email' },
+            { label: 'Telefone', key: 'telefone' }
+        ],
+        subscriber: [
+            { label: 'Nome do Assinante', key: 'Nome do Assinante' },
+            { label: 'Nome Completo do Assinante', key: 'Nome Completo do Assinante' },
+            { label: 'Status do Assinante', key: 'Status do Assinante' },
+            { label: 'CPF/CNPJ', key: 'cpf_cnpj' },
+            { label: 'Telefone', key: 'telefone' }
+        ],
+        consumer_unit: [
+            { label: 'Unidade Consumidora', key: 'Unidade Consumidora' },
+            { label: 'Endereço da UC', key: 'Endereço da UC' },
+            { label: 'Status da UC', key: 'Status da UC' },
+            { label: 'Número da UC', key: 'numero_uc' }
+        ],
+        invoice: [
+            { label: 'Mês de Referência', key: 'Mês de Referência da Fatura' },
+            { label: 'Vencimento da Fatura', key: 'Vencimento da Fatura' },
+            { label: 'Linha Digitável', key: 'Linha Digitável de Pagamento' },
+            { label: 'Status da Fatura', key: 'Status da Fatura' },
+            { label: 'Valor Total', key: 'valor_total' },
+            { label: 'Link do Boleto', key: 'link_boleto' }
+        ],
+        originator: [
+            { label: 'Nome do Originador', key: 'Nome do Originador' },
+            { label: 'Nome Completo do Originador', key: 'Nome Completo do Originador' },
+            { label: 'Status do Originador', key: 'Status do Originador' },
+            { label: 'Email', key: 'email' }
+        ],
+        supplier: [
+            { label: 'Nome do Fornecedor', key: 'Nome do Fornecedor' },
+            { label: 'Nome Completo do Fornecedor', key: 'Nome Completo do Fornecedor' },
+            { label: 'Email', key: 'email' }
+        ],
+        power_plant: [
+            { label: 'Nome da Usina', key: 'Nome da Usina' },
+            { label: 'Potência (kWp)', key: 'potencia_kwp' }
+        ]
     };
 
 
-    const insertVariable = (variable) => {
+    const insertVariable = (variableKey) => {
         const textarea = document.getElementById('message_body_textarea');
         if (!textarea) return;
 
@@ -202,14 +240,15 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         const before = text.substring(0, start);
         const after = text.substring(end);
         
-        const newText = before + `{{${variable}}}` + after;
+        const newTag = `{{${variableKey}}}`;
+        const newText = before + newTag + after;
         setFormData({ ...formData, message_body: newText });
         setShowVariables(false);
         
         // Focar novamente no textarea após inserir
         setTimeout(() => {
             textarea.focus();
-            const newCursorPos = start + variable.length + 4;
+            const newCursorPos = start + newTag.length;
             textarea.setSelectionRange(newCursorPos, newCursorPos);
         }, 0);
     };
@@ -511,16 +550,16 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                                                     {availableVariables[formData.entity_type]?.map(v => (
                                                         <button 
-                                                            key={v} 
+                                                            key={v.key} 
                                                             type="button" 
-                                                            onClick={() => insertVariable(v)}
+                                                            onClick={() => insertVariable(v.key)}
                                                             style={{ 
                                                                 fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '6px', 
                                                                 border: '1px solid #e2e8f0', background: 'white', color: '#334155', 
                                                                 cursor: 'pointer', transition: 'all 0.2s', fontWeight: 500
                                                             }}
                                                         >
-                                                            {`{{${v}}}`}
+                                                            {`{{${v.label}}}`}
                                                         </button>
                                                     ))}
                                                 </div>

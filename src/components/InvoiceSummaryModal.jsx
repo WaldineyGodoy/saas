@@ -212,6 +212,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     {formatCurrency(Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))}
                                 </span>
                             </div>
+                            
+                            {/* Desconto Snapshot Display */}
+                            <div style={{ marginTop: '0.5rem', textAlign: 'right', fontSize: '0.8rem', color: '#64748b' }}>
+                                Desconto aplicado nesta fatura: <strong>{invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0)}%</strong>
+                            </div>
                         </div>
                     </div>
 

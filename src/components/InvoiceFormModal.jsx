@@ -92,7 +92,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 linha_digitavel: invoice.linha_digitavel || '',
                 pix_string: invoice.pix_string || '',
                 valor_concessionaria: invoice.valor_concessionaria || invoice.valor_a_pagar || 0,
-                status: invoice.status || 'ag_emissao_boleto'
+                status: invoice.status || 'ag_emissao_boleto',
+                desconto_aplicado: invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (selectedUc?.desconto_assinante || 0)
             });
             // Find UC to set tariff info
             if (ucs) {
@@ -145,8 +146,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const consumo = Number(formData.consumo_kwh) || 0;
             const rawConsumoCompensado = Number(formData.consumo_compensado) || 0;
             const rawTarifa = Number(selectedUc.tarifa_concessionaria) || 0;
-            const descontoPercent = Number(selectedUc.desconto_assinante) || 0;
-            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+            
+            // Prioritize persisted discount from invoice, otherwise use UC current discount
+            const discountSnapshot = formData.desconto_aplicado !== undefined 
+                ? Number(formData.desconto_aplicado) 
+                : Number(selectedUc.desconto_assinante);
+                
+            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
 
             // Nova Fórmula conforme solicitação:
             // Tarifa Mínima e Excedentes R$ = (Consumo Kwh - Consumo Compensado kwh) * Valor da Tarifa
@@ -178,6 +184,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         formData.consumo_compensado,
         formData.iluminacao_publica,
         formData.outros_lancamentos,
+        formData.desconto_aplicado,
         selectedUc
     ]);
     
@@ -529,8 +536,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     {(() => {
                                         const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
                                         const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        const descontoPercent = Number(uc?.desconto_assinante) || 0;
-                                        const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                        // Use snapshot from invoice if available
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
                                         const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
                                         return formatCurrency(energiaCompensadaReais);
                                     })()}
@@ -556,8 +564,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         - {(() => {
                                             const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
                                             const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                            const descontoPercent = Number(uc?.desconto_assinante) || 0;
-                                            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                            // Use snapshot from invoice if available
+                                            const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
                                             const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
                                             return formatCurrency(economiaReais);
                                         })()}
@@ -565,7 +574,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 </div>
                                 <div className="metric-line discount">
                                     <span>Desconto Aplicado:</span>
-                                    <span>{uc?.desconto_assinante || 0}%</span>
+                                    <span>{inv.desconto_aplicado !== undefined ? inv.desconto_aplicado : (uc?.desconto_assinante || 0)}%</span>
                                 </div>
                             </div>
 
@@ -576,8 +585,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         const rawConsumo = Number(inv.consumo_kwh) || 0;
                                         const rawCompensado = Number(inv.consumo_compensado) || 0;
                                         const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        const descontoPercent = Number(uc?.desconto_assinante) || 0;
-                                        const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+                                        // Use snapshot from invoice if available
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
                                         
                                         const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
                                         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
@@ -792,8 +802,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const rawConsumo = Number(formData.consumo_kwh) || 0;
             const rawCompensado = Number(formData.consumo_compensado) || 0;
             const rawTarifa = Number(selectedUc?.tarifa_concessionaria) || 0;
-            const descontoPercent = Number(selectedUc?.desconto_assinante) || 0;
-            const multiplier = descontoPercent > 1 ? descontoPercent / 100 : descontoPercent;
+            
+            // Snapshot the discount for persistence
+            const discountToApply = formData.desconto_aplicado !== undefined 
+                ? Number(formData.desconto_aplicado) 
+                : Number(selectedUc?.desconto_assinante || 0);
+                
+            const multiplier = discountToApply > 1 ? discountToApply / 100 : discountToApply;
             
             const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
             const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
@@ -819,7 +834,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 economia_reais: economiaReais,
                 linha_digitavel: formData.linha_digitavel || null,
                 pix_string: formData.pix_string || null,
-                status: formData.status
+                status: formData.status,
+                desconto_aplicado: discountToApply
             };
 
             if (!payload.uc_id) throw new Error('Selecione uma Unidade Consumidora.');
