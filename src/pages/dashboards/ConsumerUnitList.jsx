@@ -538,7 +538,7 @@ export default function ConsumerUnitList() {
             year: { success: 0, error: 0, not_available: 0, pending: 0 }
         };
 
-        const activeUnits = units.filter(u => u.status === 'ativo');
+        const activeUnits = units.filter(u => u.status === 'ativo' || u.status === 'desconectado');
 
         activeUnits.forEach(unit => {
             const unitDate = new Date(unit.created_at);
