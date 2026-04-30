@@ -100,7 +100,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
     });
 
     const handleAddComment = async (e) => {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
         if (!newComment.trim()) return;
 
         setSubmitting(true);
@@ -333,10 +333,16 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
 
                 {/* Footer / Input area */}
                 <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e2e8f0', background: 'white', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
-                    <form onSubmit={handleAddComment} style={{ display: 'flex', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
                         <textarea
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleAddComment();
+                                }
+                            }}
                             placeholder="Escreva um comentário ou atualização..."
                             style={{
                                 flex: 1, padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
@@ -347,7 +353,8 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                             onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
                         />
                         <button
-                            type="submit"
+                            type="button"
+                            onClick={() => handleAddComment()}
                             disabled={submitting || !newComment.trim()}
                             style={{
                                 background: 'var(--color-blue)', color: 'white', border: 'none',
@@ -362,7 +369,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                             <Send size={18} />
                             {submitting ? '...' : 'Postar'}
                         </button>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
