@@ -156,14 +156,41 @@ export default function GridMap() {
     };
 
     const handleSearch = async (e) => {
-        e.preventDefault();
-        if (!searchQuery) return;
+        if (e) e.preventDefault();
+        const query = searchQuery.trim();
+        if (!query) return;
+
+        console.log('Pesquisando:', query);
+
+        // Regex flexível: aceita "-6.123, -35.123", "-6.123 -35.123" ou com espaços extras
+        const coordRegex = /^([-+]?\d{1,2}(?:\.\d+)?)[,\s]+([-+]?\d{1,3}(?:\.\d+)?)$/;
+        const match = query.match(coordRegex);
+
+        if (match) {
+            const lat = parseFloat(match[1]);
+            const lng = parseFloat(match[2]);
+            
+            console.log('Coordenada detectada:', lat, lng);
+
+            setViewState(prev => ({
+                ...prev,
+                longitude: lng,
+                latitude: lat,
+                zoom: 14
+            }));
+            setSearchResults([]);
+            fetchSubstations(lat, lng);
+            return;
+        }
+
         try {
-            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&country=br&limit=5`);
+            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&country=br&limit=5`);
             const data = await res.json();
-            setSearchResults(data.features || []);
+            if (data.features) {
+                setSearchResults(data.features);
+            }
         } catch(err) {
-            console.error('Erro na busca:', err);
+            console.error('Erro na busca Mapbox:', err);
         }
     };
 
