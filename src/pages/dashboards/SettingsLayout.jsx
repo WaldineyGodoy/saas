@@ -82,7 +82,7 @@ export default function SettingsLayout() {
                 </div>
 
                 {/* Content Area */}
-                <div style={{ minHeight: '500px' }}>
+                <div style={{ minHeight: '500px', minWidth: 0 }}>
                     {renderContent()}
                 </div>
             </div>

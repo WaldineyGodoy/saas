@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, MessageSquare, Mail, Zap, Trash2, Edit2, Power } from 'lucide-react';
+import { Plus, MessageSquare, Mail, Zap, Trash2, Edit2, Power, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
 import MessageTriggerModal from './components/MessageTriggerModal';
@@ -10,6 +10,7 @@ export default function TriggerMessageDashboard() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTrigger, setEditingTrigger] = useState(null);
+    const [filterEntity, setFilterEntity] = useState('all');
 
     const columns = [
         { id: 'lead', label: 'Leads' },
@@ -20,6 +21,10 @@ export default function TriggerMessageDashboard() {
         { id: 'supplier', label: 'Fornecedores' },
         { id: 'power_plant', label: 'Usinas' }
     ];
+
+    const filteredColumns = filterEntity === 'all' 
+        ? columns 
+        : columns.filter(col => col.id === filterEntity);
 
 
     useEffect(() => {
@@ -76,17 +81,7 @@ export default function TriggerMessageDashboard() {
     };
 
     const renderCard = (trigger) => (
-        <div key={trigger.id} style={{
-            background: 'white',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            padding: '1.25rem',
-            marginBottom: '1rem',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-            transition: 'all 0.2s',
-            cursor: 'default',
-            position: 'relative'
-        }}>
+        <div key={trigger.id} className="kanban-card" style={{ cursor: 'default' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>{trigger.name}</h5>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -158,10 +153,9 @@ export default function TriggerMessageDashboard() {
         </div>
     );
 
-
     return (
-        <div style={{ height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
                     <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Regras de Gatilhos</h3>
                     <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b' }}>Configure as mensagens automáticas do CRM.</p>
@@ -186,13 +180,68 @@ export default function TriggerMessageDashboard() {
                 </button>
             </div>
 
+            {/* Filter */}
+            <div style={{ 
+                marginBottom: '1.5rem', 
+                background: 'white', 
+                padding: '1rem', 
+                borderRadius: '12px', 
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem'
+            }}>
+                <div style={{ flex: 1, maxWidth: '300px' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
+                        Filtrar por Entidade
+                    </label>
+                    <select
+                        value={filterEntity}
+                        onChange={(e) => setFilterEntity(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '0.6rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.9rem',
+                            color: '#1e293b',
+                            outline: 'none',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <option value="all">Todas as Entidades</option>
+                        {columns.map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
             {loading ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Carregando gatilhos...</div>
             ) : (
-                <div className="kanban-box">
-                    <div className="kanban-board" style={{ height: 'auto' }}>
-                        {columns.map(col => (
-                            <div key={col.id} className="kanban-column">
+                <div className="kanban-box" style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    minHeight: '500px',
+                    maxHeight: 'calc(100vh - 300px)'
+                }}>
+                    <div className="kanban-board" style={{ 
+                        flex: 1, 
+                        paddingBottom: '2rem',
+                        display: 'flex',
+                        gap: '1rem',
+                        alignItems: 'stretch'
+                    }}>
+                        {filteredColumns.map(col => (
+                            <div key={col.id} className="kanban-column" style={{ 
+                                height: '100%', 
+                                maxHeight: 'none', 
+                                minHeight: '400px',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}>
                                 <div className="kanban-column-header">
                                     <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         {col.label}
@@ -202,81 +251,10 @@ export default function TriggerMessageDashboard() {
                                     </span>
                                 </div>
                                 
-                                <div className="kanban-column-content">
+                                <div className="kanban-column-content" style={{ flex: 1, overflowY: 'auto' }}>
                                     {triggers
                                         .filter(t => t.entity_type === col.id)
-                                        .map(trigger => (
-                                            <div key={trigger.id} className="kanban-card" style={{ cursor: 'default' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>{trigger.name}</h5>
-                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button onClick={() => { setEditingTrigger(trigger); setIsModalOpen(true); }} style={{ padding: '0.4rem', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#64748b' }} title="Editar"><Edit2 size={14} /></button>
-                                                        <button onClick={() => deleteTrigger(trigger.id)} style={{ padding: '0.4rem', background: '#fee2e2', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#ef4444' }} title="Excluir"><Trash2 size={14} /></button>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                        {trigger.trigger_event && (
-                                                            <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
-                                                                {trigger.trigger_event}
-                                                            </span>
-                                                        )}
-                                                        
-                                                        {trigger.trigger_event && trigger.trigger_status && (
-                                                            <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 800 }}>
-                                                                {trigger.logic_operator === 'and' ? 'E' : trigger.logic_operator === 'or' ? 'OU' : 'NÃO'}
-                                                            </span>
-                                                        )}
-
-                                                        {trigger.trigger_status && (
-                                                            <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
-                                                                Status: {trigger.trigger_status}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                            {/* Fixed missing Clock import/usage if needed, but assuming it exists or replacing with generic icon if not found in imports */}
-                                                            {trigger.delay_type === 'immediate' ? 'Envio Imediato' : 
-                                                             trigger.delay_type === 'before_due' ? `${trigger.delay_days} dias antes` : 
-                                                             trigger.delay_type === 'after_due' ? `${trigger.delay_days} dias após` : 
-                                                             `${trigger.delay_days} dias após evento`}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                                                    <div style={{ display: 'flex', gap: '0.6rem' }}>
-                                                        {(trigger.channels || [trigger.channel]).map(ch => (
-                                                            <div key={ch} style={{ color: ch === 'whatsapp' ? '#22c55e' : '#0284c7' }} title={ch === 'whatsapp' ? 'WhatsApp' : 'E-mail'}>
-                                                                {ch === 'whatsapp' ? <MessageSquare size={16} /> : <Mail size={16} />}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => toggleTriggerStatus(trigger.id, trigger.is_active)}
-                                                        style={{
-                                                            padding: '0.3rem 0.6rem',
-                                                            borderRadius: '6px',
-                                                            border: 'none',
-                                                            background: trigger.is_active ? '#dcfce7' : '#f1f5f9',
-                                                            color: trigger.is_active ? '#166534' : '#64748b',
-                                                            fontSize: '0.65rem',
-                                                            fontWeight: 800,
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '0.4rem',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        <Power size={10} /> {trigger.is_active ? 'ATIVO' : 'INATIVO'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
+                                        .map(trigger => renderCard(trigger))
                                     }
                                     {triggers.filter(t => t.entity_type === col.id).length === 0 && (
                                         <div style={{ 
@@ -287,7 +265,7 @@ export default function TriggerMessageDashboard() {
                                             border: '2px dashed #e2e8f0',
                                             borderRadius: '12px'
                                         }}>
-                                            Nenhuma regra para {col.label}
+                                            Nenhuma regra
                                         </div>
                                     )}
                                 </div>

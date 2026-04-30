@@ -482,18 +482,40 @@ textarea {
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   margin-top: 1rem;
-  overflow: hidden; /* Contains the scrollable board */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-blue) #f1f5f9;
+  position: relative;
+}
+
+/* Custom Scrollbar for Webkit */
+.kanban-box::-webkit-scrollbar {
+  height: 10px;
+}
+
+.kanban-box::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.kanban-box::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+}
+
+.kanban-box::-webkit-scrollbar-thumb:hover {
+  background: var(--color-blue);
 }
 
 .kanban-board {
   display: flex;
   gap: 1.25rem;
-  overflow-x: auto;
-  padding-bottom: 1rem;
-  min-height: calc(100vh - 320px);
+  width: max-content;
+  padding-bottom: 0.5rem;
+  min-height: calc(100vh - 400px);
   align-items: flex-start;
-  scrollbar-width: auto;
-  scrollbar-color: var(--color-blue) #f1f5f9;
 }
 
 .kanban-column {
