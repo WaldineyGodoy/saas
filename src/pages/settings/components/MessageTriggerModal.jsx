@@ -319,7 +319,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Receptor (Entidade)</label>
+                                        <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Essa Regra se aplica a :</label>
                                         <select
                                             value={formData.entity_type}
                                             onChange={e => setFormData({ ...formData, entity_type: e.target.value, trigger_status: '' })}
