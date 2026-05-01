@@ -304,8 +304,9 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                     {activeSection === 'rules' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                             {/* Block 1: Main Config */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                {/* Row 1: Name and Entity */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                                     <div className="form-group">
                                         <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nome da Regra</label>
                                         <input
@@ -328,39 +329,39 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                         </select>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1rem' }}>
-                                        <div className="form-group">
-                                            <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Evento Gatilho</label>
-                                            <select
-                                                value={formData.trigger_event}
-                                                onChange={e => setFormData({ ...formData, trigger_event: e.target.value })}
-                                                style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', fontSize: '0.95rem' }}
-                                            >
-                                                <option value="">Nenhum Evento</option>
-                                                {commonEvents.map(ev => <option key={ev} value={ev}>{ev}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="form-group">
-                                            <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Operador</label>
-                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.3rem', borderRadius: '10px' }}>
-                                                {['and', 'or', 'not'].map(op => (
-                                                    <button
-                                                        key={op}
-                                                        type="button"
-                                                        onClick={() => setFormData({ ...formData, logic_operator: op })}
-                                                        style={{
-                                                            flex: 1, padding: '0.5rem', borderRadius: '7px', border: 'none',
-                                                            background: formData.logic_operator === op ? 'white' : 'transparent',
-                                                            color: formData.logic_operator === op ? '#0284c7' : '#94a3b8',
-                                                            fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase',
-                                                            boxShadow: formData.logic_operator === op ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
-                                                        }}
-                                                    >
-                                                        {op === 'and' ? 'E' : op === 'or' ? 'OU' : 'NÃO'}
-                                                    </button>
-                                                ))}
-                                            </div>
+
+                                {/* Row 2: Event, Operator, Status */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1.2fr', gap: '1.5rem', alignItems: 'flex-end' }}>
+                                    <div className="form-group">
+                                        <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Evento Gatilho</label>
+                                        <select
+                                            value={formData.trigger_event}
+                                            onChange={e => setFormData({ ...formData, trigger_event: e.target.value })}
+                                            style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', fontSize: '0.95rem' }}
+                                        >
+                                            <option value="">Nenhum Evento</option>
+                                            {commonEvents.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 700, color: '#334155', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Operador</label>
+                                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.3rem', borderRadius: '10px' }}>
+                                            {['and', 'or', 'not'].map(op => (
+                                                <button
+                                                    key={op}
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, logic_operator: op })}
+                                                    style={{
+                                                        flex: 1, padding: '0.5rem 0', borderRadius: '7px', border: 'none',
+                                                        background: formData.logic_operator === op ? 'white' : 'transparent',
+                                                        color: formData.logic_operator === op ? '#0284c7' : '#94a3b8',
+                                                        fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase',
+                                                        boxShadow: formData.logic_operator === op ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                                    }}
+                                                >
+                                                    {op === 'and' ? 'E' : op === 'or' ? 'OU' : 'NÃO'}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                     <div className="form-group">
@@ -376,6 +377,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
                                     </div>
                                 </div>
                             </div>
+
 
                             {/* Block 2: Scheduling */}
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
