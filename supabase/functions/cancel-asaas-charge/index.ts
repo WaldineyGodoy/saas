@@ -67,7 +67,10 @@ serve(async (req) => {
 
                     // Se não for 200, logamos. Se o erro for "Pagamento não encontrado", podemos ignorar.
                     if (!deleteRes.ok && deleteData.errors?.[0]?.code !== 'not_found' && deleteRes.status !== 404) {
-                        throw new Error(`Erro Asaas: ${deleteData.errors?.[0]?.description || 'Falha ao cancelar no Asaas'}`);
+                        const errMsg = deleteData.errors?.[0]?.description?.toLowerCase() || '';
+                        if (!errMsg.includes('já está cancelado') && !errMsg.includes('already cancelled')) {
+                            throw new Error(`Erro Asaas: ${deleteData.errors?.[0]?.description || 'Falha ao cancelar no Asaas'}`);
+                        }
                     }
                 }
             }
