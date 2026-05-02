@@ -27,6 +27,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [paymentAmount, setPaymentAmount] = useState(0);
     const [isPartial, setIsPartial] = useState(false);
 
+    // Manual Entry State
+    const [manualEntryAmount, setManualEntryAmount] = useState('');
+    const [manualEntryType, setManualEntryType] = useState('credit');
+    const [manualEntryDescription, setManualEntryDescription] = useState('');
+    const [manualEntryLoading, setManualEntryLoading] = useState(false);
+
     const [formData, setFormData] = useState({
         name: '',
         cnpj: '',
@@ -186,7 +192,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 amount: amountToPay,
                 type: 'PIX',
                 asaas_id: data?.data?.id
-            }, `Solicitado pagamento de ${formatCurrency(amountToPay)} via PIX`);
+            }, `Solicitado pagamento de ${Math.abs(amountToPay).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} via PIX`);
 
             // Refresh ledger
             fetchLedgerStatement();
@@ -195,6 +201,72 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             showAlert('Erro ao processar pagamento: ' + err.message, 'error');
         } finally {
             setPaying(false);
+        }
+    };
+
+    const handleManualEntry = async () => {
+        if (!supplier?.id) {
+            showAlert('Fornecedor precisa estar salvo antes de lançar valores.', 'warning');
+            return;
+        }
+        if (!manualEntryAmount || isNaN(manualEntryAmount) || manualEntryAmount <= 0) {
+            showAlert('Por favor, informe um valor válido.', 'warning');
+            return;
+        }
+        if (!manualEntryDescription) {
+            showAlert('Por favor, informe a descrição do lançamento.', 'warning');
+            return;
+        }
+
+        setManualEntryLoading(true);
+        try {
+            const { data: configData } = await supabase
+                .from('integrations_config')
+                .select('environment')
+                .eq('service_name', 'financial_api')
+                .single();
+            const isSandbox = configData?.environment === 'sandbox';
+
+            const { data: accountData, error: accountError } = await supabase
+                .from('ledger_accounts')
+                .select('id')
+                .eq('code', '2.1.1')
+                .single();
+            
+            if (accountError) throw accountError;
+            
+            // Crédito (negativo) = aumenta saldo a receber. Débito (positivo) = diminui saldo a receber.
+            const amountToInsert = manualEntryType === 'credit' ? -Math.abs(manualEntryAmount) : Math.abs(manualEntryAmount);
+
+            const { error: insertError } = await supabase
+                .from('ledger_entries')
+                .insert({
+                    account_id: accountData.id,
+                    amount: amountToInsert,
+                    description: manualEntryDescription,
+                    reference_type: 'SUPPLIER',
+                    reference_id: supplier.id,
+                    is_sandbox: isSandbox || false
+                });
+
+            if (insertError) throw insertError;
+
+            showAlert('Lançamento avulso registrado com sucesso.', 'success');
+            setManualEntryAmount('');
+            setManualEntryDescription('');
+            fetchLedgerStatement(); // Refresh ledger
+            
+            await addHistory('supplier', supplier.id, 'manual_ledger_entry', {
+                amount: amountToInsert,
+                type: manualEntryType,
+                description: manualEntryDescription
+            }, `Lançamento avulso: ${manualEntryDescription} (R$ ${Math.abs(amountToInsert).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+
+        } catch (error) {
+            console.error('Error inserting manual entry:', error);
+            showAlert('Erro ao registrar lançamento: ' + error.message, 'error');
+        } finally {
+            setManualEntryLoading(false);
         }
     };
 
@@ -798,6 +870,76 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Manual Ledger Entry Block */}
+                                {supplier?.id && (
+                                    <div style={sectionStyle}>
+                                        <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                            <ArrowUpDown size={20} color="#8b5cf6" /> Lançamentos Avulsos
+                                        </h4>
+                                        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                                            Registre bonificações (créditos) ou descontos/despesas (débitos) diretamente na conta do fornecedor.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
+                                            <div>
+                                                <label style={labelStyle}>Tipo</label>
+                                                <select
+                                                    style={inputStyle}
+                                                    value={manualEntryType}
+                                                    onChange={e => setManualEntryType(e.target.value)}
+                                                >
+                                                    <option value="credit">Crédito a Receber (+)</option>
+                                                    <option value="debit">Débito / Desconto (-)</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>Descrição do Lançamento</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    placeholder="Ex: Bonificação, Ajuste, Despesa extra"
+                                                    value={manualEntryDescription}
+                                                    onChange={e => setManualEntryDescription(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={labelStyle}>Valor (R$)</label>
+                                                <input
+                                                    style={inputStyle}
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    placeholder="0,00"
+                                                    value={manualEntryAmount}
+                                                    onChange={e => setManualEntryAmount(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleManualEntry}
+                                                    disabled={manualEntryLoading || !manualEntryAmount || !manualEntryDescription}
+                                                    style={{
+                                                        background: manualEntryType === 'credit' ? '#10b981' : '#ef4444',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        padding: '0 1.5rem',
+                                                        borderRadius: '12px',
+                                                        fontWeight: 'bold',
+                                                        cursor: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 'not-allowed' : 'pointer',
+                                                        opacity: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 0.7 : 1,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        height: '46px',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {manualEntryLoading ? 'Lançando...' : 'Lançar'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {supplier && usinas.length > 0 && (
                                     <div style={{ ...sectionStyle, background: '#f0f9ff', border: '1px solid #bae6fd' }}>
