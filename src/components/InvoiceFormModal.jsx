@@ -1379,7 +1379,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                         <p style={{ color: '#64748b', marginBottom: '2rem', lineHeight: '1.5' }}>
                             {duplicateInfo?.type === 'block'
-                                ? `Já existe uma fatura emitida para esta UC com mês de referência ${formData.mes_referencia} e vencimento em ${new Date(duplicateInfo.existing.vencimento).toLocaleDateString('pt-BR')}.`
+                                ? `Já existe uma fatura emitida para esta UC com mês de referência ${formData.mes_referencia} e vencimento em ${new Date(duplicateInfo.existing.vencimento + (duplicateInfo.existing.vencimento.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR')}.`
                                 : `Já existe uma fatura para o mês de referência ${formData.mes_referencia}, porém com uma data de vencimento diferente. O que deseja fazer?`
                             }
                         </p>

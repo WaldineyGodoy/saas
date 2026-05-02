@@ -17,15 +17,17 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const { invoice_id } = await req.json()
+        const { invoice_id, type = 'invoice' } = await req.json()
 
         if (!invoice_id) {
             throw new Error("ID da fatura não fornecido.");
         }
 
+        const table = type === 'consolidated_invoice' ? 'consolidated_invoices' : 'invoices';
+
         // 1. Buscar a fatura para verificar status e asaas_payment_id
         const { data: invoice, error: invoiceError } = await supabase
-            .from('invoices')
+            .from(table)
             .select('status, asaas_payment_id')
             .eq('id', invoice_id)
             .single()
@@ -72,16 +74,25 @@ serve(async (req) => {
         }
 
         // 3. Atualizar status no Banco de Dados e limpar metadados do Asaas
+        const updatePayload = {
+            status: 'cancelado',
+            asaas_status: 'CANCELLED',
+            asaas_payment_id: null,
+            asaas_boleto_url: null,
+            linha_digitavel: null,
+            pix_string: null
+        };
+        
+        // Se for consolidada, ela não tem linha_digitavel/pix_string na tabela atualmente, mas ignorar campos extras não falha o update no postgrest se existirem
+        // Mas para ser seguro:
+        if (type === 'consolidated_invoice') {
+             delete updatePayload.linha_digitavel;
+             delete updatePayload.pix_string;
+        }
+
         const { error: updateError } = await supabase
-            .from('invoices')
-            .update({
-                status: 'cancelado',
-                asaas_status: 'CANCELLED',
-                asaas_payment_id: null,
-                asaas_boleto_url: null,
-                linha_digitavel: null,
-                pix_string: null
-            })
+            .from(table)
+            .update(updatePayload)
             .eq('id', invoice_id)
 
         if (updateError) throw updateError

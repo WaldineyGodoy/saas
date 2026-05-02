@@ -2,6 +2,15 @@
 
 ---
 
+## [02/05/2026] - Correção de Faturamento Consolidado e Erro de CORS
+
+### 💸 Faturas Consolidadas e Notificações
+- **Integração de Cancelamento com Asaas**: O botão de cancelar fatura consolidada (`<Ban />`) deixou de ser uma simulação local. Agora ele aciona a Edge Function `cancel-asaas-charge`, que exclui oficialmente a cobrança na API do Asaas e, em seguida, atualiza o status para `cancelado` no banco de dados e libera as faturas individuais para nova emissão.
+- **Envio Automático de Fatura Consolidada**: Corrigida a ausência de disparo de notificações (`sendCombinedNotification`) ao gerar uma nova fatura consolidada no `SubscriberModal.jsx`. Agora o sistema aguarda a geração do PDF e envia e-mail e WhatsApp de forma automática, mantendo o mesmo comportamento das faturas individuais.
+- **Correção de CORS no Canvas (Logo Google)**: Substituída a imagem de avatar hardcoded (do domínio `lh3.googleusercontent.com`, que causava bloqueio de CORS na renderização do `html2canvas`) pela chamada dinâmica `branding?.logo_url` na estrutura de `renderHiddenConsolidatedDetail`. Isso previne a quebra da rotina de captura de PDF da fatura consolidada e permite o seu disparo normal.
+
+---
+
 ## [30/04/2026] - Estabilização de Contratos e Correção de Timeline
 
 ### 📝 Gestão de Contratos e Documentos

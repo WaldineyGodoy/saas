@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, shortenLink } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, shortenLink, cancelAsaasCharge } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -608,10 +608,10 @@ Associado`;
 
         let targetDate = new Date(currentYear, currentMonth, day);
 
-        // Regra: Se o dia já passou ou faltar menos de 3 dias
+        // Regra: Se o dia já passou ou faltar menos de 1 dia
         const diffDays = (targetDate - today) / (1000 * 60 * 60 * 24);
 
-        if (diffDays < 3) {
+        if (diffDays < 1) {
             // Vencimento para o mês seguinte
             targetDate = new Date(currentYear, currentMonth + 1, day);
         }
@@ -1010,7 +1010,7 @@ Associado`;
                 recipientEmail: subscriber.email || formData.email,
                 recipientPhone: subscriber.phone || formData.phone,
                 subscriberName: subscriber.name || formData.name,
-                dueDate: new Date(invoice.due_date || invoice.vencimento).toLocaleDateString('pt-BR'),
+                dueDate: new Date((invoice.due_date || invoice.vencimento) + (!String(invoice.due_date || invoice.vencimento).includes('T') ? 'T12:00:00' : '')).toLocaleDateString('pt-BR'),
                 value: (invoice.total_value || invoice.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                 pdfBlob: pdfBlob,
                 fileName: fileName,
@@ -1059,13 +1059,17 @@ Associado`;
                     <header className="bg-white">
                         <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">
                             <div className="flex items-center gap-2">
-                                <img 
-                                    src="https://lh3.googleusercontent.com/aida/ADBb0uifhC93-7nY-qVlpl2VCbHi0L17fw_fp7B9Zyy1aycCrdJNcbpom1KaqidsefxOoWNJ_TWh2YC1BM4hVUnMR4PH0ZYktntr94jGjc9ahANupnJMvBrN6ZnCQeozqTovT4Sp7aWhQH2SfG5jvs9TGwdXDJ95UeUSq9g0Byuz0EB3ZyrATWG6i5pf0EiSgUAxSBQX8eTdwlsr_pfvr5rjC8YuwAMvEvfNExN9LkzCw2QaKRj7VltrbdKjlJZy6thBHv5qrvKIhpyU3Sk" 
-                                    alt="B2W Energia Logo" 
-                                    className="w-10 h-10 object-contain" 
-                                />
+                                {branding?.logo_url ? (
+                                    <img 
+                                        src={branding.logo_url} 
+                                        alt={branding.company_name} 
+                                        className="w-10 h-10 object-contain" 
+                                    />
+                                ) : (
+                                    <FileText size={24} color="#003366" />
+                                )}
                                 <span className="text-xl font-extrabold text-[#003366] uppercase tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                    B2W Energia por assinatura
+                                    {branding?.company_name || 'B2W Energia por assinatura'}
                                 </span>
                             </div>
                             <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full flex items-center justify-center">
@@ -2361,7 +2365,29 @@ Associado`;
                                                                         .select('*')
                                                                         .eq('id', result.consolidatedId)
                                                                         .single();
-                                                                    if (newCons) handleDownloadConsolidated(newCons);
+                                                                    if (newCons) {
+                                                                        const pdfBlob = await handleDownloadConsolidated(newCons);
+                                                                        if (pdfBlob) {
+                                                                            showAlert('Enviando notificações da consolidada...', 'info');
+                                                                            const monthYearStr = newCons.mes_referencia ? newCons.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+                                                                            const cleanSubName = (subscriber?.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+                                                                            const fileName = `Fatura_Consolidada_${cleanSubName}_${monthYearStr}.pdf`;
+                                                                            
+                                                                            await sendCombinedNotification({
+                                                                                recipientEmail: formData.email,
+                                                                                recipientPhone: formData.phone,
+                                                                                subscriberName: formData.name,
+                                                                                dueDate: new Date(newCons.due_date + 'T12:00:00').toLocaleDateString('pt-BR'),
+                                                                                value: Number(newCons.total_value || totalToConsolidate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                                                                                pdfBlob: pdfBlob,
+                                                                                fileName: fileName,
+                                                                                subscriberId: subscriber.id,
+                                                                                profileId: profile?.id,
+                                                                                isConsolidated: true
+                                                                            });
+                                                                            showAlert('Notificações consolidadas enviadas com sucesso!', 'success');
+                                                                        }
+                                                                    }
                                                                 } else if (result.url) {
                                                                     window.open(result.url, '_blank');
                                                                 }
@@ -2509,7 +2535,7 @@ Associado`;
                                                         <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#1e293b' }}>
                                                             {ci.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vencimento: {new Date(ci.due_date).toLocaleDateString('pt-BR')}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Vencimento: {new Date(ci.due_date + (ci.due_date.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR')}</div>
                                                         <div style={{ marginTop: '0.3rem' }}>
                                                             <span style={{
                                                                 fontSize: '0.6rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px',
@@ -2557,11 +2583,8 @@ Associado`;
                                                                     const confirm = await showConfirm('Deseja cancelar esta fatura consolidada? O boleto no Asaas também será cancelado.', 'Cancelar Fatura Consolidada');
                                                                     if (!confirm) return;
                                                                     try {
-                                                                        // Aqui chamaríamos uma nova API de cancelamento consolidado ou adaptariamos a atual
-                                                                        // Por enquanto, vamos marcar como cancelado localmente (Simulado - ideal seria Edge Function)
-                                                                        // 1. Atualizar status da fatura consolidada
-                                                                        const { error } = await supabase.from('consolidated_invoices').update({ status: 'canceled' }).eq('id', ci.id);
-                                                                        if (error) throw error;
+                                                                        // 1. Cancelar na API (Asaas + Local DB via Edge Function)
+                                                                        await cancelAsaasCharge(ci.id, 'consolidated_invoice');
 
                                                                         // 2. Liberar faturas individuais associadas (limpando também IDs do Asaas)
                                                                         const { error: unlinkError } = await supabase

@@ -105,8 +105,8 @@ export const createAsaasCharge = async (id, type = 'invoice', extra = {}) => {
     return callFunction('create-asaas-charge', payload);
 };
 
-export async function cancelAsaasCharge(invoiceId) {
-    return callFunction('cancel-asaas-charge', { invoice_id: invoiceId });
+export async function cancelAsaasCharge(invoiceId, type = 'invoice') {
+    return callFunction('cancel-asaas-charge', { invoice_id: invoiceId, type });
 }
 
 export async function updateAsaasCharge(invoiceId, value, dueDate) {
