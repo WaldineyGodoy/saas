@@ -152,6 +152,7 @@
 - **Cálculo de Vacância e Rentabilidade**: Fórmulas corrigidas para refletir o benefício real gerado pela usina comparado ao valor investido.
 
 ### 💰 Funcionalidades Financeiras e Automação
+- **Lançamentos Avulsos (Fornecedores)**: Implementação de um bloco para registro manual de Créditos (Bonificações) e Débitos (Despesas/Descontos) direto na aba Financeiro do `SupplierModal.jsx`, com sincronização automática no Livro Razão (conta 2.1.1).
 - **Otimização de Consulta do Ledger**: Refatoração da query no `SupplierModal.jsx` para buscar por `supplier_id` e `reference_id` na view `view_ledger_enriched`, garantindo 100% de precisão nos lançamentos financeiros vinculados.
 - **Segurança em Transações PIX**: Adicionada a exibição visual da **Chave PIX e Tipo** (CPF/CNPJ) nos modais de confirmação de pagamento (CRM) e resgate (App), prevenindo envios para contas incorretas.
 - **Resgate Condicional (App do Fornecedor)**: Implementada lógica de visibilidade para o botão **"Resgatar Agora"**. O botão agora é ocultado automaticamente se a configuração `allow_auto_redemption` estiver desativada no CRM.
