@@ -537,7 +537,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 pix_string: null,
                 valor_a_pagar: 0,
                 valor_concessionaria: 0,
-                status: 'pago' // Green color
+                status: 'sem_faturamento' // Green color (before), now slate
             };
 
             const { error } = await supabase.from('invoices').upsert(payload, { onConflict: 'uc_id,mes_referencia' });
@@ -954,7 +954,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     <Upload size={18} /> Upload Conta
                                                 </button>
                                                 <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                    <PlusCircle size={18} /> Fatura Avulsa
+                                                    <PlusCircle size={18} /> Sem Faturamento
                                                 </button>
                                             </div>
                                         </div>

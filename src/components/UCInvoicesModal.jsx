@@ -54,6 +54,7 @@ export default function UCInvoicesModal({ uc, onClose }) {
 
     const getStatusBadge = (status) => {
         const map = {
+            'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
