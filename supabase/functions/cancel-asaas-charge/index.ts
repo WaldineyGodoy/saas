@@ -75,7 +75,7 @@ serve(async (req) => {
 
         // 3. Atualizar status no Banco de Dados e limpar metadados do Asaas
         const updatePayload = {
-            status: 'cancelado',
+            status: type === 'consolidated_invoice' ? 'canceled' : 'cancelado',
             asaas_status: 'CANCELLED',
             asaas_payment_id: null,
             asaas_boleto_url: null,
