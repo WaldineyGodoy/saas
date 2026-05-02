@@ -346,7 +346,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 valor_a_pagar: extractedData.valorTotal || 0,
                 valor_concessionaria: extractedData.valorTotal || 0,
                 desconto_assinante: Number(uc.desconto_assinante) || 0,
-                status: 'a_vencer',
+                status: 'ag_emissao_boleto',
                 concessionaria_pdf_url: publicUrl,
                 linha_digitavel: extractedData.linhaDigitavel || null,
                 pix_string: extractedData.pixString || null
