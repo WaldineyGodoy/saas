@@ -83,11 +83,11 @@ serve(async (req) => {
             pix_string: null
         };
         
-        // Se for consolidada, ela não tem linha_digitavel/pix_string na tabela atualmente, mas ignorar campos extras não falha o update no postgrest se existirem
-        // Mas para ser seguro:
+        // Se for consolidada, ela não tem linha_digitavel/pix_string/asaas_status na tabela atualmente
         if (type === 'consolidated_invoice') {
              delete updatePayload.linha_digitavel;
              delete updatePayload.pix_string;
+             delete updatePayload.asaas_status;
         }
 
         const { error: updateError } = await supabase
