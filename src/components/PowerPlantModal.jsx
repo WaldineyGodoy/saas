@@ -63,7 +63,8 @@ const modalStyles = `
 
 // Sortable UC Item Component
 const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
-    const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
+    const isDisconnected = uc.status === 'desconectado' || uc.status === 'cancelado';
+    const percentage = (geracaoEstimada > 0 && !isDisconnected) ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : (isDisconnected ? '0.00' : null);
     const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
     
     const getStatusStyle = (status) => {
@@ -111,7 +112,10 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         zIndex: isDragging ? 100 : 1,
         position: 'relative',
         marginBottom: '0.75rem',
-        transition: 'all 0.2s ease'
+        transition: 'all 0.2s ease',
+        opacity: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 0.7 : 1,
+        borderStyle: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 'dashed' : 'solid',
+        backgroundColor: (uc.status === 'desconectado' || uc.status === 'cancelado') ? '#f8fafc' : 'white'
     };
 
     const isGeradora = uc.tipo_unidade === 'geradora';
@@ -327,8 +331,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     // Calculated Field: Potencia Kwp
     const [potenciaKwp, setPotenciaKwp] = useState(0);
 
-    // Calc Total Franchise
-    const totalFranquiaVinculada = selectedUCs.reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
+    // Calc Total Franchise - Exclude disconnected/canceled units from commitment
+    const totalFranquiaVinculada = selectedUCs
+        .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
+        .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
+    
+    const geracaoDisponivel = Math.max(0, (Number(formData.geracao_estimada_kwh) || 0) - totalFranquiaVinculada);
 
     useEffect(() => {
         const mods = Number(formData.qtd_modulos) || 0;
@@ -415,6 +423,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             fetchMonthlyDetails();
         }
     }, [activeFinanceTab, referenceMonth, usina?.id, selectedUCs, monthlyEstimates]);
+
+    useEffect(() => {
+        if (activeTab === 'ucs' && usina?.id) {
+            fetchLinkedUCs(usina.id);
+        }
+    }, [activeTab, usina?.id]);
 
     useEffect(() => {
         const fetchMonthlyEstimates = async () => {
@@ -1077,7 +1091,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.85rem',
                             padding: '0.8rem', border: isSelected ? '1px solid #8b5cf6' : '1px solid #ddd',
                             borderRadius: '6px', background: isSelected ? 'white' : 'rgba(255,255,255,0.6)',
-                            transition: '0.2s', boxShadow: isSelected ? '0 2px 4px rgba(139, 92, 246, 0.1)' : 'none'
+                            transition: '0.2s', boxShadow: isSelected ? '0 2px 4px rgba(139, 92, 246, 0.1)' : 'none',
+                            opacity: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 0.6 : 1,
+                            borderStyle: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 'dashed' : 'solid'
                         }}>
                             <input
                                 type="checkbox"
@@ -1130,7 +1146,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     </div>
                                     {isSelected && formData.geracao_estimada_kwh > 0 && (
                                         <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                                            {((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
+                                            {(uc.status === 'desconectado' || uc.status === 'cancelado') ? '0.00' : ((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
                                         </div>
                                     )}
                                 </div>
@@ -2617,8 +2633,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#5b21b6' }}>{totalFranquiaVinculada.toFixed(0)} kWh</div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.7rem', color: '#059669', textTransform: 'uppercase', fontWeight: 700 }}>Disponível</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#10b981' }}>{geracaoDisponivel.toFixed(0)} kWh</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Total de UCs</div>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#059669' }}>{selectedUCs.length}</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#059669' }}>
+                                        {selectedUCs.filter(u => u.status === 'ativo').length} / {selectedUCs.length}
+                                    </div>
                                 </div>
                             </div>
                         </div>
