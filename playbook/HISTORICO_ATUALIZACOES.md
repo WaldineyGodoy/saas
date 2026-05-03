@@ -2,6 +2,14 @@
 
 ---
 
+## [02/05/2026] - Implementação de Lógica de Desconexão e Vacância
+- **Nova Lógica de Comprometimento**: UCs com status `desconectado` ou `cancelado` agora são ignoradas no cálculo de geração comprometida da usina.
+- **Indicador de Disponibilidade**: Adicionado contador de "Capacidade Disponível" (kWh) para facilitar a reposição de UCs.
+- **Visual de Desconexão**: UCs desconectadas permanecem vinculadas para histórico mas ganharam estilo visual diferenciado (opacidade 70% e bordas tracejadas).
+- **Refetch Automático**: Implementada atualização em tempo real ao alternar para a aba de UCs no modal da usina.
+
+---
+
 ## [03/05/2026] - Sincronização de UCs e Correção de Geração
 - **Correção de Geração Mensal**: Resolvido erro de esquema PostgREST ao remover colunas inexistentes (`geracao_real`) no upsert da tabela `generation_production`.
 - **Validação de Status**: Corrigido valor inválido de enum (`pendente` -> `em_producao`) na persistência de dados financeiros da usina.
