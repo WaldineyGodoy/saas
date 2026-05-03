@@ -697,6 +697,32 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
                                 </div>
+                                
+                                {supplier && usinas.length > 0 && (
+                                    <div style={{ ...sectionStyle, background: '#f0f9ff', border: '1px solid #bae6fd', marginTop: '1.5rem' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Zap size={20} color="#0369a1" /> Usinas Vinculadas
+                                        </h4>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                            {usinas.map(u => (
+                                                <div key={u.id} style={{
+                                                    background: 'white',
+                                                    padding: '0.6rem 1rem',
+                                                    borderRadius: '12px',
+                                                    fontSize: '0.85rem',
+                                                    border: '1px solid #e0f2fe',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                                }}>
+                                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: u.status === 'ativo' ? '#10b981' : '#f59e0b' }}></div>
+                                                    <strong>{u.name}</strong>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -769,6 +795,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        <CheckCircle size={20} color="#34d399" /> Status Operacional
+                                    </h4>
+                                    <div className="form-group">
+                                        <select
+                                            style={{ ...inputStyle, fontWeight: 'bold' }}
+                                            value={formData.status}
+                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                        >
+                                            <option value="ativacao">🟠 Em Ativação</option>
+                                            <option value="ativo">🟢 Ativo</option>
+                                            <option value="inativo">🔴 Inativo</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                                         <Wallet size={20} color="#f59e0b" /> Dados Bancários e PIX
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
@@ -819,53 +862,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 <option value="email">Email</option>
                                                 <option value="telefone">Telefone</option>
                                                 <option value="aleatoria">Aleatória</option>
-                                            </select>
-                                        </div>
-                                        <div style={{ 
-                                            gridColumn: '1 / -1', 
-                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                            padding: '1.25rem',
-                                            borderRadius: '16px',
-                                            border: '1px solid #e2e8f0',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            marginBottom: '0.5rem'
-                                        }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Saldo Acumulado</div>
-                                                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: ledgerBalance >= 0 ? '#10b981' : '#ef4444' }}>
-                                                    {formatCurrency(ledgerBalance)}
-                                                </div>
-                                            </div>
-                                            <button 
-                                                type="button"
-                                                onClick={() => setActiveTab('extrato')}
-                                                style={{
-                                                    background: 'white',
-                                                    border: '1px solid #e2e8f0',
-                                                    padding: '0.5rem 1rem',
-                                                    borderRadius: '10px',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '600',
-                                                    color: '#3b82f6',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Ver Detalhes
-                                            </button>
-                                        </div>
-
-                                        <div style={{ gridColumn: '1 / -1' }}>
-                                            <label style={labelStyle}>Status Operacional</label>
-                                            <select
-                                                style={{ ...inputStyle, fontWeight: 'bold' }}
-                                                value={formData.status}
-                                                onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                            >
-                                                <option value="ativacao">🟠 Em Ativação</option>
-                                                <option value="ativo">🟢 Ativo</option>
-                                                <option value="inativo">🔴 Inativo</option>
                                             </select>
                                         </div>
                                     </div>
@@ -941,28 +937,44 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     </div>
                                 )}
 
-                                {supplier && usinas.length > 0 && (
-                                    <div style={{ ...sectionStyle, background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-                                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#0369a1' }}>Usinas Vinculadas</h4>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                            {usinas.map(u => (
-                                                <div key={u.id} style={{
-                                                    background: 'white',
-                                                    padding: '0.6rem 1rem',
-                                                    borderRadius: '12px',
-                                                    fontSize: '0.85rem',
-                                                    border: '1px solid #e0f2fe',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.5rem'
-                                                }}>
-                                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: u.status === 'ativo' ? '#10b981' : '#f59e0b' }}></div>
-                                                    <strong>{u.name}</strong>
-                                                </div>
-                                            ))}
+                                <div style={{ 
+                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                    padding: '1.5rem',
+                                    borderRadius: '20px',
+                                    border: '1px solid #e2e8f0',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '1rem',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saldo Acumulado</div>
+                                        <div style={{ fontSize: '1.75rem', fontWeight: '900', color: ledgerBalance >= 0 ? '#10b981' : '#ef4444', marginTop: '0.25rem' }}>
+                                            {formatCurrency(ledgerBalance)}
                                         </div>
                                     </div>
-                                )}
+                                    <button 
+                                        type="button"
+                                        onClick={() => setActiveTab('extrato')}
+                                        style={{
+                                            background: 'white',
+                                            border: '1px solid #e2e8f0',
+                                            padding: '0.75rem 1.25rem',
+                                            borderRadius: '12px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: '700',
+                                            color: '#3b82f6',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                    >
+                                        Ver Detalhes
+                                    </button>
+                                </div>
                             </div>
                         )}
 

@@ -2,6 +2,15 @@
 
 ---
 
+## [03/05/2026] - Sincronização de UCs e Correção de Geração
+- **Correção de Geração Mensal**: Resolvido erro de esquema PostgREST ao remover colunas inexistentes (`geracao_real`) no upsert da tabela `generation_production`.
+- **Validação de Status**: Corrigido valor inválido de enum (`pendente` -> `em_producao`) na persistência de dados financeiros da usina.
+- **Sincronização de UCs**: Atualizado mapeamento de status de UCs para incluir novos valores do banco (`ativacao`, `transf. titularidade`, etc.) e garantir fidelidade visual.
+- **Geração Prevista**: Ajustada a lógica de busca de estimativas mensais para garantir que a geração prevista seja exibida corretamente na aba financeira, integrando dados do gráfico técnico.
+- **UX**: Refinamento dos badges de status e integração com `UCInvoicesModal` para acesso rápido ao financeiro das UCs.
+
+---
+
 ## [02/05/2026] - Correção de Faturamento Consolidado e Erro de CORS
 
 ### 💸 Faturas Consolidadas e Notificações

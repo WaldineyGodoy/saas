@@ -25,6 +25,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import UCInvoicesModal from './UCInvoicesModal';
 
 // Global styles for the modal
 const modalStyles = `
@@ -64,6 +65,25 @@ const modalStyles = `
 const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
     const percentage = geracaoEstimada > 0 ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : null;
     const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
+    
+    const getStatusStyle = (status) => {
+        const map = {
+            'ativo': { color: '#059669', bg: '#ecfdf5', label: 'Ativo' },
+            'desconectado': { color: '#e11d48', bg: '#fff1f2', label: 'Desconectado' },
+            'em_ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Em Ativação' },
+            'ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Ativação' },
+            'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
+            'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },
+            'cancelado_inadimplente': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado Inad.' },
+            'aguardando_conexao': { color: '#7c3aed', bg: '#f5f3ff', label: 'Ag. Conexão' },
+            'sem_geracao': { color: '#64748b', bg: '#f8fafc', label: 'Sem Geração' },
+            'em_transf_titularidade': { color: '#0ea5e9', bg: '#f0f9ff', label: 'Transf. Titularidade' },
+        };
+        return map[status] || { color: '#64748b', bg: '#f8fafc', label: status?.replace(/_/g, ' ') || 'N/A' };
+    };
+
+    const statusStyle = getStatusStyle(uc.status);
+
     const {
         attributes,
         listeners,
@@ -81,86 +101,138 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         transition,
         display: 'flex',
         alignItems: 'center',
-        gap: '0.8rem',
-        fontSize: '0.85rem',
-        padding: '0.8rem',
-        border: '1px solid #8b5cf6',
-        borderRadius: '6px',
+        gap: '1rem',
+        padding: '1rem',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
         background: 'white',
         cursor: 'default',
-        boxShadow: isDragging ? '0 8px 16px rgba(139, 92, 246, 0.15)' : 'none',
+        boxShadow: isDragging ? '0 10px 25px rgba(124, 58, 237, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
         zIndex: isDragging ? 100 : 1,
         position: 'relative',
-        marginBottom: '0.5rem'
+        marginBottom: '0.75rem',
+        transition: 'all 0.2s ease'
     };
 
+    const isGeradora = uc.tipo_unidade === 'geradora';
+
     return (
-        <div ref={setNodeRef} style={style}>
+        <div 
+            ref={setNodeRef} 
+            style={style}
+            className="uc-card-hover"
+        >
+            <style>{`
+                .uc-card-hover:hover {
+                    border-color: #7c3aed !important;
+                    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08) !important;
+                }
+            `}</style>
+            
             {!isFixed && (
                 <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
-                    <GripVertical size={18} />
+                    <GripVertical size={20} />
                 </div>
             )}
+            
             {isFixed && (
-                <div style={{ width: '18px', display: 'flex', alignItems: 'center', color: '#cbd5e1' }}>
-                    {/* Empty space or fixed icon */}
-                    <div style={{ width: '18px' }} />
-                </div>
+                <div style={{ width: '20px' }} />
             )}
 
-            <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#7c3aed', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>
+            <div style={{ 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '10px', 
+                background: isGeradora ? '#fef3c7' : '#f5f3ff', 
+                color: isGeradora ? '#92400e' : '#7c3aed', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                fontSize: '0.85rem', 
+                fontWeight: '800',
+                border: `1px solid ${isGeradora ? '#fcd34d' : '#ddd6fe'}`
+            }}>
                 {index + 1}
             </div>
 
-            <input
-                type="checkbox"
-                checked={true}
-                onChange={e => onToggle(e.target.checked)}
-                style={{ transform: 'scale(1.1)', accentColor: '#7c3aed', cursor: 'pointer' }}
-            />
-
             <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
-                    <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: uc.tipo_unidade === 'geradora' ? '#fef3c7' : '#e0f2fe', color: uc.tipo_unidade === 'geradora' ? '#92400e' : '#075985', fontWeight: 600, textTransform: 'capitalize' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '1rem', letterSpacing: '-0.01em' }}>{uc.numero_uc}</div>
+                    <span style={{ 
+                        fontSize: '0.65rem', 
+                        padding: '0.15rem 0.5rem', 
+                        borderRadius: '6px', 
+                        background: isGeradora ? '#fef3c7' : '#e0f2fe', 
+                        color: isGeradora ? '#92400e' : '#075985', 
+                        fontWeight: 800, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.02em'
+                    }}>
                         {uc.tipo_unidade || 'Beneficiária'}
                     </span>
+                    <span style={{ 
+                        fontSize: '0.65rem', 
+                        padding: '0.15rem 0.5rem', 
+                        borderRadius: '6px', 
+                        background: statusStyle.bg, 
+                        color: statusStyle.color, 
+                        fontWeight: 800, 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.02em',
+                        border: `1px solid ${statusStyle.color}20`
+                    }}>
+                        {statusStyle.label}
+                    </span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
                     {uc.titular_conta}
                 </div>
                 {subscriber && (
-                    <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem' }}>
-                        Titular: {subscriber.name}
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <Users size={12} /> {subscriber.name}
                     </div>
                 )}
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                    CPF/CNPJ: {uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || 'Não inf.'}
-                </div>
             </div>
 
-            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                <div>
-                    <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                        {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
+            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ minWidth: '100px' }}>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.1rem' }}>
+                        {uc.concessionaria}
+                    </span>
+                    <div style={{ fontSize: '1.1rem', color: '#059669', fontWeight: '900' }}>
+                        {uc.franquia ? `${Math.round(uc.franquia)}` : '0'} <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>kWh</span>
                     </div>
                     {percentage && (
-                        <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, marginTop: '-0.1rem' }}>
                             {percentage}%
                         </div>
                     )}
-                    <div style={{ fontSize: '0.65rem', color: uc.saldo_remanescente ? '#dc2626' : '#94a3b8', fontWeight: uc.saldo_remanescente ? 'bold' : 'normal', marginTop: '0.1rem' }}>
-                        Saldo R.: {uc.saldo_remanescente ? 'Sim' : 'Não'}
-                    </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => onPreview(uc)}
-                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '0.4rem', color: '#64748b', cursor: 'pointer' }}
-                >
-                    <Eye size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button
+                        type="button"
+                        onClick={() => onPreview(uc)}
+                        style={{ 
+                            background: '#f8fafc', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '8px', 
+                            padding: '0.5rem', 
+                            color: '#64748b', 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#7c3aed'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+                    >
+                        <Eye size={18} />
+                    </button>
+                    <input
+                        type="checkbox"
+                        checked={true}
+                        onChange={e => onToggle(e.target.checked)}
+                        style={{ width: '1.25rem', height: '1.25rem', accentColor: '#7c3aed', cursor: 'pointer' }}
+                    />
+                </div>
             </div>
         </div>
     );
@@ -244,6 +316,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal'
     const [showExpandedUCs, setShowExpandedUCs] = useState(false);
+    const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+    const [ucForInvoices, setUcForInvoices] = useState(null);
     const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
     const sensors = useSensors(
@@ -513,7 +587,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const totalDespesas = maintenance + rent + gestaoTotal + otherServices;
 
             // 2. Upsert generation_production
-            const { details, ...mainData } = monthlyDetails;
+            const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
             const { error: prodError } = await supabase
                 .from('generation_production')
                 .upsert({
@@ -966,8 +1040,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     geracaoEstimada={formData.geracao_estimada_kwh}
                                     subscribers={subscribers}
                                     isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
-                                    onPreview={() => {
-                                        setPreviewUC(uc);
+                                    onPreview={async () => {
+                                        const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                        setPreviewUC(data || uc);
                                         setShowPreviewModal(true);
                                     }}
                                     onToggle={async (checked) => {
@@ -1061,8 +1136,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setPreviewUC(uc);
+                                    onClick={async () => {
+                                        const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                        setPreviewUC(data || uc);
                                         setShowPreviewModal(true);
                                     }}
                                     style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '0.4rem', color: '#64748b', cursor: 'pointer' }}
@@ -1167,14 +1243,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 // If monthly details are populated, save them to generation_production
                 if (monthlyDetails) {
-                    const { details, ...mainData } = monthlyDetails;
+                    const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
                     const { error: prodError } = await supabase.from('generation_production')
                         .upsert({
                             ...mainData,
                             usina_id: usinaId,
                             mes_referencia: `${referenceMonth}-01`,
                             service_details: details || {},
-                            status: mainData.status || 'pendente'
+                            status: mainData.status === 'pendente' || !mainData.status ? 'em_producao' : mainData.status
                         });
                     
                     if (prodError) throw prodError;
@@ -2052,55 +2128,164 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {activeTab === 'ucs' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div style={{ background: '#f5f3ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #ede9fe' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                <div style={{ background: '#ffffff', padding: '2rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
                                         <div>
-                                            <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#5b21b6' }}>Controle de Vínculos e Rateio</h4>
-                                            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#7c3aed' }}>
-                                                Comprometido: <strong>{totalFranquiaVinculada.toFixed(0)} kWh</strong> 
-                                                {formData.geracao_estimada_kwh > 0 && ` (${Math.round((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100)}% da geração)`}
-                                            </p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                                                <div style={{ padding: '0.6rem', background: '#f5f3ff', borderRadius: '12px', color: '#7c3aed' }}>
+                                                    <Link size={24} />
+                                                </div>
+                                                <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Controle e Vínculos de Rateio</h4>
+                                            </div>
+                                            
+                                            <div style={{ marginTop: '1rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}>
+                                                    <span style={{ color: '#64748b' }}>Geração Comprometida</span>
+                                                    <span style={{ color: '#7c3aed' }}>{totalFranquiaVinculada.toFixed(0)} / {formData.geracao_estimada_kwh || 0} kWh</span>
+                                                </div>
+                                                <div style={{ width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
+                                                    <div style={{ 
+                                                        width: `${Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100)}%`, 
+                                                        height: '100%', 
+                                                        background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
+                                                        borderRadius: '10px',
+                                                        transition: 'width 0.5s ease-out'
+                                                    }} />
+                                                </div>
+                                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                                                    {formData.geracao_estimada_kwh > 0 ? 
+                                                        `Isso representa ${((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100).toFixed(1)}% do potencial da usina.` : 
+                                                        'Defina a geração estimada na aba Geral para ver o comprometimento.'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                        <div style={{ display: 'flex', gap: '1rem' }}>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowExpandedUCs(true)}
-                                                style={{ padding: '0.6rem 1rem', background: 'white', border: '1px solid #ddd', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}
+                                                style={{ 
+                                                    padding: '0.75rem 1.25rem', 
+                                                    background: 'white', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    borderRadius: '12px', 
+                                                    cursor: 'pointer', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.6rem', 
+                                                    fontSize: '0.9rem', 
+                                                    fontWeight: 700, 
+                                                    color: '#475569',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#7c3aed'}
+                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
                                             >
                                                 <Maximize2 size={18} /> Expandir Gestor
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={handleGenerateList}
-                                                style={{ padding: '0.6rem 1.25rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, boxShadow: '0 4px 6px -1px rgba(124, 58, 237, 0.2)' }}
+                                                style={{ 
+                                                    padding: '0.75rem 1.5rem', 
+                                                    background: '#7c3aed', 
+                                                    color: 'white', 
+                                                    border: 'none', 
+                                                    borderRadius: '12px', 
+                                                    cursor: 'pointer', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.6rem', 
+                                                    fontSize: '0.9rem', 
+                                                    fontWeight: 700, 
+                                                    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                                             >
                                                 <Download size={18} /> Anexo IV
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Sub-Filters embedded */}
-                                    <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem', padding: '1rem', background: 'white', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                            <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Visualizar</label>
-                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
-                                                <button type="button" onClick={() => setUcFilter('linked')} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: ucFilter === 'linked' ? 'white' : 'transparent', color: ucFilter === 'linked' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Vinculadas</button>
-                                                <button type="button" onClick={() => setUcFilter('unlinked')} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: ucFilter === 'unlinked' ? 'white' : 'transparent', color: ucFilter === 'unlinked' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Disponíveis</button>
+                                    {/* Sub-Filters embedded with modern design */}
+                                    <div style={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: '1fr 1fr', 
+                                        gap: '1.5rem', 
+                                        marginBottom: '2rem', 
+                                        padding: '1.5rem', 
+                                        background: '#f8fafc', 
+                                        borderRadius: '20px', 
+                                        border: '1px solid #f1f5f9' 
+                                    }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Visualizar Unidades</label>
+                                            <div style={{ display: 'flex', background: 'white', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setUcFilter('linked')} 
+                                                    style={{ 
+                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
+                                                        background: ucFilter === 'linked' ? '#7c3aed' : 'transparent', 
+                                                        color: ucFilter === 'linked' ? 'white' : '#64748b', 
+                                                        cursor: 'pointer', transition: 'all 0.2s' 
+                                                    }}
+                                                >
+                                                    Vinculadas
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setUcFilter('unlinked')} 
+                                                    style={{ 
+                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
+                                                        background: ucFilter === 'unlinked' ? '#7c3aed' : 'transparent', 
+                                                        color: ucFilter === 'unlinked' ? 'white' : '#64748b', 
+                                                        cursor: 'pointer', transition: 'all 0.2s' 
+                                                    }}
+                                                >
+                                                    Disponíveis
+                                                </button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                            <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Regra de Rateio</label>
-                                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
-                                                <button type="button" onClick={() => setFormData({...formData, rateio_type: 'prioridade'})} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent', color: formData.rateio_type === 'prioridade' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Prioridade</button>
-                                                <button type="button" onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})} style={{ padding: '0.3rem 0.8rem', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent', color: formData.rateio_type === 'porcentagem' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>Porcentagem</button>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Regra de Rateio</label>
+                                            <div style={{ display: 'flex', background: 'white', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setFormData({...formData, rateio_type: 'prioridade'})} 
+                                                    style={{ 
+                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
+                                                        background: formData.rateio_type === 'prioridade' ? '#7c3aed' : 'transparent', 
+                                                        color: formData.rateio_type === 'prioridade' ? 'white' : '#64748b', 
+                                                        cursor: 'pointer', transition: 'all 0.2s' 
+                                                    }}
+                                                >
+                                                    Prioridade
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})} 
+                                                    style={{ 
+                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
+                                                        background: formData.rateio_type === 'porcentagem' ? '#7c3aed' : 'transparent', 
+                                                        color: formData.rateio_type === 'porcentagem' ? 'white' : '#64748b', 
+                                                        cursor: 'pointer', transition: 'all 0.2s' 
+                                                    }}
+                                                >
+                                                    Porcentagem
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
 
                                     {loadingUCs ? (
-                                        <div style={{ textAlign: 'center', padding: '2rem' }}>Carregando...</div>
+                                        <div style={{ textAlign: 'center', padding: '4rem' }}>
+                                            <RefreshCcw className="animate-spin" size={32} color="#7c3aed" />
+                                            <p style={{ marginTop: '1rem', color: '#64748b', fontWeight: 600 }}>Sincronizando unidades...</p>
+                                        </div>
                                     ) : (
-                                        <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                        <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '0.75rem' }} className="custom-scrollbar">
                                             {renderUCList()}
                                         </div>
                                     )}
@@ -2242,9 +2427,26 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Status</label>
-                                <span style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem', borderRadius: '20px', background: '#f0fdf4', color: '#166534', fontWeight: 600 }}>
-                                    {previewUC.status?.replace('_', ' ').toUpperCase()}
-                                </span>
+                                {(() => {
+                                    const map = {
+                                        'ativo': { color: '#059669', bg: '#ecfdf5', label: 'Ativo' },
+                                        'desconectado': { color: '#e11d48', bg: '#fff1f2', label: 'Desconectado' },
+                                        'em_ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Em Ativação' },
+                                        'ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Ativação' },
+                                        'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
+                                        'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },
+                                        'cancelado_inadimplente': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado Inad.' },
+                                        'aguardando_conexao': { color: '#7c3aed', bg: '#f5f3ff', label: 'Ag. Conexão' },
+                                        'sem_geracao': { color: '#64748b', bg: '#f8fafc', label: 'Sem Geração' },
+                                        'em_transf_titularidade': { color: '#0ea5e9', bg: '#f0f9ff', label: 'Transf. Titularidade' },
+                                    };
+                                    const s = map[previewUC.status] || { color: '#64748b', bg: '#f8fafc', label: previewUC.status?.replace(/_/g, ' ').toUpperCase() || 'N/A' };
+                                    return (
+                                        <span style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem', borderRadius: '20px', background: s.bg, color: s.color, fontWeight: 700 }}>
+                                            {s.label.toUpperCase()}
+                                        </span>
+                                    );
+                                })()}
                             </div>
                             <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '1rem' }}>
                                 <div>
@@ -2291,7 +2493,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                            <button
+                                onClick={() => {
+                                    setUcForInvoices(previewUC);
+                                    setShowInvoicesModal(true);
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.5rem', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #7c3aed', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                <FileText size={18} /> Ver Faturas
+                            </button>
                             <button
                                 onClick={() => setShowPreviewModal(false)}
                                 style={{ padding: '0.7rem 2rem', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
@@ -2427,6 +2638,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showInvoicesModal && ucForInvoices && (
+                <UCInvoicesModal 
+                    uc={ucForInvoices} 
+                    onClose={() => setShowInvoicesModal(false)} 
+                />
             )}
         </div>
     );
