@@ -221,6 +221,28 @@ export default function InvoiceListManager() {
         }
     };
 
+    const handleDrop = async (e, newStatus) => {
+        e.preventDefault();
+        const invoiceId = e.dataTransfer.getData('invoiceId');
+        if (!invoiceId) return;
+
+        const inv = invoices.find(i => i.id === invoiceId);
+        if (!inv || inv.status === newStatus) return;
+
+        const previousStatus = inv.status;
+        setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, status: newStatus } : i));
+
+        try {
+            const { error } = await supabase.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+            if (error) throw error;
+            showAlert('Status atualizado com sucesso!', 'success');
+        } catch (error) {
+            console.error('Error updating status:', error);
+            showAlert('Erro ao atualizar status: ' + error.message, 'error');
+            setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, status: previousStatus } : i));
+        }
+    };
+
     const formatCurrency = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const getStatusBadge = (status) => {
@@ -955,14 +977,26 @@ export default function InvoiceListManager() {
                                     };
                                     const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
                                     return (
-                                        <div key={status} className="kanban-column" style={{ borderTop: `4px solid ${s.color}` }}>
+                                        <div 
+                                            key={status} 
+                                            className="kanban-column" 
+                                            style={{ borderTop: `4px solid ${s.color}` }}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={(e) => handleDrop(e, status)}
+                                        >
                                             <div className="kanban-column-header" style={{ color: s.color }}>
                                                 <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
                                                 <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>{formatCurrency(invoicesInStatus.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0))}</span>
                                             </div>
                                             <div className="kanban-column-content">
                                                 {invoicesInStatus.map(inv => (
-                                                    <div key={inv.id} onClick={() => handleEdit(inv)} className="kanban-card">
+                                                    <div 
+                                                        key={inv.id} 
+                                                        onClick={() => handleEdit(inv)} 
+                                                        className="kanban-card"
+                                                        draggable
+                                                        onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
+                                                    >
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                             <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>{inv.consumer_units?.numero_uc}</span>
                                                             <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</span>
