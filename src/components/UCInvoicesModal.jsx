@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, X, AlertCircle, CheckCircle, Clock, ExternalLink, View } from 'lucide-react';
+import { FileText, X, AlertCircle, CheckCircle, Clock, ExternalLink, View, TicketMinus } from 'lucide-react';
 import InvoiceFormModal from './InvoiceFormModal';
 
 export default function UCInvoicesModal({ uc, onClose }) {
