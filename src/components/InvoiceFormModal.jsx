@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle, Send, Plus, TicketMinus, CheckCircle2 } from 'lucide-react';
+import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle, Send, Plus, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf, sendCombinedNotification } from '../lib/api';
@@ -830,7 +830,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                 data_leitura: formData.data_leitura || null,
                 valor_a_pagar: totalToSave,
-                valor_concessionaria: Number(formData.valor_concessionaria) || 0,
+                valor_concessionaria: typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || 0),
                 economia_reais: economiaReais,
                 linha_digitavel: formData.linha_digitavel || null,
                 pix_string: formData.pix_string || null,
@@ -960,13 +960,97 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
                 </div>
 
+                {/* Status Selection - Premium Pipeline Style */}
+                {canManageStatus && (
+                    <div style={{ 
+                        padding: '1.25rem 1.5rem', 
+                        background: '#f8fafc', 
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem'
+                    }}>
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between'
+                        }}>
+                            <label style={{ 
+                                fontSize: '0.75rem', 
+                                color: '#64748b', 
+                                fontWeight: 800, 
+                                textTransform: 'uppercase', 
+                                letterSpacing: '0.05em',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
+                            }}>
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563eb' }}></div>
+                                Status Atual da Fatura
+                            </label>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
+                                Clique para alterar o status
+                            </span>
+                        </div>
+                        
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '0.6rem', 
+                            flexWrap: 'wrap',
+                            justifyContent: 'flex-start'
+                        }}>
+                            {[
+                                { id: 'sem_faturamento', label: 'Sem Faturamento', icon: Ban, color: '#64748b', bg: '#f1f5f9' },
+                                { id: 'ag_emissao_boleto', label: 'Ag. Emissão', icon: FileText, color: '#2563eb', bg: '#eff6ff' },
+                                { id: 'a_vencer', label: 'A Vencer', icon: Calculator, color: '#0284c7', bg: '#f0f9ff' },
+                                { id: 'confirmado', label: 'Confirmado', icon: CheckCircle2, color: '#0891b2', bg: '#ecfeff' },
+                                { id: 'pago', label: 'Pago', icon: CheckCircle, color: '#059669', bg: '#ecfdf5' },
+                                { id: 'atrasado', label: 'Atrasado', icon: AlertCircle, color: '#dc2626', bg: '#fef2f2' }
+                            ].map((s) => {
+                                const isActive = formData.status === s.id;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, status: s.id })}
+                                        style={{
+                                            flex: '1 1 auto',
+                                            minWidth: '130px',
+                                            padding: '0.6rem 0.8rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid',
+                                            borderColor: isActive ? s.color : '#e2e8f0',
+                                            background: isActive ? s.bg : 'white',
+                                            color: isActive ? s.color : '#64748b',
+                                            fontWeight: isActive ? 700 : 500,
+                                            fontSize: '0.8rem',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '0.5rem',
+                                            boxShadow: isActive ? `0 4px 6px -1px ${s.color}20` : 'none',
+                                            transform: isActive ? 'translateY(-1px)' : 'none'
+                                        }}
+                                    >
+                                        <s.icon size={14} strokeWidth={isActive ? 2.5 : 2} />
+                                        {s.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* Tabs Navigation */}
                 <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: 'white', padding: '0 1.25rem' }}>
                     {[
                         { id: 'geral', label: 'Identificação', icon: <Info size={18} /> },
                         { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
                         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={18} /> },
-                        { id: 'resumo', label: 'Resumo', icon: <Calculator size={18} /> }
+                        { id: 'resumo', label: 'Conta de Energia', icon: <FileText size={18} /> },
+                        { id: 'resumo_fatura', label: 'Resumo da Fatura', icon: <Calculator size={18} /> }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -1040,46 +1124,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                         <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vencimento</label>
                                         <input type="date" required value={formData.vencimento} onChange={e => setFormData({ ...formData, vencimento: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#dc2626', fontWeight: 'bold' }} />
                                     </div>
-                                    {/* Status */}
-                                    {canManageStatus && (
-                                        <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-full">
-                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status da Fatura</label>
-                                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                                {['sem_faturamento', 'ag_emissao_boleto', 'a_vencer', 'confirmado', 'pago', 'atrasado'].map((status) => (
-                                                    <button
-                                                        key={status}
-                                                        type="button"
-                                                        onClick={() => setFormData({ ...formData, status })}
-                                                        style={{
-                                                            flex: 1,
-                                                            padding: '0.75rem',
-                                                            borderRadius: '8px',
-                                                            border: '1px solid',
-                                                            borderColor: formData.status === status ? (status === 'pago' ? '#22c55e' : status === 'confirmado' ? '#0891b2' : status === 'atrasado' ? '#dc2626' : status === 'sem_faturamento' ? '#64748b' : '#2563eb') : '#cbd5e1',
-                                                            background: formData.status === status ? (status === 'pago' ? '#f0fdf4' : status === 'confirmado' ? '#ecfeff' : status === 'atrasado' ? '#fef2f2' : status === 'sem_faturamento' ? '#f1f5f9' : '#eff6ff') : 'white',
-                                                            color: formData.status === status ? (status === 'pago' ? '#166534' : status === 'confirmado' ? '#155e75' : status === 'atrasado' ? '#991b1b' : status === 'sem_faturamento' ? '#475569' : '#1e40af') : '#64748b',
-                                                            fontWeight: 'bold',
-                                                            fontSize: '0.9rem',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: '0.5rem'
-                                                        }}
-                                                    >
-                                                        {status === 'pago' && <CheckCircle size={16} />}
-                                                        {status === 'confirmado' && <CheckCircle2 size={16} />}
-                                                        {status === 'atrasado' && <AlertCircle size={16} />}
-                                                        {status === 'ag_emissao_boleto' && <TicketMinus size={16} />}
-                                                        {status === 'a_vencer' && <Calculator size={16} />}
-                                                        {status === 'sem_faturamento' && <FileText size={16} />}
-                                                        {status === 'ag_emissao_boleto' ? 'Ag. Emissão' : status === 'a_vencer' ? 'A Vencer' : status === 'confirmado' ? 'Confirmado' : status === 'pago' ? 'Pago' : status === 'sem_faturamento' ? 'Sem Faturamento' : 'Atrasado'}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                </div>
                                 </div>
                             </div>
                         )}
@@ -1134,7 +1179,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
                         {activeTab === 'financeiro' && (
                             <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
                                     <div className="bg-white p-5 rounded-xl border border-slate-200">
                                         <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Iluminação Pública (R$)</label>
                                         <div style={{ position: 'relative' }}>
@@ -1148,6 +1193,23 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
                                             <input type="text" value={formData.outros_lancamentos.replace('R$', '').trim()} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
                                         </div>
+                                    </div>
+
+                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Desconto Aplicado (%)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input 
+                                                type="number" 
+                                                step="0.1" 
+                                                value={formData.desconto_aplicado !== undefined ? formData.desconto_aplicado : (selectedUc?.desconto_assinante || 0)} 
+                                                onChange={e => setFormData({ ...formData, desconto_aplicado: parseFloat(e.target.value) })} 
+                                                style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold', color: '#2563eb' }} 
+                                            />
+                                            <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>%</span>
+                                        </div>
+                                        <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                                            Desconto cadastrado na UC: <strong>{selectedUc?.desconto_assinante || 0}%</strong>
+                                        </p>
                                     </div>
                                     
                                     <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 col-span-full">
@@ -1188,6 +1250,101 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         )}
 
                         {activeTab === 'resumo' && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 550px)', gap: '2rem', justifyContent: 'center' }}>
+                                    <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #f1f5f9' }}>
+                                            <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px' }}>
+                                                <FileText size={24} color="#3b82f6" />
+                                            </div>
+                                            <div>
+                                                <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem', textTransform: 'uppercase' }}>RESUMO DA CONTA DE ENERGIA</h4>
+                                                <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Conta processada da concessionária</p>
+                                            </div>
+                                        </div>
+
+                                        {selectedUc && (
+                                            <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', border: '1px solid #e2e8f0' }}>
+                                                <div style={{ gridColumn: '1 / -1' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Beneficiário / Unidade Consumidora</label>
+                                                    <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{selectedUc.subscribers?.name || selectedUc.titular_conta}</span>
+                                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {selectedUc.numero_uc}</div>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Período</label>
+                                                    <span style={{ fontWeight: 600, color: '#334155' }}>
+                                                        {(() => {
+                                                            const [y, m] = formData.mes_referencia.split('-');
+                                                            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                                                            return `${months[parseInt(m) - 1]}/${y}`;
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Vencimento Boleto</label>
+                                                    <span style={{ fontWeight: 'bold', color: '#2563eb' }}>{formData.vencimento ? new Date(formData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
+                                                <span>Consumo Total:</span>
+                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_kwh} kWh</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
+                                                <span>Energia Compensada:</span>
+                                                <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
+                                            </div>
+                                            
+                                            <div style={{ height: '1px', background: '#e2e8f0', margin: '0.4rem 0' }}></div>
+
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
+                                                <span>Custo da Energia:</span>
+                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_reais}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#16a34a', fontWeight: '600' }}>
+                                                <span>Economia Gerada:</span>
+                                                <span>- {formData.economia_reais}</span>
+                                            </div>
+                                            
+                                            <div style={{ 
+                                                marginTop: '0.5rem', padding: '1.25rem', borderRadius: '12px', 
+                                                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                            }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>VALOR DA CONTA DE ENERGIA</span>
+                                                    <span style={{ fontSize: '0.7rem', color: '#166534', opacity: 0.8 }}>Incluindo taxas e impostos</span>
+                                                </div>
+                                                <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
+                                                    {formData.valor_concessionaria ? (typeof formData.valor_concessionaria === 'number' ? formData.valor_concessionaria.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : formData.valor_concessionaria) : formData.valor_a_pagar}
+                                                </span>
+                                            </div>
+
+                                            {/* Original Document Link */}
+                                            {invoice?.concessionaria_pdf_url && (
+                                                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                                                    <a 
+                                                        href={invoice.concessionaria_pdf_url} 
+                                                        target="_blank" 
+                                                        rel="noreferrer"
+                                                        style={{ 
+                                                            fontSize: '0.8rem', color: '#64748b', textDecoration: 'none', 
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
+                                                        }}
+                                                    >
+                                                        <FileText size={14} /> Ver Conta da Concessionária
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'resumo_fatura' && (
                             <div style={{ animation: 'fadeIn 0.3s ease' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 550px)', gap: '2rem', justifyContent: 'center' }}>
                                     <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)' }}>
@@ -1309,23 +1466,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                     )
                                                 )}
                                             </div>
-
-                                            {/* Original Document Link - Move to Footer style icon */}
-                                            {invoice?.concessionaria_pdf_url && (
-                                                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                                                    <a 
-                                                        href={invoice.concessionaria_pdf_url} 
-                                                        target="_blank" 
-                                                        rel="noreferrer"
-                                                        style={{ 
-                                                            fontSize: '0.8rem', color: '#64748b', textDecoration: 'none', 
-                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
-                                                        }}
-                                                    >
-                                                        <FileText size={14} /> Ver Conta da Concessionária
-                                                    </a>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
