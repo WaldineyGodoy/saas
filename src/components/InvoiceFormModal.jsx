@@ -1126,7 +1126,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     </div>
                                 </div>
                                 </div>
-                            </div>
                         )}
 
                         {activeTab === 'consumo' && (
