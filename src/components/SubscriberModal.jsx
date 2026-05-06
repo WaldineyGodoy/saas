@@ -682,7 +682,7 @@ Associado`;
             }
 
             const canvas = await html2canvas(element, {
-                scale: 1.5,
+                scale: 2,
                 useCORS: true,
                 allowTaint: true,
                 logging: false,
@@ -690,12 +690,26 @@ Associado`;
             });
 
             const imgData = canvas.toDataURL('image/png');
-            const pdfSummary = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdfSummary.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210;
+            const pageHeight = 297;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
 
-            const summaryBase64 = pdfSummary.output('datauristring').split(',')[1];
+            // Page 1
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            // Subsequent pages if height exceeds A4
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            const summaryBase64 = pdf.output('datauristring').split(',')[1];
             const asaasUrl = consolidated.asaas_boleto_url;
 
             // Coletar todas as URLs de faturas de energia das faturas individuais (Removendo duplicatas)
@@ -1054,7 +1068,7 @@ Associado`;
 
         return (
             <div className="pdf-capture-wrapper consolidated" style={{ width: '210mm', backgroundColor: 'white', position: 'relative' }}>
-                <main className="flex flex-col bg-white min-h-[297mm]">
+                <main className="flex flex-col bg-white" style={{ minHeight: '297mm' }}>
                     {/* Header Section */}
                     <header className="bg-white">
                         <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">

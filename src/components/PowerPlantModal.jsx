@@ -6,8 +6,9 @@ import { useUI } from '../contexts/UIContext';
 import { 
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
-    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw
+    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare
 } from 'lucide-react';
+import HistoryTimeline from './HistoryTimeline';
 import {
     DndContext,
     closestCorners,
@@ -318,7 +319,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [ucFilter, setUcFilter] = useState('linked'); // 'linked' or 'unlinked'
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal'
+    const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
     const [showExpandedUCs, setShowExpandedUCs] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
     const [ucForInvoices, setUcForInvoices] = useState(null);
@@ -1339,7 +1340,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         { id: 'tecnico', label: 'Técnico', icon: Activity },
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet2 },
                         { id: 'ucs', label: 'UCs & Rateio', icon: Link },
-                        { id: 'portal', label: 'Portal', icon: Globe }
+                        { id: 'portal', label: 'Portal', icon: Globe },
+                        { id: 'comunicacao', label: 'Comunicados', icon: MessageSquare }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -2375,6 +2377,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Tab Content: Comunicados / Histórico */}
+                    {activeTab === 'comunicacao' && (
+                        <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <HistoryTimeline 
+                                entityType="usina"
+                                entityId={usina?.id}
+                                entityName={formData.name || usina?.name}
+                                isInline={true}
+                            />
                         </div>
                     )}
 
