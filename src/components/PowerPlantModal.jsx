@@ -1278,14 +1278,20 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 // If monthly details are populated, save them to generation_production
                 if (monthlyDetails) {
                     const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
+                    const upsertData = {
+                        ...mainData,
+                        usina_id: usinaId,
+                        mes_referencia: `${referenceMonth}-01`,
+                        service_details: details || {},
+                        status: mainData.status === 'pendente' || !mainData.status ? 'em_producao' : mainData.status
+                    };
+                    
+                    if (prodId) {
+                        upsertData.id = prodId;
+                    }
+
                     const { error: prodError } = await supabase.from('generation_production')
-                        .upsert({
-                            ...mainData,
-                            usina_id: usinaId,
-                            mes_referencia: `${referenceMonth}-01`,
-                            service_details: details || {},
-                            status: mainData.status === 'pendente' || !mainData.status ? 'em_producao' : mainData.status
-                        });
+                        .upsert(upsertData);
                     
                     if (prodError) throw prodError;
                 }
