@@ -2,6 +2,16 @@
 
 ---
 
+## [08/05/2026] - Estabilização de Webhook e Correção de Ledger
+- **Segurança de Webhook**: Refatorada a Edge Function `asaas-webhook` para usar recuperação de headers insensível a maiúsculas/minúsculas (`req.headers.get`), resolvendo erros 401 de autenticação.
+- **Rastreabilidade**: Implementado log de payloads brutos e headers na tabela `webhook_logs` para todas as requisições, facilitando auditorias de integração.
+- **Correção de Ledger (Unique Constraint)**: Resolvido erro de banco de dados (`23505`) ao processar pagamentos consolidados. O `external_id` no livro razão agora é granular (`asaas_payment_id:invoice_id`), permitindo múltiplos lançamentos para o mesmo pagamento Asaas.
+- **Sincronização Retroativa**: Processamento manual de faturas que ficaram com status `a_vencer` devido a falhas de comunicação prévias.
+
+---
+
+
+
 ## [02/05/2026] - Implementação de Lógica de Desconexão e Vacância
 - **Nova Lógica de Comprometimento**: UCs com status `desconectado` ou `cancelado` agora são ignoradas no cálculo de geração comprometida da usina.
 - **Indicador de Disponibilidade**: Adicionado contador de "Capacidade Disponível" (kWh) para facilitar a reposição de UCs.

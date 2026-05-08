@@ -28,20 +28,38 @@ serve(async (req) => {
             throw new Error('Financial integration not configured');
         }
 
-        // Security Check: Validate Asaas Webhook Token
+        // Log raw request for debugging
+        const rawBody = await req.text();
+        const headers = Object.fromEntries(req.headers.entries());
         const receivedToken = req.headers.get('asaas-access-token');
-        if (finConfig.secret_key && receivedToken !== finConfig.secret_key) {
-            console.error('Invalid Asaas access token');
+
+        // Security Check: Validate Asaas Webhook Token
+        const isAuthorized = !finConfig.secret_key || receivedToken === finConfig.secret_key;
+
+        // Log to database
+        await supabase.from('webhook_logs').insert({
+            service_name: 'asaas-webhook',
+            payload: { raw: rawBody },
+            headers: headers,
+            status_code: isAuthorized ? 200 : 401
+        });
+
+        if (!isAuthorized) {
+            console.error(`Invalid Asaas access token. Received: ${receivedToken?.substring(0, 10)}...`);
             return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
         }
 
-        const eventData = await req.json();
+        if (!rawBody) {
+            return new Response(JSON.stringify({ received: true, status: 'empty_body' }), { headers: corsHeaders });
+        }
+
+        const eventData = JSON.parse(rawBody);
         const { event, payment } = eventData;
 
         console.log(`Webhook Event: ${event}`, payment);
 
         if (!payment || !payment.id) {
-            return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ received: true, status: 'no_payment' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // 2. Identify Invoice Type (Individual or Consolidated)
