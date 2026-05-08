@@ -113,7 +113,6 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         zIndex: isDragging ? 100 : 1,
         position: 'relative',
         marginBottom: '0.75rem',
-        transition: 'all 0.2s ease',
         opacity: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 0.7 : 1,
         borderStyle: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 'dashed' : 'solid',
         backgroundColor: (uc.status === 'desconectado' || uc.status === 'cancelado') ? '#f8fafc' : 'white'

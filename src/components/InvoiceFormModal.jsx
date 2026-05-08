@@ -57,6 +57,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [subscriber, setSubscriber] = useState(null);
     const [activeTab, setActiveTab] = useState('geral');
     const hiddenRef = useRef(null);
+    const isSubmitting = useRef(false);
 
     // Helpers
     const formatCurrency = (val) => {
@@ -257,6 +258,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
         const targetId = localInvoiceId || invoice?.id;
         if (!targetId) return;
 
+        if (isSubmitting.current) return;
+
         const confirmed = await showConfirm(
             'Você realmente deseja cancelar essa fatura? Se houver um boleto emitido no Asaas, ele também será cancelado. Esta ação é irreversível.',
             'Confirmar Cancelamento',
@@ -266,6 +269,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
         if (!confirmed) return;
 
+        isSubmitting.current = true;
         setLoading(true);
         try {
             await cancelAsaasCharge(invoice.id);
@@ -277,6 +281,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             showAlert('Erro ao cancelar fatura: ' + error.message, 'error');
         } finally {
             setLoading(false);
+            isSubmitting.current = false;
         }
     };
 
@@ -795,6 +800,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
 
     const handleSubmit = async (e, action = null) => {
         if (e) e.preventDefault();
+        
+        if (isSubmitting.current) return;
+        isSubmitting.current = true;
+        
         setLoading(true);
 
         try {
@@ -914,6 +923,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             showAlert('Erro ao salvar fatura: ' + error.message, 'error');
         } finally {
             setLoading(false);
+            isSubmitting.current = false;
         }
     };
 
