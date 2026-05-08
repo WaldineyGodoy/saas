@@ -381,7 +381,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             });
             fetchLinkedUCs(usina.id);
         }
-    }, [usina]);
+    }, [usina?.id]);
 
     useEffect(() => {
         fetchAvailableUCs();
@@ -423,7 +423,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         if (activeFinanceTab === 'lancamentos' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeFinanceTab, referenceMonth, usina?.id, selectedUCs, monthlyEstimates]);
+    }, [activeFinanceTab, referenceMonth, usina?.id]);
 
     useEffect(() => {
         if (activeTab === 'ucs' && usina?.id) {
@@ -479,6 +479,19 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         fetchMonthlyEstimates();
     }, [formData.ibge_code, potenciaKwp]);
 
+    // Update only the predicted generation when chart estimates arrive
+    useEffect(() => {
+        if (monthlyEstimates.length > 0 && monthlyDetails) {
+            const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
+            const estimateObj = monthlyEstimates[monthIdx] || {};
+            const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
+            
+            if (prediction !== monthlyDetails.geracao_prevista) {
+                setMonthlyDetails(prev => prev ? { ...prev, geracao_prevista: prediction } : prev);
+            }
+        }
+    }, [monthlyEstimates, referenceMonth]);
+
     const fetchMonthlyDetails = async () => {
         setLoadingMonthly(true);
         try {
@@ -487,19 +500,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
             let totalCompensada = 0;
             let totalFaturamento = 0;
+            let prodData = null;
+            let prodError = null;
+
             if (selectedUCs.length > 0) {
                 const ucIds = selectedUCs.map(uc => uc.id);
 
-                const { data: energyData } = await supabase
-                    .from('invoices')
-                    .select('consumo_compensado')
-                    .in('uc_id', ucIds)
-                    .eq('mes_referencia', firstDay)
-                    .neq('status', 'cancelado');
-                
-                totalCompensada = energyData?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
-
-                // Faturamento based on vencimento in the referenceMonth
                 const [year, month] = referenceMonth.split('-');
                 let y = parseInt(year);
                 let m = parseInt(month) + 1;
@@ -509,15 +515,20 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 }
                 const nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
 
-                const { data: faturamentoData } = await supabase
-                    .from('invoices')
-                    .select('valor_a_pagar')
-                    .in('uc_id', ucIds)
-                    .gte('vencimento', firstDay)
-                    .lt('vencimento', nextMonthStr)
-                    .neq('status', 'cancelado');
-                
-                totalFaturamento = faturamentoData?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
+                const [energyRes, faturamentoRes, prodRes] = await Promise.all([
+                    supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
+                    supabase.from('invoices').select('valor_a_pagar').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
+                    supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).maybeSingle()
+                ]);
+
+                totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
+                totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
+                prodData = prodRes.data;
+                prodError = prodRes.error;
+            } else {
+                const prodRes = await supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).maybeSingle();
+                prodData = prodRes.data;
+                prodError = prodRes.error;
             }
 
             // 2. Get prediction for the specific month from chart data
@@ -525,21 +536,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const estimateObj = monthlyEstimates[monthIdx] || {};
             const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
 
-            const { data, error } = await supabase
-                .from('generation_production')
-                .select('*')
-                .eq('usina_id', usina.id)
-                .eq('mes_referencia', firstDay)
-                .maybeSingle();
-
-            if (error) throw error;
+            if (prodError) throw prodError;
             
-            if (data) {
+            if (prodData) {
                 setMonthlyDetails({
-                    ...data,
-                    details: data.service_details || {},
-                    energia_compensada: data.energia_compensada || totalCompensada,
-                    faturamento_mensal: data.faturamento_mensal || totalFaturamento,
+                    ...prodData,
+                    details: prodData.service_details || {},
+                    energia_compensada: prodData.energia_compensada || totalCompensada,
+                    faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
             } else {
