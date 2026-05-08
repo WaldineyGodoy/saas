@@ -518,15 +518,19 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 const [energyRes, faturamentoRes, prodRes] = await Promise.all([
                     supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
                     supabase.from('invoices').select('valor_a_pagar').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
-                    supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).maybeSingle()
+                    supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
                 ]);
+
+                if (energyRes.error) console.error('Energy Fetch Error:', energyRes.error);
+                if (faturamentoRes.error) console.error('Faturamento Fetch Error:', faturamentoRes.error);
+                if (prodRes.error) console.error('Production Fetch Error:', prodRes.error);
 
                 totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
                 totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
                 prodData = prodRes.data;
                 prodError = prodRes.error;
             } else {
-                const prodRes = await supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).maybeSingle();
+                const prodRes = await supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle();
                 prodData = prodRes.data;
                 prodError = prodRes.error;
             }
@@ -536,7 +540,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const estimateObj = monthlyEstimates[monthIdx] || {};
             const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
 
-            if (prodError) throw prodError;
+            // Don't throw if only the production record is missing, but log it
+            if (prodError && prodError.code !== 'PGRST116') {
+                console.warn('Non-critical production fetch error:', prodError);
+            }
             
             if (prodData) {
                 setMonthlyDetails({
@@ -607,17 +614,23 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             // 2. Upsert generation_production
             const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
+            const upsertData = {
+                ...mainData,
+                service_details: details || {},
+                custo_disponibilidade: concessionaria, // Ensure energy cost is mapped
+                gestao_reais: gestaoTotal,
+                total_despesas: totalDespesas,
+                fechamento: new Date().toISOString().split('T')[0],
+                status: 'liquidado'
+            };
+            
+            if (prodId) {
+                upsertData.id = prodId;
+            }
+
             const { error: prodError } = await supabase
                 .from('generation_production')
-                .upsert({
-                    ...mainData,
-                    service_details: details || {},
-                    custo_disponibilidade: concessionaria, // Ensure energy cost is mapped
-                    gestao_reais: gestaoTotal,
-                    total_despesas: totalDespesas,
-                    fechamento: new Date().toISOString().split('T')[0],
-                    status: 'liquidado'
-                });
+                .upsert(upsertData);
 
             if (prodError) throw prodError;
 
