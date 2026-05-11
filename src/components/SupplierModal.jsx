@@ -1314,7 +1314,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         
                         {!isPartial ? (
                             <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: '1.5', marginBottom: '2rem' }}>
-                                Deseja realizar o pagamento total de <strong style={{ color: '#1e293b' }}>{formatCurrency(paymentAmount)}</strong> via PIX para este fornecedor?
+                                Deseja realizar o pagamento de <strong style={{ color: '#1e293b' }}>{formatCurrency(paymentAmount)}</strong> via PIX para a chave <strong style={{ color: '#1e293b' }}>{formData.pix_key}</strong> ({formData.pix_key_type?.toUpperCase()})?
                             </p>
                         ) : (
                             <div style={{ marginBottom: '2rem' }}>

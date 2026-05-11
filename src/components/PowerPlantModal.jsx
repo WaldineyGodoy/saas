@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
@@ -308,6 +309,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         concessionaria: '',
         unidade_geradora: '',
         cnpj_cpf: '',
+        dia_leitura: '',
         rateio_type: 'prioridade',
         portal_credentials: { url: '', login: '', password: '' }
     });
@@ -375,6 +377,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 concessionaria: usina.concessionaria || '',
                 unidade_geradora: usina.unidade_geradora || '',
                 cnpj_cpf: usina.cnpj_cpf || '',
+                dia_leitura: usina.dia_leitura || '',
                 rateio_type: usina.rateio_type || 'prioridade',
                 portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' }
             });
@@ -505,18 +508,33 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (selectedUCs.length > 0) {
                 const ucIds = selectedUCs.map(uc => uc.id);
 
-                const [year, month] = referenceMonth.split('-');
-                let y = parseInt(year);
-                let m = parseInt(month) + 1;
-                if (m > 12) {
-                    m = 1;
-                    y++;
+                let startD, endD;
+                if (!formData.dia_leitura) {
+                    const [year, month] = referenceMonth.split('-');
+                    let y = parseInt(year);
+                    let m = parseInt(month) + 1;
+                    if (m > 12) {
+                        m = 1;
+                        y++;
+                    }
+                    startD = firstDay;
+                    endD = `${y}-${String(m).padStart(2, '0')}-01`;
+                } else {
+                    const baseDate = parseISO(firstDay);
+                    const day = parseInt(formData.dia_leitura);
+                    const startDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                    const endDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                    // Add 1 day to end date to make it exclusive like lt() requires if using time
+                    const nextDayObj = new Date(endDateObj);
+                    nextDayObj.setDate(nextDayObj.getDate() + 1);
+                    
+                    startD = format(startDateObj, 'yyyy-MM-dd');
+                    endD = format(nextDayObj, 'yyyy-MM-dd');
                 }
-                const nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
 
                 const [energyRes, faturamentoRes, prodRes] = await Promise.all([
                     supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                    supabase.from('invoices').select('valor_a_pagar').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
+                    supabase.from('invoices').select('valor_a_pagar').in('uc_id', ucIds).gte('vencimento', startD).lt('vencimento', endD).neq('status', 'cancelado'),
                     supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
                 ]);
 
@@ -633,6 +651,17 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             if (prodError) throw prodError;
 
+            const periodString = (() => {
+                const baseDate = parseISO(`${referenceMonth}-01`);
+                if (!formData.dia_leitura) {
+                    return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
+                }
+                const day = parseInt(formData.dia_leitura);
+                const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
+            })();
+
             // 3. Create Ledger Entries
             const entries = [];
             const supplierId = formData.supplier_id; // Reference for account 2.1.1
@@ -643,7 +672,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     transaction_id: transactionId,
                     account_code: '2.1.1',
                     amount: -faturamento, // Credit (Increases liability)
-                    description: `Faturamento Mensal - ${usina.name} - ${referenceMonth}`,
+                    description: `Faturamento Mensal - ${usina.name} - ${referenceMonth} (${periodString})`,
                     reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
@@ -653,7 +682,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     transaction_id: transactionId,
                     account_code: '3.1.0', 
                     amount: faturamento, // Debit
-                    description: `Provisão Repasse Usina - ${usina.name} - ${referenceMonth}`,
+                    description: `Provisão Repasse Usina - ${usina.name} - ${referenceMonth} (${periodString})`,
                     reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
@@ -668,7 +697,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     transaction_id: transactionId,
                     account_code: '2.1.1', // Obrigações Usinas
                     amount: amount,
-                    description: `${desc} - ${referenceMonth}`,
+                    description: `${desc} - ${referenceMonth} (${periodString})`,
                     reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
@@ -678,7 +707,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     transaction_id: transactionId,
                     account_code: accountCode,
                     amount: -amount,
-                    description: `${desc} - ${referenceMonth}`,
+                    description: `${desc} - ${referenceMonth} (${periodString})`,
                     reference_type: 'supplier',
                     reference_id: supplierId,
                     is_sandbox: false
@@ -1488,6 +1517,19 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     />
                                 </div>
 
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Dia de Leitura (1-31)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="31"
+                                        value={formData.dia_leitura}
+                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
+                                        placeholder="Ex: 13"
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                    />
+                                </div>
+
                                 <div style={{ gridColumn: '1 / -1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                         <label style={{ fontSize: '1rem', color: '#1e293b', fontWeight: 700 }}>Unidade Geradora Principal</label>
@@ -1924,6 +1966,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Mês de Referência</label>
                                                         <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', textTransform: 'capitalize' }}>
                                                             {new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
+                                                            {(() => {
+                                                                const baseDate = parseISO(`${referenceMonth}-01`);
+                                                                if (!formData.dia_leitura) {
+                                                                    return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
+                                                                }
+                                                                const day = parseInt(formData.dia_leitura);
+                                                                const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                                                                const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                                                                return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
+                                                            })()}
                                                         </div>
                                                     </div>
 
