@@ -508,8 +508,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             if (selectedUCs.length > 0) {
                 const ucIds = selectedUCs.map(uc => uc.id);
 
+                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                const diaLeitura = mainUG?.dia_leitura;
+                
                 let startD, endD;
-                if (!formData.dia_leitura) {
+                if (!diaLeitura) {
                     const [year, month] = referenceMonth.split('-');
                     let y = parseInt(year);
                     let m = parseInt(month) + 1;
@@ -521,7 +524,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     endD = `${y}-${String(m).padStart(2, '0')}-01`;
                 } else {
                     const baseDate = parseISO(firstDay);
-                    const day = parseInt(formData.dia_leitura);
+                    const day = parseInt(diaLeitura);
                     const startDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
                     const endDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
                     // Add 1 day to end date to make it exclusive like lt() requires if using time
@@ -653,10 +656,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             const periodString = (() => {
                 const baseDate = parseISO(`${referenceMonth}-01`);
-                if (!formData.dia_leitura) {
+                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                const diaLeitura = mainUG?.dia_leitura;
+                
+                if (!diaLeitura) {
                     return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
                 }
-                const day = parseInt(formData.dia_leitura);
+                const day = parseInt(diaLeitura);
                 const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
                 const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
                 return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
@@ -1517,18 +1523,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     />
                                 </div>
 
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Dia de Leitura (1-31)</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="31"
-                                        value={formData.dia_leitura}
-                                        onChange={e => setFormData({ ...formData, dia_leitura: e.target.value })}
-                                        placeholder="Ex: 13"
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
-                                    />
-                                </div>
+
 
                                 <div style={{ gridColumn: '1 / -1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
