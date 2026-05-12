@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { fetchAddressByCep, fetchOfferData } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
 import { 
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
-    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare
+    LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
+    Paperclip, Send, Loader2, Info, History
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import {
@@ -321,6 +322,100 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
+    const [manualMessage, setManualMessage] = useState('');
+    const [manualFile, setManualFile] = useState(null);
+    const [isSendingManualWA, setIsSendingManualWA] = useState(false);
+
+    const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) return;
+        try {
+            const { error } = await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: customContent || `${action}: ${details.type || ''}`,
+                metadata: details,
+                created_by: profile?.id
+            });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error adding history:', error);
+        }
+    };
+
+    const handleSendManualWhatsApp = async () => {
+        if (!manualMessage.trim() && !manualFile) {
+            showAlert('Por favor, digite uma mensagem ou anexe um arquivo.', 'warning');
+            return;
+        }
+
+        // Determinar destinatário: Supplier vinculado
+        const supplier = suppliers.find(s => s.id === formData.supplier_id);
+        const targetPhone = supplier?.phone;
+        const targetName = supplier?.name || formData.name;
+
+        if (!targetPhone) {
+            showAlert('Telefone do proprietário/fornecedor não encontrado.', 'error');
+            return;
+        }
+
+        const confirmed = await showConfirm(
+            `Deseja enviar esta mensagem para ${targetName}?`,
+            'Confirmar Envio',
+            'Sim, Enviar',
+            'Cancelar'
+        );
+        if (!confirmed) return;
+
+        setIsSendingManualWA(true);
+        try {
+            let mediaBase64 = null;
+            let fileName = null;
+
+            if (manualFile) {
+                const reader = new FileReader();
+                const filePromise = new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                });
+                reader.readAsDataURL(manualFile);
+                mediaBase64 = await filePromise;
+                fileName = manualFile.name;
+            }
+
+            // Normalização extra de DDI
+            let phoneToQuery = targetPhone.replace(/\D/g, '');
+            if (phoneToQuery.length >= 10 && phoneToQuery.length <= 11 && !phoneToQuery.startsWith('55')) {
+                phoneToQuery = `55${phoneToQuery}`;
+            }
+
+            const response = await sendWhatsapp(
+                phoneToQuery,
+                manualMessage,
+                null,
+                mediaBase64,
+                fileName
+            );
+
+            if (response.error) throw new Error(response.error);
+
+            showAlert('Mensagem enviada com sucesso!', 'success');
+            
+            await addHistory('usina', usina?.id, 'whatsapp_manual', {
+                message: manualMessage,
+                file: fileName,
+                phone: phoneToQuery,
+                status: 'sent'
+            }, `Comunicado WhatsApp: ${manualMessage.substring(0, 50)}${manualMessage.length > 50 ? '...' : ''}`);
+
+            setManualMessage('');
+            setManualFile(null);
+        } catch (error) {
+            console.error('Error sending manual WhatsApp:', error);
+            showAlert('Erro ao enviar mensagem: ' + error.message, 'error');
+        } finally {
+            setIsSendingManualWA(false);
+        }
+    };
     const [showExpandedUCs, setShowExpandedUCs] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
     const [ucForInvoices, setUcForInvoices] = useState(null);
@@ -2480,12 +2575,123 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {/* Tab Content: Comunicados / Histórico */}
                     {activeTab === 'comunicacao' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            <HistoryTimeline 
-                                entityType="usina"
-                                entityId={usina?.id}
-                                entityName={formData.name || usina?.name}
-                                isInline={true}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '850px', margin: '0 auto' }}>
+                                {/* Send New Communication Section */}
+                                <div style={{ 
+                                    background: 'white', 
+                                    padding: '2rem', 
+                                    borderRadius: '16px', 
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h4 style={{ margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b', fontSize: '1.1rem' }}>
+                                        <MessageSquare size={20} color="#25D366" />
+                                        Enviar Novo Comunicado (WhatsApp)
+                                    </h4>
+
+                                    <textarea
+                                        value={manualMessage}
+                                        onChange={(e) => setManualMessage(e.target.value)}
+                                        placeholder="Digite a mensagem para o proprietário da usina..."
+                                        style={{
+                                            width: '100%',
+                                            height: '140px',
+                                            padding: '1rem',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '12px',
+                                            fontSize: '0.95rem',
+                                            outline: 'none',
+                                            resize: 'vertical',
+                                            marginBottom: '1.25rem',
+                                            fontFamily: 'inherit',
+                                            transition: 'border-color 0.2s'
+                                        }}
+                                        onFocus={(e) => e.target.style.borderColor = '#25D366'}
+                                        onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                                    />
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <label style={{ 
+                                                display: 'flex', alignItems: 'center', gap: '0.5rem', 
+                                                padding: '0.6rem 1.25rem', background: '#f1f5f9', 
+                                                borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem',
+                                                color: '#475569', fontWeight: 600, border: '1px solid #e2e8f0',
+                                                transition: 'all 0.2s'
+                                            }}>
+                                                <Paperclip size={18} />
+                                                {manualFile ? 'Alterar Arquivo' : 'Anexar Documento'}
+                                                <input 
+                                                    type="file" 
+                                                    style={{ display: 'none' }} 
+                                                    onChange={(e) => setManualFile(e.target.files[0])}
+                                                />
+                                            </label>
+                                            {manualFile && (
+                                                <div style={{ 
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                    fontSize: '0.85rem', color: '#0369a1', background: '#f0f9ff',
+                                                    padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #bae6fd'
+                                                }}>
+                                                    <span style={{ fontWeight: 600, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {manualFile.name}
+                                                    </span>
+                                                    <span style={{ opacity: 0.7 }}>({(manualFile.size / 1024).toFixed(0)} KB)</span>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setManualFile(null)}
+                                                        style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', padding: '2px' }}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleSendManualWhatsApp}
+                                            disabled={isSendingManualWA || (!manualMessage.trim() && !manualFile)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                                background: '#25D366', color: 'white', border: 'none',
+                                                padding: '0.75rem 2rem', borderRadius: '10px',
+                                                fontWeight: 800, cursor: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 'not-allowed' : 'pointer',
+                                                opacity: (isSendingManualWA || (!manualMessage.trim() && !manualFile)) ? 0.7 : 1,
+                                                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)',
+                                                transition: 'all 0.2s',
+                                                fontSize: '1rem'
+                                            }}
+                                        >
+                                            {isSendingManualWA ? <Loader2 size={20} className="spin-animation" /> : <Send size={20} />}
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Mensagem'}
+                                        </button>
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Info size={14} />
+                                            Esta mensagem será enviada para o telefone cadastrado no proprietário da usina.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* History Section */}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingLeft: '0.5rem' }}>
+                                        <History size={20} color="#64748b" />
+                                        <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                                            Histórico de Comunicados e Eventos
+                                        </h4>
+                                    </div>
+                                    <HistoryTimeline 
+                                        entityType="usina"
+                                        entityId={usina?.id}
+                                        entityName={formData.name || usina?.name}
+                                        isInline={true}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
 

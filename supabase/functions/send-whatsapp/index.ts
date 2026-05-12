@@ -161,7 +161,7 @@ serve(async (req) => {
         }
 
         const resData = await response.json();
-        console.log('Evolution API Success Response:', JSON.stringify(resData));
+        console.log('Evolution API Success. Message Status:', resData.status || 'Success', 'ID:', resData.key?.id || 'N/A');
         return new Response(JSON.stringify({ success: true, apiResponse: resData }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
