@@ -241,6 +241,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             const { error: insertError } = await supabase
                 .from('ledger_entries')
                 .insert({
+                    transaction_id: crypto.randomUUID(),
                     account_id: accountData.id,
                     amount: amountToInsert,
                     description: manualEntryDescription,
