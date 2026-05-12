@@ -898,7 +898,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const fetchSuppliers = async () => {
-        const { data } = await supabase.from('suppliers').select('id, name').order('name');
+        const { data } = await supabase.from('suppliers').select('id, name, phone').order('name');
         setSuppliers(data || []);
     };
 
