@@ -1353,8 +1353,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 background: '#f8fafc',
                 borderRadius: '12px',
                 width: '95%',
-                maxWidth: '850px',
-                maxHeight: '95vh',
+                maxWidth: '1150px',
+                maxHeight: '92vh',
                 overflowY: 'auto',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
             }}>
@@ -1386,8 +1386,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     overflowX: 'auto', 
                     background: 'white', 
                     borderBottom: '1px solid #e2e8f0',
-                    padding: '0 0.5rem',
-                    gap: '0.5rem',
+                    padding: '0 1rem',
+                    gap: '1rem',
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none'
                 }}>
@@ -1426,7 +1426,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     ))}
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '500px' }}>
+                <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '650px' }}>
 
                     {/* Floating Summary Card (Técnico e Financeiro) */}
                     {['tecnico', 'financeiro'].includes(activeTab) && (
@@ -1534,7 +1534,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             </span>
                                         )}
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1rem', maxHeight: '350px', overflowY: 'auto', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1rem', maxHeight: '500px', overflowY: 'auto', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
                                         {(() => {
                                             const allUCs = [...availableUCs, ...selectedUCs];
                                             const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
