@@ -6,7 +6,7 @@ import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import { 
     History, User, MapPin, Wallet, X, Save, Trash2, 
-    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy
+    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 
