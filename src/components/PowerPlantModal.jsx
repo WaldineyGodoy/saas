@@ -1573,7 +1573,30 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             transform: isSelected ? 'scale(1.02)' : 'none'
                                                         }}
                                                     >
-                                                        <div style={{ position: 'absolute', top: '1rem', right: '1rem' }}>
+                                                        <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setPreviewUC(uc);
+                                                                    setShowPreviewModal(true);
+                                                                }}
+                                                                style={{
+                                                                    background: '#f8fafc', 
+                                                                    border: '1px solid #e2e8f0', 
+                                                                    borderRadius: '8px', 
+                                                                    padding: '0.4rem', 
+                                                                    color: '#64748b', 
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.2s',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                                }}
+                                                                onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#3b82f6'; }}
+                                                                onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+                                                                title="Visualizar Detalhes"
+                                                            >
+                                                                <Eye size={16} />
+                                                            </button>
                                                             <div style={{
                                                                 width: '20px', height: '20px', borderRadius: '50%',
                                                                 border: isSelected ? '6px solid #3b82f6' : '2px solid #cbd5e1',
@@ -1965,10 +1988,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
                                                             {(() => {
                                                                 const baseDate = parseISO(`${referenceMonth}-01`);
-                                                                if (!formData.dia_leitura) {
+                                                                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                                                                const diaLeitura = mainUG?.dia_leitura;
+
+                                                                if (!diaLeitura) {
                                                                     return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
                                                                 }
-                                                                const day = parseInt(formData.dia_leitura);
+                                                                const day = parseInt(diaLeitura);
                                                                 const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
                                                                 const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
                                                                 return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
