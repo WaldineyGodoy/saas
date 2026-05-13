@@ -446,9 +446,8 @@ export default function InvoiceListManager() {
         const daysInMonth = new Date(year, month, 0).getDate();
         const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
         
-        // Filtra faturas: apenas UCs ativas e modalidade Auto Consumo Remoto
+        // Filtra faturas: apenas modalidade Auto Consumo Remoto
         const filteredEnergyInvoices = invoices.filter(inv => 
-            inv.consumer_units?.status === 'ativo' && 
             inv.consumer_units?.modalidade === 'auto_consumo_remoto' &&
             inv.status !== 'sem_faturamento' &&
             (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
@@ -818,7 +817,6 @@ export default function InvoiceListManager() {
                 {/* Legenda de Status (Energia) integrada se necessário */}
                 {viewMode === 'energy_calendar' && (() => {
                     const energyStats = filteredInvoices.filter(inv => 
-                        inv.consumer_units?.status === 'ativo' && 
                         inv.consumer_units?.modalidade === 'auto_consumo_remoto'
                     ).reduce((acc, inv) => {
                         const today = new Date();
