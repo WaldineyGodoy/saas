@@ -1268,9 +1268,45 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px' }}>
                                                 <FileText size={24} color="#3b82f6" />
                                             </div>
-                                            <div>
+                                            <div style={{ flex: 1 }}>
                                                 <h4 style={{ color: '#1e293b', fontWeight: 800, margin: 0, fontSize: '1.1rem', textTransform: 'uppercase' }}>RESUMO DA CONTA DE ENERGIA</h4>
                                                 <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Conta processada da concessionária</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Energy Bill Status Toggle (MOVED HERE FOR VISIBILITY) */}
+                                        <div style={{ marginBottom: '1.5rem', padding: '1.25rem', background: '#f8fafc', borderRadius: '16px', border: '2px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '1rem', textAlign: 'center', letterSpacing: '0.05em' }}>
+                                                STATUS DE PAGAMENTO DA CONCESSIONÁRIA
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                                {[
+                                                    { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
+                                                    { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' },
+                                                    { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' }
+                                                ].map(s => (
+                                                    <button
+                                                        key={s.id}
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, energy_bill_status: s.id })}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '0.75rem',
+                                                            borderRadius: '10px',
+                                                            border: '2px solid',
+                                                            borderColor: formData.energy_bill_status === s.id ? s.color : '#e2e8f0',
+                                                            background: formData.energy_bill_status === s.id ? s.bg : 'white',
+                                                            color: formData.energy_bill_status === s.id ? s.color : '#64748b',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: formData.energy_bill_status === s.id ? `0 4px 6px ${s.color}20` : 'none'
+                                                        }}
+                                                    >
+                                                        {s.label}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
 
@@ -1331,41 +1367,6 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                 <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
                                                     {formData.valor_concessionaria ? (typeof formData.valor_concessionaria === 'number' ? formData.valor_concessionaria.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : formData.valor_concessionaria) : formData.valor_a_pagar}
                                                 </span>
-                                            </div>
-
-                                            {/* Energy Bill Status Toggle */}
-                                            <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                                                    Status do Pagamento (Concessionária)
-                                                </label>
-                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    {[
-                                                        { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
-                                                        { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' },
-                                                        { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' }
-                                                    ].map(s => (
-                                                        <button
-                                                            key={s.id}
-                                                            type="button"
-                                                            onClick={() => setFormData({ ...formData, energy_bill_status: s.id })}
-                                                            style={{
-                                                                flex: 1,
-                                                                padding: '0.6rem',
-                                                                borderRadius: '8px',
-                                                                border: '1px solid',
-                                                                borderColor: formData.energy_bill_status === s.id ? s.color : '#cbd5e1',
-                                                                background: formData.energy_bill_status === s.id ? s.bg : 'white',
-                                                                color: formData.energy_bill_status === s.id ? s.color : '#64748b',
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 700,
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s'
-                                                            }}
-                                                        >
-                                                            {s.label}
-                                                        </button>
-                                                    ))}
-                                                </div>
                                             </div>
 
                                             {/* Original Document Link */}

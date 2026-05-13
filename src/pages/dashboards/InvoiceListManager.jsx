@@ -177,7 +177,7 @@ export default function InvoiceListManager() {
                 // Marcar como pago no CRM
                 const { error: updateError } = await supabase
                     .from('invoices')
-                    .update({ status: 'pago' })
+                    .update({ energy_bill_status: 'pago' })
                     .eq('id', inv.id);
                 
                 if (updateError) throw updateError;
