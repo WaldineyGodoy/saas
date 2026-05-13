@@ -29,6 +29,7 @@ import { CSS } from '@dnd-kit/utilities';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import UCInvoicesModal from './UCInvoicesModal';
+import ConsumerUnitModal from './ConsumerUnitModal';
 
 // Global styles for the modal
 const modalStyles = `
@@ -420,6 +421,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
     const [ucForInvoices, setUcForInvoices] = useState(null);
     const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+    const [editingUC, setEditingUC] = useState(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1673,8 +1675,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                 type="button"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    setPreviewUC(uc);
-                                                                    setShowPreviewModal(true);
+                                                                    setEditingUC(uc);
                                                                 }}
                                                                 style={{
                                                                     background: '#f8fafc', 
@@ -2084,7 +2085,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             {(() => {
                                                                 const baseDate = parseISO(`${referenceMonth}-01`);
                                                                 const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
-                                                                const diaLeitura = mainUG?.dia_leitura;
+                                                                const diaLeitura = formData.dia_leitura || mainUG?.dia_leitura;
 
                                                                 if (!diaLeitura) {
                                                                     return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
@@ -2983,6 +2984,23 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 <UCInvoicesModal 
                     uc={ucForInvoices} 
                     onClose={() => setShowInvoicesModal(false)} 
+                />
+            )}
+
+            {editingUC && (
+                <ConsumerUnitModal
+                    consumerUnit={editingUC}
+                    onClose={() => setEditingUC(null)}
+                    onSave={() => {
+                        fetchLinkedUCs(usina.id);
+                        fetchAvailableUCs();
+                        setEditingUC(null);
+                    }}
+                    onDelete={() => {
+                        fetchLinkedUCs(usina.id);
+                        fetchAvailableUCs();
+                        setEditingUC(null);
+                    }}
                 />
             )}
         </div>

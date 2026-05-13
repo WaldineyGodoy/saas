@@ -1879,7 +1879,7 @@ Associado`;
                         { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
                         { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' }
-                    ].map(tab => {
+                    ].filter(tab => subscriber || ['dados', 'endereco'].includes(tab.id)).map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
                         return (

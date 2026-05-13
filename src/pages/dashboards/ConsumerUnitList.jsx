@@ -28,12 +28,12 @@ import { CSS } from '@dnd-kit/utilities';
 
 const KANBAN_STATUSES = [
     { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' },
-    { status: 'em_transf_titularidade', label: 'Em Transf. de Titularidade', color: '#8b5cf6' },
+    { status: 'em_transf_titularidade', label: 'Em Transf. de Titularidade', color: '#db2777' },
     { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
     { status: 'sem_geracao', label: 'Sem Geração', color: '#64748b' },
     { status: 'em_atraso', label: 'Em Atraso', color: '#f97316' },
-    { status: 'desconectado', label: 'Desconectado', color: '#8b5cf6' },
+    { status: 'desconectado', label: 'Desconectado', color: '#4b5563' },
     { status: 'cancelado', label: 'Cancelado', color: '#ef4444' },
     { status: 'cancelado_inadimplente', label: 'Cancelado (Inad.)', color: '#991b1b' }
 ];
