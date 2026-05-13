@@ -455,7 +455,10 @@ export default function InvoiceListManager() {
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
-                const day = inv.consumer_units?.dia_vencimento || parseInt(inv.vencimento.split('-')[2], 10);
+                // Prioriza a data de vencimento real da fatura para o calendário
+                const date = new Date(inv.vencimento);
+                const day = date.getUTCDate();
+                
                 if (!acc[day]) acc[day] = [];
                 acc[day].push(inv);
             }
