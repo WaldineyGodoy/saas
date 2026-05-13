@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 import { useBranding } from '../contexts/BrandingContext';
@@ -11,6 +11,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
 
     const [paymentStatus, setPaymentStatus] = useState(null); // 'success' | 'error'
+    const [isEditing, setIsEditing] = useState(false);
+    const [editData, setEditData] = useState(null);
 
     if (!invoice) return null;
 
@@ -105,6 +107,90 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
     };
 
+    const handleToggleEdit = () => {
+        if (isEditing) {
+            setIsEditing(false);
+            setEditData(null);
+        } else {
+            setEditData({
+                mes_referencia: invoice.mes_referencia?.substring(0, 7),
+                vencimento: invoice.vencimento,
+                consumo_kwh: invoice.consumo_kwh || 0,
+                consumo_compensado: invoice.consumo_compensado || 0,
+                consumo_reais: invoice.consumo_reais || 0,
+                iluminacao_publica: invoice.iluminacao_publica || 0,
+                tarifa_minima: invoice.tarifa_minima || 0,
+                outros_lancamentos: invoice.outros_lancamentos || 0,
+                valor_concessionaria: invoice.valor_concessionaria || 0
+            });
+            setIsEditing(true);
+        }
+    };
+
+    const handleEditChange = (field, value) => {
+        const newData = { ...editData, [field]: value };
+        
+        // Recalcular Total Concessionária se algum valor financeiro mudar
+        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos'].includes(field)) {
+            newData.valor_concessionaria = 
+                (Number(newData.consumo_reais) || 0) + 
+                (Number(newData.iluminacao_publica) || 0) + 
+                (Number(newData.tarifa_minima) || 0) + 
+                (Number(newData.outros_lancamentos) || 0);
+        }
+        
+        setEditData(newData);
+    };
+
+    const handleSaveEdit = async () => {
+        setLoading(true);
+        try {
+            const payload = {
+                ...editData,
+                mes_referencia: editData.mes_referencia + '-01' // Voltar para o formato de data
+            };
+
+            const { error } = await supabase
+                .from('invoices')
+                .update(payload)
+                .eq('id', invoice.id);
+
+            if (error) throw error;
+            
+            setIsEditing(false);
+            if (onPaymentSuccess) onPaymentSuccess();
+            alert('Fatura atualizada com sucesso!');
+            onClose(); // Fechar para atualizar os dados
+        } catch (error) {
+            console.error('Erro ao salvar edição:', error);
+            alert('Erro ao salvar: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!window.confirm('Tem certeza que deseja excluir permanentemente esta fatura? Esta ação não pode ser desfeita.')) return;
+        
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .delete()
+                .eq('id', invoice.id);
+
+            if (error) throw error;
+            
+            if (onPaymentSuccess) onPaymentSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Erro ao excluir fatura:', error);
+            alert('Erro ao excluir: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const statusColors = {
         pago: { bg: '#dcfce7', text: '#166534', label: 'PAGO' },
         a_vencer: { bg: '#eff6ff', text: '#1d4ed8', label: 'A VENCER' },
@@ -135,12 +221,25 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     backgroundColor: 'white', borderRadius: '20px', width: '90%', maxWidth: '600px',
                     maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
                 }}>
-                    <button onClick={onClose} style={{
-                        position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none',
-                        border: 'none', cursor: 'pointer', color: '#64748b', zIndex: 10
-                    }}>
-                        <X size={24} />
-                    </button>
+                    <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem', zIndex: 10 }}>
+                        <button 
+                            onClick={handleDelete}
+                            title="Excluir Fatura"
+                            style={{ background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }}
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                        <button 
+                            onClick={handleToggleEdit}
+                            title={isEditing ? "Cancelar Edição" : "Editar Fatura"}
+                            style={{ background: isEditing ? '#f1f5f9' : '#eff6ff', border: 'none', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: isEditing ? '#64748b' : '#2563eb', display: 'flex', alignItems: 'center' }}
+                        >
+                            {isEditing ? <RotateCcw size={20} /> : <Pencil size={20} />}
+                        </button>
+                        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                            <X size={24} />
+                        </button>
+                    </div>
     
                     <div style={{ padding: '2rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -149,10 +248,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                             <div>
                                 <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>
-                                    Resumo da Conta de Energia
+                                    {isEditing ? 'Editando Fatura de Energia' : 'Resumo da Conta de Energia'}
                                 </h2>
                                 <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
-                                    Detalhamento técnico e financeiro
+                                    {isEditing ? 'Altere os dados técnicos e financeiros abaixo' : 'Detalhamento técnico e financeiro'}
                                 </p>
                             </div>
                         </div>
@@ -222,20 +321,38 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</div>
-                                <div style={{ fontWeight: 800, color: '#ef4444', fontSize: '1.1rem' }}>
-                                    {getUtilityDueDate()}
-                                </div>
+                                {isEditing ? (
+                                    <input 
+                                        type="date" 
+                                        value={editData.vencimento} 
+                                        onChange={e => handleEditChange('vencimento', e.target.value)}
+                                        style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.9rem', marginTop: '0.25rem' }}
+                                    />
+                                ) : (
+                                    <div style={{ fontWeight: 800, color: '#ef4444', fontSize: '1.1rem' }}>
+                                        {getUtilityDueDate()}
+                                    </div>
+                                )}
                             </div>
-                        <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
-                            <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Mês Referência</div>
-                            <div style={{ fontWeight: 800, color: '#166534', fontSize: '1.1rem' }}>
-                                {invoice.mes_referencia ? (() => {
-                                    const [year, month] = invoice.mes_referencia.split('-');
-                                    return new Date(year, parseInt(month) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-                                })() : 'N/A'}
+                            <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #dcfce7' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Mês Referência</div>
+                                {isEditing ? (
+                                    <input 
+                                        type="month" 
+                                        value={editData.mes_referencia} 
+                                        onChange={e => handleEditChange('mes_referencia', e.target.value)}
+                                        style={{ width: '100%', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.9rem', marginTop: '0.25rem' }}
+                                    />
+                                ) : (
+                                    <div style={{ fontWeight: 800, color: '#166534', fontSize: '1.1rem' }}>
+                                        {invoice.mes_referencia ? (() => {
+                                            const [year, month] = invoice.mes_referencia.split('-');
+                                            return new Date(year, parseInt(month) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                                        })() : 'N/A'}
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    </div>
 
                     {/* Detalhamento de Consumo */}
                     <div style={{ 
@@ -248,26 +365,49 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                         </h4>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
                                 <span>Consumo Total (kWh):</span>
-                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{invoice.consumo_kwh} kWh</span>
+                                {isEditing ? (
+                                    <input type="number" value={editData.consumo_kwh} onChange={e => handleEditChange('consumo_kwh', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{invoice.consumo_kwh} kWh</span>
+                                )}
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
                                 <span>Energia Compensada:</span>
-                                <span style={{ fontWeight: 700, color: '#16a34a' }}>- {invoice.consumo_compensado} kWh</span>
+                                {isEditing ? (
+                                    <input type="number" value={editData.consumo_compensado} onChange={e => handleEditChange('consumo_compensado', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#16a34a' }}>- {invoice.consumo_compensado} kWh</span>
+                                )}
                             </div>
                             <hr style={{ border: 'none', borderTop: '1px dashed #e2e8f0', margin: '0.25rem 0' }} />
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
                                 <span>Consumo em Reais:</span>
-                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency(invoice.consumo_reais)}</span>
+                                {isEditing ? (
+                                    <input type="number" step="0.01" value={editData.consumo_reais} onChange={e => handleEditChange('consumo_reais', e.target.value)} style={{ width: '100px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency(invoice.consumo_reais)}</span>
+                                )}
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
                                 <span>Iluminação Pública:</span>
-                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency(invoice.iluminacao_publica)}</span>
+                                {isEditing ? (
+                                    <input type="number" step="0.01" value={editData.iluminacao_publica} onChange={e => handleEditChange('iluminacao_publica', e.target.value)} style={{ width: '100px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency(invoice.iluminacao_publica)}</span>
+                                )}
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
                                 <span>Tarifa Mínima/Outros:</span>
-                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency((Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0))}</span>
+                                {isEditing ? (
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input type="number" step="0.01" value={editData.tarifa_minima} onChange={e => handleEditChange('tarifa_minima', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Min" />
+                                        <input type="number" step="0.01" value={editData.outros_lancamentos} onChange={e => handleEditChange('outros_lancamentos', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Outros" />
+                                    </div>
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{formatCurrency((Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0))}</span>
+                                )}
                             </div>
                             
                             <div style={{ 
@@ -278,7 +418,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             }}>
                                 <span style={{ fontSize: '1rem', fontWeight: 800, color: branding?.primary_color || '#003366' }}>TOTAL CONCESSIONÁRIA</span>
                                 <span style={{ fontSize: '1.5rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                    {formatCurrency(Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))}
+                                    {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))))}
                                 </span>
                             </div>
                             
@@ -291,44 +431,64 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
                     {/* Ações */}
                     <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button 
-                            onClick={handleViewPdf}
-                            style={{
-                                flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0',
-                                background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseOver={e => e.currentTarget.style.borderColor = branding?.primary_color || '#003366'}
-                            onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-                        >
-                            <ExternalLink size={18} /> Visualizar Conta
-                        </button>
-                        
-                        {invoice.status !== 'pago' && consumerUnit?.modalidade === 'auto_consumo_remoto' && (
-                            <button 
-                                onClick={handlePay}
-                                disabled={loading || paymentStatus === 'success'}
-                                style={{
-                                    flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
-                                    background: paymentStatus === 'success' ? '#22c55e' : (branding?.secondary_color || '#FF6600'),
-                                    color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                    opacity: loading ? 0.7 : 1,
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
-                            >
-                                {loading ? (
-                                    <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                ) : paymentStatus === 'success' ? (
-                                    <><CheckCircle2 size={18} /> Pago com Sucesso</>
-                                ) : (
-                                    <><CreditCard size={18} /> Pagar Agora</>
+                        {isEditing ? (
+                            <>
+                                <button 
+                                    onClick={handleToggleEdit}
+                                    style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={handleSaveEdit}
+                                    disabled={loading}
+                                    style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: 'none', background: branding?.primary_color || '#003366', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                >
+                                    {loading ? 'Salvando...' : <><Save size={18} /> Salvar Alterações</>}
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button 
+                                    onClick={handleViewPdf}
+                                    style={{
+                                        flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0',
+                                        background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={e => e.currentTarget.style.borderColor = branding?.primary_color || '#003366'}
+                                    onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                >
+                                    <ExternalLink size={18} /> Visualizar Conta
+                                </button>
+                                
+                                {invoice.status !== 'pago' && consumerUnit?.modalidade === 'auto_consumo_remoto' && (
+                                    <button 
+                                        onClick={handlePay}
+                                        disabled={loading || paymentStatus === 'success'}
+                                        style={{
+                                            flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
+                                            background: paymentStatus === 'success' ? '#22c55e' : (branding?.secondary_color || '#FF6600'),
+                                            color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                                            opacity: loading ? 0.7 : 1,
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
+                                        onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
+                                    >
+                                        {loading ? (
+                                            <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                        ) : paymentStatus === 'success' ? (
+                                            <><CheckCircle2 size={18} /> Pago com Sucesso</>
+                                        ) : (
+                                            <><CreditCard size={18} /> Pagar Agora</>
+                                        )}
+                                    </button>
                                 )}
-                            </button>
+                            </>
                         )}
                     </div>
 
