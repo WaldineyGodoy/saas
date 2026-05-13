@@ -7,6 +7,8 @@ import { useBranding } from '../contexts/BrandingContext';
 export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess }) {
     const { branding } = useBranding();
     const [loading, setLoading] = useState(false);
+    const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
 
     const [paymentStatus, setPaymentStatus] = useState(null); // 'success' | 'error'
 
@@ -54,14 +56,19 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 throw new Error(result.error || 'Erro ao processar pagamento.');
             }
 
-            // Update local status
+            // Update local status - IMPORTANT: Also update energy_bill_status to 'pago'
             const { error: updateError } = await supabase
                 .from('invoices')
-                .update({ status: 'pago', asaas_status: 'PAID' })
+                .update({ 
+                    status: 'pago', 
+                    asaas_status: 'PAID',
+                    energy_bill_status: 'pago' 
+                })
                 .eq('id', invoice.id);
 
             if (updateError) console.error('Erro ao atualizar status local:', updateError);
 
+            setEnergyStatus('pago');
             setPaymentStatus('success');
             if (onPaymentSuccess) onPaymentSuccess();
             
@@ -75,6 +82,26 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             alert(`Falha no pagamento: ${error.message}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdateEnergyStatus = async (newStatus) => {
+        if (updatingStatus) return;
+        setUpdatingStatus(true);
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ energy_bill_status: newStatus })
+                .eq('id', invoice.id);
+
+            if (error) throw error;
+            setEnergyStatus(newStatus);
+            if (onPaymentSuccess) onPaymentSuccess();
+        } catch (error) {
+            console.error('Erro ao atualizar status da conta:', error);
+            alert('Erro ao atualizar status: ' + error.message);
+        } finally {
+            setUpdatingStatus(false);
         }
     };
 
@@ -127,6 +154,48 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
                                     Detalhamento técnico e financeiro
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* Energy Bill Status Toggle - Manual Override */}
+                        <div style={{ 
+                            background: '#f1f5f9', 
+                            padding: '1rem', 
+                            borderRadius: '16px', 
+                            marginBottom: '1.5rem',
+                            border: '1px solid #e2e8f0'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta (Operacional)</span>
+                                {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
+                            </div>
+                            <div style={{ display: 'flex', background: 'white', padding: '0.25rem', borderRadius: '12px', gap: '0.25rem' }}>
+                                {[
+                                    { id: 'pendente', label: 'Pendente', color: '#2563eb' },
+                                    { id: 'pago', label: 'Pago', color: '#166534' },
+                                    { id: 'erro', label: 'Erro', color: '#dc2626' }
+                                ].map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => handleUpdateEnergyStatus(s.id)}
+                                        disabled={updatingStatus}
+                                        style={{
+                                            flex: 1,
+                                            padding: '0.5rem',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            fontSize: '0.8rem',
+                                            fontWeight: energyStatus === s.id ? '800' : '500',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            background: energyStatus === s.id ? s.color : 'transparent',
+                                            color: energyStatus === s.id ? 'white' : '#64748b',
+                                            boxShadow: energyStatus === s.id ? `0 4px 12px ${s.color}40` : 'none'
+                                        }}
+                                    >
+                                        {s.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
     

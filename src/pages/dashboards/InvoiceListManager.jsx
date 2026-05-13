@@ -443,7 +443,8 @@ export default function InvoiceListManager() {
         const filteredEnergyInvoices = invoices.filter(inv => 
             inv.consumer_units?.status === 'ativo' && 
             inv.consumer_units?.modalidade === 'auto_consumo_remoto' &&
-            inv.status !== 'sem_faturamento'
+            inv.status !== 'sem_faturamento' &&
+            (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
             if (inv.vencimento && inv.status !== 'cancelado') {
