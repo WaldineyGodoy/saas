@@ -178,26 +178,46 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         lead: [
             { label: 'Nome do Lead', key: 'Nome do Lead' },
             { label: 'Status do Lead', key: 'Status do Lead' },
+            { label: 'Concessionária', key: 'Concessionária' },
             { label: 'Email', key: 'email' },
             { label: 'Telefone', key: 'telefone' }
         ],
         subscriber: [
             { label: 'Nome do Assinante', key: 'Nome do Assinante' },
             { label: 'Status do Assinante', key: 'Status do Assinante' },
-            { label: 'CPF/CNPJ', key: 'cpf_cnpj' }
+            { label: 'CPF/CNPJ', key: 'CPF/CNPJ' },
+            { label: 'Email', key: 'email' },
+            { label: 'Telefone', key: 'telefone' }
         ],
         consumer_unit: [
             { label: 'Unidade Consumidora', key: 'Unidade Consumidora' },
-            { label: 'Número da UC', key: 'numero_uc' }
+            { label: 'Número da UC', key: 'Número da UC' },
+            { label: 'Endereço da UC', key: 'Endereço da UC' },
+            { label: 'Concessionária', key: 'Concessionária' },
+            { label: 'Status da UC', key: 'Status da UC' },
+            { label: 'Nome do Assinante', key: 'Nome do Assinante' }
         ],
         invoice: [
+            { label: 'Mês de Ref.', key: 'Mês de Referência da Fatura' },
             { label: 'Vencimento', key: 'Vencimento da Fatura' },
-            { label: 'Valor Total', key: 'valor_total' },
-            { label: 'Linha Digitável', key: 'Linha Digitável' }
+            { label: 'Concessionária', key: 'Concessionária' },
+            { label: 'Valor Total', key: 'Valor Total' },
+            { label: 'Linha Digitável', key: 'Linha Digitável de Pagamento' },
+            { label: 'Status da Fatura', key: 'Status da Fatura' }
         ],
-        originator: [{ label: 'Nome do Originador', key: 'Nome do Originador' }],
-        supplier: [{ label: 'Nome do Fornecedor', key: 'Nome do Fornecedor' }],
-        power_plant: [{ label: 'Nome da Usina', key: 'Nome da Usina' }]
+        originator: [
+            { label: 'Nome do Originador', key: 'Nome do Originador' },
+            { label: 'Status', key: 'Status do Originador' }
+        ],
+        supplier: [
+            { label: 'Nome do Fornecedor', key: 'Nome do Fornecedor' },
+            { label: 'Status', key: 'Status do Fornecedor' }
+        ],
+        power_plant: [
+            { label: 'Nome da Usina', key: 'Nome da Usina' },
+            { label: 'Status', key: 'Status da Usina' },
+            { label: 'Concessionária', key: 'Concessionária' }
+        ]
     };
 
     const insertVariable = (variableKey, target) => {

@@ -14,11 +14,12 @@ DECLARE
 BEGIN
     -- LEAD
     IF p_entity_type = 'lead' THEN
-        SELECT name, email, phone as telefone, status INTO v_data FROM public.leads WHERE id = p_entity_id;
+        SELECT name, email, phone as telefone, status, concessionaria INTO v_data FROM public.leads WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome do Lead}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Nome Completo do Lead}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status do Lead}}', COALESCE(v_data.status::TEXT, ''));
+            v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
         END IF;
     
     -- ASSINANTE (SUBSCRIBER)
@@ -37,6 +38,7 @@ BEGIN
             c.numero_uc, 
             c.address::TEXT as address, 
             c.status::TEXT as status,
+            c.concessionaria,
             s.name as subscriber_name,
             s.email,
             s.phone as telefone
@@ -50,18 +52,20 @@ BEGIN
             v_result := REPLACE(v_result, '{{Endereço da UC}}', COALESCE(v_data.address, ''));
             v_result := REPLACE(v_result, '{{Status da UC}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Número da UC}}', COALESCE(v_data.numero_uc, ''));
+            v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
             v_result := REPLACE(v_result, '{{Nome do Assinante}}', COALESCE(v_data.subscriber_name, ''));
         END IF;
 
     -- FATURA (INVOICE)
     ELSIF p_entity_type = 'invoice' THEN
-        SELECT mes_referencia, vencimento::TEXT as vencimento, linha_digitavel, status::TEXT as status, valor_total::TEXT as valor_total INTO v_data FROM public.invoices WHERE id = p_entity_id;
+        SELECT mes_referencia, vencimento::TEXT as vencimento, linha_digitavel, status::TEXT as status, valor_total::TEXT as valor_total, concessionaria INTO v_data FROM public.invoices WHERE id = p_entity_id;
         IF FOUND THEN
-            v_result := REPLACE(v_result, '{{Mês de Referência da Fatura}}', COALESCE(v_data.mes_referencia, ''));
+            v_result := REPLACE(v_result, '{{Mês de Referência da Fatura}}', COALESCE(v_data.mes_referencia::TEXT, ''));
             v_result := REPLACE(v_result, '{{Vencimento da Fatura}}', COALESCE(v_data.vencimento, ''));
             v_result := REPLACE(v_result, '{{Linha Digitável de Pagamento}}', COALESCE(v_data.linha_digitavel, ''));
             v_result := REPLACE(v_result, '{{Status da Fatura}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Valor Total}}', COALESCE(v_data.valor_total, '0.00'));
+            v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
         END IF;
 
     -- ORIGINADOR (ORIGINATOR)
@@ -84,10 +88,11 @@ BEGIN
 
     -- USINA (POWER_PLANT)
     ELSIF p_entity_type = 'power_plant' THEN
-        SELECT name, status::TEXT as status INTO v_data FROM public.usinas WHERE id = p_entity_id;
+        SELECT name, status::TEXT as status, concessionaria INTO v_data FROM public.usinas WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome da Usina}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status da Usina}}', COALESCE(v_data.status, ''));
+            v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
         END IF;
     END IF;
 
