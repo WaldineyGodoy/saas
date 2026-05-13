@@ -249,7 +249,7 @@ export default function InvoiceListManager() {
         const map = {
             'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
-            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pago', icon: CheckCircle2 },
+            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
             'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: FileText },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
