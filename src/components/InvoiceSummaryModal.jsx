@@ -3,9 +3,11 @@ import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle,
 import { supabase } from '../lib/supabase';
 
 import { useBranding } from '../contexts/BrandingContext';
+import { useUI } from '../contexts/UIContext';
 
 export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess }) {
     const { branding } = useBranding();
+    const { showAlert, showConfirm } = useUI();
     const [loading, setLoading] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
@@ -24,12 +26,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         if (invoice.concessionaria_pdf_url) {
             window.open(invoice.concessionaria_pdf_url, '_blank');
         } else {
-            alert('PDF da concessionária não disponível para esta fatura.');
+            showAlert('PDF da concessionária não disponível para esta fatura.', 'warning');
         }
     };
 
     const handlePay = async () => {
-        const confirmed = window.confirm(`Deseja processar o pagamento desta conta no valor de ${formatCurrency(invoice.valor_a_pagar)}?`);
+        const confirmed = await showConfirm(`Deseja processar o pagamento desta conta no valor de ${formatCurrency(invoice.valor_a_pagar)}?`, 'Confirmar Pagamento');
         if (!confirmed) return;
 
         setLoading(true);
@@ -81,7 +83,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         } catch (error) {
             console.error('Erro no pagamento:', error);
             setPaymentStatus('error');
-            alert(`Falha no pagamento: ${error.message}`);
+            showAlert(`Falha no pagamento: ${error.message}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -99,9 +101,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             if (error) throw error;
             setEnergyStatus(newStatus);
             if (onPaymentSuccess) onPaymentSuccess();
+            showAlert('Status da conta atualizado com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao atualizar status da conta:', error);
-            alert('Erro ao atualizar status: ' + error.message);
+            showAlert('Erro ao atualizar status: ' + error.message, 'error');
         } finally {
             setUpdatingStatus(false);
         }
@@ -113,15 +116,16 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             setEditData(null);
         } else {
             setEditData({
-                mes_referencia: invoice.mes_referencia?.substring(0, 7),
-                vencimento: invoice.vencimento,
+                mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
+                vencimento: invoice.vencimento || '',
                 consumo_kwh: invoice.consumo_kwh || 0,
                 consumo_compensado: invoice.consumo_compensado || 0,
                 consumo_reais: invoice.consumo_reais || 0,
                 iluminacao_publica: invoice.iluminacao_publica || 0,
                 tarifa_minima: invoice.tarifa_minima || 0,
                 outros_lancamentos: invoice.outros_lancamentos || 0,
-                valor_concessionaria: invoice.valor_concessionaria || 0
+                valor_concessionaria: invoice.valor_concessionaria || 0,
+                valor_a_pagar: invoice.valor_a_pagar || 0
             });
             setIsEditing(true);
         }
@@ -143,11 +147,17 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     };
 
     const handleSaveEdit = async () => {
+        if (!editData.vencimento || !editData.mes_referencia) {
+            showAlert('Por favor, preencha o vencimento e o mês de referência.', 'warning');
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
                 ...editData,
-                mes_referencia: editData.mes_referencia + '-01' // Voltar para o formato de data
+                // Garantir que mes_referencia tenha o dia 01 se for apenas YYYY-MM
+                mes_referencia: editData.mes_referencia.length === 7 ? `${editData.mes_referencia}-01` : editData.mes_referencia
             };
 
             const { error } = await supabase
@@ -157,20 +167,20 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
             if (error) throw error;
             
+            if (onPaymentSuccess) await onPaymentSuccess();
+            showAlert('Fatura atualizada com sucesso!', 'success');
             setIsEditing(false);
-            if (onPaymentSuccess) onPaymentSuccess();
-            alert('Fatura atualizada com sucesso!');
-            onClose(); // Fechar para atualizar os dados
+            onClose(); 
         } catch (error) {
             console.error('Erro ao salvar edição:', error);
-            alert('Erro ao salvar: ' + error.message);
+            showAlert('Erro ao salvar: ' + (error.message || 'Erro desconhecido'), 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async () => {
-        if (!window.confirm('Tem certeza que deseja excluir permanentemente esta fatura? Esta ação não pode ser desfeita.')) return;
+        if (!await showConfirm('Tem certeza que deseja excluir permanentemente esta fatura? Esta ação não pode ser desfeita.', 'Excluir Fatura', 'Excluir', 'Cancelar')) return;
         
         setLoading(true);
         try {
@@ -183,9 +193,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             
             if (onPaymentSuccess) onPaymentSuccess();
             onClose();
+            showAlert('Fatura excluída com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao excluir fatura:', error);
-            alert('Erro ao excluir: ' + error.message);
+            showAlert('Erro ao excluir: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -200,10 +211,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
         const getUtilityDueDate = () => {
             if (!invoice.vencimento) return 'N/A';
-            if (consumerUnit?.dia_vencimento) {
-                const [year, month] = invoice.vencimento.split('-');
-                return `${String(consumerUnit.dia_vencimento).padStart(2, '0')}/${month}/${year}`;
-            }
+            // Mostrar a data exata da fatura, sem forçar o dia do cadastro da UC
+            // Isso evita confusão quando o usuário edita a data e a UI continua mostrando a antiga
             return new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
         };
 
@@ -426,6 +435,33 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             <div style={{ marginTop: '0.5rem', textAlign: 'right', fontSize: '0.8rem', color: '#64748b' }}>
                                 Desconto aplicado nesta fatura: <strong>{invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0)}%</strong>
                             </div>
+
+                            <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#475569' }}>VALOR DO ASSINANTE (BOLETO)</span>
+                                {isEditing ? (
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={editData.valor_a_pagar} 
+                                        onChange={e => handleEditChange('valor_a_pagar', e.target.value)} 
+                                        style={{ 
+                                            width: '120px', 
+                                            border: '2px solid var(--color-blue)', 
+                                            borderRadius: '8px', 
+                                            textAlign: 'right', 
+                                            padding: '0.4rem',
+                                            fontSize: '1.1rem',
+                                            fontWeight: 'bold'
+                                        }} 
+                                    />
+                                ) : (
+                                    <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--color-blue)' }}>
+                                        {formatCurrency(invoice.valor_a_pagar)}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -493,8 +529,23 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     </div>
 
                     {paymentStatus === 'success' && (
-                        <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0fdf4', border: '1px solid #22c55e', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#166534', fontSize: '0.85rem' }}>
-                            <CheckCircle2 size={16} /> Pagamento processado e status atualizado!
+                        <div style={{ 
+                            marginTop: '1.5rem', 
+                            padding: '1.25rem', 
+                            background: '#f0fdf4', 
+                            border: '1px solid #22c55e', 
+                            borderRadius: '16px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.75rem', 
+                            color: '#166534', 
+                            fontSize: '0.9rem',
+                            animation: 'slideUp 0.3s ease-out'
+                        }}>
+                            <div style={{ background: '#22c55e', color: 'white', borderRadius: '50%', padding: '4px', display: 'flex' }}>
+                                <CheckCircle2 size={16} />
+                            </div>
+                            <span style={{ fontWeight: 600 }}>Pagamento processado e status atualizado com sucesso!</span>
                         </div>
                     )}
                 </div>

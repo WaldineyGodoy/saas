@@ -1449,9 +1449,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             <div className="custom-scrollbar" style={{
                 background: '#f8fafc',
                 borderRadius: '12px',
-                width: '95%',
-                maxWidth: '1150px',
-                maxHeight: '92vh',
+                width: '98%',
+                maxWidth: '1350px',
+                maxHeight: '96vh',
                 overflowY: 'auto',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
             }}>
@@ -1523,7 +1523,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     ))}
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '650px' }}>
+                <form onSubmit={handleSubmit} style={{ padding: '2rem', minHeight: '750px' }}>
 
                     {/* Floating Summary Card (Técnico e Financeiro) */}
                     {['tecnico', 'financeiro'].includes(activeTab) && (
@@ -2576,7 +2576,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {/* Tab Content: Comunicados / Histórico */}
                     {activeTab === 'comunicacao' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '850px', margin: '0 auto' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
                                 {/* Send New Communication Section */}
                                 <div style={{ 
                                     background: 'white', 

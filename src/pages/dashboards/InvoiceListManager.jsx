@@ -32,6 +32,13 @@ export default function InvoiceListManager() {
 
     const filteredInvoices = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
+        if (inv.status === 'sem_faturamento') return false;
+        
+        // Se ambos os valores forem zero ou nulos, não exibir no dashboard financeiro
+        const valPagar = Number(inv.valor_a_pagar) || 0;
+        const valConcessionaria = Number(inv.valor_concessionaria) || 0;
+        if (valPagar <= 0 && valConcessionaria <= 0) return false;
+
         if (statusFilter && inv.status !== statusFilter) return false;
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();

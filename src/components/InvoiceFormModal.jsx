@@ -949,20 +949,27 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             top: '50%',
                             left: '50%',
                             transform: 'translate(-50%, -50%)',
-                            background: '#dcfce7',
-                            color: '#166534',
-                            padding: '0.8rem 1.5rem',
-                            borderRadius: '8px',
-                            border: '1px solid #bbf7d0',
-                            fontWeight: 'bold',
-                            zIndex: 10,
-                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                            background: 'white',
+                            color: '#1e293b',
+                            padding: '1.5rem 2.5rem',
+                            borderRadius: '24px',
+                            border: '1px solid #e2e8f0',
+                            fontWeight: 800,
+                            zIndex: 100,
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '0.5rem',
-                            animation: 'fadeInOut 0.3s ease'
+                            gap: '1rem',
+                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
                         }}>
-                            <CheckCircle size={20} /> Fatura Salva com Sucesso!
+                            <div style={{ background: '#22c55e', color: 'white', borderRadius: '50%', padding: '12px', display: 'flex' }}>
+                                <CheckCircle2 size={32} />
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>Sucesso!</div>
+                                <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 500 }}>Fatura salva com sucesso.</div>
+                            </div>
                         </div>
                     )}
                     <div>
@@ -1556,27 +1563,29 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             {/* Duplicate Safety Modal */}
             {showDuplicateModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, backdropFilter: 'blur(8px)' }}>
-                    <div style={{ background: 'white', borderRadius: '24px', padding: '2rem', width: '90%', maxWidth: '450px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', textAlign: 'center' }}>
-                        <div style={{ background: '#fff7ed', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: '#f97316' }}>
-                            <AlertCircle size={32} />
+                    <div style={{ background: 'white', borderRadius: '28px', padding: '2.5rem', width: '90%', maxWidth: '480px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', textAlign: 'center', animation: 'fadeIn 0.3s ease-out' }}>
+                        <div style={{ background: (branding?.secondary_color || '#FF6600') + '15', width: '80px', height: '80px', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: branding?.secondary_color || '#FF6600' }}>
+                            <AlertCircle size={40} />
                         </div>
 
-                        <h3 style={{ fontSize: '1.4rem', color: '#1e293b', fontWeight: 'bold', marginBottom: '1rem' }}>
+                        <h3 style={{ fontSize: '1.5rem', color: '#1e293b', fontWeight: 800, marginBottom: '0.75rem', letterSpacing: '-0.025em' }}>
                             {duplicateInfo?.type === 'block' ? 'Fatura Já Existente' : 'Fatura Detectada'}
                         </h3>
 
-                        <p style={{ color: '#64748b', marginBottom: '2rem', lineHeight: '1.5' }}>
+                        <p style={{ color: '#64748b', marginBottom: '2.5rem', lineHeight: '1.6', fontSize: '1rem' }}>
                             {duplicateInfo?.type === 'block'
                                 ? `Já existe uma fatura emitida para esta UC com mês de referência ${formData.mes_referencia} e vencimento em ${new Date(duplicateInfo.existing.vencimento + (duplicateInfo.existing.vencimento.includes('T') ? '' : 'T12:00:00')).toLocaleDateString('pt-BR')}.`
                                 : `Já existe uma fatura para o mês de referência ${formData.mes_referencia}, porém com uma data de vencimento diferente. O que deseja fazer?`
                             }
                         </p>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {duplicateInfo?.type === 'block' ? (
                                 <button
                                     onClick={() => setShowDuplicateModal(false)}
-                                    style={{ padding: '1rem', background: '#f1f5f9', color: '#475569', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                    style={{ padding: '1.25rem', background: '#f1f5f9', color: '#475569', borderRadius: '16px', border: 'none', cursor: 'pointer', fontWeight: 700, transition: '0.2s' }}
+                                    onMouseOver={e => e.currentTarget.style.background = '#e2e8f0'}
+                                    onMouseOut={e => e.currentTarget.style.background = '#f1f5f9'}
                                 >
                                     Entendido
                                 </button>
@@ -1584,7 +1593,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                 <>
                                     <button
                                         onClick={() => { setShowDuplicateModal(false); handleSubmit(null, 'new'); }}
-                                        style={{ padding: '1rem', background: 'var(--color-blue)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                        style={{ padding: '1.25rem', background: branding?.primary_color || 'var(--color-blue)', color: 'white', borderRadius: '16px', border: 'none', cursor: 'pointer', fontWeight: 800, transition: '0.2s', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                        onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                        onMouseOut={e => e.currentTarget.style.filter = 'none'}
                                     >
                                         Emitir Nova Fatura
                                     </button>
@@ -1593,13 +1604,15 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             setShowDuplicateModal(false);
                                             handleSubmit(null, 'update');
                                         }}
-                                        style={{ padding: '1rem', background: '#fff7ed', color: '#c2410c', borderRadius: '12px', border: '1px solid #ffedd5', cursor: 'pointer', fontWeight: 'bold' }}
+                                        style={{ padding: '1.25rem', background: (branding?.secondary_color || '#FF6600') + '10', color: branding?.secondary_color || '#FF6600', borderRadius: '16px', border: `1px solid ${(branding?.secondary_color || '#FF6600')}30`, cursor: 'pointer', fontWeight: 700, transition: '0.2s' }}
+                                        onMouseOver={e => e.currentTarget.style.background = (branding?.secondary_color || '#FF6600') + '20'}
+                                        onMouseOut={e => e.currentTarget.style.background = (branding?.secondary_color || '#FF6600') + '10'}
                                     >
                                         Ajustar Data de Vencimento
                                     </button>
                                     <button
                                         onClick={() => setShowDuplicateModal(false)}
-                                        style={{ padding: '1rem', background: 'white', color: '#64748b', borderRadius: '12px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: '600' }}
+                                        style={{ padding: '1rem', background: 'transparent', color: '#94a3b8', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 600, marginTop: '0.5rem' }}
                                     >
                                         Cancelar
                                     </button>
