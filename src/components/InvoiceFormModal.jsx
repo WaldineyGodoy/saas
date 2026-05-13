@@ -94,7 +94,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 pix_string: invoice.pix_string || '',
                 valor_concessionaria: invoice.valor_concessionaria || invoice.valor_a_pagar || 0,
                 status: invoice.status || 'ag_emissao_boleto',
-                desconto_aplicado: invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (selectedUc?.desconto_assinante || 0)
+                desconto_aplicado: invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (selectedUc?.desconto_assinante || 0),
+                energy_bill_status: invoice.energy_bill_status || 'pendente'
             });
             // Find UC to set tariff info
             if (ucs) {
@@ -844,7 +845,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 linha_digitavel: formData.linha_digitavel || null,
                 pix_string: formData.pix_string || null,
                 status: formData.status,
-                desconto_aplicado: discountToApply
+                desconto_aplicado: discountToApply,
+                energy_bill_status: formData.energy_bill_status || 'pendente'
             };
 
             if (!payload.uc_id) throw new Error('Selecione uma Unidade Consumidora.');
@@ -1329,6 +1331,41 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                 <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#166534' }}>
                                                     {formData.valor_concessionaria ? (typeof formData.valor_concessionaria === 'number' ? formData.valor_concessionaria.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : formData.valor_concessionaria) : formData.valor_a_pagar}
                                                 </span>
+                                            </div>
+
+                                            {/* Energy Bill Status Toggle */}
+                                            <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                                                    Status do Pagamento (Concessionária)
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    {[
+                                                        { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
+                                                        { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' },
+                                                        { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' }
+                                                    ].map(s => (
+                                                        <button
+                                                            key={s.id}
+                                                            type="button"
+                                                            onClick={() => setFormData({ ...formData, energy_bill_status: s.id })}
+                                                            style={{
+                                                                flex: 1,
+                                                                padding: '0.6rem',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid',
+                                                                borderColor: formData.energy_bill_status === s.id ? s.color : '#cbd5e1',
+                                                                background: formData.energy_bill_status === s.id ? s.bg : 'white',
+                                                                color: formData.energy_bill_status === s.id ? s.color : '#64748b',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            {s.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
 
                                             {/* Original Document Link */}

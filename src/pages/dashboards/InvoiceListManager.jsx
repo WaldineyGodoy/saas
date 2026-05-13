@@ -249,8 +249,8 @@ export default function InvoiceListManager() {
         const map = {
             'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
-            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado', icon: CheckCircle2 },
-            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: TicketMinus },
+            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pago', icon: CheckCircle2 },
+            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: FileText },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
@@ -567,13 +567,21 @@ export default function InvoiceListManager() {
                                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '3.5rem', fontStyle: 'italic', opacity: 0.6 }}>Sem vencimentos</div>
                                 ) : (
                                     dayInvoices.map(inv => {
+                                        const today = new Date();
+                                        const dueDate = new Date(inv.vencimento);
+                                        const isPastDue = dueDate < today;
+                                        
+                                        const ebStatus = inv.energy_bill_status || 'pendente';
+                                        
                                         const statusData = {
-                                            'sem_faturamento': { color: '#475569', label: 'SEM FATURAMENTO', bg: '#f1f5f9' },
-                                            'pago': { color: '#166534', label: 'PAGO', bg: '#dcfce7' },
-                                            'atrasado': { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' },
-                                            'a_vencer': { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' }
+                                            'pago': { color: '#166534', label: 'PAGA', bg: '#dcfce7' },
+                                            'pendente': isPastDue 
+                                                ? { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' }
+                                                : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
+                                            'erro': { color: '#991b1b', label: 'ERRO PAGAMENTO', bg: '#fef2f2' }
                                         };
-                                        const s = statusData[inv.status] || { color: '#64748b', label: inv.status, bg: '#f1f5f9' };
+                                        
+                                        const s = statusData[ebStatus] || { color: '#64748b', label: ebStatus.toUpperCase(), bg: '#f1f5f9' };
                                         const formatCurrencyValue = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
                                         // Valores da Concessionária
@@ -637,35 +645,36 @@ export default function InvoiceListManager() {
                                                     </div>
                                                 </div>
 
-                                                {/* Botão de Pagamento Asaas */}
-                                                {inv.status !== 'pago' && inv.asaas_boleto_url && (
+                                                {/* Botão de Pagamento Concessionária */}
+                                                {ebStatus !== 'pago' && inv.linha_digitavel && (
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            window.open(inv.asaas_boleto_url, '_blank');
+                                                            handlePayBill(inv);
                                                         }}
+                                                        disabled={payingId === inv.id}
                                                         style={{
                                                             marginTop: '0.3rem',
                                                             padding: '0.4rem',
-                                                            background: '#2563eb',
+                                                            background: '#10b981',
                                                             color: 'white',
                                                             border: 'none',
                                                             borderRadius: '6px',
                                                             fontSize: '0.7rem',
                                                             fontWeight: 'bold',
-                                                            cursor: 'pointer',
+                                                            cursor: payingId === inv.id ? 'default' : 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             gap: '0.3rem',
-                                                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
                                                         }}
                                                     >
-                                                        <CreditCard size={12} /> PAGAR BOLETO
+                                                        <CreditCard size={12} /> {payingId === inv.id ? 'PROCESSANDO...' : 'PAGAR CONTA'}
                                                     </button>
                                                 )}
                                                 
-                                                {inv.status === 'pago' && (
+                                                {ebStatus === 'pago' && (
                                                     <div style={{ 
                                                         marginTop: '0.5rem', 
                                                         padding: '0.4rem', 
@@ -677,7 +686,7 @@ export default function InvoiceListManager() {
                                                         fontWeight: 'bold',
                                                         border: '1px solid #bbf7d0'
                                                     }}>
-                                                        PAGAMENTO CONFIRMADO
+                                                        CONTA PAGA
                                                     </div>
                                                 )}
                                             </div>
