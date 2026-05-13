@@ -816,31 +816,50 @@ export default function InvoiceListManager() {
                 </div>
 
                 {/* Legenda de Status (Energia) integrada se necessário */}
-                {viewMode === 'energy_calendar' && (
-                    <div style={{
-                        padding: '0.75rem 1rem',
-                        background: 'rgba(255, 255, 255, 0.4)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(226, 232, 240, 0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '2.5rem'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pagos: {invoices.filter(i => i.status === 'pago').length}</span>
+                {viewMode === 'energy_calendar' && (() => {
+                    const energyStats = filteredInvoices.filter(inv => 
+                        inv.consumer_units?.status === 'ativo' && 
+                        inv.consumer_units?.modalidade === 'auto_consumo_remoto'
+                    ).reduce((acc, inv) => {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const dueDate = new Date(inv.vencimento);
+                        const isPastDue = dueDate < today;
+                        const ebStatus = inv.energy_bill_status || 'pendente';
+                        
+                        if (ebStatus === 'pago') acc.pago++;
+                        else if (ebStatus === 'pendente' && isPastDue) acc.atrasado++;
+                        else acc.a_vencer++;
+                        
+                        return acc;
+                    }, { pago: 0, atrasado: 0, a_vencer: 0 });
+
+                    return (
+                        <div style={{
+                            padding: '0.75rem 1rem',
+                            background: 'rgba(255, 255, 255, 0.4)',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(226, 232, 240, 0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '2.5rem'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pagos: {energyStats.pago}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Atrasadas: {energyStats.atrasado}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>A Vencer: {energyStats.a_vencer}</span>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Atrasadas: {invoices.filter(i => i.status === 'atrasado').length}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>A Vencer: {invoices.filter(i => i.status === 'a_vencer').length}</span>
-                        </div>
-                    </div>
-                )}
+                    );
+                })()}
             </div>
 
             {loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (
