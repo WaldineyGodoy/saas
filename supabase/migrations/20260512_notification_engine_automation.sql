@@ -2,6 +2,27 @@
 -- Data: 2026-05-12
 -- Descrição: Ativação de gatilhos para fornecedores, despacho automático de logs via Edge Functions e correção de variáveis.
 
+-- Função auxiliar para formatar o endereço JSON em texto legível
+CREATE OR REPLACE FUNCTION public.fn_format_json_address(p_address jsonb)
+ RETURNS text
+ LANGUAGE plpgsql
+ AS $function$
+ BEGIN
+    IF p_address IS NULL OR p_address = '{}'::jsonb THEN
+        RETURN '';
+    END IF;
+
+    RETURN CONCAT_WS(', ', 
+        COALESCE(p_address->>'rua', ''),
+        COALESCE(p_address->>'numero', ''),
+        CASE WHEN p_address->>'complemento' IS NOT NULL AND p_address->>'complemento' <> '' THEN 'Comp: ' || (p_address->>'complemento') ELSE NULL END,
+        COALESCE(p_address->>'bairro', ''),
+        COALESCE(p_address->>'cidade', '') || ' - ' || COALESCE(p_address->>'uf', ''),
+        CASE WHEN p_address->>'cep' IS NOT NULL AND p_address->>'cep' <> '' THEN 'CEP: ' || (p_address->>'cep') ELSE NULL END
+    );
+ END;
+ $function$;
+
 -- 1. Função para substituir variáveis nas mensagens
 CREATE OR REPLACE FUNCTION public.fn_replace_notification_variables(p_text text, p_entity_type text, p_entity_id uuid)
  RETURNS text
@@ -14,29 +35,31 @@ DECLARE
 BEGIN
     -- LEAD
     IF p_entity_type = 'lead' THEN
-        SELECT name, email, phone as telefone, status, concessionaria INTO v_data FROM public.leads WHERE id = p_entity_id;
+        SELECT name, email, phone as telefone, status, concessionaria, address INTO v_data FROM public.leads WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome do Lead}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Nome Completo do Lead}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status do Lead}}', COALESCE(v_data.status::TEXT, ''));
             v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
+            v_result := REPLACE(v_result, '{{Endereço}}', public.fn_format_json_address(v_data.address));
         END IF;
     
     -- ASSINANTE (SUBSCRIBER)
     ELSIF p_entity_type = 'subscriber' THEN
-        SELECT name, email, phone as telefone, status, cpf_cnpj INTO v_data FROM public.subscribers WHERE id = p_entity_id;
+        SELECT name, email, phone as telefone, status, cpf_cnpj, address INTO v_data FROM public.subscribers WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome do Assinante}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Nome Completo do Assinante}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status do Assinante}}', COALESCE(v_data.status::TEXT, ''));
             v_result := REPLACE(v_result, '{{CPF/CNPJ}}', COALESCE(v_data.cpf_cnpj, ''));
+            v_result := REPLACE(v_result, '{{Endereço}}', public.fn_format_json_address(v_data.address));
         END IF;
 
     -- UNIDADE CONSUMIDORA (CONSUMER_UNIT)
     ELSIF p_entity_type = 'consumer_unit' THEN
         SELECT 
             c.numero_uc, 
-            c.address::TEXT as address, 
+            c.address, 
             c.status::TEXT as status,
             c.concessionaria,
             s.name as subscriber_name,
@@ -49,7 +72,7 @@ BEGIN
         
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Unidade Consumidora}}', COALESCE(v_data.numero_uc, ''));
-            v_result := REPLACE(v_result, '{{Endereço da UC}}', COALESCE(v_data.address, ''));
+            v_result := REPLACE(v_result, '{{Endereço da UC}}', public.fn_format_json_address(v_data.address));
             v_result := REPLACE(v_result, '{{Status da UC}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Número da UC}}', COALESCE(v_data.numero_uc, ''));
             v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
@@ -58,7 +81,7 @@ BEGIN
 
     -- FATURA (INVOICE)
     ELSIF p_entity_type = 'invoice' THEN
-        SELECT mes_referencia, vencimento::TEXT as vencimento, linha_digitavel, status::TEXT as status, valor_total::TEXT as valor_total, concessionaria INTO v_data FROM public.invoices WHERE id = p_entity_id;
+        SELECT mes_referencia, vencimento::TEXT as vencimento, linha_digitavel, status::TEXT as status, valor_total::TEXT as valor_total, concessionaria, address INTO v_data FROM public.invoices WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Mês de Referência da Fatura}}', COALESCE(v_data.mes_referencia::TEXT, ''));
             v_result := REPLACE(v_result, '{{Vencimento da Fatura}}', COALESCE(v_data.vencimento, ''));
@@ -66,35 +89,53 @@ BEGIN
             v_result := REPLACE(v_result, '{{Status da Fatura}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Valor Total}}', COALESCE(v_data.valor_total, '0.00'));
             v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
+            v_result := REPLACE(v_result, '{{Endereço da UC}}', public.fn_format_json_address(v_data.address));
         END IF;
 
     -- ORIGINADOR (ORIGINATOR)
     ELSIF p_entity_type = 'originator' THEN
-        SELECT name, email, phone as telefone, status::TEXT as status INTO v_data FROM public.originators_v2 WHERE id = p_entity_id;
+        SELECT name, email, phone as telefone, status::TEXT as status, address INTO v_data FROM public.originators_v2 WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome do Originador}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Nome Completo do Originador}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status do Originador}}', COALESCE(v_data.status, ''));
+            v_result := REPLACE(v_result, '{{Endereço}}', public.fn_format_json_address(v_data.address));
         END IF;
 
     -- FORNECEDOR (SUPPLIER)
     ELSIF p_entity_type = 'supplier' THEN
-        SELECT name, email, phone as telefone, status::TEXT as status INTO v_data FROM public.suppliers WHERE id = p_entity_id;
+        SELECT name, email, phone as telefone, status::TEXT as status, address INTO v_data FROM public.suppliers WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome do Fornecedor}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Nome Completo do Fornecedor}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status do Fornecedor}}', COALESCE(v_data.status, ''));
+            v_result := REPLACE(v_result, '{{Endereço}}', public.fn_format_json_address(v_data.address));
         END IF;
 
     -- USINA (POWER_PLANT)
     ELSIF p_entity_type = 'power_plant' THEN
-        SELECT name, status::TEXT as status, concessionaria INTO v_data FROM public.usinas WHERE id = p_entity_id;
+        SELECT name, status::TEXT as status, concessionaria, address INTO v_data FROM public.usinas WHERE id = p_entity_id;
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Nome da Usina}}', COALESCE(v_data.name, ''));
             v_result := REPLACE(v_result, '{{Status da Usina}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Concessionária}}', COALESCE(v_data.concessionaria, ''));
+            v_result := REPLACE(v_result, '{{Endereço}}', public.fn_format_json_address(v_data.address));
         END IF;
     END IF;
+
+    -- Campos genéricos
+    IF v_data IS NOT NULL THEN
+        BEGIN
+            v_result := REPLACE(v_result, '{{email}}', COALESCE(v_data.email::TEXT, ''));
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+        BEGIN
+            v_result := REPLACE(v_result, '{{telefone}}', COALESCE(v_data.telefone::TEXT, ''));
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+    END IF;
+
+    RETURN v_result;
+END;
+$function$;
 
     -- Campos genéricos
     IF v_data IS NOT NULL THEN
