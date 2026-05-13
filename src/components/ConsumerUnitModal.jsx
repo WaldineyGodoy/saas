@@ -537,7 +537,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 pix_string: null,
                 valor_a_pagar: 0,
                 valor_concessionaria: 0,
-                status: 'sem_faturamento' // Green color (before), now slate
+                status: 'sem_faturamento',
+                energy_bill_status: 'pago'
             };
 
             const { error } = await supabase.from('invoices').upsert(payload, { onConflict: 'uc_id,mes_referencia' });
