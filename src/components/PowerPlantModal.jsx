@@ -2462,8 +2462,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, marginTop: '0.4rem' }}>Comprometimento em ativação</div>
                                         </div>
                                     </div>
-                                </div>
-
+                                    
                                     {/* Sub-Filters embedded with modern design */}
                                     <div style={{ 
                                         display: 'grid', 
