@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useBranding } from '../../contexts/BrandingContext';
 import PowerPlantModal from '../../components/PowerPlantModal';
 import PlantClosingsHistoryModal from '../../components/PlantClosingsHistoryModal';
 import { FileText } from 'lucide-react';
@@ -26,6 +27,25 @@ const KANBAN_STATUSES = [
     { status: 'inativa', label: 'Inativa', color: '#64748b', bg: '#f1f5f9' },
     { status: 'cancelada', label: 'Cancelada', color: '#94a3b8', bg: '#f1f5f9' }
 ];
+
+const getCommitmentStyle = (percentage) => {
+    if (percentage < 30) return { 
+        gradient: 'linear-gradient(90deg, #22c55e, #10b981)', 
+        color: '#166534'
+    };
+    if (percentage < 60) return { 
+        gradient: 'linear-gradient(90deg, #eab308, #f97316)', 
+        color: '#854d0e'
+    };
+    if (percentage < 85) return { 
+        gradient: 'linear-gradient(90deg, #f97316, #ef4444)', 
+        color: '#9a3412'
+    };
+    return { 
+        gradient: 'linear-gradient(90deg, #ef4444, #991b1b)', 
+        color: '#7f1d1d'
+    };
+};
 
 function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
     const {
@@ -93,23 +113,32 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
 
             {plant.geracao_estimada_kwh > 0 && plant.consumer_units?.length > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748b', marginBottom: '0.2rem' }}>
-                        <span>Lotação / Franquia</span>
-                        <span style={{ fontWeight: 'bold', color: '#7c3aed' }}>
-                            {Math.round((plant.consumer_units
-                                .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
-                                .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%
-                        </span>
-                    </div>
-                    <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{
-                            height: '100%',
-                            background: '#7c3aed',
-                            width: `${Math.min(100, (plant.consumer_units
-                                .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
-                                .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%`
-                        }} />
-                    </div>
+                    {(() => {
+                        const totalComprometido = plant.consumer_units
+                            .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
+                            .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
+                        const pct = Math.min(100, (totalComprometido / plant.geracao_estimada_kwh) * 100);
+                        const style = getCommitmentStyle(pct);
+                        
+                        return (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748b', marginBottom: '0.2rem' }}>
+                                    <span>Lotação / Franquia</span>
+                                    <span style={{ fontWeight: 'bold', color: style.color }}>
+                                        {Math.round(pct)}%
+                                    </span>
+                                </div>
+                                <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <div style={{
+                                        height: '100%',
+                                        background: style.gradient,
+                                        width: `${pct}%`,
+                                        transition: 'all 0.5s ease'
+                                    }} />
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
 
