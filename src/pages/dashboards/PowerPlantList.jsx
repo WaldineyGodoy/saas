@@ -96,14 +96,18 @@ function KanbanCard({ plant, onClick, onClosingsClick, isOverlay }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#64748b', marginBottom: '0.2rem' }}>
                         <span>Lotação / Franquia</span>
                         <span style={{ fontWeight: 'bold', color: '#7c3aed' }}>
-                            {Math.round((plant.consumer_units.reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%
+                            {Math.round((plant.consumer_units
+                                .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
+                                .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%
                         </span>
                     </div>
                     <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{
                             height: '100%',
                             background: '#7c3aed',
-                            width: `${Math.min(100, (plant.consumer_units.reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%`
+                            width: `${Math.min(100, (plant.consumer_units
+                                .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
+                                .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0) / plant.geracao_estimada_kwh) * 100)}%`
                         }} />
                     </div>
                 </div>
