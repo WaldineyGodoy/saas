@@ -441,8 +441,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const ucStats = {
         total: selectedUCs.length,
         ativos: selectedUCs.filter(u => u.status === 'ativo').length,
+        ativosKwh: selectedUCs
+            .filter(u => u.status === 'ativo')
+            .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0),
         pendentes: selectedUCs.filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status)).length,
-        franquiaReservada: selectedUCs
+        pendentesKwh: selectedUCs
             .filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status))
             .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0)
     };
@@ -2432,34 +2435,35 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         `${((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100).toFixed(1)}% do potencial` : 
                                                         'Defina a geração estimada'}
                                                 </span>
-                                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Disponível: {geracaoDisponivel.toFixed(0)} kWh</span>
-                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Card 2: Status das UCs */}
+                                        {/* Card 2: Status Detalhado das UCs */}
                                         <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '20px', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                                 <Users size={16} color="#64748b" />
-                                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>Unidades</span>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>Resumo de Unidades</span>
                                             </div>
-                                            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#1e293b' }}>{ucStats.total}</div>
-                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: '#dcfce7', color: '#166534', borderRadius: '4px', fontWeight: 700 }}>{ucStats.ativos} Ativas</span>
-                                                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: 700 }}>{ucStats.pendentes} Ag. Conexão</span>
+                                            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#1e293b' }}>
+                                                <span style={{ color: '#64748b', fontSize: '1rem', fontWeight: 600 }}>Unidades : </span> {ucStats.total}
                                             </div>
-                                        </div>
-
-                                        {/* Card 3: Franquia Reservada */}
-                                        <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '20px', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                                <Clock size={16} color="#64748b" />
-                                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>Franquia Reservada</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.75rem' }}>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></div>
+                                                    {ucStats.ativos} Ativas - {ucStats.ativosKwh.toFixed(0)} kWh
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6' }}></div>
+                                                    {ucStats.pendentes} Ag. Conexão - {ucStats.pendentesKwh.toFixed(0)} kWh
+                                                </div>
+                                                <div style={{ 
+                                                    marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', 
+                                                    fontSize: '0.85rem', fontWeight: 800, color: branding?.primary_color || '#3b82f6',
+                                                    display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                                }}>
+                                                    <Zap size={14} /> DISPONÍVEL : {geracaoDisponivel.toFixed(0)} kWh
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: branding?.primary_color || '#3b82f6' }}>{ucStats.franquiaReservada.toFixed(0)} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>kWh</span></div>
-                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, marginTop: '0.4rem' }}>Comprometimento em ativação</div>
                                         </div>
                                     </div>
                                     
