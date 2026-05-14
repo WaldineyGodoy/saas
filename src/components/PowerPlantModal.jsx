@@ -11,6 +11,7 @@ import {
     Paperclip, Send, Loader2, Info, History
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import { useBranding } from '../contexts/BrandingContext';
 import {
     DndContext,
     closestCorners,
@@ -67,6 +68,7 @@ const modalStyles = `
 
 // Sortable UC Item Component
 const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
+    const { branding } = useBranding();
     const isDisconnected = uc.status === 'desconectado' || uc.status === 'cancelado';
     const percentage = (geracaoEstimada > 0 && !isDisconnected) ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : (isDisconnected ? '0.00' : null);
     const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
@@ -80,7 +82,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
             'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },
             'cancelado_inadimplente': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado Inad.' },
-            'aguardando_conexao': { color: '#7c3aed', bg: '#f5f3ff', label: 'Ag. Conexão' },
+            'aguardando_conexao': { color: branding?.primary_color || '#3b82f6', bg: (branding?.primary_color || '#3b82f6') + '10', label: 'Ag. Conexão' },
             'sem_geracao': { color: '#64748b', bg: '#f8fafc', label: 'Sem Geração' },
             'em_transf_titularidade': { color: '#0ea5e9', bg: '#f0f9ff', label: 'Transf. Titularidade' },
         };
@@ -112,7 +114,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         borderRadius: '12px',
         background: 'white',
         cursor: 'default',
-        boxShadow: isDragging ? '0 10px 25px rgba(124, 58, 237, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
+        boxShadow: isDragging ? `0 10px 25px ${(branding?.primary_color || '#3b82f6')}33` : '0 2px 4px rgba(0,0,0,0.02)',
         zIndex: isDragging ? 100 : 1,
         position: 'relative',
         marginBottom: '0.75rem',
@@ -131,8 +133,8 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
         >
             <style>{`
                 .uc-card-hover:hover {
-                    border-color: #7c3aed !important;
-                    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08) !important;
+                    border-color: ${branding?.primary_color || '#3b82f6'} !important;
+                    box-shadow: 0 4px 12px ${(branding?.primary_color || '#3b82f6')}15 !important;
                 }
             `}</style>
             
@@ -150,14 +152,14 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                 width: '32px', 
                 height: '32px', 
                 borderRadius: '10px', 
-                background: isGeradora ? '#fef3c7' : '#f5f3ff', 
-                color: isGeradora ? '#92400e' : '#7c3aed', 
+                background: isGeradora ? '#fef3c7' : (branding?.primary_color || '#3b82f6') + '15', 
+                color: isGeradora ? '#92400e' : (branding?.primary_color || '#3b82f6'), 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
                 fontSize: '0.85rem', 
                 fontWeight: '800',
-                border: `1px solid ${isGeradora ? '#fcd34d' : '#ddd6fe'}`
+                border: `1px solid ${isGeradora ? '#fcd34d' : (branding?.primary_color || '#3b82f6') + '30'}`
             }}>
                 {index + 1}
             </div>
@@ -228,7 +230,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                             cursor: 'pointer',
                             transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#7c3aed'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = branding?.primary_color || '#3b82f6'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
                     >
                         <Eye size={18} />
@@ -237,7 +239,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                         type="checkbox"
                         checked={true}
                         onChange={e => onToggle(e.target.checked)}
-                        style={{ width: '1.25rem', height: '1.25rem', accentColor: '#7c3aed', cursor: 'pointer' }}
+                        style={{ transform: 'scale(1.1)', accentColor: branding?.primary_color || '#3b82f6', cursor: 'pointer' }}
                     />
                 </div>
             </div>
@@ -246,6 +248,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
 };
 
 export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
+    const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const [suppliers, setSuppliers] = useState([]);
     const [inverterBrands, setInverterBrands] = useState([]);
@@ -1176,6 +1179,25 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         showAlert('Arquivo CSV e PDF gerados com sucesso!', 'success');
     };
 
+    const getCommitmentStyle = (percentage) => {
+        if (percentage < 30) return { 
+            gradient: 'linear-gradient(90deg, #22c55e, #10b981)', 
+            color: '#166534'
+        };
+        if (percentage < 60) return { 
+            gradient: 'linear-gradient(90deg, #eab308, #f97316)', 
+            color: '#854d0e'
+        };
+        if (percentage < 85) return { 
+            gradient: 'linear-gradient(90deg, #f97316, #ef4444)', 
+            color: '#9a3412'
+        };
+        return { 
+            gradient: 'linear-gradient(90deg, #ef4444, #991b1b)', 
+            color: '#7f1d1d'
+        };
+    };
+
     const renderUCList = () => {
         const listToRender = ucFilter === 'linked'
             ? selectedUCs
@@ -1238,9 +1260,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     return (
                         <div key={uc.id} style={{
                             display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.85rem',
-                            padding: '0.8rem', border: isSelected ? '1px solid #8b5cf6' : '1px solid #ddd',
+                            padding: '0.8rem', border: isSelected ? `1px solid ${branding?.primary_color || '#3b82f6'}` : '1px solid #ddd',
                             borderRadius: '6px', background: isSelected ? 'white' : 'rgba(255,255,255,0.6)',
-                            transition: '0.2s', boxShadow: isSelected ? '0 2px 4px rgba(139, 92, 246, 0.1)' : 'none',
+                            transition: '0.2s', boxShadow: isSelected ? `0 2px 4px ${(branding?.primary_color || '#3b82f6')}1A` : 'none',
                             opacity: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 0.6 : 1,
                             borderStyle: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 'dashed' : 'solid'
                         }}>
@@ -1259,7 +1281,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         else setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
                                     }
                                 }}
-                                style={{ transform: 'scale(1.1)', accentColor: '#7c3aed', cursor: 'pointer' }}
+                                style={{ transform: 'scale(1.1)', accentColor: branding?.primary_color || '#3b82f6', cursor: 'pointer' }}
                             />
                             <div style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2343,7 +2365,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
                                         <div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <div style={{ padding: '0.6rem', background: '#f5f3ff', borderRadius: '12px', color: '#7c3aed' }}>
+                                                <div style={{ padding: '0.6rem', background: (branding?.primary_color || '#3b82f6') + '10', borderRadius: '12px', color: branding?.primary_color || '#3b82f6' }}>
                                                     <Link size={24} />
                                                 </div>
                                                 <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Controle e Vínculos de Rateio</h4>
@@ -2352,16 +2374,28 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             <div style={{ marginTop: '1rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}>
                                                     <span style={{ color: '#64748b' }}>Geração Comprometida</span>
-                                                    <span style={{ color: '#7c3aed' }}>{totalFranquiaVinculada.toFixed(0)} / {formData.geracao_estimada_kwh || 0} kWh</span>
+                                                    {(() => {
+                                                        const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
+                                                        const style = getCommitmentStyle(pct);
+                                                        return (
+                                                            <span style={{ color: style.color }}>{totalFranquiaVinculada.toFixed(0)} / {formData.geracao_estimada_kwh || 0} kWh</span>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <div style={{ width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
-                                                    <div style={{ 
-                                                        width: `${Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100)}%`, 
-                                                        height: '100%', 
-                                                        background: 'linear-gradient(90deg, #7c3aed, #a855f7)',
-                                                        borderRadius: '10px',
-                                                        transition: 'width 0.5s ease-out'
-                                                    }} />
+                                                    {(() => {
+                                                        const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
+                                                        const style = getCommitmentStyle(pct);
+                                                        return (
+                                                            <div style={{ 
+                                                                width: `${pct}%`, 
+                                                                height: '100%', 
+                                                                background: style.gradient,
+                                                                borderRadius: '10px',
+                                                                transition: 'all 0.5s ease-out'
+                                                            }} />
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
                                                     {formData.geracao_estimada_kwh > 0 ? 
@@ -2388,7 +2422,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     color: '#475569',
                                                     transition: 'all 0.2s'
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = '#7c3aed'}
+                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = branding?.primary_color || '#3b82f6'}
                                                 onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
                                             >
                                                 <Maximize2 size={18} /> Expandir Gestor
@@ -2398,7 +2432,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 onClick={handleGenerateList}
                                                 style={{ 
                                                     padding: '0.75rem 1.5rem', 
-                                                    background: '#7c3aed', 
+                                                    background: branding?.primary_color || '#3b82f6', 
                                                     color: 'white', 
                                                     border: 'none', 
                                                     borderRadius: '12px', 
@@ -2408,7 +2442,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     gap: '0.6rem', 
                                                     fontSize: '0.9rem', 
                                                     fontWeight: 700, 
-                                                    boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3)',
+                                                    boxShadow: `0 4px 12px ${(branding?.primary_color || '#3b82f6')}4D`,
                                                     transition: 'all 0.2s'
                                                 }}
                                                 onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
@@ -2438,7 +2472,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     onClick={() => setUcFilter('linked')} 
                                                     style={{ 
                                                         flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: ucFilter === 'linked' ? '#7c3aed' : 'transparent', 
+                                                        background: ucFilter === 'linked' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
                                                         color: ucFilter === 'linked' ? 'white' : '#64748b', 
                                                         cursor: 'pointer', transition: 'all 0.2s' 
                                                     }}
@@ -2450,7 +2484,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     onClick={() => setUcFilter('unlinked')} 
                                                     style={{ 
                                                         flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: ucFilter === 'unlinked' ? '#7c3aed' : 'transparent', 
+                                                        background: ucFilter === 'unlinked' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
                                                         color: ucFilter === 'unlinked' ? 'white' : '#64748b', 
                                                         cursor: 'pointer', transition: 'all 0.2s' 
                                                     }}
@@ -2467,7 +2501,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     onClick={() => setFormData({...formData, rateio_type: 'prioridade'})} 
                                                     style={{ 
                                                         flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: formData.rateio_type === 'prioridade' ? '#7c3aed' : 'transparent', 
+                                                        background: formData.rateio_type === 'prioridade' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
                                                         color: formData.rateio_type === 'prioridade' ? 'white' : '#64748b', 
                                                         cursor: 'pointer', transition: 'all 0.2s' 
                                                     }}
@@ -2479,7 +2513,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})} 
                                                     style={{ 
                                                         flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: formData.rateio_type === 'porcentagem' ? '#7c3aed' : 'transparent', 
+                                                        background: formData.rateio_type === 'porcentagem' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
                                                         color: formData.rateio_type === 'porcentagem' ? 'white' : '#64748b', 
                                                         cursor: 'pointer', transition: 'all 0.2s' 
                                                     }}
@@ -2492,7 +2526,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                                     {loadingUCs ? (
                                         <div style={{ textAlign: 'center', padding: '4rem' }}>
-                                            <RefreshCcw className="animate-spin" size={32} color="#7c3aed" />
+                                            <RefreshCcw className="animate-spin" size={32} color={branding?.primary_color || '#3b82f6'} />
                                             <p style={{ marginTop: '1rem', color: '#64748b', fontWeight: 600 }}>Sincronizando unidades...</p>
                                         </div>
                                     ) : (
@@ -2739,7 +2773,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                <div style={{ padding: '0.6rem', background: '#f5f3ff', color: '#7c3aed', borderRadius: '10px' }}>
+                                <div style={{ padding: '0.6rem', background: (branding?.primary_color || '#3b82f6') + '10', color: branding?.primary_color || '#3b82f6', borderRadius: '10px' }}>
                                     <Zap size={24} />
                                 </div>
                                 <div>
@@ -2770,7 +2804,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
                                         'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },
                                         'cancelado_inadimplente': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado Inad.' },
-                                        'aguardando_conexao': { color: '#7c3aed', bg: '#f5f3ff', label: 'Ag. Conexão' },
+                                        'aguardando_conexao': { color: branding?.primary_color || '#3b82f6', bg: (branding?.primary_color || '#3b82f6') + '10', label: 'Ag. Conexão' },
                                         'sem_geracao': { color: '#64748b', bg: '#f8fafc', label: 'Sem Geração' },
                                         'em_transf_titularidade': { color: '#0ea5e9', bg: '#f0f9ff', label: 'Transf. Titularidade' },
                                     };
@@ -2833,7 +2867,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     setUcForInvoices(previewUC);
                                     setShowInvoicesModal(true);
                                 }}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.5rem', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #7c3aed', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.7rem 1.5rem', background: (branding?.primary_color || '#3b82f6') + '10', color: branding?.primary_color || '#3b82f6', border: `1px solid ${branding?.primary_color || '#3b82f6'}`, borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
                             >
                                 <FileText size={18} /> Ver Faturas
                             </button>
@@ -2886,7 +2920,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         style={{
                                             padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                             background: ucFilter === 'linked' ? 'white' : 'transparent',
-                                            color: ucFilter === 'linked' ? '#7c3aed' : '#64748b',
+                                            color: ucFilter === 'linked' ? (branding?.primary_color || '#3b82f6') : '#64748b',
                                             boxShadow: ucFilter === 'linked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                                             cursor: 'pointer'
                                         }}
@@ -2897,7 +2931,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         style={{
                                             padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                             background: ucFilter === 'unlinked' ? 'white' : 'transparent',
-                                            color: ucFilter === 'unlinked' ? '#7c3aed' : '#64748b',
+                                            color: ucFilter === 'unlinked' ? (branding?.primary_color || '#3b82f6') : '#64748b',
                                             boxShadow: ucFilter === 'unlinked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                                             cursor: 'pointer'
                                         }}
@@ -2920,7 +2954,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         style={{
                                             padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                             background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent',
-                                            color: formData.rateio_type === 'prioridade' ? '#7c3aed' : '#64748b',
+                                            color: formData.rateio_type === 'prioridade' ? (branding?.primary_color || '#3b82f6') : '#64748b',
                                             boxShadow: formData.rateio_type === 'prioridade' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                                             cursor: 'pointer'
                                         }}
@@ -2937,7 +2971,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         style={{
                                             padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
                                             background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent',
-                                            color: formData.rateio_type === 'porcentagem' ? '#7c3aed' : '#64748b',
+                                            color: formData.rateio_type === 'porcentagem' ? (branding?.primary_color || '#3b82f6') : '#64748b',
                                             boxShadow: formData.rateio_type === 'porcentagem' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                                             cursor: 'pointer'
                                         }}
