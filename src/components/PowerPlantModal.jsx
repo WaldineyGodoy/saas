@@ -8,7 +8,7 @@ import {
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
-    Paperclip, Send, Loader2, Info, History
+    Paperclip, Send, Loader2, Info, History, Clock
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import { useBranding } from '../contexts/BrandingContext';
@@ -438,6 +438,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         .filter(uc => uc.status !== 'desconectado' && uc.status !== 'cancelado')
         .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0);
     
+    const ucStats = {
+        total: selectedUCs.length,
+        ativos: selectedUCs.filter(u => u.status === 'ativo').length,
+        pendentes: selectedUCs.filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status)).length,
+        franquiaReservada: selectedUCs
+            .filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status))
+            .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0)
+    };
+
     const geracaoDisponivel = Math.max(0, (Number(formData.geracao_estimada_kwh) || 0) - totalFranquiaVinculada);
 
     useEffect(() => {
@@ -2361,97 +2370,99 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {activeTab === 'ucs' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div style={{ background: '#ffffff', padding: '2rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1.5rem' }}>
-                                        <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <div style={{ padding: '0.6rem', background: (branding?.primary_color || '#3b82f6') + '10', borderRadius: '12px', color: branding?.primary_color || '#3b82f6' }}>
-                                                    <Link size={24} />
-                                                </div>
-                                                <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Controle e Vínculos de Rateio</h4>
+                                <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ padding: '0.6rem', background: (branding?.primary_color || '#3b82f6') + '10', borderRadius: '12px', color: branding?.primary_color || '#3b82f6' }}>
+                                                <Link size={24} />
                                             </div>
-                                            
-                                            <div style={{ marginTop: '1rem' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}>
-                                                    <span style={{ color: '#64748b' }}>Geração Comprometida</span>
-                                                    {(() => {
-                                                        const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
-                                                        const style = getCommitmentStyle(pct);
-                                                        return (
-                                                            <span style={{ color: style.color }}>{totalFranquiaVinculada.toFixed(0)} / {formData.geracao_estimada_kwh || 0} kWh</span>
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <div style={{ width: '100%', height: '10px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden', display: 'flex' }}>
-                                                    {(() => {
-                                                        const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
-                                                        const style = getCommitmentStyle(pct);
-                                                        return (
-                                                            <div style={{ 
-                                                                width: `${pct}%`, 
-                                                                height: '100%', 
-                                                                background: style.gradient,
-                                                                borderRadius: '10px',
-                                                                transition: 'all 0.5s ease-out'
-                                                            }} />
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
-                                                    {formData.geracao_estimada_kwh > 0 ? 
-                                                        `Isso representa ${((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100).toFixed(1)}% do potencial da usina.` : 
-                                                        'Defina a geração estimada na aba Geral para ver o comprometimento.'}
-                                                </p>
-                                            </div>
+                                            <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Dashboard de Rateio</h4>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '1rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowExpandedUCs(true)}
                                                 style={{ 
-                                                    padding: '0.75rem 1.25rem', 
-                                                    background: 'white', 
-                                                    border: '1px solid #e2e8f0', 
-                                                    borderRadius: '12px', 
-                                                    cursor: 'pointer', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    gap: '0.6rem', 
-                                                    fontSize: '0.9rem', 
-                                                    fontWeight: 700, 
-                                                    color: '#475569',
-                                                    transition: 'all 0.2s'
+                                                    padding: '0.6rem 1rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', 
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#475569'
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.borderColor = branding?.primary_color || '#3b82f6'}
-                                                onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e2e8f0'}
                                             >
-                                                <Maximize2 size={18} /> Expandir Gestor
+                                                <Maximize2 size={16} /> Gestor
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={handleGenerateList}
                                                 style={{ 
-                                                    padding: '0.75rem 1.5rem', 
-                                                    background: branding?.primary_color || '#3b82f6', 
-                                                    color: 'white', 
-                                                    border: 'none', 
-                                                    borderRadius: '12px', 
-                                                    cursor: 'pointer', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    gap: '0.6rem', 
-                                                    fontSize: '0.9rem', 
-                                                    fontWeight: 700, 
-                                                    boxShadow: `0 4px 12px ${(branding?.primary_color || '#3b82f6')}4D`,
-                                                    transition: 'all 0.2s'
+                                                    padding: '0.6rem 1.25rem', background: branding?.primary_color || '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', 
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                                             >
-                                                <Download size={18} /> Anexo IV
+                                                <Download size={16} /> Anexo IV
                                             </button>
                                         </div>
                                     </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                        {/* Card 1: Geração Comprometida */}
+                                        <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '1.25rem', borderRadius: '20px', border: '1px solid #f1f5f9' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.85rem', fontWeight: 800 }}>
+                                                <span style={{ color: '#64748b' }}>Geração Comprometida</span>
+                                                {(() => {
+                                                    const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
+                                                    const style = getCommitmentStyle(pct);
+                                                    return (
+                                                        <span style={{ color: style.color }}>{totalFranquiaVinculada.toFixed(0)} / {formData.geracao_estimada_kwh || 0} kWh</span>
+                                                    );
+                                                })()}
+                                            </div>
+                                            <div style={{ width: '100%', height: '10px', background: '#e2e8f0', borderRadius: '10px', overflow: 'hidden', display: 'flex', marginBottom: '0.75rem' }}>
+                                                {(() => {
+                                                    const pct = Math.min(100, (totalFranquiaVinculada / (formData.geracao_estimada_kwh || 1)) * 100);
+                                                    const style = getCommitmentStyle(pct);
+                                                    return (
+                                                        <div style={{ 
+                                                            width: `${pct}%`, height: '100%', background: style.gradient, borderRadius: '10px', transition: 'all 0.5s ease-out'
+                                                        }} />
+                                                    );
+                                                })()}
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                                                    {formData.geracao_estimada_kwh > 0 ? 
+                                                        `${((totalFranquiaVinculada / formData.geracao_estimada_kwh) * 100).toFixed(1)}% do potencial` : 
+                                                        'Defina a geração estimada'}
+                                                </span>
+                                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }}></div>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Disponível: {geracaoDisponivel.toFixed(0)} kWh</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Card 2: Status das UCs */}
+                                        <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '20px', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                                <Users size={16} color="#64748b" />
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>Unidades</span>
+                                            </div>
+                                            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#1e293b' }}>{ucStats.total}</div>
+                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: '#dcfce7', color: '#166534', borderRadius: '4px', fontWeight: 700 }}>{ucStats.ativos} Ativas</span>
+                                                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: 700 }}>{ucStats.pendentes} Ag. Conexão</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Card 3: Franquia Reservada */}
+                                        <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '20px', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                                <Clock size={16} color="#64748b" />
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>Franquia Reservada</span>
+                                            </div>
+                                            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: branding?.primary_color || '#3b82f6' }}>{ucStats.franquiaReservada.toFixed(0)} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>kWh</span></div>
+                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, marginTop: '0.4rem' }}>Comprometimento em ativação</div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                     {/* Sub-Filters embedded with modern design */}
                                     <div style={{ 
