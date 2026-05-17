@@ -92,7 +92,7 @@ export default function Dashboard() {
         }
 
         // 5. Faturas
-        items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-file-earmark-text' });
+        items.push({ id: 'invoices', label: 'Faturas e Contas de Energia', icon: 'bi-file-earmark-text' });
 
         // 6. Fornecedores
         const suppliersAllowed = ['supplier', 'manager', 'admin', 'super_admin'];

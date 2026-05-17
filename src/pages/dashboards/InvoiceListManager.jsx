@@ -25,21 +25,87 @@ export default function InvoiceListManager() {
     const [showTooltip, setShowTooltip] = useState(false);
     const [payingId, setPayingId] = useState(null);
 
+    // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
+    const [activeTab, setActiveTab] = useState('faturas');
+
     // Estados para o Resumo Financeiro
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        setStatusFilter('');
+        if (tab === 'faturas') {
+            if (viewMode === 'energy_list') setViewMode('list');
+            else if (viewMode === 'energy_kanban') setViewMode('kanban');
+            else if (viewMode === 'energy_calendar') setViewMode('calendar');
+            else setViewMode('kanban');
+        } else {
+            if (viewMode === 'list') setViewMode('energy_list');
+            else if (viewMode === 'kanban') setViewMode('energy_kanban');
+            else if (viewMode === 'calendar') setViewMode('energy_calendar');
+            else setViewMode('energy_kanban');
+        }
+    };
+
+    const getAnteriorLeitura = (currentInvoice) => {
+        if (!currentInvoice.uc_id || !currentInvoice.mes_referencia) return '-';
+        
+        const [year, month] = currentInvoice.mes_referencia.split('-').map(Number);
+        let prevYear = year;
+        let prevMonth = month - 1;
+        if (prevMonth === 0) {
+            prevMonth = 12;
+            prevYear = year - 1;
+        }
+        const prevMonthStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+        
+        const prevInv = invoices.find(inv => 
+            inv.uc_id === currentInvoice.uc_id && 
+            inv.mes_referencia === prevMonthStr
+        );
+        
+        if (prevInv && prevInv.data_leitura) {
+            return prevInv.data_leitura.split('-').reverse().join('/');
+        }
+        
+        return '-';
+    };
 
     const filteredInvoices = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
-        if (inv.status === 'sem_faturamento') return false;
         
-        // Se ambos os valores forem zero ou nulos, não exibir no dashboard financeiro
-        const valPagar = Number(inv.valor_a_pagar) || 0;
-        const valConcessionaria = Number(inv.valor_concessionaria) || 0;
-        if (valPagar <= 0 && valConcessionaria <= 0) return false;
+        if (activeTab === 'faturas') {
+            if (inv.status === 'sem_faturamento') return false;
+            
+            // Se ambos os valores forem zero ou nulos, não exibir no dashboard financeiro
+            const valPagar = Number(inv.valor_a_pagar) || 0;
+            const valConcessionaria = Number(inv.valor_concessionaria) || 0;
+            if (valPagar <= 0 && valConcessionaria <= 0) return false;
 
-        if (statusFilter && inv.status !== statusFilter) return false;
+            if (statusFilter && inv.status !== statusFilter) return false;
+        } else {
+            // Contas de energia (Concessionária)
+            if (inv.consumer_units?.modalidade !== 'auto_consumo_remoto') return false;
+            if (inv.status === 'sem_faturamento') return false;
+
+            if (statusFilter) {
+                const ebStatus = inv.energy_bill_status || 'pendente';
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                const isPastDue = dueDate && dueDate < today;
+
+                if (statusFilter === 'atrasada') {
+                    if (ebStatus !== 'pendente' || !isPastDue) return false;
+                } else if (statusFilter === 'a_vencer') {
+                    if (ebStatus !== 'pendente' || isPastDue) return false;
+                } else {
+                    if (ebStatus !== statusFilter) return false;
+                }
+            }
+        }
+
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             const titular = inv.consumer_units?.titular_conta?.toLowerCase() || '';
@@ -248,6 +314,56 @@ export default function InvoiceListManager() {
             showAlert('Erro ao atualizar status: ' + error.message, 'error');
             setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, status: previousStatus } : i));
         }
+    };
+
+    const handleEnergyDrop = async (e, newStatus) => {
+        e.preventDefault();
+        const invoiceId = e.dataTransfer.getData('invoiceId');
+        if (!invoiceId) return;
+
+        const inv = invoices.find(i => i.id === invoiceId);
+        if (!inv) return;
+
+        let dbStatus = newStatus;
+        if (newStatus === 'a_vencer' || newStatus === 'atrasada') {
+            dbStatus = 'pendente';
+        }
+
+        const previousStatus = inv.energy_bill_status || 'pendente';
+        setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, energy_bill_status: dbStatus } : i));
+
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ energy_bill_status: dbStatus })
+                .eq('id', invoiceId);
+            if (error) throw error;
+            showAlert('Status da conta concessionária atualizado!', 'success');
+            fetchInvoices();
+        } catch (error) {
+            console.error('Error updating energy bill status:', error);
+            showAlert('Erro ao atualizar status: ' + error.message, 'error');
+            setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, energy_bill_status: previousStatus } : i));
+        }
+    };
+
+    const getEnergyStatusBadge = (status, isPastDue) => {
+        const statusMap = {
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
+            'pendente': isPastDue 
+                ? { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle }
+                : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
+            'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro', icon: AlertCircle },
+            'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
+            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
+        };
+        const s = statusMap[status] || statusMap['pendente'];
+        const Icon = s.icon;
+        return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', background: s.bg, color: s.color, borderRadius: '99px', fontSize: '0.8rem', width: 'fit-content', fontWeight: 'bold' }}>
+                <Icon size={12} /> {s.label}
+            </span>
+        );
     };
 
     const formatCurrency = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -721,8 +837,12 @@ export default function InvoiceListManager() {
         <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <div>
-                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>Faturas</h2>
-                    <p style={{ color: '#64748b', margin: 0 }}>Gerencie os lançamentos mensais das Unidades Consumidoras</p>
+                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>
+                        {activeTab === 'faturas' ? 'Faturas e Contas de Energia' : 'Contas de Energia Concessionária'}
+                    </h2>
+                    <p style={{ color: '#64748b', margin: 0 }}>
+                        {activeTab === 'faturas' ? 'Gerencie as faturas emitidas pelo sistema aos clientes' : 'Gerencie as faturas recebidas das concessionárias'}
+                    </p>
                 </div>
             </div>
 
@@ -743,6 +863,50 @@ export default function InvoiceListManager() {
                 flexDirection: 'column',
                 gap: '1rem'
             }}>
+                {/* Menu Superior Horizontal Principal */}
+                <div style={{ display: 'flex', gap: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem' }}>
+                    <button
+                        onClick={() => handleTabChange('faturas')}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: '0.5rem 1rem',
+                            fontSize: '1rem',
+                            fontWeight: '800',
+                            color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
+                            borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            marginBottom: '-4px',
+                            outline: 'none',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                        }}
+                    >
+                        Faturas
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('contas_energia')}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: '0.5rem 1rem',
+                            fontSize: '1rem',
+                            fontWeight: '800',
+                            color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
+                            borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            marginBottom: '-4px',
+                            outline: 'none',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                        }}
+                    >
+                        Contas de Energia
+                    </button>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
@@ -775,13 +939,26 @@ export default function InvoiceListManager() {
                             )}
                         </div>
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
-                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
-                            <option value="">Status</option>
-                            <option value="sem_faturamento">Sem Faturamento</option>
-                            <option value="a_vencer">A Vencer</option>
-                            <option value="atrasado">Atrasado</option>
-                            <option value="pago">Pago</option>
-                        </select>
+                        {activeTab === 'faturas' ? (
+                            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
+                                <option value="">Todos os Status</option>
+                                <option value="sem_faturamento">Sem Faturamento</option>
+                                <option value="a_vencer">A Vencer</option>
+                                <option value="atrasado">Atrasado</option>
+                                <option value="confirmado">Confirmado</option>
+                                <option value="pago">Pago</option>
+                            </select>
+                        ) : (
+                            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
+                                <option value="">Todos os Status</option>
+                                <option value="a_vencer">A Vencer</option>
+                                <option value="atrasada">Atrasada</option>
+                                <option value="pago">Paga</option>
+                                <option value="contestada">Contestada</option>
+                                <option value="parcelada">Parcelada</option>
+                                <option value="erro">Erro</option>
+                            </select>
+                        )}
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <Search size={16} color="#64748b" />
@@ -791,18 +968,31 @@ export default function InvoiceListManager() {
 
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                            <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <List size={16} /> Lista
-                            </button>
-                            <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <Layout size={16} /> Kanban
-                            </button>
-                            <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <CalendarIcon size={16} /> Venc. Faturas
-                            </button>
-                            <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                <CreditCard size={16} /> Venc. Conta de Energia
-                            </button>
+                            {activeTab === 'faturas' ? (
+                                <>
+                                    <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <List size={16} /> Lista
+                                    </button>
+                                    <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <Layout size={16} /> Kanban
+                                    </button>
+                                    <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <CalendarIcon size={16} /> Venc. Faturas
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button onClick={() => setViewMode('energy_list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_list' ? 'white' : 'transparent', color: viewMode === 'energy_list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_list' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <List size={16} /> Lista
+                                    </button>
+                                    <button onClick={() => setViewMode('energy_kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_kanban' ? 'white' : 'transparent', color: viewMode === 'energy_kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_kanban' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <Layout size={16} /> Kanban
+                                    </button>
+                                    <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        <CalendarIcon size={16} /> Venc. Conta de Energia
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1032,6 +1222,67 @@ export default function InvoiceListManager() {
                                 </tbody>
                             </table>
                         </div>
+                    ) : viewMode === 'energy_list' ? (
+                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead style={{ background: '#f8fafc' }}>
+                                    <tr>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Código do Cliente</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Ref. Mês/Ano</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Valor a Pagar</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vencimento</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Leitura Anterior</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Leitura Atual</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Consumo</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Compensado</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Status</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Assinante</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredInvoices.map(inv => {
+                                        const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
+                                        const today = new Date();
+                                        today.setHours(0,0,0,0);
+                                        const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                                        const isPastDue = dueDate && dueDate < today;
+
+                                        return (
+                                            <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{inv.consumer_units?.numero_uc || '-'}</td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                    {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '800', color: '#ef4444' }}>
+                                                    {formatCurrency(cost)}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                    {inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>
+                                                    {getAnteriorLeitura(inv)}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                    {inv.data_leitura ? inv.data_leitura.split('-').reverse().join('/') : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', fontWeight: 'bold' }}>
+                                                    {inv.consumo_kwh ? `${inv.consumo_kwh} kWh` : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold' }}>
+                                                    {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem' }}>
+                                                    {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
+                                                </td>
+                                                <td style={{ padding: '1rem', color: '#475569', fontWeight: '500' }}>
+                                                    {inv.consumer_units?.subscribers?.name || '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     ) : viewMode === 'kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
@@ -1080,6 +1331,103 @@ export default function InvoiceListManager() {
                                                         <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
                                                     </div>
                                                 ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : viewMode === 'energy_kanban' ? (
+                        <div className="kanban-box">
+                            <div className="kanban-board">
+                                {['a_vencer', 'atrasada', 'pago', 'contestada', 'parcelada', 'erro'].map(col => {
+                                    const invoicesInCol = filteredInvoices.filter(inv => {
+                                        const ebStatus = inv.energy_bill_status || 'pendente';
+                                        const today = new Date();
+                                        today.setHours(0,0,0,0);
+                                        const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                                        const isPastDue = dueDate && dueDate < today;
+
+                                        if (col === 'a_vencer') {
+                                            return ebStatus === 'pendente' && !isPastDue;
+                                        } else if (col === 'atrasada') {
+                                            return ebStatus === 'pendente' && isPastDue;
+                                        } else {
+                                            return ebStatus === col;
+                                        }
+                                    });
+
+                                    const colMap = { 
+                                        'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
+                                        'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
+                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }, 
+                                        'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
+                                        'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
+                                        'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro' } 
+                                    };
+                                    const s = colMap[col];
+                                    
+                                    const totalAmount = invoicesInCol.reduce((acc, curr) => {
+                                        const cost = Number(curr.valor_concessionaria) || ((Number(curr.tarifa_minima) || 0) + (Number(curr.iluminacao_publica) || 0) + (Number(curr.outros_lancamentos) || 0));
+                                        return acc + cost;
+                                    }, 0);
+
+                                    return (
+                                        <div 
+                                            key={col} 
+                                            className="kanban-column" 
+                                            style={{ borderTop: `4px solid ${s.color}` }}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={(e) => handleEnergyDrop(e, col)}
+                                        >
+                                            <div className="kanban-column-header" style={{ color: s.color }}>
+                                                <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
+                                                <span style={{ fontSize: '0.8rem', background: s.color, color: 'white', padding: '0.1rem 0.5rem', borderRadius: '99px' }}>
+                                                    {formatCurrency(totalAmount)}
+                                                </span>
+                                            </div>
+                                            <div className="kanban-column-content">
+                                                {invoicesInCol.map(inv => {
+                                                    const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
+                                                    return (
+                                                        <div 
+                                                            key={inv.id} 
+                                                            onClick={() => {
+                                                                setSelectedInvoiceForSummary(inv);
+                                                                setIsSummaryModalOpen(true);
+                                                            }} 
+                                                            className="kanban-card"
+                                                            draggable
+                                                            onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>
+                                                                    {inv.consumer_units?.numero_uc}
+                                                                </span>
+                                                                <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>
+                                                                    {inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>
+                                                                {inv.consumer_units?.subscribers?.name}
+                                                            </div>
+                                                            {inv.consumer_units?.concessionaria && (
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.2rem' }}>
+                                                                    {inv.consumer_units.concessionaria}
+                                                                </div>
+                                                            )}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                                                                <span style={{ fontWeight: 'bold', color: '#ef4444' }}>
+                                                                    {formatCurrency(cost)}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                                    {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
