@@ -4,7 +4,7 @@ import {
   AlertTriangle, CheckCircle2, Zap, Settings, ZoomIn, ZoomOut, 
   Maximize, Play, Pause, RefreshCw, UserCheck, ShieldAlert, 
   FileText, X, Eye, EyeOff, ShieldCheck, ChevronRight, ChevronLeft, HelpCircle,
-  MessageSquare, Send
+  MessageSquare, Send, User, DollarSign, Building, Layers, Globe
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
@@ -56,6 +56,18 @@ export default function AuditGraphView({ onInspectInvoice }) {
   const [ucCycleIndex, setUcCycleIndex] = useState(0);
   const [auditPeriodFilter, setAuditPeriodFilter] = useState('all');
   
+  // Expanded CRM entities states
+  const [leads, setLeads] = useState([]);
+  const [originators, setOriginators] = useState([]);
+  const [subscribers, setSubscribers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [usinas, setUsinas] = useState([]);
+  const [consolidatedInvoices, setConsolidatedInvoices] = useState([]);
+  
+  // Interactive Custom Context Menu & Details states
+  const [contextMenu, setContextMenu] = useState(null);
+  const [inspectedEntity, setInspectedEntity] = useState(null);
+  
   // Interaction tracking
   const svgRef = useRef(null);
   const isDraggingCanvasRef = useRef(false);
@@ -82,14 +94,23 @@ export default function AuditGraphView({ onInspectInvoice }) {
   // Re-run audit scanning when custom rules or period filter changes
   useEffect(() => {
     if (invoices.length > 0) {
-      runAudit(invoices, ucs);
+      runAudit(
+        invoices,
+        ucs,
+        leads,
+        originators,
+        subscribers,
+        suppliers,
+        usinas,
+        consolidatedInvoices
+      );
     }
-  }, [customRules, auditPeriodFilter]);
+  }, [customRules, auditPeriodFilter, leads, originators, subscribers, suppliers, usinas, consolidatedInvoices]);
 
   const fetchAuditData = async () => {
     setLoading(true);
     setAgentStatus('scanning');
-    setAgentMessage('Carregando informações das faturas e unidades consumidoras...');
+    setAgentMessage('Carregando informações do ecossistema CRM e faturas...');
     try {
       // 1. Fetch Invoices with UC details
       const { data: invoicesData, error: invError } = await supabase
@@ -117,11 +138,50 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
       if (ucError) throw ucError;
 
+      // 3. Fetch all other CRM entities in parallel
+      const [
+        leadsRes,
+        originatorsRes,
+        subscribersRes,
+        suppliersRes,
+        usinasRes,
+        consolidatedRes
+      ] = await Promise.all([
+        supabase.from('leads').select('*'),
+        supabase.from('originators_v2').select('*'),
+        supabase.from('subscribers').select('*'),
+        supabase.from('suppliers').select('*'),
+        supabase.from('usinas').select('*'),
+        supabase.from('consolidated_invoices').select('*')
+      ]);
+
+      const leadsData = leadsRes.data || [];
+      const originatorsData = originatorsRes.data || [];
+      const subscribersData = subscribersRes.data || [];
+      const suppliersData = suppliersRes.data || [];
+      const usinasData = usinasRes.data || [];
+      const consolidatedData = consolidatedRes.data || [];
+
       setInvoices(invoicesData || []);
       setUcs(ucsData || []);
+      setLeads(leadsData);
+      setOriginators(originatorsData);
+      setSubscribers(subscribersData);
+      setSuppliers(suppliersData);
+      setUsinas(usinasData);
+      setConsolidatedInvoices(consolidatedData);
 
-      // 3. Process audits
-      runAudit(invoicesData || [], ucsData || []);
+      // 4. Process audits
+      runAudit(
+        invoicesData || [],
+        ucsData || [],
+        leadsData,
+        originatorsData,
+        subscribersData,
+        suppliersData,
+        usinasData,
+        consolidatedData
+      );
 
     } catch (err) {
       console.error('Erro na auditoria:', err);
@@ -324,108 +384,405 @@ export default function AuditGraphView({ onInspectInvoice }) {
   const buildGraphData = (allUcs, allInvoices, allInconsistencies) => {
     const newNodes = [];
     const newLinks = [];
-    const uniqueUcs = new Set();
-    const uniqueInvoices = new Set();
 
-    // 1. Add Inconsistencies as central critical nodes
+    // Helper to determine node colors when healthy or overridden by inconsistencies
+    const getNodeInconsistencyColor = (nodeId, entityType, entityRawId, defaultColor) => {
+      const matches = allInconsistencies.filter(inc => 
+        (entityType === 'uc' && inc.uc_id === entityRawId) ||
+        ((entityType === 'conta_energia' || entityType === 'invoice') && inc.invoice_id === entityRawId) ||
+        (entityType === 'fatura' && allInvoices.some(i => i.consolidated_invoice_id === entityRawId && i.id === inc.invoice_id))
+      );
+      
+      if (matches.length > 0) {
+        const hasCritical = matches.some(m => m.severity === 'critical');
+        return hasCritical ? '#ef4444' : '#f59e0b';
+      }
+      return defaultColor;
+    };
+
+    // Helper to initialize coordinates beautifully spread out from center
+    const setNodeCoords = (node) => {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 60 + Math.random() * 260;
+      node.x = width / 2 + Math.cos(angle) * radius;
+      node.y = height / 2 + Math.sin(angle) * radius;
+      node.vx = 0;
+      node.vy = 0;
+      return node;
+    };
+
+    // Set of nodes with anomalies
+    const nodesWithInconsistencies = new Set();
     allInconsistencies.forEach(inc => {
-      newNodes.push({
+      nodesWithInconsistencies.add(inc.id);
+      if (inc.invoice_id) {
+        nodesWithInconsistencies.add(`conta_energia_${inc.invoice_id}`);
+        // also flag consolidated invoice
+        const inv = allInvoices.find(i => i.id === inc.invoice_id);
+        if (inv && inv.consolidated_invoice_id) {
+          nodesWithInconsistencies.add(`fatura_${inv.consolidated_invoice_id}`);
+        }
+      }
+      if (inc.uc_id) {
+        nodesWithInconsistencies.add(`uc_${inc.uc_id}`);
+        // also flag subscriber
+        const uc = allUcs.find(u => u.id === inc.uc_id);
+        if (uc && uc.subscriber_id) {
+          nodesWithInconsistencies.add(`subscriber_${uc.subscriber_id}`);
+        }
+      }
+    });
+
+    const shouldInclude = (nodeId) => {
+      if (healthyVisible) return true;
+      return nodesWithInconsistencies.has(nodeId) || nodeId.startsWith('inc_');
+    };
+
+    // 1. Add Inconsistencies as central pulsing nodes
+    allInconsistencies.forEach(inc => {
+      const node = {
         id: inc.id,
         type: 'inconsistency',
         errorType: inc.type,
         severity: inc.severity,
-        label: inc.title,
+        label: inc.title, // Concise summary of inconsistency
         size: 14,
         color: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
+        stroke: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
         pulse: true,
-        x: width / 2 + (Math.random() - 0.5) * 150,
-        y: height / 2 + (Math.random() - 0.5) * 150,
-        vx: 0,
-        vy: 0
-      });
+        inconsistencyData: inc
+      };
+      newNodes.push(setNodeCoords(node));
 
-      // Link Inconsistency to its Invoice
+      // Link Inconsistency to its Concessionaire Bill (Conta de Energia)
       if (inc.invoice_id) {
         newLinks.push({
           source: inc.id,
-          target: `inv_${inc.invoice_id}`,
-          color: inc.severity === 'critical' ? '#f87171' : '#fbbf24',
-          width: 2
+          target: `conta_energia_${inc.invoice_id}`,
+          color: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
+          width: 2.5
         });
       }
 
-      // Link Inconsistency directly to UC if no invoice is connected, or link UC to Invoice
+      // Link Inconsistency directly to UC
       if (inc.uc_id) {
-        uniqueUcs.add(inc.uc_id);
+        newLinks.push({
+          source: inc.id,
+          target: `uc_${inc.uc_id}`,
+          color: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
+          width: 2.5
+        });
       }
     });
 
-    // 2. Add Invoices associated with inconsistencies (or all if selected)
-    allInvoices.forEach(inv => {
-      const hasError = allInconsistencies.some(inc => inc.invoice_id === inv.id);
-      
-      // If we only show healthy ones depending on toggle
-      if (hasError || healthyVisible) {
-        const invId = `inv_${inv.id}`;
-        uniqueInvoices.add(invId);
-        
-        const mesRefFormatted = inv.mes_referencia 
-          ? new Date(inv.mes_referencia + 'T00:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: '2-digit' })
+    // 2. Add Leads
+    leads.forEach(lead => {
+      const leadId = `lead_${lead.id}`;
+      if (shouldInclude(leadId)) {
+        let borderStroke = '#3b82f6';
+        if (lead.status === 'ganho') borderStroke = '#22c55e';
+        else if (lead.status === 'perdido') borderStroke = '#ef4444';
+        else if (lead.status === 'em_contato') borderStroke = '#f59e0b';
+
+        const node = {
+          id: leadId,
+          type: 'lead',
+          label: `Lead: ${lead.name}`,
+          size: 10,
+          color: getNodeInconsistencyColor(leadId, 'lead', lead.id, '#a855f7'),
+          stroke: borderStroke,
+          rawData: lead
+        };
+        newNodes.push(setNodeCoords(node));
+
+        // Links
+        if (lead.originator_id) {
+          newLinks.push({
+            source: leadId,
+            target: `originator_${lead.originator_id}`,
+            color: 'rgba(168, 85, 247, 0.25)',
+            width: 1
+          });
+        }
+        if (lead.subscriber_id) {
+          newLinks.push({
+            source: leadId,
+            target: `subscriber_${lead.subscriber_id}`,
+            color: 'rgba(168, 85, 247, 0.25)',
+            width: 1
+          });
+        }
+        if (lead.concessionaria) {
+          newLinks.push({
+            source: leadId,
+            target: `concessionaria_${lead.concessionaria}`,
+            color: 'rgba(234, 179, 8, 0.2)',
+            width: 1
+          });
+        }
+      }
+    });
+
+    // 3. Add Originadores
+    originators.forEach(orig => {
+      const origId = `originator_${orig.id}`;
+      if (shouldInclude(origId)) {
+        const node = {
+          id: origId,
+          type: 'originator',
+          label: `Originador: ${orig.name}`,
+          size: 13,
+          color: getNodeInconsistencyColor(origId, 'originator', orig.id, '#f97316'),
+          stroke: '#d97706',
+          rawData: orig
+        };
+        newNodes.push(setNodeCoords(node));
+      }
+    });
+
+    // 4. Add Assinantes
+    subscribers.forEach(sub => {
+      const subId = `subscriber_${sub.id}`;
+      if (shouldInclude(subId)) {
+        let borderStroke = '#94a3b8';
+        if (sub.status === 'ativo') borderStroke = '#22c55e';
+        else if (sub.status === 'cancelado') borderStroke = '#ef4444';
+        else if (sub.status === 'pendente') borderStroke = '#f59e0b';
+
+        const node = {
+          id: subId,
+          type: 'subscriber',
+          label: `Assinante: ${sub.name}`,
+          size: 14,
+          color: getNodeInconsistencyColor(subId, 'subscriber', sub.id, '#3b82f6'),
+          stroke: borderStroke,
+          rawData: sub
+        };
+        newNodes.push(setNodeCoords(node));
+
+        if (sub.originator_id) {
+          newLinks.push({
+            source: subId,
+            target: `originator_${sub.originator_id}`,
+            color: 'rgba(249, 115, 22, 0.25)',
+            width: 1
+          });
+        }
+      }
+    });
+
+    // 5. Add UCs
+    allUcs.forEach(uc => {
+      const ucId = `uc_${uc.id}`;
+      if (shouldInclude(ucId)) {
+        let borderStroke = '#94a3b8';
+        if (uc.status === 'ativo') borderStroke = '#22c55e';
+        else if (uc.status === 'cancelado' || uc.status === 'desconectado') borderStroke = '#ef4444';
+        else if (uc.status === 'pendente') borderStroke = '#f59e0b';
+
+        const node = {
+          id: ucId,
+          type: 'uc',
+          label: `UC: ${uc.numero_uc} - ${uc.titular_conta || 'Sem Apelido'}`,
+          size: 12,
+          color: getNodeInconsistencyColor(ucId, 'uc', uc.id, '#10b981'),
+          stroke: borderStroke,
+          rawData: uc
+        };
+        newNodes.push(setNodeCoords(node));
+
+        // Links
+        if (uc.subscriber_id) {
+          newLinks.push({
+            source: ucId,
+            target: `subscriber_${uc.subscriber_id}`,
+            color: 'rgba(59, 130, 246, 0.25)',
+            width: 1
+          });
+        }
+        if (uc.usina_id) {
+          newLinks.push({
+            source: ucId,
+            target: `usina_${uc.usina_id}`,
+            color: 'rgba(20, 184, 166, 0.25)',
+            width: 1
+          });
+        }
+        if (uc.concessionaria) {
+          newLinks.push({
+            source: ucId,
+            target: `concessionaria_${uc.concessionaria}`,
+            color: 'rgba(234, 179, 8, 0.2)',
+            width: 1
+          });
+        }
+      }
+    });
+
+    // 6. Add Faturas (Consolidated Invoices)
+    consolidatedInvoices.forEach(fat => {
+      const fatId = `fatura_${fat.id}`;
+      if (shouldInclude(fatId)) {
+        let borderStroke = '#94a3b8';
+        if (fat.status === 'paga') borderStroke = '#22c55e';
+        else if (fat.status === 'aberta') borderStroke = '#3b82f6';
+        else if (fat.status === 'atrasada') borderStroke = '#ef4444';
+        else if (fat.status === 'cancelada') borderStroke = '#64748b';
+
+        const mesFormatted = fat.mes_referencia
+          ? fat.mes_referencia.substring(5, 7) + '/' + fat.mes_referencia.substring(0, 4)
           : 'S/Ref';
 
-        newNodes.push({
+        const node = {
+          id: fatId,
+          type: 'fatura',
+          label: `Fatura: ${mesFormatted} - R$ ${(Number(fat.total_value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          size: 11,
+          color: getNodeInconsistencyColor(fatId, 'fatura', fat.id, '#ec4899'),
+          stroke: borderStroke,
+          rawData: fat
+        };
+        newNodes.push(setNodeCoords(node));
+
+        if (fat.subscriber_id) {
+          newLinks.push({
+            source: fatId,
+            target: `subscriber_${fat.subscriber_id}`,
+            color: 'rgba(236, 72, 153, 0.25)',
+            width: 1.5
+          });
+        }
+      }
+    });
+
+    // 7. Add Contas de Energia (Invoices)
+    allInvoices.forEach(inv => {
+      const invId = `conta_energia_${inv.id}`;
+      if (shouldInclude(invId)) {
+        let borderStroke = '#94a3b8';
+        if (inv.status === 'pago' || inv.status === 'paga') borderStroke = '#22c55e';
+        else if (inv.status === 'atrasado' || inv.status === 'atrasada') borderStroke = '#ef4444';
+        else if (inv.status === 'aberto' || inv.status === 'aberta' || inv.status === 'pendente') borderStroke = '#3b82f6';
+
+        const mesFormatted = inv.mes_referencia
+          ? inv.mes_referencia.substring(5, 7) + '/' + inv.mes_referencia.substring(0, 4)
+          : 'S/Ref';
+
+        const node = {
           id: invId,
-          type: 'invoice',
-          label: `Fat ${mesRefFormatted}`,
+          type: 'conta_energia',
+          label: `Conta: ${mesFormatted} - ${inv.consumo_compensado || 0} kWh - R$ ${(Number(inv.valor_concessionaria) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
           size: 10,
-          color: hasError ? '#a855f7' : '#3b82f6',
-          x: width / 2 + (Math.random() - 0.5) * 200,
-          y: height / 2 + (Math.random() - 0.5) * 200,
-          vx: 0,
-          vy: 0,
-          invoiceData: inv
-        });
+          color: getNodeInconsistencyColor(invId, 'conta_energia', inv.id, '#06b6d4'),
+          stroke: borderStroke,
+          rawData: inv
+        };
+        newNodes.push(setNodeCoords(node));
 
-        // Link Invoice to UC
-        newLinks.push({
-          source: invId,
-          target: `uc_${inv.uc_id}`,
-          color: 'rgba(255, 255, 255, 0.12)',
-          width: 1
-        });
-        
-        uniqueUcs.add(inv.uc_id);
+        if (inv.uc_id) {
+          newLinks.push({
+            source: invId,
+            target: `uc_${inv.uc_id}`,
+            color: 'rgba(6, 182, 212, 0.25)',
+            width: 1
+          });
+        }
+        if (inv.consolidated_invoice_id) {
+          newLinks.push({
+            source: invId,
+            target: `fatura_${inv.consolidated_invoice_id}`,
+            color: 'rgba(236, 72, 153, 0.25)',
+            width: 1
+          });
+        }
       }
     });
 
-    // 3. Add UCs
-    allUcs.forEach(uc => {
-      if (uniqueUcs.has(uc.id) || healthyVisible) {
-        const hasCriticalError = allInconsistencies.some(inc => inc.uc_id === uc.id && inc.severity === 'critical');
-        const hasWarning = allInconsistencies.some(inc => inc.uc_id === uc.id && inc.severity === 'warning');
+    // 8. Add Fornecedores
+    suppliers.forEach(supp => {
+      const suppId = `supplier_${supp.id}`;
+      if (shouldInclude(suppId)) {
+        let borderStroke = '#94a3b8';
+        if (supp.status === 'ativo') borderStroke = '#22c55e';
+        else if (supp.status === 'cancelado') borderStroke = '#ef4444';
 
-        let color = '#22c55e'; // Green - healthy
-        if (hasCriticalError) color = '#ef4444'; // Red
-        else if (hasWarning) color = '#f59e0b'; // Orange
-
-        newNodes.push({
-          id: `uc_${uc.id}`,
-          type: 'uc',
-          label: `UC ${uc.numero_uc}`,
-          size: 12,
-          color,
-          x: width / 2 + (Math.random() - 0.5) * 350,
-          y: height / 2 + (Math.random() - 0.5) * 350,
-          vx: 0,
-          vy: 0,
-          ucData: uc
-        });
+        const node = {
+          id: suppId,
+          type: 'supplier',
+          label: `Fornecedor: ${supp.name}`,
+          size: 13,
+          color: getNodeInconsistencyColor(suppId, 'supplier', supp.id, '#8b5cf6'),
+          stroke: borderStroke,
+          rawData: supp
+        };
+        newNodes.push(setNodeCoords(node));
       }
     });
 
-    nodesStateRef.current = newNodes;
-    setNodes(newNodes);
-    setLinks(newLinks);
+    // 9. Add Usinas
+    usinas.forEach(u => {
+      const uId = `usina_${u.id}`;
+      if (shouldInclude(uId)) {
+        let borderStroke = '#94a3b8';
+        if (u.status === 'ativo') borderStroke = '#22c55e';
+        else if (u.status === 'cancelado') borderStroke = '#ef4444';
+        else if (u.status === 'construcao') borderStroke = '#f59e0b';
+
+        const node = {
+          id: uId,
+          type: 'usina',
+          label: `Usina: ${u.name}`,
+          size: 15,
+          color: getNodeInconsistencyColor(uId, 'usina', u.id, '#14b8a6'),
+          stroke: borderStroke,
+          rawData: u
+        };
+        newNodes.push(setNodeCoords(node));
+
+        if (u.supplier_id) {
+          newLinks.push({
+            source: uId,
+            target: `supplier_${u.supplier_id}`,
+            color: 'rgba(139, 92, 246, 0.25)',
+            width: 1.5
+          });
+        }
+      }
+    });
+
+    // 10. Add Concessionárias unique nodes
+    const uniqueConcs = [...new Set([
+      ...allUcs.map(u => u.concessionaria),
+      ...leads.map(l => l.concessionaria),
+      ...usinas.map(u => u.concessionaria)
+    ].filter(Boolean))];
+
+    uniqueConcs.forEach(concName => {
+      const concId = `concessionaria_${concName}`;
+      if (shouldInclude(concId)) {
+        const node = {
+          id: concId,
+          type: 'concessionaria',
+          label: `Distribuidora: ${concName}`,
+          size: 14,
+          color: '#eab308',
+          stroke: '#eab308',
+          rawData: { name: concName }
+        };
+        newNodes.push(setNodeCoords(node));
+      }
+    });
+
+    // Filter links to ensure both source and target exist in newNodes
+    const filteredNodes = newNodes;
+    const filteredLinks = newLinks.filter(l => 
+      filteredNodes.some(n => n.id === l.source) && 
+      filteredNodes.some(n => n.id === l.target)
+    );
+
+    nodesStateRef.current = filteredNodes;
+    setNodes(filteredNodes);
+    setLinks(filteredLinks);
   };
 
   // Re-run Audits manually
@@ -435,6 +792,8 @@ export default function AuditGraphView({ onInspectInvoice }) {
     setActiveAlertId(null);
     setActiveInconsistency(null);
     setActiveLegendFilter(null);
+    setContextMenu(null);
+    setInspectedEntity(null);
     setCriticalCycleIndex(0);
     setWarningCycleIndex(0);
     setUcCycleIndex(0);
@@ -602,32 +961,68 @@ export default function AuditGraphView({ onInspectInvoice }) {
           setAgentMessage(msg);
         }
       }
-    } else if (node.type === 'uc') {
-      setAgentStatus('ready');
-      setAgentMessage(`Você selecionou a **Unidade Consumidora ${node.ucData.numero_uc}** (${node.ucData.titular_conta}). Ela está atualmente no status **'${node.ucData.status}'**.
+    } else {
+      // For CRM entities: leads, subscribers, ucs, usinas, consolidatedInvoices, suppliers, concessionarias
+      if (shouldOpenModal) {
+        setInspectedEntity(node);
+      }
       
-      **Concessionária:** ${node.ucData.concessionaria || 'Neoenergia Cosern'}
-      **Erros Pendentes:** ${inconsistencies.filter(i => i.uc_id === node.ucData.id).length} erro(s).`);
-    } else if (node.type === 'invoice') {
-      const inv = node.invoiceData;
-      const formattedValue = Number(inv.valor_concessionaria || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      setAgentStatus('ready');
-      setAgentMessage(`Você selecionou a **Fatura de Ref. ${inv.mes_referencia ? inv.mes_referencia.substring(0, 7) : '-'}** da UC ${inv.consumer_units?.numero_uc}.
+      let typeLabel = node.type.toUpperCase();
+      if (node.type === 'conta_energia') typeLabel = 'CONTA DISTRIBUIDORA';
+      else if (node.type === 'fatura') typeLabel = 'FATURA CONSOLIDADA';
       
-      **Valor Concessionária:** ${formattedValue}
-      **Valor Cobrado do Assinante:** R$ ${Number(inv.valor_a_pagar || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-      **Status no CRM:** ${inv.status || 'pendente'}`);
+      setAgentStatus('ready');
+      setAgentMessage(`Você selecionou a entidade **${node.label}** (${typeLabel}).`);
     }
-
+    
     // Smooth camera focus (pan to node center)
     const targetX = width / 2 - node.x;
     const targetY = height / 2 - node.y;
-    
-    // Animate smoothly
     setPanX(targetX);
     setPanY(targetY);
     setZoom(1.3);
   };
+
+  const handleNodeContextMenu = (e, node) => {
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - svgRect.left;
+    const y = e.clientY - svgRect.top;
+    setContextMenu({
+      x,
+      y,
+      node
+    });
+  };
+
+  const handleSidebarCardClick = (inc) => {
+    setActiveAlertId(inc.id);
+    setAgentStatus('action');
+    
+    // Focus and select the node on the canvas but NOT activeInconsistency (modal popup)
+    const node = nodes.find(n => n.id === inc.id);
+    if (node) {
+      setSelectedNode(node);
+      setPanX(width / 2 - node.x);
+      setPanY(height / 2 - node.y);
+      setZoom(1.4);
+    }
+
+    // Set agent message detailing the discrepancy
+    let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
+    if (inc.type === 'duplicate_bill') {
+      msg += `Detectei que foram emitidas duas faturas redundantes no mesmo mês de referência para a mesma Unidade Consumidora. Isso causará cobranças duplicadas ao cliente.\n\n**Recomendação:** Excluir a fatura excedente ou colocá-la como 'Sem Faturamento'.`;
+    } else if (inc.type === 'duplicate_ref') {
+      msg += `Esta Unidade Consumidora possui faturas redundantes ou sobrepostas declaradas para o mesmo mês de referência. Isso causa divergências no faturamento financeiro.\n\n**Recomendação:** Auditar as datas de vencimento ou ajustar os meses de referência.`;
+    } else if (inc.type === 'overlap') {
+      msg += `As datas de leituras registradas possuem um intervalo de apenas **${inc.details.days} dias**. Os ciclos normais de concessionárias devem possuir entre 28 e 33 dias. Isso indica que as faturas foram extraídas de forma errada ou duplicada.\n\n**Recomendação:** Disparar um re-scrapear automático do portal da concessionária para normalizar os dados.`;
+    } else if (inc.type === 'billing_error') {
+      msg += `Encontrei uma incompatibilidade matemática crítica: o valor cobrado do Assinante (**R$ ${inc.details.valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**) possui um desvio de **${Math.round(inc.details.ratio * 100)}%** sobre o valor original da concessionária (**R$ ${inc.details.valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n**Recomendação:** Auditar as tarifas e refazer a conta.`;
+    } else if (inc.type === 'no_compensation') {
+      msg += `A UC de Auto Consumo registrou consumo significativo de **${inc.details.consumoKwh} kWh**, porém a concessionária não creditou nenhuma energia compensada. Isso pode significar que a distribuidora não aplicou a compensação neste mês ou que as credenciais do portal estão desatualizadas.\n\n**Recomendação:** Verificar junto à concessionária ou revisar a compensação.`;
+    }
+    setAgentMessage(msg);
+  };
+
 
   const handleInconsistencyClick = (inc) => {
     setActiveAlertId(inc.id);
@@ -662,40 +1057,6 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
   const handleLegendClick = (type) => {
     setActiveLegendFilter(prev => prev === type ? null : type);
-
-    if (type === 'critical') {
-      const list = inconsistencies.filter(i => i.severity === 'critical');
-      if (list.length === 0) return;
-      const nextIndex = (criticalCycleIndex + 1) % list.length;
-      setCriticalCycleIndex(nextIndex);
-      const inc = list[nextIndex];
-      const node = nodesStateRef.current.find(n => n.id === inc.id);
-      if (node) {
-        handleNodeClick(node);
-      }
-    } else if (type === 'warning') {
-      const list = inconsistencies.filter(i => i.severity === 'warning');
-      if (list.length === 0) return;
-      const nextIndex = (warningCycleIndex + 1) % list.length;
-      setWarningCycleIndex(nextIndex);
-      const inc = list[nextIndex];
-      const node = nodesStateRef.current.find(n => n.id === inc.id);
-      if (node) {
-        handleNodeClick(node);
-      }
-    } else if (type === 'uc') {
-      const list = nodesStateRef.current.filter(n => n.type === 'uc');
-      if (list.length === 0) return;
-      const nextIndex = (ucCycleIndex + 1) % list.length;
-      setUcCycleIndex(nextIndex);
-      const node = list[nextIndex];
-      handleNodeClick(node);
-    } else if (type === 'healthy') {
-      const list = nodesStateRef.current.filter(n => n.type === 'invoice');
-      if (list.length === 0) return;
-      const node = list[0];
-      handleNodeClick(node);
-    }
   };
 
   // Agent Actions
@@ -967,6 +1328,15 @@ export default function AuditGraphView({ onInspectInvoice }) {
     dragStartRef.current = { x: e.clientX, y: e.clientY };
   };
 
+  const handleCanvasClick = (e) => {
+    if (e.target.tagName === 'svg' || e.target.classList.contains('graph-canvas-container')) {
+      setSelectedNode(null);
+      setContextMenu(null);
+      setInspectedEntity(null);
+      setActiveAlertId(null);
+    }
+  };
+
   // Zoom wheel logic
   const handleWheel = (e) => {
     e.preventDefault();
@@ -978,11 +1348,425 @@ export default function AuditGraphView({ onInspectInvoice }) {
     });
   };
 
-  const handleZoomReset = () => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
+  const renderContextMenu = () => {
+    if (!contextMenu) return null;
+    const { x, y, node } = contextMenu;
+    const isErrorNode = node.type === 'inconsistency';
+    
+    return (
+      <div 
+        className="graph-context-menu"
+        style={{ left: `${x}px`, top: `${y}px` }}
+      >
+        <div 
+          className="graph-context-menu-item"
+          onClick={() => {
+            setContextMenu(null);
+            if (isErrorNode) {
+              const inc = inconsistencies.find(i => i.id === node.id);
+              if (inc) handleInconsistencyClick(inc);
+            } else {
+              setInspectedEntity(node);
+            }
+          }}
+        >
+          <Eye size={12} />
+          <span>Visualizar Entidade</span>
+        </div>
+        
+        {isErrorNode && (
+          <div 
+            className="graph-context-menu-item"
+            style={{ color: '#f59e0b' }}
+            onClick={() => {
+              setContextMenu(null);
+              handleActionFix(node.id);
+            }}
+          >
+            <Zap size={12} />
+            <span>Corrigir Inconsistência</span>
+          </div>
+        )}
+        
+        <div 
+          className="graph-context-menu-item"
+          onClick={() => {
+            setContextMenu(null);
+            // Center camera on node
+            setPanX(width / 2 - node.x);
+            setPanY(height / 2 - node.y);
+            setZoom(1.4);
+          }}
+        >
+          <Maximize size={12} />
+          <span>Focar Câmera</span>
+        </div>
+        
+        <div 
+          className="graph-context-menu-item danger"
+          style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', marginTop: '4px', borderRadius: '0 0 8px 8px' }}
+          onClick={() => setContextMenu(null)}
+        >
+          <X size={12} />
+          <span>Fechar Menu</span>
+        </div>
+      </div>
+    );
   };
+
+  const renderInspectedEntityDetails = () => {
+    if (!inspectedEntity) return null;
+    const entity = inspectedEntity;
+    
+    // Determine title, type, and specific details to show
+    let title = '';
+    let icon = <User size={18} />;
+    let detailsContent = null;
+    let actionBtnText = 'Ver no CRM';
+    let onActionClick = () => {};
+
+    if (entity.type === 'lead') {
+      const data = entity.rawData || {};
+      title = `Lead: ${data.name || 'Sem Nome'}`;
+      icon = <User size={18} className="text-purple-400" />;
+      actionBtnText = 'Gerenciar Lead';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'ganho' ? '#22c55e' : (data.status === 'perdido' ? '#ef4444' : '#f59e0b'),
+              textTransform: 'capitalize' 
+            }}>{data.status || 'Pendente'}</span>
+          </div>
+          {data.email && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>E-mail</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.email}</span>
+            </div>
+          )}
+          {data.phone && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Telefone</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.phone}</span>
+            </div>
+          )}
+          {data.concessionaria && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Distribuidora</span>
+              <span style={{ fontSize: '0.8rem', color: '#eab308', fontWeight: 'bold' }}>{data.concessionaria}</span>
+            </div>
+          )}
+          {data.valor_estimado && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Valor Estimado</span>
+              <span style={{ fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold' }}>
+                {Number(data.valor_estimado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'originator') {
+      const data = entity.rawData || {};
+      title = `Originador: ${data.name || 'Sem Nome'}`;
+      icon = <Layers size={18} className="text-orange-400" />;
+      actionBtnText = 'Gerenciar Originador';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Comissão</span>
+            <span style={{ fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold' }}>{data.commission_rate || 0}% de taxa</span>
+          </div>
+          {data.email && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>E-mail</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.email}</span>
+            </div>
+          )}
+          {data.phone && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Telefone</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.phone}</span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'subscriber') {
+      const data = entity.rawData || {};
+      title = `Assinante: ${data.name || 'Sem Nome'}`;
+      icon = <UserCheck size={18} className="text-blue-400" />;
+      actionBtnText = 'Gerenciar Assinante';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status no CRM</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'ativo' ? '#22c55e' : (data.status === 'cancelado' ? '#ef4444' : '#f59e0b'),
+              textTransform: 'capitalize' 
+            }}>{data.status || 'Ativo'}</span>
+          </div>
+          {data.documento && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>CPF / CNPJ</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.documento}</span>
+            </div>
+          )}
+          {data.email && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>E-mail</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.email}</span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'uc') {
+      const data = entity.rawData || {};
+      title = `UC: ${data.numero_uc}`;
+      icon = <CheckCircle2 size={18} className="text-emerald-400" />;
+      actionBtnText = 'Ver no CRM';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Titular</span>
+            <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>{data.titular_conta || 'Sem Apelido'}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Distribuidora</span>
+            <span style={{ fontSize: '0.8rem', color: '#eab308', fontWeight: 'bold' }}>{data.concessionaria || 'Neoenergia Cosern'}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'ativo' ? '#22c55e' : (data.status === 'desconectado' || data.status === 'cancelado' ? '#ef4444' : '#f59e0b'),
+              textTransform: 'capitalize' 
+            }}>{data.status || 'Ativa'}</span>
+          </div>
+          {data.enquadramento && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Enquadramento</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.enquadramento}</span>
+            </div>
+          )}
+          {data.grupo && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Grupo Tarifário</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.grupo}</span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'fatura') {
+      const data = entity.rawData || {};
+      title = `Consolidado de Faturamento`;
+      icon = <FileText size={18} className="text-pink-400" />;
+      actionBtnText = 'Gerenciar Fatura';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {data.mes_referencia && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Mês de Referência</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>
+                {new Date(data.mes_referencia + 'T00:00:00').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+              </span>
+            </div>
+          )}
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Valor Total</span>
+            <span style={{ fontSize: '0.8rem', color: '#ec4899', fontWeight: 'bold' }}>
+              {Number(data.total_value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status de Pagamento</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'paga' ? '#22c55e' : (data.status === 'atrasada' ? '#ef4444' : '#3b82f6'),
+              textTransform: 'capitalize' 
+            }}>{data.status || 'aberta'}</span>
+          </div>
+        </div>
+      );
+    } else if (entity.type === 'conta_energia') {
+      const data = entity.rawData || {};
+      title = `Conta Concessionária`;
+      icon = <FileText size={18} className="text-cyan-400" />;
+      actionBtnText = 'Inspecionar Fatura';
+      onActionClick = () => {
+        if (onInspectInvoice) onInspectInvoice(data);
+      };
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {data.mes_referencia && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Mês de Referência</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>
+                {new Date(data.mes_referencia + 'T00:00:00').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+              </span>
+            </div>
+          )}
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Valor Concessionária</span>
+            <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>
+              {Number(data.valor_concessionaria || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Valor Cobrado do Assinante</span>
+            <span style={{ fontSize: '0.8rem', color: '#06b6d4', fontWeight: 'bold' }}>
+              {Number(data.valor_a_pagar || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Energia Compensada</span>
+            <span style={{ fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold' }}>
+              {data.consumo_compensado || 0} kWh
+            </span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Consumo Medido</span>
+            <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>
+              {data.consumo_kwh || 0} kWh
+            </span>
+          </div>
+        </div>
+      );
+    } else if (entity.type === 'supplier') {
+      const data = entity.rawData || {};
+      title = `Fornecedor: ${data.name || 'Sem Nome'}`;
+      icon = <Building size={18} className="text-violet-400" />;
+      actionBtnText = 'Gerenciar Fornecedor';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'ativo' ? '#22c55e' : '#ef4444',
+              textTransform: 'capitalize' 
+            }}>{data.status || 'Ativo'}</span>
+          </div>
+          {data.cnpj && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>CNPJ</span>
+              <span style={{ fontSize: '0.8rem', color: '#ffffff' }}>{data.cnpj}</span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'usina') {
+      const data = entity.rawData || {};
+      title = `Usina: ${data.name || 'Sem Nome'}`;
+      icon = <Zap size={18} className="text-teal-400" />;
+      actionBtnText = 'Gerenciar Usina';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Status</span>
+            <span style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 'bold', 
+              color: data.status === 'ativo' ? '#22c55e' : (data.status === 'construcao' ? '#f59e0b' : '#ef4444'),
+              textTransform: 'capitalize' 
+            }}>{data.status || 'Ativo'}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Capacidade Declarada</span>
+            <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>{data.capacity_kwp || 0} kWp</span>
+          </div>
+          {data.concessionaria && (
+            <div>
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Distribuidora Regional</span>
+              <span style={{ fontSize: '0.8rem', color: '#eab308', fontWeight: 'bold' }}>{data.concessionaria}</span>
+            </div>
+          )}
+        </div>
+      );
+    } else if (entity.type === 'concessionaria') {
+      const data = entity.rawData || {};
+      title = `Distribuidora: ${data.name || 'Distribuidora'}`;
+      icon = <Globe size={18} className="text-yellow-400" />;
+      actionBtnText = 'Ver Distribuidora';
+      detailsContent = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Região de Cobertura</span>
+            <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 'bold' }}>{data.name}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block', textTransform: 'uppercase' }}>Conexões Ativas no Grafo</span>
+            <span style={{ fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold' }}>
+              {links.filter(l => l.source === entity.id || l.target === entity.id).length} unidades
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="graph-details-drawer">
+        <div className="graph-details-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+            {icon}
+            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+              {title}
+            </span>
+          </div>
+          <button 
+            onClick={() => setInspectedEntity(null)}
+            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '50%' }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="graph-details-content">
+          {detailsContent}
+        </div>
+        <div className="graph-details-footer">
+          <button 
+            onClick={() => {
+              onActionClick();
+              showAlert(`Visualizando detalhes avançados de: ${title}`, 'info');
+              setInspectedEntity(null);
+            }}
+            style={{
+              flex: 1,
+              background: '#FF6600',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 12px rgba(255, 102, 0, 0.25)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseOver={e => e.currentTarget.style.backgroundColor = '#ff8c3a'}
+            onMouseOut={e => e.currentTarget.style.backgroundColor = '#FF6600'}
+          >
+            <Eye size={14} /> {actionBtnText}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const nodesWithInconsistencies = new Set(inconsistencies.flatMap(inc => [inc.invoice_id, inc.uc_id]).filter(Boolean));
 
   const uniqueMonths = [...new Set(invoices
     .map(i => i.mes_referencia ? i.mes_referencia.substring(0, 7) : null)
@@ -1172,7 +1956,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     <div 
                       key={inc.id}
                       className={`audit-error-card ${isActive ? 'active' : ''}`}
-                      onClick={() => handleInconsistencyClick(inc)}
+                      onClick={() => handleSidebarCardClick(inc)}
                       style={{
                         background: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(245, 158, 11, 0.04)',
                         borderColor: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.18)' : 'rgba(245, 158, 11, 0.15)',
@@ -1265,7 +2049,12 @@ export default function AuditGraphView({ onInspectInvoice }) {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onMouseDown={handleCanvasMouseDown}
+          onClick={handleCanvasClick}
           onWheel={handleWheel}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu(null);
+          }}
         >
           {sidebarCollapsed && (
             <button 
@@ -1533,14 +2322,14 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && sourceNode.type === 'inconsistency' && sourceNode.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && sourceNode.type === 'inconsistency' && sourceNode.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && sourceNode.type === 'uc') ||
-                    (activeLegendFilter === 'healthy' && sourceNode.type === 'invoice')
+                    (activeLegendFilter === 'healthy' && (sourceNode.type === 'fatura' || sourceNode.type === 'conta_energia') && !nodesWithInconsistencies.has(sourceNode.id))
                   ));
                   
                   const targetMatches = targetNode && (!activeLegendFilter || (
                     (activeLegendFilter === 'critical' && targetNode.type === 'inconsistency' && targetNode.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && targetNode.type === 'inconsistency' && targetNode.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && targetNode.type === 'uc') ||
-                    (activeLegendFilter === 'healthy' && targetNode.type === 'invoice')
+                    (activeLegendFilter === 'healthy' && (targetNode.type === 'fatura' || targetNode.type === 'conta_energia') && !nodesWithInconsistencies.has(targetNode.id))
                   ));
                   
                   const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
@@ -1550,7 +2339,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                   
                   let linkStroke = isLinkSelected ? '#ffffff' : (isHighlighted ? '#a855f7' : link.color);
                   if (isDimmedLink) {
-                    linkStroke = '#334155';
+                    linkStroke = '#1c2330';
                   }
                   
                   return (
@@ -1579,7 +2368,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
-                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                    (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
                   const isDimmed = isDimmedByLegend || (selectedNode && !isSelected && !isConnectedToSelected);
@@ -1638,7 +2427,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
-                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                    (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
                   
@@ -1649,7 +2438,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
                   // 1. By default, all nodes are silver gradient
                   let nodeFill = 'url(#silver-gradient)';
-                  let nodeStroke = 'rgba(255, 255, 255, 0.2)';
+                  let nodeStroke = node.stroke || 'rgba(255, 255, 255, 0.2)';
                   let nodeFilter = 'url(#glow-silver)';
 
                   if (activeLegendFilter) {
@@ -1674,13 +2463,13 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       }
                     } else {
                       // Dimmed low brightness silver for non-matches
-                      nodeFill = '#272d37';
-                      nodeStroke = 'rgba(255, 255, 255, 0.04)';
+                      nodeFill = '#1c2330';
+                      nodeStroke = 'rgba(255, 255, 255, 0.05)';
                       nodeFilter = 'none';
                     }
                   } else if (selectedNode) {
                     if (isSelected) {
-                      // The selected node itself gets its color highlight
+                      // The selected node itself gets its signature CRM color
                       if (node.type === 'inconsistency') {
                         if (node.severity === 'critical') {
                           nodeFill = '#ef4444';
@@ -1692,8 +2481,29 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       } else if (node.type === 'uc') {
                         nodeFill = '#22c55e';
                         nodeFilter = 'url(#glow-silver)';
-                      } else if (node.type === 'invoice') {
+                      } else if (node.type === 'fatura') {
+                        nodeFill = '#ec4899';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'conta_energia') {
+                        nodeFill = '#06b6d4';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'lead') {
+                        nodeFill = '#a855f7';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'originator') {
+                        nodeFill = '#f97316';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'subscriber') {
                         nodeFill = '#3b82f6';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'supplier') {
+                        nodeFill = '#8b5cf6';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'usina') {
+                        nodeFill = '#14b8a6';
+                        nodeFilter = 'url(#glow-silver)';
+                      } else if (node.type === 'concessionaria') {
+                        nodeFill = '#eab308';
                         nodeFilter = 'url(#glow-silver)';
                       }
                       nodeStroke = '#ffffff';
@@ -1704,7 +2514,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       nodeFilter = 'url(#glow-silver)';
                     } else {
                       // Unconnected nodes are deeply dimmed silver
-                      nodeFill = '#1a1f26';
+                      nodeFill = '#111622';
                       nodeStroke = 'rgba(255, 255, 255, 0.03)';
                       nodeFilter = 'none';
                     }
@@ -1726,6 +2536,11 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       style={{ transition: 'r 0.15s, opacity 0.2s', cursor: 'grab' }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                       onClick={(e) => { e.stopPropagation(); handleNodeClick(node, true); }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleNodeContextMenu(e, node);
+                      }}
                       onMouseEnter={() => setHoveredNode(node)}
                       onMouseLeave={() => setHoveredNode(null)}
                     />
@@ -1745,7 +2560,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
-                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                    (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
 
@@ -1764,6 +2579,11 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       fontWeight={isSelected ? 'bold' : 'normal'}
                       opacity={isDimmed ? 0.08 : 0.85}
                       style={{ pointerEvents: 'none', transition: 'opacity 0.2s', userSelect: 'none' }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleNodeContextMenu(e, node);
+                      }}
                     >
                       {node.label}
                     </text>
@@ -1773,6 +2593,9 @@ export default function AuditGraphView({ onInspectInvoice }) {
               </g>
             </svg>
           )}
+
+          {renderContextMenu()}
+          {renderInspectedEntityDetails()}
 
           {/* Settings Panel Toggle Button */}
           <button 
