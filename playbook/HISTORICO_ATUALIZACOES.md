@@ -2,6 +2,13 @@
 
 ---
 
+## [17/05/2026] - Correção do Webhook Pagamento Pix e Reativação Automática da Fila
+- **Token de Autenticação do Webhook**: Identificado que o webhook de transferências e repasses ("Pagamento Pix") estava sem o token de segurança (`authToken`) configurado no painel do Asaas. Isso fazia com que o Asaas enviasse requisições sem o cabeçalho `asaas-access-token`, resultando em bloqueio `401 Unauthorized` e interrompendo a fila automática por falhas repetidas.
+- **Resolução Programática**: Atualizada a configuração do webhook diretamente via API do Asaas, definindo o `authToken` esperado (`whsec_3NAl_NtipeuVu1VSmXC6qBBLJXdtUUkjQOJa_MD_D1I`) e removendo o estado interrompido (`interrupted: false`).
+- **Sincronização Automática**: Após a reativação e configuração do token, a fila do Asaas realizou o envio imediato e retroativo de 18 eventos represados. Todos foram processados com sucesso pelo servidor com código de status **200 OK** e devidamente catalogados na tabela `webhook_logs`.
+
+---
+
 ## [08/05/2026] - Estabilização de Webhook e Correção de Ledger
 - **Segurança de Webhook**: Refatorada a Edge Function `asaas-webhook` para usar recuperação de headers insensível a maiúsculas/minúsculas (`req.headers.get`), resolvendo erros 401 de autenticação.
 - **Rastreabilidade**: Implementado log de payloads brutos e headers na tabela `webhook_logs` para todas as requisições, facilitando auditorias de integração.
