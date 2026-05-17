@@ -27,6 +27,8 @@ export default function InvoiceListManager() {
 
     // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
     const [activeTab, setActiveTab] = useState('faturas');
+    // Estado de Ordenação
+    const [sortBy, setSortBy] = useState('ref_desc');
 
     // Estados para o Resumo Financeiro
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
@@ -117,6 +119,60 @@ export default function InvoiceListManager() {
             }
         }
         return true;
+    });
+
+    const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+        if (sortBy === 'ref_desc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
+            return dateB - dateA;
+        }
+        if (sortBy === 'ref_asc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
+            return dateA - dateB;
+        }
+        if (sortBy === 'venc_desc') {
+            const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
+            const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
+            return dateB - dateA;
+        }
+        if (sortBy === 'venc_asc') {
+            const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
+            const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
+            return dateA - dateB;
+        }
+        if (sortBy === 'uc_asc') {
+            const ucA = a.consumer_units?.numero_uc || '';
+            const ucB = b.consumer_units?.numero_uc || '';
+            return ucA.localeCompare(ucB);
+        }
+        if (sortBy === 'uc_desc') {
+            const ucA = a.consumer_units?.numero_uc || '';
+            const ucB = b.consumer_units?.numero_uc || '';
+            return ucB.localeCompare(ucA);
+        }
+        if (sortBy === 'valor_desc') {
+            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
+            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
+            return valB - valA;
+        }
+        if (sortBy === 'valor_asc') {
+            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
+            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
+            return valA - valB;
+        }
+        if (sortBy === 'assinante_asc') {
+            const nameA = a.consumer_units?.subscribers?.name || '';
+            const nameB = b.consumer_units?.subscribers?.name || '';
+            return nameA.localeCompare(nameB);
+        }
+        if (sortBy === 'assinante_desc') {
+            const nameA = a.consumer_units?.subscribers?.name || '';
+            const nameB = b.consumer_units?.subscribers?.name || '';
+            return nameB.localeCompare(nameA);
+        }
+        return 0;
     });
 
     useEffect(() => {
@@ -367,6 +423,28 @@ export default function InvoiceListManager() {
     };
 
     const formatCurrency = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const abbreviateName = (name, max = 24) => {
+        if (!name) return '-';
+        if (name.length <= max) return name;
+        
+        const prepositions = ['de', 'da', 'do', 'das', 'dos', 'e'];
+        const parts = name.split(' ').filter(part => part.length > 0);
+        if (parts.length <= 2) return name;
+        
+        const first = parts[0];
+        const last = parts[parts.length - 1];
+        
+        const initials = parts.slice(1, -1)
+            .filter(part => !prepositions.includes(part.toLowerCase()))
+            .map(part => part[0].toUpperCase() + '.')
+            .join(' ');
+            
+        const abbreviated = `${first} ${initials} ${last}`;
+        if (abbreviated.length <= max) return abbreviated;
+        
+        return `${first} ${last}`;
+    };
 
     const getStatusBadge = (status) => {
         const map = {
@@ -961,6 +1039,26 @@ export default function InvoiceListManager() {
                         )}
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#64748b' }}>Ordenar por:</span>
+                            <select 
+                                value={sortBy} 
+                                onChange={e => setSortBy(e.target.value)} 
+                                style={{ padding: '0.4rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#0f172a', background: 'white', fontWeight: '600', outline: 'none', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                            >
+                                <option value="ref_desc">Ref. Mês/Ano: Mais Novo primeiro</option>
+                                <option value="ref_asc">Ref. Mês/Ano: Mais Antigo primeiro</option>
+                                <option value="venc_desc">Vencimento: Mais Novo primeiro</option>
+                                <option value="venc_asc">Vencimento: Mais Antigo primeiro</option>
+                                <option value="uc_asc">Código do Cliente (A-Z)</option>
+                                <option value="uc_desc">Código do Cliente (Z-A)</option>
+                                <option value="valor_desc">Valor a Pagar: Maior primeiro</option>
+                                <option value="valor_asc">Valor a Pagar: Menor primeiro</option>
+                                <option value="assinante_asc">Assinante: Ordem alfabética (A-Z)</option>
+                                <option value="assinante_desc">Assinante: Ordem alfabética (Z-A)</option>
+                            </select>
+                        </div>
+                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <Search size={16} color="#64748b" />
                             <input placeholder="Buscar UC..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '120px' }} />
                         </div>
@@ -1071,31 +1169,31 @@ export default function InvoiceListManager() {
             ) : (
                 <>
                     {viewMode === 'list' ? (
-                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead style={{ background: '#f8fafc' }}>
                                     <tr>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Status</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vr. da Fatura</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vencimento</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Unidade Consumidora</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vr. Conta de Energia</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Saldo</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Ações</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vr. da Fatura</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vencimento</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Unidade Consumidora</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vr. Conta de Energia</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Saldo</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                        {filteredInvoices.map(inv => {
+                                        {sortedInvoices.map(inv => {
                                             const factValue = Number(inv.valor_a_pagar) || 0;
                                             const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
                                             const balance = factValue - energyBillValue;
 
                                             return (
                                                 <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '1rem' }}>{getStatusBadge(inv.status)}</td>
+                                                    <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
                                                     
                                                     {/* Vr. da Fatura + Boleto */}
-                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                             <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
                                                             {inv.asaas_boleto_url && inv.status !== 'pago' && (
@@ -1120,10 +1218,44 @@ export default function InvoiceListManager() {
                                                         </div>
                                                     </td>
 
-                                                    <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
+                                                    <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
                                                     
-                                                                                                         {/* Vr. Conta de Energia + Pagar */}
-                                                     <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                    {/* Unidade Consumidora clicável azul com borda */}
+                                                    <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
+                                                        <span 
+                                                            onClick={() => {
+                                                                setSelectedInvoiceForSummary(inv);
+                                                                setIsSummaryModalOpen(true);
+                                                            }}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                padding: '0.2rem 0.6rem',
+                                                                background: '#eff6ff', 
+                                                                color: '#2563eb', 
+                                                                border: '1px solid #bfdbfe',
+                                                                borderRadius: '99px',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)'
+                                                            }}
+                                                            onMouseOver={(e) => {
+                                                                e.currentTarget.style.background = '#dbeafe';
+                                                                e.currentTarget.style.borderColor = '#93c5fd';
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                e.currentTarget.style.background = '#eff6ff';
+                                                                e.currentTarget.style.borderColor = '#bfdbfe';
+                                                            }}
+                                                        >
+                                                            {inv.consumer_units?.numero_uc || '-'}
+                                                        </span>
+                                                    </td>
+                                                    
+                                                    {/* Vr. Conta de Energia + Pagar */}
+                                                     <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                              <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
                                                              <div style={{ minWidth: '85px' }}>
@@ -1188,7 +1320,7 @@ export default function InvoiceListManager() {
                                                      </td>
 
                                                     {/* Saldo */}
-                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                         <div style={{ 
                                                             fontWeight: 'bold', 
                                                             fontSize: '1rem',
@@ -1199,7 +1331,7 @@ export default function InvoiceListManager() {
                                                     </td>
 
                                                     {/* Ação Editar */}
-                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                         <button 
                                                             onClick={() => handleEdit(inv)} 
                                                             style={{ 
@@ -1223,24 +1355,24 @@ export default function InvoiceListManager() {
                             </table>
                         </div>
                     ) : viewMode === 'energy_list' ? (
-                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead style={{ background: '#f8fafc' }}>
                                     <tr>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Código do Cliente</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Ref. Mês/Ano</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Valor a Pagar</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Vencimento</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Leitura Anterior</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Leitura Atual</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Consumo</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Compensado</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Status</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Assinante</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Código do Cliente</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Ref. Mês/Ano</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Valor a Pagar</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vencimento</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Leitura Anterior</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Leitura Atual</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Consumo</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Compensado</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredInvoices.map(inv => {
+                                    {sortedInvoices.map(inv => {
                                         const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
@@ -1249,33 +1381,66 @@ export default function InvoiceListManager() {
 
                                         return (
                                             <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '1rem', fontWeight: 'bold', color: '#0f172a' }}>{inv.consumer_units?.numero_uc || '-'}</td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                {/* Código do Cliente clicável azul */}
+                                                <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
+                                                    <span 
+                                                        onClick={() => {
+                                                            setSelectedInvoiceForSummary(inv);
+                                                            setIsSummaryModalOpen(true);
+                                                        }}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            padding: '0.2rem 0.6rem',
+                                                            background: '#eff6ff', 
+                                                            color: '#2563eb', 
+                                                            border: '1px solid #bfdbfe',
+                                                            borderRadius: '99px',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)'
+                                                        }}
+                                                        onMouseOver={(e) => {
+                                                            e.currentTarget.style.background = '#dbeafe';
+                                                            e.currentTarget.style.borderColor = '#93c5fd';
+                                                        }}
+                                                        onMouseOut={(e) => {
+                                                            e.currentTarget.style.background = '#eff6ff';
+                                                            e.currentTarget.style.borderColor = '#bfdbfe';
+                                                        }}
+                                                    >
+                                                        {inv.consumer_units?.numero_uc || '-'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
                                                     {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '800', color: '#ef4444' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '800', color: '#ef4444', whiteSpace: 'nowrap' }}>
                                                     {formatCurrency(cost)}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
                                                     {inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap' }}>
                                                     {getAnteriorLeitura(inv)}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
                                                     {inv.data_leitura ? inv.data_leitura.split('-').reverse().join('/') : '-'}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', fontWeight: 'bold' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                                     {inv.consumo_kwh ? `${inv.consumo_kwh} kWh` : '-'}
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold' }}>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                                     {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
                                                 </td>
-                                                <td style={{ padding: '1rem' }}>
+                                                <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
                                                     {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
                                                 </td>
-                                                <td style={{ padding: '1rem', color: '#475569', fontWeight: '500' }}>
-                                                    {inv.consumer_units?.subscribers?.name || '-'}
+                                                {/* Assinante com abreviação inteligente */}
+                                                <td style={{ padding: '1rem', color: '#475569', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                                                    {abbreviateName(inv.consumer_units?.subscribers?.name)}
                                                 </td>
                                             </tr>
                                         );
