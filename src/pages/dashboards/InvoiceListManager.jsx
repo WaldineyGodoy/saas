@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,8 +33,8 @@ export default function InvoiceListManager() {
     const [activeTab, setActiveTab] = useState('faturas');
     // Estado de Ordenação
     const [sortBy, setSortBy] = useState('ref_desc');
-    // Estado de exibição do título (! Info)
-    const [showTitleInfo, setShowTitleInfo] = useState(false);
+    // Estado de exibição do detalhe informativo da aba (! Info)
+    const [activeInfoTab, setActiveInfoTab] = useState(null);
 
     // Estados para o Resumo Financeiro
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
@@ -919,25 +919,88 @@ export default function InvoiceListManager() {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-            {showTitleInfo && (
+            {activeInfoTab && (
                 <div style={{ 
-                    background: 'rgba(255, 255, 255, 0.95)', 
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(226, 232, 240, 0.8)',
-                    padding: '1.25rem', 
-                    borderRadius: '12px', 
+                    background: 'rgba(15, 23, 42, 0.95)', 
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    padding: '1.5rem', 
+                    borderRadius: '16px', 
                     width: '100%', 
                     marginBottom: '1.5rem', 
-                    boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
-                    animation: 'fadeIn 0.2s ease'
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 15px rgba(37, 99, 235, 0.15)',
+                    animation: 'fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    position: 'relative',
+                    color: '#f8fafc'
                 }}>
-                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.6rem', fontWeight: 'bold', margin: 0 }}>
-                        {activeTab === 'faturas' ? 'Faturas e Contas de Energia' : activeTab === 'contas_energia' ? 'Contas de Energia Concessionária' : 'Auditor Gráfico de Inconsistências'}
-                    </h2>
-                    <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem', marginTop: '0.25rem' }}>
-                        {activeTab === 'faturas' ? 'Gerencie as faturas emitidas pelo sistema aos clientes' : activeTab === 'contas_energia' ? 'Gerencie as faturas recebidas das concessionárias' : 'Auditoria visual agêntica e análise de anomalias em contas de energia'}
-                    </p>
+                    <button
+                        onClick={() => setActiveInfoTab(null)}
+                        style={{
+                            position: 'absolute',
+                            top: '1rem',
+                            right: '1rem',
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '4px',
+                            transition: 'color 0.2s'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.color = '#f8fafc'}
+                        onMouseOut={e => e.currentTarget.style.color = '#94a3b8'}
+                        title="Fechar informações"
+                    >
+                        <X size={18} />
+                    </button>
+
+                    {activeInfoTab === 'faturas' && (
+                        <>
+                            <h2 style={{ color: '#3b82f6', fontSize: '1.5rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <FileText size={22} /> Painel de Faturamento de Assinantes
+                            </h2>
+                            <p style={{ color: '#cbd5e1', margin: 0, fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                                Este painel exibe a relação completa das faturas emitidas pelo sistema aos clientes finais/assinantes. 
+                                Permite acompanhar em tempo real o status de pagamento (Pago, A Vencer, Atrasado, Sem Faturamento), 
+                                o valor a faturar e o saldo final após aplicação do desconto da usina. Você também tem acesso aos links 
+                                diretos dos boletos bancários da plataforma Asaas para verificação de liquidações comerciais.
+                            </p>
+                        </>
+                    )}
+
+                    {activeInfoTab === 'contas_energia' && (
+                        <>
+                            <h2 style={{ color: '#eab308', fontSize: '1.5rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <CreditCard size={22} /> Controle de Contas de Concessionária
+                            </h2>
+                            <p style={{ color: '#cbd5e1', margin: 0, fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                                Centraliza todas as faturas físicas coletadas das distribuidoras de energia (ex: Neoenergia Cosern). 
+                                Permite monitorar os valores faturados pela concessionária (incluindo iluminação pública, taxas de rede 
+                                e impostos), o histórico de leituras de consumo em kWh e datas de vencimento. Também possibilita 
+                                a liquidação ou contestação de faturas de concessionária integradas à modalidade de autoconsumo.
+                            </p>
+                        </>
+                    )}
+
+                    {activeInfoTab === 'auditor_grafico' && (
+                        <>
+                            <h2 style={{ color: '#10b981', fontSize: '1.5rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Zap size={22} color="#10b981" /> Auditor Gráfico de Inconsistências (Obsidian Engine)
+                            </h2>
+                            <p style={{ color: '#cbd5e1', margin: 0, fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                                Ferramenta especialista dotada de um motor de simulação de grafos interativo em tempo real. 
+                                O auditor varre a base de dados de faturas comparando vencimentos, sobreposições de períodos de leitura, 
+                                duplicidade de meses de referência e desvios matemáticos extremos entre faturas de concessionárias e 
+                                valores cobrados de assinantes. O chatbot flutuante de aprendizado permite criar regras de tolerância a 
+                                desvios em tempo real.
+                            </p>
+                        </>
+                    )}
                 </div>
             )}
 
@@ -959,58 +1022,20 @@ export default function InvoiceListManager() {
                 gap: '1rem'
             }}>
                 {/* Menu Superior Horizontal Principal */}
-                <div style={{ display: 'flex', gap: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem' }}>
-                    <button
-                        onClick={() => handleTabChange('faturas')}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: '0.5rem 1rem',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
-                            borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            marginBottom: '-4px',
-                            outline: 'none',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                        }}
-                    >
-                        Faturas
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('contas_energia')}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: '0.5rem 1rem',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
-                            borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            marginBottom: '-4px',
-                            outline: 'none',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                        }}
-                    >
-                        Contas de Energia
-                    </button>
-                    {showAuditorTab && (
+                <div style={{ display: 'flex', gap: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
+                    
+                    {/* Aba Faturas */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <button
-                            onClick={() => handleTabChange('auditor_grafico')}
+                            onClick={() => handleTabChange('faturas')}
                             style={{
                                 background: 'none',
                                 border: 'none',
-                                padding: '0.5rem 1rem',
+                                padding: '0.5rem 0.2rem',
                                 fontSize: '1rem',
                                 fontWeight: '800',
-                                color: activeTab === 'auditor_grafico' ? 'var(--color-blue)' : '#64748b',
-                                borderBottom: activeTab === 'auditor_grafico' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
+                                borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
                                 marginBottom: '-4px',
@@ -1019,35 +1044,140 @@ export default function InvoiceListManager() {
                                 letterSpacing: '0.05em'
                             }}
                         >
-                            Auditor Gráfico
+                            Faturas
                         </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveInfoTab(activeInfoTab === 'faturas' ? null : 'faturas');
+                            }}
+                            style={{
+                                background: activeInfoTab === 'faturas' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                color: activeInfoTab === 'faturas' ? 'white' : 'var(--color-blue)',
+                                border: '1px solid rgba(37, 99, 235, 0.25)',
+                                borderRadius: '50%',
+                                width: '18px',
+                                height: '18px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: '900',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                outline: 'none',
+                                boxShadow: activeInfoTab === 'faturas' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
+                                transform: 'translateY(-2px)'
+                            }}
+                            title="Exibir informações da página de Faturas"
+                        >
+                            !
+                        </button>
+                    </div>
+
+                    {/* Aba Contas de Energia */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <button
+                            onClick={() => handleTabChange('contas_energia')}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '0.5rem 0.2rem',
+                                fontSize: '1rem',
+                                fontWeight: '800',
+                                color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
+                                borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                marginBottom: '-4px',
+                                outline: 'none',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}
+                        >
+                            Contas de Energia
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveInfoTab(activeInfoTab === 'contas_energia' ? null : 'contas_energia');
+                            }}
+                            style={{
+                                background: activeInfoTab === 'contas_energia' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                color: activeInfoTab === 'contas_energia' ? 'white' : 'var(--color-blue)',
+                                border: '1px solid rgba(37, 99, 235, 0.25)',
+                                borderRadius: '50%',
+                                width: '18px',
+                                height: '18px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: '900',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                outline: 'none',
+                                boxShadow: activeInfoTab === 'contas_energia' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
+                                transform: 'translateY(-2px)'
+                            }}
+                            title="Exibir informações da página de Contas de Energia"
+                        >
+                            !
+                        </button>
+                    </div>
+
+                    {/* Aba Auditor Gráfico */}
+                    {showAuditorTab && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                                onClick={() => handleTabChange('auditor_grafico')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '0.5rem 0.2rem',
+                                    fontSize: '1rem',
+                                    fontWeight: '800',
+                                    color: activeTab === 'auditor_grafico' ? 'var(--color-blue)' : '#64748b',
+                                    borderBottom: activeTab === 'auditor_grafico' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    marginBottom: '-4px',
+                                    outline: 'none',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em'
+                                }}
+                            >
+                                Auditor Gráfico
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveInfoTab(activeInfoTab === 'auditor_grafico' ? null : 'auditor_grafico');
+                                }}
+                                style={{
+                                    background: activeInfoTab === 'auditor_grafico' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                    color: activeInfoTab === 'auditor_grafico' ? 'white' : 'var(--color-blue)',
+                                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                                    borderRadius: '50%',
+                                    width: '18px',
+                                    height: '18px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '900',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none',
+                                    boxShadow: activeInfoTab === 'auditor_grafico' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
+                                    transform: 'translateY(-2px)'
+                                }}
+                                title="Exibir informações da página do Auditor Gráfico"
+                            >
+                                !
+                            </button>
+                        </div>
                     )}
-                    <button
-                        onClick={() => setShowTitleInfo(!showTitleInfo)}
-                        style={{
-                            background: showTitleInfo ? '#ef4444' : 'none',
-                            color: showTitleInfo ? 'white' : '#ef4444',
-                            border: '2px solid #ef4444',
-                            borderRadius: '50%',
-                            width: '28px',
-                            height: '28px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: '900',
-                            fontSize: '1.1rem',
-                            cursor: 'pointer',
-                            marginLeft: '0.75rem',
-                            alignSelf: 'center',
-                            transition: 'all 0.2s ease-in-out',
-                            boxShadow: showTitleInfo ? '0 0 10px rgba(239, 68, 68, 0.4)' : 'none',
-                            outline: 'none',
-                            marginBottom: '4px'
-                        }}
-                        title={showTitleInfo ? "Ocultar informações" : "Exibir informações da página"}
-                    >
-                        !
-                    </button>
                 </div>
 
                 {activeTab !== 'auditor_grafico' && (
@@ -1229,7 +1359,13 @@ export default function InvoiceListManager() {
             </div>
 
             {activeTab === 'auditor_grafico' ? (
-                <AuditGraphView />
+                <AuditGraphView onInspectInvoice={(invoiceId) => {
+                    const inv = invoices.find(i => i.id === invoiceId);
+                    if (inv) {
+                        setSelectedInvoiceForSummary(inv);
+                        setIsSummaryModalOpen(true);
+                    }
+                }} />
             ) : loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', background: 'white', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '1rem' }}><FileText size={48} /></div>

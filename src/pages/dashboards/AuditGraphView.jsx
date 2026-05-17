@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
-export default function AuditGraphView() {
+export default function AuditGraphView({ onInspectInvoice }) {
   const { showAlert, showConfirm } = useUI();
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
@@ -33,6 +33,9 @@ export default function AuditGraphView() {
   const [agentMessage, setAgentMessage] = useState('Analisando base de faturas...');
   const [agentStatus, setAgentStatus] = useState('scanning'); // scanning, ready, action
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeLegendFilter, setActiveLegendFilter] = useState(null);
+  const [activeInconsistency, setActiveInconsistency] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Floating AI Chat States
   const [chatOpen, setChatOpen] = useState(false);
@@ -599,6 +602,7 @@ export default function AuditGraphView() {
   const handleInconsistencyClick = (inc) => {
     setActiveAlertId(inc.id);
     setAgentStatus('action');
+    setActiveInconsistency(inc);
     
     // Specific Agent message detailing the discrepancy
     let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
@@ -627,6 +631,8 @@ export default function AuditGraphView() {
   };
 
   const handleLegendClick = (type) => {
+    setActiveLegendFilter(prev => prev === type ? null : type);
+
     if (type === 'critical') {
       const list = inconsistencies.filter(i => i.severity === 'critical');
       if (list.length === 0) return;
@@ -653,6 +659,11 @@ export default function AuditGraphView() {
       const nextIndex = (ucCycleIndex + 1) % list.length;
       setUcCycleIndex(nextIndex);
       const node = list[nextIndex];
+      handleNodeClick(node);
+    } else if (type === 'healthy') {
+      const list = nodesStateRef.current.filter(n => n.type === 'invoice');
+      if (list.length === 0) return;
+      const node = list[0];
       handleNodeClick(node);
     }
   };
@@ -958,8 +969,98 @@ export default function AuditGraphView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+      {/* Top Filter and Controls Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'rgba(15, 23, 42, 0.45)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
+        padding: '10px 16px',
+        borderRadius: '12px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+        gap: '1rem',
+        flexWrap: 'wrap',
+        zIndex: isFullscreen ? 100000 : 1
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Período de Análise:</span>
+          <select
+            value={auditPeriodFilter}
+            onChange={(e) => setAuditPeriodFilter(e.target.value)}
+            style={{
+              background: '#0f172a',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              color: '#ffffff',
+              borderRadius: '6px',
+              padding: '4px 10px',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              outline: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 0 10px rgba(0,0,0,0.2)'
+            }}
+          >
+            <option value="all">Qualquer data (Completo)</option>
+            {uniqueMonths.map(m => (
+              <option key={m} value={m}>{formatPeriod(m)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#cbd5e1' }}>
+          <span style={{ color: '#94a3b8' }}>Status de Conexão:</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#22c55e', fontWeight: 'bold' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 6px #22c55e' }}></span>
+            Monitorando Banco (Supabase)
+          </span>
+        </div>
+      </div>
+
       {/* Main Canvas + Sidebar Split */}
-      <div className="auditor-container">
+      <div 
+        className="auditor-container"
+        style={isFullscreen ? {
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 99999,
+          borderRadius: 0,
+          border: 'none',
+        } : {}}
+      >
+        {isFullscreen && (
+          <button
+            onClick={() => setIsFullscreen(false)}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              zIndex: 999999,
+              background: 'rgba(239, 68, 68, 0.85)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 16px rgba(239, 68, 68, 0.4)',
+              transition: 'all 0.2s ease',
+            }}
+            title="Fechar Tela Cheia"
+            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <X size={20} />
+          </button>
+        )}
 
         {/* Auditor Sidebar Panel */}
         <div 
@@ -1188,8 +1289,8 @@ export default function AuditGraphView() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
+                background: activeLegendFilter === 'critical' ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.1)',
+                border: activeLegendFilter === 'critical' ? '2px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.25)',
                 color: '#ef4444',
                 padding: '4px 10px',
                 borderRadius: '15px',
@@ -1197,17 +1298,21 @@ export default function AuditGraphView() {
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 0 8px rgba(239,68,68,0.1)'
+                boxShadow: activeLegendFilter === 'critical' ? '0 0 16px rgba(239, 68, 68, 0.6)' : '0 0 8px rgba(239,68,68,0.1)'
               }}
               onMouseOver={e => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.3)';
+                if (activeLegendFilter !== 'critical') {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.3)';
+                }
               }}
               onMouseOut={e => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                e.currentTarget.style.boxShadow = '0 0 8px rgba(239,68,68,0.1)';
+                if (activeLegendFilter !== 'critical') {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(239,68,68,0.1)';
+                }
               }}
-              title="Clique para ir ao próximo nó crítico"
+              title="Clique para destacar e ciclar nós críticos"
             >
               <ShieldAlert size={12} />
               <span>Críticos: {inconsistencies.filter(i => i.severity === 'critical').length}</span>
@@ -1220,8 +1325,8 @@ export default function AuditGraphView() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.25)',
+                background: activeLegendFilter === 'warning' ? 'rgba(245, 158, 11, 0.45)' : 'rgba(245, 158, 11, 0.1)',
+                border: activeLegendFilter === 'warning' ? '2px solid #f59e0b' : '1px solid rgba(245, 158, 11, 0.25)',
                 color: '#f59e0b',
                 padding: '4px 10px',
                 borderRadius: '15px',
@@ -1229,17 +1334,21 @@ export default function AuditGraphView() {
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 0 8px rgba(245,158,11,0.1)'
+                boxShadow: activeLegendFilter === 'warning' ? '0 0 16px rgba(245, 158, 11, 0.6)' : '0 0 8px rgba(245,158,11,0.1)'
               }}
               onMouseOver={e => {
-                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
-                e.currentTarget.style.boxShadow = '0 0 12px rgba(245,158,11,0.3)';
+                if (activeLegendFilter !== 'warning') {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(245,158,11,0.3)';
+                }
               }}
               onMouseOut={e => {
-                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
-                e.currentTarget.style.boxShadow = '0 0 8px rgba(245,158,11,0.1)';
+                if (activeLegendFilter !== 'warning') {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(245,158,11,0.1)';
+                }
               }}
-              title="Clique para ir ao próximo aviso"
+              title="Clique para destacar e ciclar avisos"
             >
               <AlertTriangle size={12} />
               <span>Avisos: {inconsistencies.filter(i => i.severity === 'warning').length}</span>
@@ -1252,8 +1361,8 @@ export default function AuditGraphView() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(34, 197, 94, 0.1)',
-                border: '1px solid rgba(34, 197, 94, 0.25)',
+                background: activeLegendFilter === 'uc' ? 'rgba(34, 197, 94, 0.45)' : 'rgba(34, 197, 94, 0.1)',
+                border: activeLegendFilter === 'uc' ? '2px solid #22c55e' : '1px solid rgba(34, 197, 94, 0.25)',
                 color: '#22c55e',
                 padding: '4px 10px',
                 borderRadius: '15px',
@@ -1261,41 +1370,61 @@ export default function AuditGraphView() {
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: '0 0 8px rgba(34,197,94,0.1)'
+                boxShadow: activeLegendFilter === 'uc' ? '0 0 16px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(34,197,94,0.1)'
               }}
               onMouseOver={e => {
-                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
-                e.currentTarget.style.boxShadow = '0 0 12px rgba(34,197,94,0.3)';
+                if (activeLegendFilter !== 'uc') {
+                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(34,197,94,0.3)';
+                }
               }}
               onMouseOut={e => {
-                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.1)';
-                e.currentTarget.style.boxShadow = '0 0 8px rgba(34,197,94,0.1)';
+                if (activeLegendFilter !== 'uc') {
+                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(34,197,94,0.1)';
+                }
               }}
-              title="Clique para ir à próxima Unidade Consumidora"
+              title="Clique para destacar e ciclar Unidades Consumidoras"
             >
               <CheckCircle2 size={12} />
               <span>UCs: {ucs.length}</span>
             </button>
 
-            {/* Invoiced Info Badge */}
-            <div
+            {/* Invoiced Info Button */}
+            <button
+              onClick={() => handleLegendClick('healthy')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(148, 163, 184, 0.1)',
-                border: '1px solid rgba(148, 163, 184, 0.25)',
-                color: '#cbd5e1',
+                background: activeLegendFilter === 'healthy' ? 'rgba(59, 130, 246, 0.45)' : 'rgba(148, 163, 184, 0.1)',
+                border: activeLegendFilter === 'healthy' ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.25)',
+                color: activeLegendFilter === 'healthy' ? '#60a5fa' : '#cbd5e1',
                 padding: '4px 10px',
                 borderRadius: '15px',
                 fontSize: '0.7rem',
                 fontWeight: 'bold',
-                boxShadow: '0 0 8px rgba(148,163,184,0.1)'
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeLegendFilter === 'healthy' ? '0 0 16px rgba(59, 130, 246, 0.6)' : '0 0 8px rgba(148,163,184,0.1)'
               }}
+              onMouseOver={e => {
+                if (activeLegendFilter !== 'healthy') {
+                  e.currentTarget.style.background = 'rgba(148, 163, 184, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(148,163,184,0.3)';
+                }
+              }}
+              onMouseOut={e => {
+                if (activeLegendFilter !== 'healthy') {
+                  e.currentTarget.style.background = 'rgba(148, 163, 184, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(148,163,184,0.1)';
+                }
+              }}
+              title="Clique para destacar e focar faturas saudáveis"
             >
               <FileText size={12} />
               <span>Faturas: {invoices.length}</span>
-            </div>
+            </button>
           </div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', color: '#94a3b8' }}>
@@ -1367,16 +1496,39 @@ export default function AuditGraphView() {
                 
                 {/* 1. Links / Connections */}
                 {links.map((link, idx) => {
+                  const sourceNode = nodes.find(n => n.id === link.source);
+                  const targetNode = nodes.find(n => n.id === link.target);
+                  
+                  const sourceMatches = sourceNode && (!activeLegendFilter || (
+                    (activeLegendFilter === 'critical' && sourceNode.type === 'inconsistency' && sourceNode.severity === 'critical') ||
+                    (activeLegendFilter === 'warning' && sourceNode.type === 'inconsistency' && sourceNode.severity === 'warning') ||
+                    (activeLegendFilter === 'uc' && sourceNode.type === 'uc') ||
+                    (activeLegendFilter === 'healthy' && sourceNode.type === 'invoice')
+                  ));
+                  
+                  const targetMatches = targetNode && (!activeLegendFilter || (
+                    (activeLegendFilter === 'critical' && targetNode.type === 'inconsistency' && targetNode.severity === 'critical') ||
+                    (activeLegendFilter === 'warning' && targetNode.type === 'inconsistency' && targetNode.severity === 'warning') ||
+                    (activeLegendFilter === 'uc' && targetNode.type === 'uc') ||
+                    (activeLegendFilter === 'healthy' && targetNode.type === 'invoice')
+                  ));
+                  
                   const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
                   const isLinkSelected = selectedNode && (selectedNode.id === link.source || selectedNode.id === link.target);
-                  const isDimmedLink = (hoveredNode && !isHighlighted) || (selectedNode && !isLinkSelected && !hoveredNode);
+                  const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches);
+                  const isDimmedLink = isLinkDimmedByLegend || (hoveredNode && !isHighlighted) || (selectedNode && !isLinkSelected && !hoveredNode);
+                  
+                  let linkStroke = isLinkSelected ? '#ffffff' : (isHighlighted ? '#a855f7' : link.color);
+                  if (isDimmedLink) {
+                    linkStroke = '#334155';
+                  }
                   
                   return (
                     <line
                       key={`link-${idx}`}
                       id={`link-${idx}`}
                       className="graph-link"
-                      stroke={isLinkSelected ? '#ffffff' : (isHighlighted ? '#a855f7' : link.color)}
+                      stroke={linkStroke}
                       strokeWidth={isLinkSelected ? link.width + 3.5 : (isHighlighted ? link.width + 1.5 : link.width)}
                       opacity={isLinkSelected ? 0.95 : (isDimmedLink ? 0.08 : 0.28)}
                       filter={isLinkSelected ? 'url(#glow-silver)' : undefined}
@@ -1393,6 +1545,17 @@ export default function AuditGraphView() {
                     (l.target === selectedNode.id && l.source === node.id)
                   );
                   const hasSilverEffect = isSelected || isConnectedToSelected;
+                  
+                  const matchesLegendFilter = !activeLegendFilter || (
+                    (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
+                    (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
+                    (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                  );
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  const isDimmed = isDimmedByLegend || (selectedNode && !isSelected && !isConnectedToSelected);
+                  
+                  if (isDimmed) return null;
                   
                   return (
                     <circle
@@ -1419,9 +1582,35 @@ export default function AuditGraphView() {
                   );
                   const hasSilverEffect = isSelected || isConnectedToSelected;
                   
-                  const isDimmed = (hoveredNode && !isHovered && 
-                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
+                  const matchesLegendFilter = !activeLegendFilter || (
+                    (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
+                    (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
+                    (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                  );
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  
+                  const isDimmed = isDimmedByLegend || 
+                    (hoveredNode && !isHovered && 
+                      !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
                     (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
+
+                  let nodeFill = node.color;
+                  if (hasSilverEffect) {
+                    nodeFill = 'url(#silver-gradient)';
+                  } else if (selectedNode || isDimmedByLegend) {
+                    nodeFill = '#334155'; // dim silver
+                  }
+
+                  let nodeStroke = isSelected ? '#ffffff' : (hasSilverEffect ? '#cbd5e1' : (isHovered ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)'));
+                  if (isDimmedByLegend && !hasSilverEffect) {
+                    nodeStroke = '#1e293b';
+                  }
+
+                  let nodeFilter = hasSilverEffect ? 'url(#glow-silver)' : (node.type === 'inconsistency' ? (node.severity === 'critical' ? 'url(#glow-error)' : 'url(#glow-warn)') : 'none');
+                  if (isDimmedByLegend && !hasSilverEffect) {
+                    nodeFilter = 'none';
+                  }
 
                   return (
                     <circle
@@ -1429,10 +1618,10 @@ export default function AuditGraphView() {
                       id={`circle-${node.id}`}
                       className="graph-node"
                       r={isSelected ? node.size + 4 : node.size}
-                      fill={hasSilverEffect ? 'url(#silver-gradient)' : node.color}
-                      stroke={isSelected ? '#ffffff' : (hasSilverEffect ? '#cbd5e1' : (isHovered ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)'))}
+                      fill={nodeFill}
+                      stroke={nodeStroke}
                       strokeWidth={isSelected ? 3.5 : (isConnectedToSelected ? 2 : 1.5)}
-                      filter={hasSilverEffect ? 'url(#glow-silver)' : (node.type === 'inconsistency' ? (node.severity === 'critical' ? 'url(#glow-error)' : 'url(#glow-warn)') : 'none')}
+                      filter={nodeFilter}
                       opacity={isDimmed ? 0.18 : 1}
                       style={{ transition: 'r 0.15s, opacity 0.2s', cursor: 'grab' }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
@@ -1452,8 +1641,17 @@ export default function AuditGraphView() {
                     (l.target === selectedNode.id && l.source === node.id)
                   );
                   
-                  const isDimmed = (hoveredNode && !isHovered && 
-                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
+                  const matchesLegendFilter = !activeLegendFilter || (
+                    (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
+                    (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
+                    (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'healthy' && node.type === 'invoice')
+                  );
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+
+                  const isDimmed = isDimmedByLegend || 
+                    (hoveredNode && !isHovered && 
+                      !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
                     (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
 
                   return (
@@ -1534,7 +1732,7 @@ export default function AuditGraphView() {
             <button className="graph-control-btn" title="Diminuir Zoom" onClick={() => setZoom(prev => Math.max(0.3, prev - 0.15))}>
               <ZoomOut size={16} />
             </button>
-            <button className="graph-control-btn" title="Centralizar Câmera" onClick={handleZoomReset}>
+            <button className="graph-control-btn" title="Expandir Tela Cheia (Fullscreen)" onClick={() => setIsFullscreen(!isFullscreen)}>
               <Maximize size={16} />
             </button>
             <div style={{ width: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 2px' }}></div>
@@ -1660,6 +1858,205 @@ export default function AuditGraphView() {
           </div>
         </div>
       </div>
+
+      {/* Detailed Inconsistency Inspection Popup Modal */}
+      {activeInconsistency && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(9, 13, 22, 0.8)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 100000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.25s ease'
+        }} onClick={() => setActiveInconsistency(null)}>
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.95)',
+            border: activeInconsistency.severity === 'critical' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: '16px',
+            width: '90%',
+            maxWidth: '520px',
+            boxShadow: activeInconsistency.severity === 'critical' ? '0 24px 60px rgba(239, 68, 68, 0.15)' : '0 24px 60px rgba(245, 158, 11, 0.15)',
+            overflow: 'hidden',
+            animation: 'scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)'
+          }} onClick={(e) => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              background: activeInconsistency.severity === 'critical' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.06)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                {activeInconsistency.severity === 'critical' ? (
+                  <ShieldAlert size={20} color="#ef4444" style={{ flexShrink: 0 }} />
+                ) : (
+                  <AlertTriangle size={20} color="#f59e0b" style={{ flexShrink: 0 }} />
+                )}
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: '#ffffff' }}>
+                    {activeInconsistency.title}
+                  </h4>
+                  <span style={{
+                    fontSize: '0.6rem',
+                    fontWeight: 'bold',
+                    color: activeInconsistency.severity === 'critical' ? '#ef4444' : '#f59e0b',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    Conflito Grau {activeInconsistency.severity === 'critical' ? 'Crítico' : 'Aviso'}
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActiveInconsistency(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: 'none',
+                  color: '#94a3b8',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div>
+                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Divergência Encontrada</span>
+                <p style={{ fontSize: '0.8rem', color: '#e2e8f0', margin: 0, lineHeight: 1.45 }}>
+                  {activeInconsistency.description}
+                </p>
+              </div>
+
+              {/* Recommendation Box */}
+              <div style={{
+                background: 'rgba(255, 102, 0, 0.05)',
+                border: '1px dashed rgba(255, 102, 0, 0.2)',
+                borderRadius: '8px',
+                padding: '12px',
+                display: 'flex',
+                gap: '0.6rem'
+              }}>
+                <Zap size={16} color="#FF6600" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 'bold', color: '#ff8c3a', display: 'block', textTransform: 'uppercase' }}>Recomendação Agêntica</span>
+                  <p style={{ fontSize: '0.75rem', color: '#cbd5e1', margin: '2px 0 0 0', lineHeight: 1.4 }}>
+                    {activeInconsistency.type === 'duplicate_bill' && 'Excluir a fatura excedente ou colocá-la como "Sem Faturamento".'}
+                    {activeInconsistency.type === 'duplicate_ref' && 'Ajustar as datas de leitura ou os meses de referência redundantes.'}
+                    {activeInconsistency.type === 'overlap' && 'Disparar um re-scrapear automático do portal da concessionária.'}
+                    {activeInconsistency.type === 'billing_error' && 'Revisar a fórmula tarifária do assinante ou atualizar o desconto contratual.'}
+                    {activeInconsistency.type === 'no_compensation' && 'Verificar pendências junto à concessionária ou revisar as credenciais do portal.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div style={{
+              display: 'flex',
+              gap: '0.75rem',
+              padding: '16px 20px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: '#0b0f19'
+            }}>
+              <button
+                onClick={() => {
+                  handleActionIgnore(activeInconsistency.id);
+                  setActiveInconsistency(null);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#94a3b8',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+              >
+                Ignorar Alerta
+              </button>
+
+              {activeInconsistency.invoice_id && (
+                <button
+                  onClick={() => {
+                    onInspectInvoice(activeInconsistency.invoice_id);
+                    setActiveInconsistency(null);
+                  }}
+                  style={{
+                    flex: 1.2,
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    color: '#60a5fa',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                >
+                  Visualizar Fatura
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  handleActionFix(activeInconsistency.id);
+                  setActiveInconsistency(null);
+                }}
+                style={{
+                  flex: 1.5,
+                  background: 'linear-gradient(135deg, #FF6600, #ff8c3a)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  boxShadow: '0 4px 12px rgba(255, 102, 0, 0.25)',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+              >
+                <Zap size={12} /> Corrigir Agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
