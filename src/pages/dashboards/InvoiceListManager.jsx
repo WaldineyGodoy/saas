@@ -6,10 +6,14 @@ import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
+import { useAuth } from '../../contexts/AuthContext';
+import AuditGraphView from './AuditGraphView';
 
 
 export default function InvoiceListManager() {
     const { showAlert, showConfirm } = useUI();
+    const { profile } = useAuth();
+    const showAuditorTab = ['admin', 'super_admin', 'manager'].includes(profile?.role);
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -42,7 +46,7 @@ export default function InvoiceListManager() {
             else if (viewMode === 'energy_kanban') setViewMode('kanban');
             else if (viewMode === 'energy_calendar') setViewMode('calendar');
             else setViewMode('kanban');
-        } else {
+        } else if (tab === 'contas_energia') {
             if (viewMode === 'list') setViewMode('energy_list');
             else if (viewMode === 'kanban') setViewMode('energy_kanban');
             else if (viewMode === 'calendar') setViewMode('energy_calendar');
@@ -916,10 +920,10 @@ export default function InvoiceListManager() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <div>
                     <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>
-                        {activeTab === 'faturas' ? 'Faturas e Contas de Energia' : 'Contas de Energia Concessionária'}
+                        {activeTab === 'faturas' ? 'Faturas e Contas de Energia' : activeTab === 'contas_energia' ? 'Contas de Energia Concessionária' : 'Auditor Gráfico de Inconsistências'}
                     </h2>
                     <p style={{ color: '#64748b', margin: 0 }}>
-                        {activeTab === 'faturas' ? 'Gerencie as faturas emitidas pelo sistema aos clientes' : 'Gerencie as faturas recebidas das concessionárias'}
+                        {activeTab === 'faturas' ? 'Gerencie as faturas emitidas pelo sistema aos clientes' : activeTab === 'contas_energia' ? 'Gerencie as faturas recebidas das concessionárias' : 'Auditoria visual agêntica e análise de anomalias em contas de energia'}
                     </p>
                 </div>
             </div>
@@ -983,9 +987,32 @@ export default function InvoiceListManager() {
                     >
                         Contas de Energia
                     </button>
+                    {showAuditorTab && (
+                        <button
+                            onClick={() => handleTabChange('auditor_grafico')}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '0.5rem 1rem',
+                                fontSize: '1rem',
+                                fontWeight: '800',
+                                color: activeTab === 'auditor_grafico' ? 'var(--color-blue)' : '#64748b',
+                                borderBottom: activeTab === 'auditor_grafico' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                marginBottom: '-4px',
+                                outline: 'none',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}
+                        >
+                            Auditor Gráfico
+                        </button>
+                    )}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                {activeTab !== 'auditor_grafico' && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
                             <CalendarIcon size={16} />
@@ -1103,9 +1130,10 @@ export default function InvoiceListManager() {
                         </div>
                     </div>
                 </div>
+            )}
 
                 {/* Legenda de Status (Energia) integrada se necessário */}
-                {viewMode === 'energy_calendar' && (() => {
+                {activeTab !== 'auditor_grafico' && viewMode === 'energy_calendar' && (() => {
                     const energyStats = filteredInvoices.filter(inv => 
                         inv.consumer_units?.modalidade === 'auto_consumo_remoto'
                     ).reduce((acc, inv) => {
@@ -1161,7 +1189,9 @@ export default function InvoiceListManager() {
                 })()}
             </div>
 
-            {loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (
+            {activeTab === 'auditor_grafico' ? (
+                <AuditGraphView />
+            ) : loading ? <p>Carregando...</p> : filteredInvoices.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', background: 'white', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '1rem' }}><FileText size={48} /></div>
                     <h3 style={{ color: '#475569', fontWeight: 'bold' }}>{monthFilter === 'all' ? 'Nenhuma Fatura encontrada' : 'Nenhuma Fatura emitida para o Mês selecionado'}</h3>
