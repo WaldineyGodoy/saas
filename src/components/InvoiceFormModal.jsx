@@ -1019,8 +1019,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                             justifyContent: 'flex-start'
                         }}>
                             {[
-                                { id: 'sem_faturamento', label: 'Sem Faturamento', icon: Ban, color: '#64748b', bg: '#f1f5f9' },
-                                { id: 'ag_emissao_boleto', label: 'Ag. Emissão', icon: FileText, color: '#2563eb', bg: '#eff6ff' },
+                                { id: 'ag_emissao_boleto', label: 'Sem Faturamento', icon: FileText, color: '#2563eb', bg: '#eff6ff' },
                                 { id: 'a_vencer', label: 'A Vencer', icon: Calculator, color: '#0284c7', bg: '#f0f9ff' },
                                 { id: 'confirmado', label: 'Confirmado', icon: CheckCircle2, color: '#0891b2', bg: '#ecfeff' },
                                 { id: 'pago', label: 'Pago', icon: CheckCircle, color: '#059669', bg: '#ecfdf5' },

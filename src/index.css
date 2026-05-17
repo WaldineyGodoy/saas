@@ -487,6 +487,9 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: var(--color-blue) #f1f5f9;
   position: relative;
+  max-height: calc(100vh - 260px);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Custom Scrollbar for Webkit */
@@ -514,7 +517,8 @@ textarea {
   gap: 1.25rem;
   width: max-content;
   padding-bottom: 0.5rem;
-  min-height: calc(100vh - 400px);
+  flex: 1;
+  min-height: 0;
   align-items: flex-start;
 }
 
@@ -527,7 +531,7 @@ textarea {
   background: #f8fafc;
   border-radius: 14px;
   border: 1px solid #f1f5f9;
-  max-height: calc(100vh - 350px);
+  max-height: 100%;
   overflow: hidden;
 }
 

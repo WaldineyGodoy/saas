@@ -451,7 +451,7 @@ export default function InvoiceListManager() {
             'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
-            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto', icon: FileText },
+            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
@@ -1020,7 +1020,7 @@ export default function InvoiceListManager() {
                         {activeTab === 'faturas' ? (
                             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
                                 <option value="">Todos os Status</option>
-                                <option value="sem_faturamento">Sem Faturamento</option>
+                                <option value="ag_emissao_boleto">Sem Faturamento</option>
                                 <option value="a_vencer">A Vencer</option>
                                 <option value="atrasado">Atrasado</option>
                                 <option value="confirmado">Confirmado</option>
@@ -1451,16 +1451,17 @@ export default function InvoiceListManager() {
                     ) : viewMode === 'kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['sem_faturamento', 'ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago'].map(status => {
-                                    const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
-                                    const statusMap = { 
-                                        'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento' },
-                                        'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Ag. Emissão de Boleto' },
-                                        'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
-                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
-                                        'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
-                                        'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
-                                    };
+                                {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago']
+                                    .filter(status => !statusFilter || status === statusFilter)
+                                    .map(status => {
+                                        const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
+                                        const statusMap = { 
+                                            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento' },
+                                            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
+                                            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
+                                            'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
+                                            'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado' } 
+                                        };
                                     const s = statusMap[status] || { color: '#475569', bg: '#f1f5f9', label: status };
                                     return (
                                         <div 
@@ -1505,7 +1506,9 @@ export default function InvoiceListManager() {
                     ) : viewMode === 'energy_kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['a_vencer', 'atrasada', 'pago', 'contestada', 'parcelada', 'erro'].map(col => {
+                                {['a_vencer', 'atrasada', 'pago', 'contestada', 'parcelada', 'erro']
+                                    .filter(col => !statusFilter || col === statusFilter)
+                                    .map(col => {
                                     const invoicesInCol = filteredInvoices.filter(inv => {
                                         const ebStatus = inv.energy_bill_status || 'pendente';
                                         const today = new Date();
