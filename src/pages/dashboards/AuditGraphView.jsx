@@ -402,12 +402,20 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
     // Helper to initialize coordinates beautifully spread out from center
     const setNodeCoords = (node) => {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 60 + Math.random() * 260;
-      node.x = width / 2 + Math.cos(angle) * radius;
-      node.y = height / 2 + Math.sin(angle) * radius;
-      node.vx = 0;
-      node.vy = 0;
+      const existing = nodesStateRef.current?.find(n => n.id === node.id);
+      if (existing && existing.x !== undefined && existing.y !== undefined) {
+        node.x = existing.x;
+        node.y = existing.y;
+        node.vx = existing.vx || 0;
+        node.vy = existing.vy || 0;
+      } else {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 60 + Math.random() * 260;
+        node.x = width / 2 + Math.cos(angle) * radius;
+        node.y = height / 2 + Math.sin(angle) * radius;
+        node.vx = 0;
+        node.vy = 0;
+      }
       return node;
     };
 
@@ -800,6 +808,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
     setPanX(0);
     setPanY(0);
     setZoom(1);
+    nodesStateRef.current = [];
     fetchAuditData();
     showAlert('Banco de faturas reanalisado com sucesso!', 'success');
   };
@@ -1816,9 +1825,9 @@ export default function AuditGraphView({ onInspectInvoice }) {
               boxShadow: '0 0 12px rgba(255, 102, 0, 0.15)'
             }}
           >
-            <option value="all">Qualquer data (Completo)</option>
+            <option value="all" style={{ background: '#0f172a', color: '#ffffff' }}>Qualquer data (Completo)</option>
             {uniqueMonths.map(m => (
-              <option key={m} value={m}>{formatPeriod(m)}</option>
+              <option key={m} value={m} style={{ background: '#0f172a', color: '#ffffff' }}>{formatPeriod(m)}</option>
             ))}
           </select>
         </div>
@@ -2103,7 +2112,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
           }}>
             {/* Critical Legend Button */}
             <button
-              onClick={() => handleLegendClick('critical')}
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('critical'); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2139,7 +2148,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
             {/* Warning Legend Button */}
             <button
-              onClick={() => handleLegendClick('warning')}
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('warning'); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2175,7 +2184,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
             {/* UC Legend Button */}
             <button
-              onClick={() => handleLegendClick('uc')}
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('uc'); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2211,7 +2220,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
             {/* Invoiced Info Button */}
             <button
-              onClick={() => handleLegendClick('healthy')}
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('healthy'); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2309,6 +2318,36 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
+
+                {/* Neon Green Glow Filter */}
+                <filter id="glow-success" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="6" result="blur" />
+                  <feColorMatrix type="matrix" values="
+                    0 0 0 0 0   
+                    0 1 0 0 0.8   
+                    0 0 0 0 0   
+                    0 0 0 0.85 0
+                  "/>
+                  <feMerge>
+                    <feMergeNode />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+
+                {/* Neon Blue Glow Filter */}
+                <filter id="glow-primary" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="6" result="blur" />
+                  <feColorMatrix type="matrix" values="
+                    0 0 0 0 0   
+                    0 0 0 0 0   
+                    0 0 1 0 0.8   
+                    0 0 0 0.85 0
+                  "/>
+                  <feMerge>
+                    <feMergeNode />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
 
               <g transform={`translate(${panX}, ${panY}) scale(${zoom})`} style={{ pointerEvents: 'auto' }}>
@@ -2335,7 +2374,12 @@ export default function AuditGraphView({ onInspectInvoice }) {
                   const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
                   const isLinkSelected = selectedNode && (selectedNode.id === link.source || selectedNode.id === link.target);
                   const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches);
-                  const isDimmedLink = isLinkDimmedByLegend || (hoveredNode && !isHighlighted) || (selectedNode && !isLinkSelected && !hoveredNode);
+                  
+                  const isDimmedLink = isLinkDimmedByLegend || (
+                    selectedNode 
+                      ? (!isLinkSelected && (!hoveredNode || !isHighlighted))
+                      : (hoveredNode && !isHighlighted)
+                  );
                   
                   let linkStroke = isLinkSelected ? '#ffffff' : (isHighlighted ? '#a855f7' : link.color);
                   if (isDimmedLink) {
@@ -2347,6 +2391,10 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       key={`link-${idx}`}
                       id={`link-${idx}`}
                       className="graph-link"
+                      x1={sourceNode?.x ?? 0}
+                      y1={sourceNode?.y ?? 0}
+                      x2={targetNode?.x ?? 0}
+                      y2={targetNode?.y ?? 0}
                       stroke={linkStroke}
                       strokeWidth={isLinkSelected ? link.width + 3.5 : (isHighlighted ? link.width + 1.5 : link.width)}
                       opacity={isLinkSelected ? 0.95 : (isDimmedLink ? 0.08 : 0.28)}
@@ -2355,10 +2403,10 @@ export default function AuditGraphView({ onInspectInvoice }) {
                   );
                 })}
 
-                {/* 2. Glow ring around pulsing inconsistency nodes */}
+                {/* 2. Glow ring around pulsing inconsistency nodes & active status nodes */}
                 {nodes.map(node => {
-                  if (!node.pulse) return null;
                   const isSelected = selectedNode && selectedNode.id === node.id;
+                  const isHovered = hoveredNode && hoveredNode.id === node.id;
                   const isConnectedToSelected = selectedNode && links.some(l => 
                     (l.source === selectedNode.id && l.target === node.id) ||
                     (l.target === selectedNode.id && l.source === node.id)
@@ -2371,32 +2419,60 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
-                  const isDimmed = isDimmedByLegend || (selectedNode && !isSelected && !isConnectedToSelected);
+                  const isNodeConnectedToHovered = hoveredNode && links.some(l => 
+                    (l.source === hoveredNode.id && l.target === node.id) ||
+                    (l.target === hoveredNode.id && l.source === node.id)
+                  );
+                  
+                  const isDimmed = isDimmedByLegend || (
+                    selectedNode 
+                      ? (!isSelected && !isConnectedToSelected && !isHovered && !isNodeConnectedToHovered)
+                      : (hoveredNode && !isHovered && !isNodeConnectedToHovered)
+                  );
                   
                   if (isDimmed) return null;
 
-                  // Compute colors dynamically: default silver, color when active legend or selected directly
+                  const showRing = node.pulse || isSelected || isHovered || (activeLegendFilter && matchesLegendFilter);
+                  if (!showRing) return null;
+
                   let ringStroke = '#ffffff';
                   let ringFilter = 'url(#glow-silver)';
                   
-                  if (activeLegendFilter) {
-                    if (activeLegendFilter === 'critical' && node.severity === 'critical') {
+                  if (node.type === 'inconsistency') {
+                    if (node.severity === 'critical') {
                       ringStroke = '#ef4444';
                       ringFilter = 'url(#glow-error)';
-                    } else if (activeLegendFilter === 'warning' && node.severity === 'warning') {
+                    } else if (node.severity === 'warning') {
                       ringStroke = '#f59e0b';
                       ringFilter = 'url(#glow-warn)';
                     }
-                  } else if (selectedNode) {
-                    if (isSelected) {
-                      if (node.severity === 'critical') {
-                        ringStroke = '#ef4444';
-                        ringFilter = 'url(#glow-error)';
-                      } else if (node.severity === 'warning') {
-                        ringStroke = '#f59e0b';
-                        ringFilter = 'url(#glow-warn)';
-                      }
-                    }
+                  } else if (node.type === 'uc') {
+                    ringStroke = '#22c55e';
+                    ringFilter = 'url(#glow-success)';
+                  } else if (node.type === 'subscriber') {
+                    ringStroke = '#3b82f6';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'fatura') {
+                    ringStroke = '#ec4899';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'conta_energia') {
+                    ringStroke = '#06b6d4';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'lead') {
+                    ringStroke = '#a855f7';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'originator') {
+                    ringStroke = '#f97316';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'supplier') {
+                    ringStroke = '#8b5cf6';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'usina') {
+                    ringStroke = '#14b8a6';
+                    ringFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'concessionaria') {
+                    ringStroke = '#eab308';
+                    ringFilter = 'url(#glow-warn)';
                   }
                   
                   return (
@@ -2404,6 +2480,9 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       key={`ring-${node.id}`}
                       id={`ring-${node.id}`}
                       className="graph-node-pulse"
+                      cx={node.x ?? 0}
+                      cy={node.y ?? 0}
+                      r={isSelected ? node.size + 12.5 : isHovered ? node.size + 9.5 : node.size + 8}
                       fill="none"
                       stroke={ringStroke}
                       strokeWidth={isSelected ? 3.5 : isConnectedToSelected ? 2.5 : 2}
@@ -2430,20 +2509,23 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  const isNodeConnectedToHovered = hoveredNode && links.some(l => 
+                    (l.source === hoveredNode.id && l.target === node.id) ||
+                    (l.target === hoveredNode.id && l.source === node.id)
+                  );
                   
-                  const isDimmed = isDimmedByLegend || 
-                    (hoveredNode && !isHovered && 
-                      !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
-                    (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
+                  const isDimmed = isDimmedByLegend || (
+                    selectedNode 
+                      ? (!isSelected && !isConnectedToSelected && !isHovered && !isNodeConnectedToHovered)
+                      : (hoveredNode && !isHovered && !isNodeConnectedToHovered)
+                  );
 
-                  // 1. By default, all nodes are silver gradient
                   let nodeFill = 'url(#silver-gradient)';
                   let nodeStroke = node.stroke || 'rgba(255, 255, 255, 0.2)';
                   let nodeFilter = 'url(#glow-silver)';
 
                   if (activeLegendFilter) {
                     if (matchesLegendFilter) {
-                      // Color matches the legend exactly
                       if (activeLegendFilter === 'critical') {
                         nodeFill = '#ef4444';
                         nodeStroke = '#ffffff';
@@ -2455,21 +2537,19 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       } else if (activeLegendFilter === 'uc') {
                         nodeFill = '#22c55e';
                         nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-success)';
                       } else if (activeLegendFilter === 'healthy') {
                         nodeFill = '#3b82f6';
                         nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       }
                     } else {
-                      // Dimmed low brightness silver for non-matches
-                      nodeFill = '#1c2330';
-                      nodeStroke = 'rgba(255, 255, 255, 0.05)';
+                      nodeFill = '#111622';
+                      nodeStroke = 'rgba(255, 255, 255, 0.03)';
                       nodeFilter = 'none';
                     }
                   } else if (selectedNode) {
                     if (isSelected) {
-                      // The selected node itself gets its signature CRM color
                       if (node.type === 'inconsistency') {
                         if (node.severity === 'critical') {
                           nodeFill = '#ef4444';
@@ -2480,40 +2560,37 @@ export default function AuditGraphView({ onInspectInvoice }) {
                         }
                       } else if (node.type === 'uc') {
                         nodeFill = '#22c55e';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-success)';
                       } else if (node.type === 'fatura') {
                         nodeFill = '#ec4899';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'conta_energia') {
                         nodeFill = '#06b6d4';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'lead') {
                         nodeFill = '#a855f7';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'originator') {
                         nodeFill = '#f97316';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'subscriber') {
                         nodeFill = '#3b82f6';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'supplier') {
                         nodeFill = '#8b5cf6';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'usina') {
                         nodeFill = '#14b8a6';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-primary)';
                       } else if (node.type === 'concessionaria') {
                         nodeFill = '#eab308';
-                        nodeFilter = 'url(#glow-silver)';
+                        nodeFilter = 'url(#glow-warn)';
                       }
                       nodeStroke = '#ffffff';
                     } else if (isConnectedToSelected) {
-                      // Neighbor nodes remain in full silver gradient
-                      nodeFill = 'url(#silver-gradient)';
-                      nodeStroke = '#cbd5e1';
+                      nodeStroke = '#ffffff';
                       nodeFilter = 'url(#glow-silver)';
                     } else {
-                      // Unconnected nodes are deeply dimmed silver
                       nodeFill = '#111622';
                       nodeStroke = 'rgba(255, 255, 255, 0.03)';
                       nodeFilter = 'none';
@@ -2527,6 +2604,8 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       key={node.id}
                       id={`circle-${node.id}`}
                       className="graph-node"
+                      cx={node.x ?? 0}
+                      cy={node.y ?? 0}
                       r={isSelected ? node.size + 4.5 : (isHovered ? node.size + 2 : node.size)}
                       fill={nodeFill}
                       stroke={nodeStroke}
@@ -2563,16 +2642,23 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
-
-                  const isDimmed = isDimmedByLegend || 
-                    (hoveredNode && !isHovered && 
-                      !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
-                    (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
+                  const isNodeConnectedToHovered = hoveredNode && links.some(l => 
+                    (l.source === hoveredNode.id && l.target === node.id) ||
+                    (l.target === hoveredNode.id && l.source === node.id)
+                  );
+                  
+                  const isDimmed = isDimmedByLegend || (
+                    selectedNode 
+                      ? (!isSelected && !isConnectedToSelected && !isHovered && !isNodeConnectedToHovered)
+                      : (hoveredNode && !isHovered && !isNodeConnectedToHovered)
+                  );
 
                   return (
                     <text
                       key={`label-${node.id}`}
                       id={`label-${node.id}`}
+                      x={node.x ?? 0}
+                      y={(node.y ?? 0) + node.size + 14}
                       textAnchor="middle"
                       fill={isSelected ? '#ffffff' : (isConnectedToSelected ? '#e2e8f0' : '#94a3b8')}
                       fontSize={isSelected ? '10px' : '9px'}

@@ -20,6 +20,7 @@ import ConsumerUnitList from './dashboards/ConsumerUnitList';
 import BillingList from './dashboards/BillingList';
 import SettingsLayout from './dashboards/SettingsLayout';
 import GridMap from './dashboards/GridMap';
+import GraphNodeView from './dashboards/GraphNodeView';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
@@ -38,8 +39,8 @@ export default function Dashboard() {
         if (profile && activeView === 'default') {
             if (profile.role === 'subscriber') setActiveView('subscriber_dashboard');
             else if (profile.role === 'supplier') setActiveView('supplier_dashboard');
-            // For all other roles (admin, super_admin, originator, broker, coordinator, manager), default to LEADS
-            else setActiveView('leads');
+            // For all other roles (admin, super_admin, originator, broker, coordinator, manager), default to Graph Node View
+            else setActiveView('graph_node_view');
         }
     }, [profile, activeView]);
 
@@ -60,6 +61,11 @@ export default function Dashboard() {
         if (!role) return [];
 
         const items = [];
+
+        // 0. Graph Node View (Obsidian Graph View)
+        if (role !== 'subscriber' && role !== 'supplier' && role !== 'lead') {
+            items.push({ id: 'graph_node_view', label: 'Graph Node View', icon: 'bi-share' });
+        }
 
         // 1. Leads
         if (role !== 'subscriber') {
@@ -134,6 +140,7 @@ export default function Dashboard() {
             case 'subscriber_dashboard': return <SubscriberDashboard />;
             case 'originator_dashboard': return <OriginatorDashboard />;
             case 'supplier_dashboard': return <SupplierDashboard />;
+            case 'graph_node_view': return <GraphNodeView />;
             case 'leads': return <LeadsList />;
             case 'subscribers_list': return <SubscriberList />;
             case 'originators_list': return <OriginatorList />;
