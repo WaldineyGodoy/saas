@@ -1286,29 +1286,32 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '1rem', textAlign: 'center', letterSpacing: '0.05em' }}>
                                                 STATUS DE PAGAMENTO DA CONCESSIONÁRIA
                                             </label>
-                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem' }}>
                                                 {[
                                                     { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
                                                     { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' },
-                                                    { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' }
+                                                    { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' },
+                                                    { id: 'parcelada', label: 'PARCELADA', color: '#ca8a04', bg: '#fef9c3' },
+                                                    { id: 'contestada', label: 'CONTESTADA', color: '#7c3aed', bg: '#f3e8ff' }
                                                 ].map(s => (
                                                     <button
                                                         key={s.id}
                                                         type="button"
                                                         onClick={() => setFormData({ ...formData, energy_bill_status: s.id })}
                                                         style={{
-                                                            flex: 1,
-                                                            padding: '0.75rem',
+                                                            padding: '0.6rem 0.2rem',
                                                             borderRadius: '10px',
                                                             border: '2px solid',
                                                             borderColor: formData.energy_bill_status === s.id ? s.color : '#e2e8f0',
                                                             background: formData.energy_bill_status === s.id ? s.bg : 'white',
                                                             color: formData.energy_bill_status === s.id ? s.color : '#64748b',
-                                                            fontSize: '0.8rem',
+                                                            fontSize: '0.7rem',
                                                             fontWeight: 800,
                                                             cursor: 'pointer',
                                                             transition: 'all 0.2s',
-                                                            boxShadow: formData.energy_bill_status === s.id ? `0 4px 6px ${s.color}20` : 'none'
+                                                            boxShadow: formData.energy_bill_status === s.id ? `0 4px 6px ${s.color}20` : 'none',
+                                                            whiteSpace: 'nowrap',
+                                                            textAlign: 'center'
                                                         }}
                                                     >
                                                         {s.label}

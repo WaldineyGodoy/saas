@@ -589,7 +589,9 @@ export default function InvoiceListManager() {
                                             'pendente': isPastDue 
                                                 ? { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' }
                                                 : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
-                                            'erro': { color: '#991b1b', label: 'ERRO PAGAMENTO', bg: '#fef2f2' }
+                                            'erro': { color: '#991b1b', label: 'ERRO PAGAMENTO', bg: '#fef2f2' },
+                                            'parcelada': { color: '#ca8a04', label: 'PARCELADA', bg: '#fef9c3' },
+                                            'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' }
                                         };
                                         
                                         const s = statusData[ebStatus] || { color: '#64748b', label: ebStatus.toUpperCase(), bg: '#f1f5f9' };
@@ -827,10 +829,12 @@ export default function InvoiceListManager() {
                         
                         if (ebStatus === 'pago') acc.pago++;
                         else if (ebStatus === 'pendente' && isPastDue) acc.atrasado++;
+                        else if (ebStatus === 'parcelada') acc.parcelada++;
+                        else if (ebStatus === 'contestada') acc.contestada++;
                         else acc.a_vencer++;
                         
                         return acc;
-                    }, { pago: 0, atrasado: 0, a_vencer: 0 });
+                    }, { pago: 0, atrasado: 0, a_vencer: 0, parcelada: 0, contestada: 0 });
 
                     return (
                         <div style={{
@@ -841,7 +845,8 @@ export default function InvoiceListManager() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '2.5rem'
+                            gap: '2.5rem',
+                            flexWrap: 'wrap'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
@@ -854,6 +859,14 @@ export default function InvoiceListManager() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
                                 <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>A Vencer: {energyStats.a_vencer}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ca8a04' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Parceladas: {energyStats.parcelada}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#7c3aed' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Contestadas: {energyStats.contestada}</span>
                             </div>
                         </div>
                     );
@@ -919,51 +932,70 @@ export default function InvoiceListManager() {
 
                                                     <td style={{ padding: '1rem', color: '#334155' }}>{inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}</td>
                                                     
-                                                    <td style={{ padding: '1rem' }}>
-                                                        <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{inv.consumer_units?.numero_uc || 'N/A'}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{inv.consumer_units?.subscribers?.name}</div>
-                                                    </td>
-
-                                                    {/* Vr. Conta de Energia + Pagar */}
-                                                    <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
-                                                            <div style={{ minWidth: '85px' }}>
-                                                                {inv.energy_bill_status === 'pago' ? (
-                                                                    <span style={{ 
-                                                                        display: 'block',
-                                                                        textAlign: 'center',
-                                                                        color: '#166534', 
-                                                                        background: '#dcfce7', 
-                                                                        padding: '0.4rem 0.2rem', 
-                                                                        borderRadius: '4px', 
-                                                                        fontSize: '0.7rem', 
-                                                                        fontWeight: '800',
-                                                                        border: '1px solid #bbf7d0'
-                                                                    }}>PAGA</span>
-                                                                ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
-                                                                    <button 
-                                                                        onClick={() => handlePayBill(inv)}
-                                                                        disabled={payingId === inv.id}
-                                                                        style={{ 
-                                                                            width: '100%',
-                                                                            background: '#ef4444', 
-                                                                            color: 'white', 
-                                                                            border: 'none', 
-                                                                            padding: '0.4rem 0.2rem', 
-                                                                            borderRadius: '4px', 
-                                                                            fontSize: '0.7rem', 
-                                                                            fontWeight: 'bold', 
-                                                                            cursor: 'pointer',
-                                                                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
-                                                                        }}
-                                                                    >
-                                                                        {payingId === inv.id ? '...' : 'PAGAR'}
-                                                                    </button>
-                                                                ) : null}
-                                                            </div>
-                                                        </div>
-                                                    </td>
+                                                                                                         {/* Vr. Conta de Energia + Pagar */}
+                                                     <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                                                             <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
+                                                             <div style={{ minWidth: '85px' }}>
+                                                                 {inv.energy_bill_status === 'pago' ? (
+                                                                     <span style={{ 
+                                                                         display: 'block',
+                                                                         textAlign: 'center',
+                                                                         color: '#166534', 
+                                                                         background: '#dcfce7', 
+                                                                         padding: '0.4rem 0.2rem', 
+                                                                         borderRadius: '4px', 
+                                                                         fontSize: '0.7rem', 
+                                                                         fontWeight: '800',
+                                                                         border: '1px solid #bbf7d0'
+                                                                     }}>PAGA</span>
+                                                                 ) : inv.energy_bill_status === 'parcelada' ? (
+                                                                     <span style={{ 
+                                                                         display: 'block',
+                                                                         textAlign: 'center',
+                                                                         color: '#ca8a04', 
+                                                                         background: '#fef9c3', 
+                                                                         padding: '0.4rem 0.2rem', 
+                                                                         borderRadius: '4px', 
+                                                                         fontSize: '0.7rem', 
+                                                                         fontWeight: '800',
+                                                                         border: '1px solid #fef08a'
+                                                                     }}>PARCELADA</span>
+                                                                 ) : inv.energy_bill_status === 'contestada' ? (
+                                                                     <span style={{ 
+                                                                         display: 'block',
+                                                                         textAlign: 'center',
+                                                                         color: '#7c3aed', 
+                                                                         background: '#f3e8ff', 
+                                                                         padding: '0.4rem 0.2rem', 
+                                                                         borderRadius: '4px', 
+                                                                         fontSize: '0.7rem', 
+                                                                         fontWeight: '800',
+                                                                         border: '1px solid #e9d5ff'
+                                                                     }}>CONTESTADA</span>
+                                                                 ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
+                                                                     <button 
+                                                                         onClick={() => handlePayBill(inv)}
+                                                                         disabled={payingId === inv.id}
+                                                                         style={{ 
+                                                                             width: '100%',
+                                                                             background: '#ef4444', 
+                                                                             color: 'white', 
+                                                                             border: 'none', 
+                                                                             padding: '0.4rem 0.2rem', 
+                                                                             borderRadius: '4px', 
+                                                                             fontSize: '0.7rem', 
+                                                                             fontWeight: 'bold', 
+                                                                             cursor: 'pointer',
+                                                                             boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                         }}
+                                                                     >
+                                                                         {payingId === inv.id ? '...' : 'PAGAR'}
+                                                                     </button>
+                                                                 ) : null}
+                                                             </div>
+                                                         </div>
+                                                     </td>
 
                                                     {/* Saldo */}
                                                     <td style={{ padding: '1rem', textAlign: 'center' }}>

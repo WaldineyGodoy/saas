@@ -277,34 +277,37 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta (Operacional)</span>
                                 {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
-                            <div style={{ display: 'flex', background: 'white', padding: '0.25rem', borderRadius: '12px', gap: '0.25rem' }}>
-                                {[
-                                    { id: 'pendente', label: 'Pendente', color: '#2563eb' },
-                                    { id: 'pago', label: 'Pago', color: '#166534' },
-                                    { id: 'erro', label: 'Erro', color: '#dc2626' }
-                                ].map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => handleUpdateEnergyStatus(s.id)}
-                                        disabled={updatingStatus}
-                                        style={{
-                                            flex: 1,
-                                            padding: '0.5rem',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            fontSize: '0.8rem',
-                                            fontWeight: energyStatus === s.id ? '800' : '500',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            background: energyStatus === s.id ? s.color : 'transparent',
-                                            color: energyStatus === s.id ? 'white' : '#64748b',
-                                            boxShadow: energyStatus === s.id ? `0 4px 12px ${s.color}40` : 'none'
-                                        }}
-                                    >
-                                        {s.label}
-                                    </button>
-                                ))}
-                            </div>
+                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
+                                 {[
+                                     { id: 'pendente', label: 'Pendente', color: '#2563eb' },
+                                     { id: 'pago', label: 'Pago', color: '#166534' },
+                                     { id: 'erro', label: 'Erro', color: '#dc2626' },
+                                     { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
+                                     { id: 'contestada', label: 'Contestada', color: '#7c3aed' }
+                                 ].map(s => (
+                                     <button
+                                         key={s.id}
+                                         onClick={() => handleUpdateEnergyStatus(s.id)}
+                                         disabled={updatingStatus}
+                                         style={{
+                                             padding: '0.5rem 0.1rem',
+                                             borderRadius: '8px',
+                                             border: 'none',
+                                             fontSize: '0.75rem',
+                                             fontWeight: energyStatus === s.id ? '800' : '600',
+                                             cursor: 'pointer',
+                                             transition: 'all 0.2s',
+                                             background: energyStatus === s.id ? s.color : 'transparent',
+                                             color: energyStatus === s.id ? 'white' : '#64748b',
+                                             boxShadow: energyStatus === s.id ? `0 4px 12px ${s.color}40` : 'none',
+                                             whiteSpace: 'nowrap',
+                                             textAlign: 'center'
+                                         }}
+                                     >
+                                         {s.label}
+                                     </button>
+                                 ))}
+                             </div>
                         </div>
     
                         {/* Status e Identificação */}
