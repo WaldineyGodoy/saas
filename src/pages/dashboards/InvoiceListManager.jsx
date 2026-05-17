@@ -33,6 +33,8 @@ export default function InvoiceListManager() {
     const [activeTab, setActiveTab] = useState('faturas');
     // Estado de Ordenação
     const [sortBy, setSortBy] = useState('ref_desc');
+    // Estado de exibição do título (! Info)
+    const [showTitleInfo, setShowTitleInfo] = useState(false);
 
     // Estados para o Resumo Financeiro
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
@@ -917,16 +919,27 @@ export default function InvoiceListManager() {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div>
-                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.8rem', fontWeight: 'bold', margin: 0 }}>
+            {showTitleInfo && (
+                <div style={{ 
+                    background: 'rgba(255, 255, 255, 0.95)', 
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(226, 232, 240, 0.8)',
+                    padding: '1.25rem', 
+                    borderRadius: '12px', 
+                    width: '100%', 
+                    marginBottom: '1.5rem', 
+                    boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                    animation: 'fadeIn 0.2s ease'
+                }}>
+                    <h2 style={{ color: 'var(--color-blue)', fontSize: '1.6rem', fontWeight: 'bold', margin: 0 }}>
                         {activeTab === 'faturas' ? 'Faturas e Contas de Energia' : activeTab === 'contas_energia' ? 'Contas de Energia Concessionária' : 'Auditor Gráfico de Inconsistências'}
                     </h2>
-                    <p style={{ color: '#64748b', margin: 0 }}>
+                    <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem', marginTop: '0.25rem' }}>
                         {activeTab === 'faturas' ? 'Gerencie as faturas emitidas pelo sistema aos clientes' : activeTab === 'contas_energia' ? 'Gerencie as faturas recebidas das concessionárias' : 'Auditoria visual agêntica e análise de anomalias em contas de energia'}
                     </p>
                 </div>
-            </div>
+            )}
 
             {/* Cabeçalho Fixo (Filtros + Modos + Ações) */}
             <div style={{
@@ -1009,6 +1022,32 @@ export default function InvoiceListManager() {
                             Auditor Gráfico
                         </button>
                     )}
+                    <button
+                        onClick={() => setShowTitleInfo(!showTitleInfo)}
+                        style={{
+                            background: showTitleInfo ? '#ef4444' : 'none',
+                            color: showTitleInfo ? 'white' : '#ef4444',
+                            border: '2px solid #ef4444',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: '900',
+                            fontSize: '1.1rem',
+                            cursor: 'pointer',
+                            marginLeft: '0.75rem',
+                            alignSelf: 'center',
+                            transition: 'all 0.2s ease-in-out',
+                            boxShadow: showTitleInfo ? '0 0 10px rgba(239, 68, 68, 0.4)' : 'none',
+                            outline: 'none',
+                            marginBottom: '4px'
+                        }}
+                        title={showTitleInfo ? "Ocultar informações" : "Exibir informações da página"}
+                    >
+                        !
+                    </button>
                 </div>
 
                 {activeTab !== 'auditor_grafico' && (

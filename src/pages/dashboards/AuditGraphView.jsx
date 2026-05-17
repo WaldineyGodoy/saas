@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { 
   AlertTriangle, CheckCircle2, Zap, Settings, ZoomIn, ZoomOut, 
   Maximize, Play, Pause, RefreshCw, UserCheck, ShieldAlert, 
-  FileText, X, Eye, EyeOff, ShieldCheck, ChevronRight, HelpCircle,
+  FileText, X, Eye, EyeOff, ShieldCheck, ChevronRight, ChevronLeft, HelpCircle,
   MessageSquare, Send
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
@@ -32,6 +32,7 @@ export default function AuditGraphView() {
   const [activeAlertId, setActiveAlertId] = useState(null);
   const [agentMessage, setAgentMessage] = useState('Analisando base de faturas...');
   const [agentStatus, setAgentStatus] = useState('scanning'); // scanning, ready, action
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Floating AI Chat States
   const [chatOpen, setChatOpen] = useState(false);
@@ -47,6 +48,10 @@ export default function AuditGraphView() {
   const [linkDistance, setLinkDistance] = useState(90);
   const [gravity, setGravity] = useState(0.04);
   const [healthyVisible, setHealthyVisible] = useState(true);
+  const [criticalCycleIndex, setCriticalCycleIndex] = useState(0);
+  const [warningCycleIndex, setWarningCycleIndex] = useState(0);
+  const [ucCycleIndex, setUcCycleIndex] = useState(0);
+  const [auditPeriodFilter, setAuditPeriodFilter] = useState('all');
   
   // Interaction tracking
   const svgRef = useRef(null);
@@ -71,12 +76,12 @@ export default function AuditGraphView() {
     }
   }, [chatMessages]);
 
-  // Re-run audit scanning when custom rules change
+  // Re-run audit scanning when custom rules or period filter changes
   useEffect(() => {
     if (invoices.length > 0) {
       runAudit(invoices, ucs);
     }
-  }, [customRules]);
+  }, [customRules, auditPeriodFilter]);
 
   const fetchAuditData = async () => {
     setLoading(true);
@@ -148,6 +153,11 @@ export default function AuditGraphView() {
 
     // Filter out canceled invoices
     let activeInvoices = allInvoices.filter(i => i.status !== 'cancelado' && i.status !== 'sem_faturamento');
+
+    // Apply audit period filter if selected
+    if (auditPeriodFilter !== 'all') {
+      activeInvoices = activeInvoices.filter(i => i.mes_referencia && i.mes_referencia.substring(0, 7) === auditPeriodFilter);
+    }
 
     // Apply custom trained rules (min_value)
     const minValueRule = customRules.find(r => r.type === 'min_value');
@@ -616,6 +626,37 @@ export default function AuditGraphView() {
     }
   };
 
+  const handleLegendClick = (type) => {
+    if (type === 'critical') {
+      const list = inconsistencies.filter(i => i.severity === 'critical');
+      if (list.length === 0) return;
+      const nextIndex = (criticalCycleIndex + 1) % list.length;
+      setCriticalCycleIndex(nextIndex);
+      const inc = list[nextIndex];
+      const node = nodesStateRef.current.find(n => n.id === inc.id);
+      if (node) {
+        handleNodeClick(node);
+      }
+    } else if (type === 'warning') {
+      const list = inconsistencies.filter(i => i.severity === 'warning');
+      if (list.length === 0) return;
+      const nextIndex = (warningCycleIndex + 1) % list.length;
+      setWarningCycleIndex(nextIndex);
+      const inc = list[nextIndex];
+      const node = nodesStateRef.current.find(n => n.id === inc.id);
+      if (node) {
+        handleNodeClick(node);
+      }
+    } else if (type === 'uc') {
+      const list = nodesStateRef.current.filter(n => n.type === 'uc');
+      if (list.length === 0) return;
+      const nextIndex = (ucCycleIndex + 1) % list.length;
+      setUcCycleIndex(nextIndex);
+      const node = list[nextIndex];
+      handleNodeClick(node);
+    }
+  };
+
   // Agent Actions
   const handleActionIgnore = async (alertId) => {
     const confirm = await showConfirm('Deseja ignorar temporariamente esta inconsistência do grafo?');
@@ -902,58 +943,189 @@ export default function AuditGraphView() {
     setPanY(0);
   };
 
+  const uniqueMonths = [...new Set(invoices
+    .map(i => i.mes_referencia ? i.mes_referencia.substring(0, 7) : null)
+    .filter(Boolean)
+  )].sort().reverse();
+
+  const formatPeriod = (monthStr) => {
+    if (!monthStr) return '';
+    const [year, month] = monthStr.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const formatted = date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-      {/* Overview Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
-        <div style={{ background: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
-            <ShieldAlert size={24} />
-          </div>
-          <div>
-            <h4 style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold', margin: 0 }}>Críticos</h4>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e293b', margin: 0 }}>
-              {inconsistencies.filter(i => i.severity === 'critical').length}
-            </h3>
-          </div>
-        </div>
-
-        <div style={{ background: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-            <AlertTriangle size={24} />
-          </div>
-          <div>
-            <h4 style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold', margin: 0 }}>Avisos</h4>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e293b', margin: 0 }}>
-              {inconsistencies.filter(i => i.severity === 'warning').length}
-            </h3>
-          </div>
-        </div>
-
-        <div style={{ background: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22c55e' }}>
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <h4 style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold', margin: 0 }}>UCs Analisadas</h4>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e293b', margin: 0 }}>{ucs.length}</h3>
-          </div>
-        </div>
-
-        <div style={{ background: 'white', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-            <FileText size={24} />
-          </div>
-          <div>
-            <h4 style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 'bold', margin: 0 }}>Faturas Inspecionadas</h4>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e293b', margin: 0 }}>{invoices.length}</h3>
-          </div>
-        </div>
-      </div>
-
       {/* Main Canvas + Sidebar Split */}
       <div className="auditor-container">
-        
+
+        {/* Auditor Sidebar Panel */}
+        <div 
+          className="auditor-sidebar"
+          style={{
+            width: sidebarCollapsed ? '0px' : '380px',
+            minWidth: sidebarCollapsed ? '0px' : '380px',
+            borderRight: sidebarCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
+            borderLeft: 'none',
+            boxShadow: sidebarCollapsed ? 'none' : '10px 0 30px rgba(0, 0, 0, 0.25)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%'
+          }}
+        >
+          <div className="auditor-sidebar-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ background: '#ef4444', width: '8px', height: '8px', borderRadius: '50%', boxShadow: '0 0 8px #ef4444' }}></div>
+              <span style={{ fontSize: '0.85rem', fontWeight: '800', letterSpacing: '0.05em', color: '#ffffff' }}>PAINEL DE AUDITORIA</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ background: 'rgba(255,255,255,0.08)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                {inconsistencies.length} CONFLITOS
+              </span>
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: '0.25rem'
+                }}
+                title="Recolher Painel"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="auditor-sidebar-content">
+            {/* Agent Bubble */}
+            <div className="audit-agent-bubble">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #FF6600, #ff8c3a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(255, 102, 0, 0.4)' }}>
+                  <Zap size={14} color="white" />
+                </div>
+                <div>
+                  <span style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.8rem', display: 'block' }}>Auditor Agêntico B2W</span>
+                  <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Analista de Consistência</span>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', whiteSpace: 'pre-line' }}>
+                {agentMessage}
+              </div>
+            </div>
+
+            {/* Inconsistency List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <h5 style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.2rem 0' }}>
+                Lista de Inconsistências
+              </h5>
+
+              {inconsistencies.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.08)' }}>
+                  <ShieldCheck size={28} color="#22c55e" style={{ margin: '0 auto 0.5rem auto' }} />
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>Nenhuma inconsistência ativa. O sistema está perfeitamente faturado!</p>
+                </div>
+              ) : (
+                inconsistencies.map(inc => {
+                  const isActive = activeAlertId === inc.id;
+                  return (
+                    <div 
+                      key={inc.id}
+                      className={`audit-error-card ${isActive ? 'active' : ''}`}
+                      onClick={() => handleInconsistencyClick(inc)}
+                      style={{
+                        background: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(245, 158, 11, 0.04)',
+                        borderColor: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.18)' : 'rgba(245, 158, 11, 0.15)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
+                          {inc.severity === 'critical' ? (
+                            <ShieldAlert size={14} color="#ef4444" style={{ flexShrink: 0 }} />
+                          ) : (
+                            <AlertTriangle size={14} color="#f59e0b" style={{ flexShrink: 0 }} />
+                          )}
+                          <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {inc.title}
+                          </span>
+                        </div>
+                        <span style={{ 
+                          fontSize: '0.55rem', 
+                          fontWeight: 'bold', 
+                          color: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
+                          background: inc.severity === 'critical' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.12)',
+                          padding: '0.1rem 0.35rem', 
+                          borderRadius: '4px',
+                          textTransform: 'uppercase'
+                        }}>
+                          {inc.severity}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '0.7rem', color: '#cbd5e1', margin: '0 0 0.6rem 0', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {inc.description}
+                      </p>
+
+                      {isActive && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleActionFix(inc.id); }}
+                            style={{
+                              flex: 1,
+                              background: '#FF6600',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0.4rem',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.25rem',
+                              boxShadow: '0 2px 5px rgba(255, 102, 0, 0.25)'
+                            }}
+                          >
+                            <Zap size={10} /> Corrigir Erro
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleActionIgnore(inc.id); }}
+                            style={{
+                              background: 'rgba(255,255,255,0.08)',
+                              color: '#94a3b8',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0.4rem 0.6rem',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                          >
+                            Ignorar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Obsidian Force-Directed Canvas */}
         <div 
           className="graph-canvas-container"
@@ -964,6 +1136,167 @@ export default function AuditGraphView() {
           onMouseDown={handleCanvasMouseDown}
           onWheel={handleWheel}
         >
+          {sidebarCollapsed && (
+            <button 
+              onClick={() => setSidebarCollapsed(false)}
+              style={{
+                position: 'absolute',
+                left: '12px',
+                top: '12px',
+                zIndex: 50,
+                background: 'linear-gradient(135deg, #FF6600, #ff8c3a)',
+                border: 'none',
+                color: 'white',
+                borderRadius: '8px',
+                padding: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 12px rgba(255,102,0,0.4)',
+                pointerEvents: 'auto',
+                transition: 'all 0.2s ease'
+              }}
+              title="Expandir Painel de Auditoria"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+
+          {/* Active Legends Overlay inside Canvas Container */}
+          <div style={{
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            zIndex: 40,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '6px 12px',
+            borderRadius: '20px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            pointerEvents: 'auto',
+            userSelect: 'none'
+          }}>
+            {/* Critical Legend Button */}
+            <button
+              onClick={() => handleLegendClick('critical')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#ef4444',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 0 8px rgba(239,68,68,0.1)'
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.3)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                e.currentTarget.style.boxShadow = '0 0 8px rgba(239,68,68,0.1)';
+              }}
+              title="Clique para ir ao próximo nó crítico"
+            >
+              <ShieldAlert size={12} />
+              <span>Críticos: {inconsistencies.filter(i => i.severity === 'critical').length}</span>
+            </button>
+
+            {/* Warning Legend Button */}
+            <button
+              onClick={() => handleLegendClick('warning')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                color: '#f59e0b',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 0 8px rgba(245,158,11,0.1)'
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                e.currentTarget.style.boxShadow = '0 0 12px rgba(245,158,11,0.3)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
+                e.currentTarget.style.boxShadow = '0 0 8px rgba(245,158,11,0.1)';
+              }}
+              title="Clique para ir ao próximo aviso"
+            >
+              <AlertTriangle size={12} />
+              <span>Avisos: {inconsistencies.filter(i => i.severity === 'warning').length}</span>
+            </button>
+
+            {/* UC Legend Button */}
+            <button
+              onClick={() => handleLegendClick('uc')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.25)',
+                color: '#22c55e',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 0 8px rgba(34,197,94,0.1)'
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                e.currentTarget.style.boxShadow = '0 0 12px rgba(34,197,94,0.3)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.1)';
+                e.currentTarget.style.boxShadow = '0 0 8px rgba(34,197,94,0.1)';
+              }}
+              title="Clique para ir à próxima Unidade Consumidora"
+            >
+              <CheckCircle2 size={12} />
+              <span>UCs: {ucs.length}</span>
+            </button>
+
+            {/* Invoiced Info Badge */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(148, 163, 184, 0.1)',
+                border: '1px solid rgba(148, 163, 184, 0.25)',
+                color: '#cbd5e1',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                boxShadow: '0 0 8px rgba(148,163,184,0.1)'
+              }}
+            >
+              <FileText size={12} />
+              <span>Faturas: {invoices.length}</span>
+            </div>
+          </div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', color: '#94a3b8' }}>
               <RefreshCw className="animate-spin" size={32} />
@@ -1004,6 +1337,30 @@ export default function AuditGraphView() {
                     <feMergeNode in="SourceGraphic" />
                   </feMerge>
                 </filter>
+
+                {/* Silver Metallic Gradient */}
+                <linearGradient id="silver-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="25%" stopColor="#f1f5f9" />
+                  <stop offset="50%" stopColor="#94a3b8" />
+                  <stop offset="75%" stopColor="#cbd5e1" />
+                  <stop offset="100%" stopColor="#334155" />
+                </linearGradient>
+
+                {/* Silver Neon Glow Filter */}
+                <filter id="glow-silver" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="7" result="blur" />
+                  <feColorMatrix type="matrix" values="
+                    0.9 0 0 0 0.9   
+                    0 0.9 0 0 0.9   
+                    0 0  0.9 0 0.9   
+                    0 0 0 0.9 0
+                  "/>
+                  <feMerge>
+                    <feMergeNode />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
 
               <g transform={`translate(${panX}, ${panY}) scale(${zoom})`} style={{ pointerEvents: 'auto' }}>
@@ -1011,14 +1368,18 @@ export default function AuditGraphView() {
                 {/* 1. Links / Connections */}
                 {links.map((link, idx) => {
                   const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
+                  const isLinkSelected = selectedNode && (selectedNode.id === link.source || selectedNode.id === link.target);
+                  const isDimmedLink = (hoveredNode && !isHighlighted) || (selectedNode && !isLinkSelected && !hoveredNode);
+                  
                   return (
                     <line
                       key={`link-${idx}`}
                       id={`link-${idx}`}
                       className="graph-link"
-                      stroke={isHighlighted ? '#a855f7' : link.color}
-                      strokeWidth={isHighlighted ? link.width + 1.5 : link.width}
-                      opacity={isHighlighted ? 0.9 : 0.28}
+                      stroke={isLinkSelected ? '#ffffff' : (isHighlighted ? '#a855f7' : link.color)}
+                      strokeWidth={isLinkSelected ? link.width + 3.5 : (isHighlighted ? link.width + 1.5 : link.width)}
+                      opacity={isLinkSelected ? 0.95 : (isDimmedLink ? 0.08 : 0.28)}
+                      filter={isLinkSelected ? 'url(#glow-silver)' : undefined}
                     />
                   );
                 })}
@@ -1027,15 +1388,22 @@ export default function AuditGraphView() {
                 {nodes.map(node => {
                   if (!node.pulse) return null;
                   const isSelected = selectedNode && selectedNode.id === node.id;
+                  const isConnectedToSelected = selectedNode && links.some(l => 
+                    (l.source === selectedNode.id && l.target === node.id) ||
+                    (l.target === selectedNode.id && l.source === node.id)
+                  );
+                  const hasSilverEffect = isSelected || isConnectedToSelected;
+                  
                   return (
                     <circle
                       key={`ring-${node.id}`}
                       id={`ring-${node.id}`}
                       className="graph-node-pulse"
                       fill="none"
-                      stroke={node.color}
-                      strokeWidth={2}
-                      opacity={isSelected ? 0.6 : 0.25}
+                      stroke={hasSilverEffect ? '#ffffff' : node.color}
+                      strokeWidth={hasSilverEffect ? 3 : 2}
+                      filter={hasSilverEffect ? 'url(#glow-silver)' : undefined}
+                      opacity={isSelected ? 0.95 : isConnectedToSelected ? 0.6 : 0.25}
                       style={{ pointerEvents: 'none' }}
                     />
                   );
@@ -1045,8 +1413,15 @@ export default function AuditGraphView() {
                 {nodes.map(node => {
                   const isSelected = selectedNode && selectedNode.id === node.id;
                   const isHovered = hoveredNode && hoveredNode.id === node.id;
-                  const isDimmed = hoveredNode && !isHovered && 
-                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id));
+                  const isConnectedToSelected = selectedNode && links.some(l => 
+                    (l.source === selectedNode.id && l.target === node.id) ||
+                    (l.target === selectedNode.id && l.source === node.id)
+                  );
+                  const hasSilverEffect = isSelected || isConnectedToSelected;
+                  
+                  const isDimmed = (hoveredNode && !isHovered && 
+                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
+                    (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
 
                   return (
                     <circle
@@ -1054,11 +1429,11 @@ export default function AuditGraphView() {
                       id={`circle-${node.id}`}
                       className="graph-node"
                       r={isSelected ? node.size + 4 : node.size}
-                      fill={node.color}
-                      stroke={isSelected ? '#ffffff' : (isHovered ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)')}
-                      strokeWidth={isSelected ? 3 : 1.5}
-                      filter={node.type === 'inconsistency' ? (node.severity === 'critical' ? 'url(#glow-error)' : 'url(#glow-warn)') : 'none'}
-                      opacity={isDimmed ? 0.15 : 1}
+                      fill={hasSilverEffect ? 'url(#silver-gradient)' : node.color}
+                      stroke={isSelected ? '#ffffff' : (hasSilverEffect ? '#cbd5e1' : (isHovered ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.3)'))}
+                      strokeWidth={isSelected ? 3.5 : (isConnectedToSelected ? 2 : 1.5)}
+                      filter={hasSilverEffect ? 'url(#glow-silver)' : (node.type === 'inconsistency' ? (node.severity === 'critical' ? 'url(#glow-error)' : 'url(#glow-warn)') : 'none')}
+                      opacity={isDimmed ? 0.18 : 1}
                       style={{ transition: 'r 0.15s, opacity 0.2s', cursor: 'grab' }}
                       onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                       onClick={(e) => { e.stopPropagation(); handleNodeClick(node); }}
@@ -1072,15 +1447,21 @@ export default function AuditGraphView() {
                 {nodes.map(node => {
                   const isSelected = selectedNode && selectedNode.id === node.id;
                   const isHovered = hoveredNode && hoveredNode.id === node.id;
-                  const isDimmed = hoveredNode && !isHovered && 
-                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id));
+                  const isConnectedToSelected = selectedNode && links.some(l => 
+                    (l.source === selectedNode.id && l.target === node.id) ||
+                    (l.target === selectedNode.id && l.source === node.id)
+                  );
+                  
+                  const isDimmed = (hoveredNode && !isHovered && 
+                    !links.some(l => (l.source === node.id && l.target === hoveredNode.id) || (l.target === node.id && l.source === hoveredNode.id))) ||
+                    (selectedNode && !isSelected && !isConnectedToSelected && !hoveredNode);
 
                   return (
                     <text
                       key={`label-${node.id}`}
                       id={`label-${node.id}`}
                       textAnchor="middle"
-                      fill={isSelected ? '#ffffff' : '#94a3b8'}
+                      fill={isSelected ? '#ffffff' : (isConnectedToSelected ? '#e2e8f0' : '#94a3b8')}
                       fontSize={isSelected ? '10px' : '9px'}
                       fontWeight={isSelected ? 'bold' : 'normal'}
                       opacity={isDimmed ? 0.08 : 0.85}
@@ -1277,146 +1658,7 @@ export default function AuditGraphView() {
               </button>
             </div>
           </div>
-
         </div>
-
-        {/* Auditor Sidebar Panel */}
-        <div className="auditor-sidebar">
-          
-          <div className="auditor-sidebar-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ background: '#ef4444', width: '8px', height: '8px', borderRadius: '50%', boxShadow: '0 0 8px #ef4444' }}></div>
-              <span style={{ fontSize: '0.85rem', fontWeight: '800', letterSpacing: '0.05em', color: '#ffffff' }}>PAINEL DE AUDITORIA</span>
-            </div>
-            <span style={{ background: 'rgba(255,255,255,0.08)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>
-              {inconsistencies.length} CONFLITOS
-            </span>
-          </div>
-
-          <div className="auditor-sidebar-content">
-            
-            {/* Agent Bubble (Avatar welcome and instruction) */}
-            <div className="audit-agent-bubble">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #FF6600, #ff8c3a)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 10px rgba(255, 102, 0, 0.4)' }}>
-                  <Zap size={14} color="white" />
-                </div>
-                <div>
-                  <span style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '0.8rem', display: 'block' }}>Auditor Agêntico B2W</span>
-                  <span style={{ fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase' }}>Analista de Consistência</span>
-                </div>
-              </div>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8', whiteSpace: 'pre-line' }}>
-                {agentMessage}
-              </div>
-            </div>
-
-            {/* Inconsistency List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <h5 style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.2rem 0' }}>
-                Lista de Inconsistências
-              </h5>
-
-              {inconsistencies.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.08)' }}>
-                  <ShieldCheck size={28} color="#22c55e" style={{ margin: '0 auto 0.5rem auto' }} />
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>Nenhuma inconsistência ativa. O sistema está perfeitamente faturado!</p>
-                </div>
-              ) : (
-                inconsistencies.map(inc => {
-                  const isActive = activeAlertId === inc.id;
-                  return (
-                    <div 
-                      key={inc.id}
-                      className={`audit-error-card ${isActive ? 'active' : ''}`}
-                      onClick={() => handleInconsistencyClick(inc)}
-                      style={{
-                        background: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(245, 158, 11, 0.04)',
-                        borderColor: inc.severity === 'critical' ? 'rgba(239, 68, 68, 0.18)' : 'rgba(245, 158, 11, 0.15)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
-                          {inc.severity === 'critical' ? (
-                            <ShieldAlert size={14} color="#ef4444" style={{ flexShrink: 0 }} />
-                          ) : (
-                            <AlertTriangle size={14} color="#f59e0b" style={{ flexShrink: 0 }} />
-                          )}
-                          <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {inc.title}
-                          </span>
-                        </div>
-                        <span style={{ 
-                          fontSize: '0.55rem', 
-                          fontWeight: 'bold', 
-                          color: inc.severity === 'critical' ? '#ef4444' : '#f59e0b',
-                          background: inc.severity === 'critical' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.12)',
-                          padding: '0.1rem 0.35rem', 
-                          borderRadius: '4px',
-                          textTransform: 'uppercase'
-                        }}>
-                          {inc.severity}
-                        </span>
-                      </div>
-
-                      <p style={{ fontSize: '0.7rem', color: '#cbd5e1', margin: '0 0 0.6rem 0', lineLineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {inc.description}
-                      </p>
-
-                      {/* Expanded alert cards show agential tools to execute fixes */}
-                      {isActive && (
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleActionFix(inc.id); }}
-                            style={{
-                              flex: 1,
-                              background: '#FF6600',
-                              color: '#ffffff',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '0.4rem',
-                              fontSize: '0.65rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '0.25rem',
-                              boxShadow: '0 2px 5px rgba(255, 102, 0, 0.25)'
-                            }}
-                          >
-                            <Zap size={10} /> Corrigir Erro
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleActionIgnore(inc.id); }}
-                            style={{
-                              background: 'rgba(255,255,255,0.08)',
-                              color: '#94a3b8',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '0.4rem 0.6rem',
-                              fontSize: '0.65rem',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-                            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                          >
-                            Ignorar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-          </div>
-
-        </div>
-
       </div>
     </div>
   );
