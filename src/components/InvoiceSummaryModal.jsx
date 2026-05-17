@@ -265,6 +265,25 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                         </div>
 
+                        {/* Status e Identificação (Assinante / Fatura do Assinante) */}
+                        <div style={{ 
+                            background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', 
+                            marginBottom: '1.5rem', border: '1px solid #e2e8f0',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Status da Fatura do Assinante</div>
+                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
+                            </div>
+                            <span style={{ 
+                                padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800,
+                                background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`
+                            }}>
+                                {currentStatus.label}
+                            </span>
+                        </div>
+
                         {/* Energy Bill Status Toggle - Manual Override */}
                         <div style={{ 
                             background: '#f1f5f9', 
@@ -274,7 +293,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             border: '1px solid #e2e8f0'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta (Operacional)</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta de energia</span>
                                 {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
@@ -308,25 +327,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      </button>
                                  ))}
                              </div>
-                        </div>
-    
-                        {/* Status e Identificação */}
-                        <div style={{ 
-                            background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', 
-                            marginBottom: '1.5rem', border: '1px solid #e2e8f0',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <div>
-                                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Assinante</div>
-                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
-                            </div>
-                            <span style={{ 
-                                padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800,
-                                background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`
-                            }}>
-                                {currentStatus.label}
-                            </span>
                         </div>
     
                         {/* Grid de Valores */}
