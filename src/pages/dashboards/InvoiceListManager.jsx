@@ -7,7 +7,7 @@ import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, Credit
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
-import AuditGraphView from './AuditGraphView';
+import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
 
 
 export default function InvoiceListManager() {
@@ -1305,7 +1305,7 @@ export default function InvoiceListManager() {
             </div>
 
             {viewMode === 'graph_node' ? (
-                <AuditGraphView onInspectInvoice={(invoiceId) => {
+                <AuditGraphViewInvoiceSummary onInspectInvoice={(invoiceId) => {
                     const inv = invoices.find(i => i.id === invoiceId);
                     if (inv) {
                         setSelectedInvoiceForSummary(inv);

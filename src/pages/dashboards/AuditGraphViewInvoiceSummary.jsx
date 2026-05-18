@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
-export default function AuditGraphView({ onInspectInvoice }) {
+export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   const { showAlert, showConfirm } = useUI();
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
@@ -74,6 +74,49 @@ export default function AuditGraphView({ onInspectInvoice }) {
   const dragStartRef = useRef({ x: 0, y: 0 });
   const draggingNodeIdRef = useRef(null);
   const nodesStateRef = useRef([]);
+
+  // Refs for physics loop tracking without stale closures
+  const activeLegendFilterRef = useRef(activeLegendFilter);
+  useEffect(() => {
+    activeLegendFilterRef.current = activeLegendFilter;
+  }, [activeLegendFilter]);
+
+  const selectedNodeRef = useRef(selectedNode);
+  useEffect(() => {
+    selectedNodeRef.current = selectedNode;
+  }, [selectedNode]);
+
+  const nodesWithInconsistenciesRef = useRef(new Set());
+  useEffect(() => {
+    const set = new Set();
+    inconsistencies.forEach(inc => {
+      set.add(inc.id);
+      if (inc.invoice_id) {
+        set.add(`conta_energia_${inc.invoice_id}`);
+        const inv = invoices.find(i => i.id === inc.invoice_id);
+        if (inv) {
+          if (inv.consolidated_invoice_id) {
+            set.add(`fatura_${inv.consolidated_invoice_id}`);
+          }
+          if (inv.uc_id) {
+            set.add(`uc_${inv.uc_id}`);
+            const uc = ucs.find(u => u.id === inv.uc_id);
+            if (uc && uc.subscriber_id) {
+              set.add(`subscriber_${uc.subscriber_id}`);
+            }
+          }
+        }
+      }
+      if (inc.uc_id) {
+        set.add(`uc_${inc.uc_id}`);
+        const uc = ucs.find(u => u.id === inc.uc_id);
+        if (uc && uc.subscriber_id) {
+          set.add(`subscriber_${uc.subscriber_id}`);
+        }
+      }
+    });
+    nodesWithInconsistenciesRef.current = set;
+  }, [inconsistencies, invoices, ucs]);
 
   // Dimensions of graph canvas
   const width = 850;
@@ -425,10 +468,19 @@ export default function AuditGraphView({ onInspectInvoice }) {
       nodesWithInconsistencies.add(inc.id);
       if (inc.invoice_id) {
         nodesWithInconsistencies.add(`conta_energia_${inc.invoice_id}`);
-        // also flag consolidated invoice
+        // also flag consolidated invoice, UC, and subscriber
         const inv = allInvoices.find(i => i.id === inc.invoice_id);
-        if (inv && inv.consolidated_invoice_id) {
-          nodesWithInconsistencies.add(`fatura_${inv.consolidated_invoice_id}`);
+        if (inv) {
+          if (inv.consolidated_invoice_id) {
+            nodesWithInconsistencies.add(`fatura_${inv.consolidated_invoice_id}`);
+          }
+          if (inv.uc_id) {
+            nodesWithInconsistencies.add(`uc_${inv.uc_id}`);
+            const uc = allUcs.find(u => u.id === inv.uc_id);
+            if (uc && uc.subscriber_id) {
+              nodesWithInconsistencies.add(`subscriber_${uc.subscriber_id}`);
+            }
+          }
         }
       }
       if (inc.uc_id) {
@@ -823,6 +875,17 @@ export default function AuditGraphView({ onInspectInvoice }) {
       const currentNodes = nodesStateRef.current;
       if (!currentNodes || currentNodes.length === 0) return;
 
+      const matchesFilter = (n, filter) => {
+        if (!filter) return false;
+        if (filter === 'critical') return n.type === 'inconsistency' && n.severity === 'critical';
+        if (filter === 'warning') return n.type === 'inconsistency' && n.severity === 'warning';
+        if (filter === 'uc') return n.type === 'uc';
+        if (filter === 'fatura') return n.type === 'fatura';
+        if (filter === 'conta_energia') return n.type === 'conta_energia';
+        if (filter === 'healthy') return (n.type === 'fatura' || n.type === 'conta_energia') && !nodesWithInconsistenciesRef.current.has(n.id);
+        return n.type === filter;
+      };
+
       // 1. Repulsion between nodes (Coulomb's Law)
       for (let i = 0; i < currentNodes.length; i++) {
         const nodeA = currentNodes[i];
@@ -833,8 +896,35 @@ export default function AuditGraphView({ onInspectInvoice }) {
           const distSq = dx * dx + dy * dy + 1;
           const dist = Math.sqrt(distSq);
           
-          if (dist < 280) {
-            const force = repulsion / distSq;
+          let effectiveRepulsion = repulsion;
+          let repelThreshold = 280;
+
+          // Push active matching nodes significantly further apart to avoid overlapping labels (Melhoria 5)
+          const activeFilter = activeLegendFilterRef.current;
+          if (activeFilter && matchesFilter(nodeA, activeFilter) && matchesFilter(nodeB, activeFilter)) {
+            effectiveRepulsion = repulsion * 3.5;
+            repelThreshold = 400;
+          }
+
+          // If a node is selected, also push all connected nodes further apart from it and from each other
+          const activeSelected = selectedNodeRef.current;
+          if (activeSelected) {
+            const isAConnected = nodeA.id === activeSelected.id || links.some(l => 
+              (l.source === activeSelected.id && l.target === nodeA.id) ||
+              (l.target === activeSelected.id && l.source === nodeA.id)
+            );
+            const isBConnected = nodeB.id === activeSelected.id || links.some(l => 
+              (l.source === activeSelected.id && l.target === nodeB.id) ||
+              (l.target === activeSelected.id && l.source === nodeB.id)
+            );
+            if (isAConnected && isBConnected) {
+              effectiveRepulsion = repulsion * 2.8;
+              repelThreshold = 350;
+            }
+          }
+
+          if (dist < repelThreshold) {
+            const force = effectiveRepulsion / distSq;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
             
@@ -935,7 +1025,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
     
     animationFrameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [nodes, links, physicsEnabled, repulsion, linkDistance, gravity, healthyVisible]);
+  }, [nodes, links, physicsEnabled, repulsion, linkDistance, gravity]);
 
   const linkStrength = () => {
     // Dynamic strength mapping
@@ -1346,16 +1436,25 @@ export default function AuditGraphView({ onInspectInvoice }) {
     }
   };
 
-  // Zoom wheel logic
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const zoomIntensity = 0.08;
-    const scroll = e.deltaY < 0 ? 1 : -1;
-    setZoom(prev => {
-      const nextZoom = prev + scroll * zoomIntensity;
-      return Math.max(0.3, Math.min(2.5, nextZoom));
-    });
-  };
+  // Smooth Mouse Scroll Zoom Handler (Melhoria 6)
+  useEffect(() => {
+    const container = svgRef.current;
+    if (!container) return;
+
+    const handleWheelEvent = (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      setZoom(prev => {
+        const nextZoom = prev * zoomFactor;
+        return Math.max(0.35, Math.min(nextZoom, 2.5));
+      });
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheelEvent);
+    };
+  }, []);
 
   const renderContextMenu = () => {
     if (!contextMenu) return null;
@@ -1775,7 +1874,27 @@ export default function AuditGraphView({ onInspectInvoice }) {
     );
   };
 
-  const nodesWithInconsistencies = new Set(inconsistencies.flatMap(inc => [inc.invoice_id, inc.uc_id]).filter(Boolean));
+  const nodesWithInconsistencies = useMemo(() => {
+    const set = new Set();
+    inconsistencies.forEach(inc => {
+      set.add(inc.id);
+      if (inc.invoice_id) {
+        set.add(`conta_energia_${inc.invoice_id}`);
+        const inv = invoices.find(i => i.id === inc.invoice_id);
+        if (inv && inv.consolidated_invoice_id) {
+          set.add(`fatura_${inv.consolidated_invoice_id}`);
+        }
+      }
+      if (inc.uc_id) {
+        set.add(`uc_${inc.uc_id}`);
+        const uc = ucs.find(u => u.id === inc.uc_id);
+        if (uc && uc.subscriber_id) {
+          set.add(`subscriber_${uc.subscriber_id}`);
+        }
+      }
+    });
+    return set;
+  }, [inconsistencies, invoices, ucs]);
 
   const uniqueMonths = [...new Set(invoices
     .map(i => i.mes_referencia ? i.mes_referencia.substring(0, 7) : null)
@@ -2059,7 +2178,6 @@ export default function AuditGraphView({ onInspectInvoice }) {
           onMouseLeave={handleMouseUp}
           onMouseDown={handleCanvasMouseDown}
           onClick={handleCanvasClick}
-          onWheel={handleWheel}
           onContextMenu={(e) => {
             e.preventDefault();
             setContextMenu(null);
@@ -2218,6 +2336,78 @@ export default function AuditGraphView({ onInspectInvoice }) {
               <span>UCs: {ucs.length}</span>
             </button>
 
+            {/* Fatura Legend Button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('fatura'); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: activeLegendFilter === 'fatura' ? 'rgba(236, 72, 153, 0.45)' : 'rgba(236, 72, 153, 0.1)',
+                border: activeLegendFilter === 'fatura' ? '2px solid #ec4899' : '1px solid rgba(236, 72, 153, 0.25)',
+                color: '#ec4899',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeLegendFilter === 'fatura' ? '0 0 16px rgba(236, 72, 153, 0.6)' : '0 0 8px rgba(236,72,153,0.1)'
+              }}
+              onMouseOver={e => {
+                if (activeLegendFilter !== 'fatura') {
+                  e.currentTarget.style.background = 'rgba(236, 72, 153, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(236,72,153,0.3)';
+                }
+              }}
+              onMouseOut={e => {
+                if (activeLegendFilter !== 'fatura') {
+                  e.currentTarget.style.background = 'rgba(236, 72, 153, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(236,72,153,0.1)';
+                }
+              }}
+              title="Clique para destacar Faturas Consolidadas"
+            >
+              <FileText size={12} />
+              <span>Faturas: {consolidatedInvoices.length}</span>
+            </button>
+
+            {/* Conta de Energia Legend Button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleLegendClick('conta_energia'); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: activeLegendFilter === 'conta_energia' ? 'rgba(6, 182, 212, 0.45)' : 'rgba(6, 182, 212, 0.1)',
+                border: activeLegendFilter === 'conta_energia' ? '2px solid #06b6d4' : '1px solid rgba(6, 182, 212, 0.25)',
+                color: '#06b6d4',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeLegendFilter === 'conta_energia' ? '0 0 16px rgba(6, 182, 212, 0.6)' : '0 0 8px rgba(6,182,212,0.1)'
+              }}
+              onMouseOver={e => {
+                if (activeLegendFilter !== 'conta_energia') {
+                  e.currentTarget.style.background = 'rgba(6, 182, 212, 0.2)';
+                  e.currentTarget.style.boxShadow = '0 0 12px rgba(6,182,212,0.3)';
+                }
+              }}
+              onMouseOut={e => {
+                if (activeLegendFilter !== 'conta_energia') {
+                  e.currentTarget.style.background = 'rgba(6, 182, 212, 0.1)';
+                  e.currentTarget.style.boxShadow = '0 0 8px rgba(6,182,212,0.1)';
+                }
+              }}
+              title="Clique para destacar Contas de Energia"
+            >
+              <Zap size={12} />
+              <span>Contas de Energia: {invoices.length}</span>
+            </button>
+
             {/* Invoiced Info Button */}
             <button
               onClick={(e) => { e.stopPropagation(); handleLegendClick('healthy'); }}
@@ -2250,8 +2440,8 @@ export default function AuditGraphView({ onInspectInvoice }) {
               }}
               title="Clique para destacar e focar faturas saudáveis"
             >
-              <FileText size={12} />
-              <span>Faturas: {invoices.length}</span>
+              <ShieldCheck size={12} />
+              <span>Saudáveis: {invoices.filter(inv => !nodesWithInconsistenciesRef.current.has(`conta_energia_${inv.id}`)).length}</span>
             </button>
           </div>
           {loading ? (
@@ -2416,9 +2606,11 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'fatura' && node.type === 'fatura') ||
+                    (activeLegendFilter === 'conta_energia' && node.type === 'conta_energia') ||
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
@@ -2506,9 +2698,11 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'fatura' && node.type === 'fatura') ||
+                    (activeLegendFilter === 'conta_energia' && node.type === 'conta_energia') ||
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
@@ -2520,83 +2714,51 @@ export default function AuditGraphView({ onInspectInvoice }) {
                       : (hoveredNode && !isHovered && !isNodeConnectedToHovered)
                   );
 
-                  let nodeFill = 'url(#silver-gradient)';
-                  let nodeStroke = node.stroke || 'rgba(255, 255, 255, 0.2)';
-                  let nodeFilter = 'url(#glow-silver)';
+                  const getNodeColor = (n) => {
+                    if (n.type === 'inconsistency') {
+                      return n.severity === 'critical' ? '#ef4444' : '#f59e0b';
+                    }
+                    if (n.type === 'uc') return '#22c55e';
+                    if (n.type === 'fatura') return '#ec4899';
+                    if (n.type === 'conta_energia') return '#06b6d4';
+                    if (n.type === 'lead') return '#a855f7';
+                    if (n.type === 'originator') return '#f97316';
+                    if (n.type === 'subscriber') return '#3b82f6';
+                    if (n.type === 'supplier') return '#8b5cf6';
+                    if (n.type === 'usina') return '#14b8a6';
+                    if (n.type === 'concessionaria') return '#eab308';
+                    return '#a1a1aa';
+                  };
 
-                  if (activeLegendFilter) {
-                    if (matchesLegendFilter) {
-                      if (activeLegendFilter === 'critical') {
-                        nodeFill = '#ef4444';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-error)';
-                      } else if (activeLegendFilter === 'warning') {
-                        nodeFill = '#f59e0b';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-warn)';
-                      } else if (activeLegendFilter === 'uc') {
-                        nodeFill = '#22c55e';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-success)';
-                      } else if (activeLegendFilter === 'healthy') {
-                        nodeFill = '#3b82f6';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-primary)';
-                      }
-                    } else {
-                      nodeFill = '#111622';
-                      nodeStroke = 'rgba(255, 255, 255, 0.03)';
-                      nodeFilter = 'none';
+                  const getNodeGlow = (n) => {
+                    if (n.type === 'inconsistency') {
+                      return n.severity === 'critical' ? 'url(#glow-error)' : 'url(#glow-warn)';
                     }
-                  } else if (selectedNode) {
+                    if (n.type === 'uc') return 'url(#glow-success)';
+                    if (n.type === 'subscriber') return 'url(#glow-primary)';
+                    if (n.type === 'fatura') return 'url(#glow-primary)';
+                    if (n.type === 'conta_energia') return 'url(#glow-primary)';
+                    return 'url(#glow-silver)';
+                  };
+
+                  let nodeFill = getNodeColor(node);
+                  let nodeStroke = getNodeColor(node);
+                  let nodeFilter = 'none';
+
+                  if (isDimmed) {
+                    nodeFill = '#111622';
+                    nodeStroke = 'rgba(255, 255, 255, 0.03)';
+                    nodeFilter = 'none';
+                  } else {
                     if (isSelected) {
-                      if (node.type === 'inconsistency') {
-                        if (node.severity === 'critical') {
-                          nodeFill = '#ef4444';
-                          nodeFilter = 'url(#glow-error)';
-                        } else {
-                          nodeFill = '#f59e0b';
-                          nodeFilter = 'url(#glow-warn)';
-                        }
-                      } else if (node.type === 'uc') {
-                        nodeFill = '#22c55e';
-                        nodeFilter = 'url(#glow-success)';
-                      } else if (node.type === 'fatura') {
-                        nodeFill = '#ec4899';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'conta_energia') {
-                        nodeFill = '#06b6d4';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'lead') {
-                        nodeFill = '#a855f7';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'originator') {
-                        nodeFill = '#f97316';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'subscriber') {
-                        nodeFill = '#3b82f6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'supplier') {
-                        nodeFill = '#8b5cf6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'usina') {
-                        nodeFill = '#14b8a6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'concessionaria') {
-                        nodeFill = '#eab308';
-                        nodeFilter = 'url(#glow-warn)';
-                      }
                       nodeStroke = '#ffffff';
-                    } else if (isConnectedToSelected) {
+                      nodeFilter = getNodeGlow(node);
+                    } else if (isHovered || isConnectedToSelected || isNodeConnectedToHovered) {
                       nodeStroke = '#ffffff';
-                      nodeFilter = 'url(#glow-silver)';
-                    } else {
-                      nodeFill = '#111622';
-                      nodeStroke = 'rgba(255, 255, 255, 0.03)';
-                      nodeFilter = 'none';
+                      nodeFilter = getNodeGlow(node);
+                    } else if (activeLegendFilter && matchesLegendFilter) {
+                      nodeFilter = getNodeGlow(node);
                     }
-                  } else if (isHovered) {
-                    nodeStroke = '#ffffff';
                   }
 
                   return (
@@ -2639,9 +2801,11 @@ export default function AuditGraphView({ onInspectInvoice }) {
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
                     (activeLegendFilter === 'warning' && node.type === 'inconsistency' && node.severity === 'warning') ||
                     (activeLegendFilter === 'uc' && node.type === 'uc') ||
+                    (activeLegendFilter === 'fatura' && node.type === 'fatura') ||
+                    (activeLegendFilter === 'conta_energia' && node.type === 'conta_energia') ||
                     (activeLegendFilter === 'healthy' && (node.type === 'fatura' || node.type === 'conta_energia') && !nodesWithInconsistencies.has(node.id))
                   );
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
