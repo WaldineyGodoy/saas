@@ -408,8 +408,33 @@ export default function GraphNodeView() {
           const distSq = dx * dx + dy * dy + 1;
           const dist = Math.sqrt(distSq);
 
-          if (dist < 260) {
-            const force = repulsion / distSq;
+          let effectiveRepulsion = repulsion;
+          let repelThreshold = 260;
+
+          // Push active matching nodes significantly further apart to avoid overlapping labels (Melhoria 5)
+          if (activeLegendFilter && nodeA.type === activeLegendFilter && nodeB.type === activeLegendFilter) {
+            effectiveRepulsion = repulsion * 3.5;
+            repelThreshold = 400;
+          }
+
+          // If a node is selected, also push all connected nodes further apart from it and from each other
+          if (selectedNode) {
+            const isAConnected = nodeA.id === selectedNode.id || links.some(l => 
+              (l.source === selectedNode.id && l.target === nodeA.id) ||
+              (l.target === selectedNode.id && l.source === nodeA.id)
+            );
+            const isBConnected = nodeB.id === selectedNode.id || links.some(l => 
+              (l.source === selectedNode.id && l.target === nodeB.id) ||
+              (l.target === selectedNode.id && l.source === nodeB.id)
+            );
+            if (isAConnected && isBConnected) {
+              effectiveRepulsion = repulsion * 2.8;
+              repelThreshold = 350;
+            }
+          }
+
+          if (dist < repelThreshold) {
+            const force = effectiveRepulsion / distSq;
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
 
@@ -508,7 +533,27 @@ export default function GraphNodeView() {
 
     animationFrameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [nodes, links, physicsEnabled, repulsion, linkDistance, gravity]);
+  }, [nodes, links, physicsEnabled, repulsion, linkDistance, gravity, activeLegendFilter, selectedNode]);
+
+  // Smooth Mouse Scroll Zoom Handler (Melhoria 6)
+  useEffect(() => {
+    const container = graphContainerRef.current;
+    if (!container) return;
+
+    const handleWheelEvent = (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      setZoom(prev => {
+        const nextZoom = prev * zoomFactor;
+        return Math.max(0.35, Math.min(nextZoom, 2.5));
+      });
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheelEvent);
+    };
+  }, []);
 
   // Center view on a selected search node
   const handleSelectSearchNode = (node) => {
@@ -1252,6 +1297,52 @@ export default function GraphNodeView() {
               <Building size={11} />
               <span>UCs</span>
             </button>
+
+            {/* Faturas Legend Button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setActiveLegendFilter(prev => prev === 'fatura' ? null : 'fatura'); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: activeLegendFilter === 'fatura' ? 'rgba(236, 72, 153, 0.45)' : 'rgba(236, 72, 153, 0.1)',
+                border: activeLegendFilter === 'fatura' ? '2px solid #ec4899' : '1px solid rgba(236, 72, 153, 0.25)',
+                color: '#f472b6',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeLegendFilter === 'fatura' ? '0 0 16px rgba(236, 72, 153, 0.6)' : 'none'
+              }}
+            >
+              <FileText size={11} />
+              <span>Faturas</span>
+            </button>
+
+            {/* Contas de Energia Legend Button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setActiveLegendFilter(prev => prev === 'conta_energia' ? null : 'conta_energia'); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: activeLegendFilter === 'conta_energia' ? 'rgba(6, 182, 212, 0.45)' : 'rgba(6, 182, 212, 0.1)',
+                border: activeLegendFilter === 'conta_energia' ? '2px solid #06b6d4' : '1px solid rgba(6, 182, 212, 0.25)',
+                color: '#22d3ee',
+                padding: '4px 10px',
+                borderRadius: '15px',
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: activeLegendFilter === 'conta_energia' ? '0 0 16px rgba(6, 182, 212, 0.6)' : 'none'
+              }}
+            >
+              <Layers size={11} />
+              <span>Contas de Energia</span>
+            </button>
           </div>
 
           {/* Canvas Floating controls */}
@@ -1612,7 +1703,8 @@ export default function GraphNodeView() {
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || node.type === activeLegendFilter;
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  // Selected or connected nodes are NEVER dimmed by legend filters (Melhoria 3)
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
@@ -1626,7 +1718,7 @@ export default function GraphNodeView() {
                   
                   if (isDimmed) return null;
 
-                  const showRing = isSelected || isHovered || (activeLegendFilter && matchesLegendFilter);
+                  const showRing = isSelected || isHovered || isConnectedToSelected || (activeLegendFilter && matchesLegendFilter);
                   if (!showRing) return null;
 
                   let ringStroke = '#ffffff';
@@ -1689,7 +1781,8 @@ export default function GraphNodeView() {
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || node.type === activeLegendFilter;
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  // Selected or connected nodes are NEVER dimmed by legend filters (Melhoria 3)
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
@@ -1705,25 +1798,43 @@ export default function GraphNodeView() {
                   let nodeStroke = 'rgba(255, 255, 255, 0.2)';
                   let nodeFilter = 'url(#glow-silver)';
 
+                  // Compute entity status colors dynamically
+                  let entityColor = '#ffffff';
+                  let entityFilter = 'url(#glow-silver)';
+                  if (node.type === 'lead') {
+                    entityColor = '#a855f7';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'originator') {
+                    entityColor = '#f97316';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'subscriber') {
+                    entityColor = '#3b82f6';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'uc') {
+                    entityColor = '#22c55e';
+                    entityFilter = 'url(#glow-success)';
+                  } else if (node.type === 'fatura') {
+                    entityColor = '#ec4899';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'conta_energia') {
+                    entityColor = '#06b6d4';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'supplier') {
+                    entityColor = '#8b5cf6';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'usina') {
+                    entityColor = '#14b8a6';
+                    entityFilter = 'url(#glow-primary)';
+                  } else if (node.type === 'concessionaria') {
+                    entityColor = '#eab308';
+                    entityFilter = 'url(#glow-warn)';
+                  }
+
                   if (activeLegendFilter) {
                     if (matchesLegendFilter) {
-                      if (activeLegendFilter === 'lead') {
-                        nodeFill = '#a855f7';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (activeLegendFilter === 'originator') {
-                        nodeFill = '#f97316';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (activeLegendFilter === 'subscriber') {
-                        nodeFill = '#3b82f6';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (activeLegendFilter === 'uc') {
-                        nodeFill = '#22c55e';
-                        nodeStroke = '#ffffff';
-                        nodeFilter = 'url(#glow-success)';
-                      }
+                      nodeFill = entityColor;
+                      nodeStroke = entityColor; // Status color border! (Melhoria 4)
+                      nodeFilter = entityFilter;
                     } else {
                       nodeFill = '#111622';
                       nodeStroke = 'rgba(255, 255, 255, 0.03)';
@@ -1731,38 +1842,13 @@ export default function GraphNodeView() {
                     }
                   } else if (selectedNode) {
                     if (isSelected) {
-                      if (node.type === 'lead') {
-                        nodeFill = '#a855f7';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'originator') {
-                        nodeFill = '#f97316';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'subscriber') {
-                        nodeFill = '#3b82f6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'uc') {
-                        nodeFill = '#22c55e';
-                        nodeFilter = 'url(#glow-success)';
-                      } else if (node.type === 'fatura') {
-                        nodeFill = '#ec4899';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'conta_energia') {
-                        nodeFill = '#06b6d4';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'supplier') {
-                        nodeFill = '#8b5cf6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'usina') {
-                        nodeFill = '#14b8a6';
-                        nodeFilter = 'url(#glow-primary)';
-                      } else if (node.type === 'concessionaria') {
-                        nodeFill = '#eab308';
-                        nodeFilter = 'url(#glow-warn)';
-                      }
-                      nodeStroke = '#ffffff';
+                      nodeFill = entityColor;
+                      nodeStroke = entityColor; // Status color border! (Melhoria 4)
+                      nodeFilter = entityFilter;
                     } else if (isConnectedToSelected) {
-                      nodeStroke = '#ffffff';
-                      nodeFilter = 'url(#glow-silver)';
+                      nodeFill = entityColor; // Colored dynamically in entity color! (Melhoria 2)
+                      nodeStroke = entityColor; // Status color border! (Melhoria 4)
+                      nodeFilter = entityFilter;
                     } else {
                       nodeFill = '#111622';
                       nodeStroke = 'rgba(255, 255, 255, 0.03)';
@@ -1804,7 +1890,8 @@ export default function GraphNodeView() {
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || node.type === activeLegendFilter;
-                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter;
+                  // Selected or connected nodes are NEVER dimmed by legend filters (Melhoria 3)
+                  const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
                     (l.source === hoveredNode.id && l.target === node.id) ||
                     (l.target === hoveredNode.id && l.source === node.id)
