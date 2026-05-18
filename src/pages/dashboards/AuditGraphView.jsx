@@ -1196,7 +1196,7 @@ export default function AuditGraphView({ onInspectInvoice }) {
 
       reply = `🧠 **Treinamento Concluído!** Sistema treinado com sucesso. Nova regra de IA ativa: **"${newRule.description}"**.
       
-      O scanner do Auditor Gráfico foi reconfigurado. Divergências menores que ${pct}% agora são consideradas normais/margem de erro e não acionarão alertas críticos no grafo.`;
+      O scanner do Graph Node View foi reconfigurado. Divergências menores que ${pct}% agora são consideradas normais/margem de erro e não acionarão alertas críticos no grafo.`;
 
       showAlert('Nova tolerância de desvio matemático treinada no sistema!', 'success');
 

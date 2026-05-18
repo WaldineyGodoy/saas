@@ -47,11 +47,13 @@ export default function InvoiceListManager() {
             if (viewMode === 'energy_list') setViewMode('list');
             else if (viewMode === 'energy_kanban') setViewMode('kanban');
             else if (viewMode === 'energy_calendar') setViewMode('calendar');
+            else if (viewMode === 'graph_node') setViewMode('graph_node');
             else setViewMode('kanban');
         } else if (tab === 'contas_energia') {
             if (viewMode === 'list') setViewMode('energy_list');
             else if (viewMode === 'kanban') setViewMode('energy_kanban');
             else if (viewMode === 'calendar') setViewMode('energy_calendar');
+            else if (viewMode === 'graph_node') setViewMode('graph_node');
             else setViewMode('energy_kanban');
         }
     };
@@ -987,20 +989,7 @@ export default function InvoiceListManager() {
                         </>
                     )}
 
-                    {activeInfoTab === 'auditor_grafico' && (
-                        <>
-                            <h2 style={{ color: '#10b981', fontSize: '1.5rem', fontWeight: '800', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Zap size={22} color="#10b981" /> Auditor Gráfico de Inconsistências (Obsidian Engine)
-                            </h2>
-                            <p style={{ color: '#cbd5e1', margin: 0, fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
-                                Ferramenta especialista dotada de um motor de simulação de grafos interativo em tempo real. 
-                                O auditor varre a base de dados de faturas comparando vencimentos, sobreposições de períodos de leitura, 
-                                duplicidade de meses de referência e desvios matemáticos extremos entre faturas de concessionárias e 
-                                valores cobrados de assinantes. O chatbot flutuante de aprendizado permite criar regras de tolerância a 
-                                desvios em tempo real.
-                            </p>
-                        </>
-                    )}
+
                 </div>
             )}
 
@@ -1126,62 +1115,10 @@ export default function InvoiceListManager() {
                         </button>
                     </div>
 
-                    {/* Aba Auditor Gráfico */}
-                    {showAuditorTab && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <button
-                                onClick={() => handleTabChange('auditor_grafico')}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    padding: '0.5rem 0.2rem',
-                                    fontSize: '1rem',
-                                    fontWeight: '800',
-                                    color: activeTab === 'auditor_grafico' ? 'var(--color-blue)' : '#64748b',
-                                    borderBottom: activeTab === 'auditor_grafico' ? '3px solid var(--color-blue)' : '3px solid transparent',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    marginBottom: '-4px',
-                                    outline: 'none',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em'
-                                }}
-                            >
-                                Auditor Gráfico
-                            </button>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveInfoTab(activeInfoTab === 'auditor_grafico' ? null : 'auditor_grafico');
-                                }}
-                                style={{
-                                    background: activeInfoTab === 'auditor_grafico' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
-                                    color: activeInfoTab === 'auditor_grafico' ? 'white' : 'var(--color-blue)',
-                                    border: '1px solid rgba(37, 99, 235, 0.25)',
-                                    borderRadius: '50%',
-                                    width: '18px',
-                                    height: '18px',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: '900',
-                                    fontSize: '0.7rem',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    outline: 'none',
-                                    boxShadow: activeInfoTab === 'auditor_grafico' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
-                                    transform: 'translateY(-2px)'
-                                }}
-                                title="Exibir informações da página do Auditor Gráfico"
-                            >
-                                !
-                            </button>
-                        </div>
-                    )}
+
                 </div>
 
-                {activeTab !== 'auditor_grafico' && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
                             <CalendarIcon size={16} />
@@ -1273,6 +1210,11 @@ export default function InvoiceListManager() {
                                     <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
                                         <CalendarIcon size={16} /> Venc. Faturas
                                     </button>
+                                    {showAuditorTab && (
+                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
+                                            <Zap size={16} /> Graph Node View
+                                        </button>
+                                    )}
                                 </>
                             ) : (
                                 <>
@@ -1285,6 +1227,11 @@ export default function InvoiceListManager() {
                                     <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
                                         <CalendarIcon size={16} /> Venc. Conta de Energia
                                     </button>
+                                    {showAuditorTab && (
+                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
+                                            <Zap size={16} /> Graph Node View
+                                        </button>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -1299,10 +1246,9 @@ export default function InvoiceListManager() {
                         </div>
                     </div>
                 </div>
-            )}
 
                 {/* Legenda de Status (Energia) integrada se necessário */}
-                {activeTab !== 'auditor_grafico' && viewMode === 'energy_calendar' && (() => {
+                {viewMode === 'energy_calendar' && (() => {
                     const energyStats = filteredInvoices.filter(inv => 
                         inv.consumer_units?.modalidade === 'auto_consumo_remoto'
                     ).reduce((acc, inv) => {
@@ -1358,7 +1304,7 @@ export default function InvoiceListManager() {
                 })()}
             </div>
 
-            {activeTab === 'auditor_grafico' ? (
+            {viewMode === 'graph_node' ? (
                 <AuditGraphView onInspectInvoice={(invoiceId) => {
                     const inv = invoices.find(i => i.id === invoiceId);
                     if (inv) {
