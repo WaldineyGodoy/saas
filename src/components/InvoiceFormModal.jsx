@@ -113,7 +113,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             setLocalInvoiceId(null);
             setLocalBoletoUrl(null);
         }
-    }, [invoice.id, ucs]);
+    }, [invoice?.id, ucs]);
 
     // Update Selected UC when changed
     useEffect(() => {
