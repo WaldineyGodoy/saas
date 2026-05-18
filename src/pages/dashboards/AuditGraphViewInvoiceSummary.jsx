@@ -431,9 +431,9 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     // Helper to determine node colors when healthy or overridden by inconsistencies
     const getNodeInconsistencyColor = (nodeId, entityType, entityRawId, defaultColor) => {
       const matches = allInconsistencies.filter(inc => 
-        (entityType === 'uc' && inc.uc_id === entityRawId) ||
-        ((entityType === 'conta_energia' || entityType === 'invoice') && inc.invoice_id === entityRawId) ||
-        (entityType === 'fatura' && allInvoices.some(i => i.consolidated_invoice_id === entityRawId && i.id === inc.invoice_id))
+        (entityType === 'uc' && String(inc.uc_id) === String(entityRawId)) ||
+        ((entityType === 'conta_energia' || entityType === 'invoice') && String(inc.invoice_id) === String(entityRawId)) ||
+        (entityType === 'fatura' && allInvoices.some(i => String(i.consolidated_invoice_id) === String(entityRawId) && String(i.id) === String(inc.invoice_id)))
       );
       
       if (matches.length > 0) {
@@ -469,14 +469,14 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       if (inc.invoice_id) {
         nodesWithInconsistencies.add(`conta_energia_${inc.invoice_id}`);
         // also flag consolidated invoice, UC, and subscriber
-        const inv = allInvoices.find(i => i.id === inc.invoice_id);
+        const inv = allInvoices.find(i => String(i.id) === String(inc.invoice_id));
         if (inv) {
           if (inv.consolidated_invoice_id) {
             nodesWithInconsistencies.add(`fatura_${inv.consolidated_invoice_id}`);
           }
           if (inv.uc_id) {
             nodesWithInconsistencies.add(`uc_${inv.uc_id}`);
-            const uc = allUcs.find(u => u.id === inv.uc_id);
+            const uc = allUcs.find(u => String(u.id) === String(inv.uc_id));
             if (uc && uc.subscriber_id) {
               nodesWithInconsistencies.add(`subscriber_${uc.subscriber_id}`);
             }
@@ -486,7 +486,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       if (inc.uc_id) {
         nodesWithInconsistencies.add(`uc_${inc.uc_id}`);
         // also flag subscriber
-        const uc = allUcs.find(u => u.id === inc.uc_id);
+        const uc = allUcs.find(u => String(u.id) === String(inc.uc_id));
         if (uc && uc.subscriber_id) {
           nodesWithInconsistencies.add(`subscriber_${uc.subscriber_id}`);
         }
@@ -2563,7 +2563,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   
                   const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
                   const isLinkSelected = selectedNode && (selectedNode.id === link.source || selectedNode.id === link.target);
-                  const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches);
+                  const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches) && !isLinkSelected && !isHighlighted;
                   
                   const isDimmedLink = isLinkDimmedByLegend || (
                     selectedNode 
@@ -2741,8 +2741,10 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                     return 'url(#glow-silver)';
                   };
 
-                  let nodeFill = getNodeColor(node);
-                  let nodeStroke = getNodeColor(node);
+                  const entityColor = getNodeColor(node);
+                  const entityFilter = getNodeGlow(node);
+                  let nodeFill = entityColor;
+                  let nodeStroke = entityColor;
                   let nodeFilter = 'none';
 
                   if (isDimmed) {
@@ -2751,13 +2753,15 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                     nodeFilter = 'none';
                   } else {
                     if (isSelected) {
-                      nodeStroke = '#ffffff';
-                      nodeFilter = getNodeGlow(node);
+                      nodeFill = entityColor;
+                      nodeStroke = entityColor;
+                      nodeFilter = entityFilter;
                     } else if (isHovered || isConnectedToSelected || isNodeConnectedToHovered) {
-                      nodeStroke = '#ffffff';
-                      nodeFilter = getNodeGlow(node);
+                      nodeFill = entityColor;
+                      nodeStroke = entityColor;
+                      nodeFilter = entityFilter;
                     } else if (activeLegendFilter && matchesLegendFilter) {
-                      nodeFilter = getNodeGlow(node);
+                      nodeFilter = entityFilter;
                     }
                   }
 
