@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
   AlertTriangle, CheckCircle2, Zap, Settings, ZoomIn, ZoomOut, 
