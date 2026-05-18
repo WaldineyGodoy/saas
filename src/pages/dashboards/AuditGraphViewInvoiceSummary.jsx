@@ -2743,26 +2743,37 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
                   const entityColor = getNodeColor(node);
                   const entityFilter = getNodeGlow(node);
-                  let nodeFill = entityColor;
-                  let nodeStroke = entityColor;
-                  let nodeFilter = 'none';
 
-                  if (isDimmed) {
-                    nodeFill = '#111622';
-                    nodeStroke = 'rgba(255, 255, 255, 0.03)';
-                    nodeFilter = 'none';
-                  } else {
+                  let nodeFill = 'url(#silver-gradient)';
+                  let nodeStroke = 'rgba(255, 255, 255, 0.2)';
+                  let nodeFilter = 'url(#glow-silver)';
+
+                  if (activeLegendFilter) {
+                    if (matchesLegendFilter) {
+                      nodeFill = entityColor;
+                      nodeStroke = entityColor;
+                      nodeFilter = entityFilter;
+                    } else {
+                      nodeFill = '#111622';
+                      nodeStroke = 'rgba(255, 255, 255, 0.03)';
+                      nodeFilter = 'none';
+                    }
+                  } else if (selectedNode) {
                     if (isSelected) {
                       nodeFill = entityColor;
                       nodeStroke = entityColor;
                       nodeFilter = entityFilter;
-                    } else if (isHovered || isConnectedToSelected || isNodeConnectedToHovered) {
+                    } else if (isConnectedToSelected) {
                       nodeFill = entityColor;
                       nodeStroke = entityColor;
                       nodeFilter = entityFilter;
-                    } else if (activeLegendFilter && matchesLegendFilter) {
-                      nodeFilter = entityFilter;
+                    } else {
+                      nodeFill = '#111622';
+                      nodeStroke = 'rgba(255, 255, 255, 0.03)';
+                      nodeFilter = 'none';
                     }
+                  } else if (isHovered) {
+                    nodeStroke = '#ffffff';
                   }
 
                   return (
