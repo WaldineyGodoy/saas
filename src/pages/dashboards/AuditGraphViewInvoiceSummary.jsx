@@ -8,6 +8,13 @@ import {
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 
+const compareIds = (a, b) => {
+  if (!a || !b) return false;
+  const idA = typeof a === 'object' ? a.id : a;
+  const idB = typeof b === 'object' ? b.id : b;
+  return String(idA).trim() === String(idB).trim();
+};
+
 export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   const { showAlert, showConfirm } = useUI();
   const [loading, setLoading] = useState(true);
@@ -47,8 +54,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   const chatMessagesEndRef = useRef(null);
   
   // Physics parameters (Obsidian style config sliders)
-  const [repulsion, setRepulsion] = useState(300);
-  const [linkDistance, setLinkDistance] = useState(90);
+  const [repulsion, setRepulsion] = useState(380);
+  const [linkDistance, setLinkDistance] = useState(120);
   const [gravity, setGravity] = useState(0.04);
   const [healthyVisible, setHealthyVisible] = useState(true);
   const [criticalCycleIndex, setCriticalCycleIndex] = useState(0);
@@ -899,6 +906,12 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           let effectiveRepulsion = repulsion;
           let repelThreshold = 280;
 
+          // If nodes are of the same type, increase repulsion to avoid overlap and improve legibility of labels
+          if (nodeA.type === nodeB.type) {
+            effectiveRepulsion = nodeA.type === 'uc' ? repulsion * 2.8 : repulsion * 2.2;
+            repelThreshold = Math.max(repelThreshold, 320);
+          }
+
           // Push active matching nodes significantly further apart to avoid overlapping labels (Melhoria 5)
           const activeFilter = activeLegendFilterRef.current;
           if (activeFilter && matchesFilter(nodeA, activeFilter) && matchesFilter(nodeB, activeFilter)) {
@@ -909,13 +922,13 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           // If a node is selected, also push all connected nodes further apart from it and from each other
           const activeSelected = selectedNodeRef.current;
           if (activeSelected) {
-            const isAConnected = nodeA.id === activeSelected.id || links.some(l => 
-              (l.source === activeSelected.id && l.target === nodeA.id) ||
-              (l.target === activeSelected.id && l.source === nodeA.id)
+            const isAConnected = compareIds(nodeA, activeSelected) || links.some(l => 
+              (compareIds(l.source, activeSelected) && compareIds(l.target, nodeA)) ||
+              (compareIds(l.target, activeSelected) && compareIds(l.source, nodeA))
             );
-            const isBConnected = nodeB.id === activeSelected.id || links.some(l => 
-              (l.source === activeSelected.id && l.target === nodeB.id) ||
-              (l.target === activeSelected.id && l.source === nodeB.id)
+            const isBConnected = compareIds(nodeB, activeSelected) || links.some(l => 
+              (compareIds(l.source, activeSelected) && compareIds(l.target, nodeB)) ||
+              (compareIds(l.target, activeSelected) && compareIds(l.source, nodeB))
             );
             if (isAConnected && isBConnected) {
               effectiveRepulsion = repulsion * 2.8;
@@ -943,8 +956,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       // 2. Attraction along links (Hooke's Law)
       for (let i = 0; i < links.length; i++) {
         const link = links[i];
-        const sourceNode = currentNodes.find(n => n.id === link.source);
-        const targetNode = currentNodes.find(n => n.id === link.target);
+        const sourceNode = currentNodes.find(n => compareIds(n, link.source));
+        const targetNode = currentNodes.find(n => compareIds(n, link.target));
         
         if (sourceNode && targetNode) {
           const dx = targetNode.x - sourceNode.x;
@@ -1009,8 +1022,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       });
       
       links.forEach((link, idx) => {
-        const sourceNode = currentNodes.find(n => n.id === link.source);
-        const targetNode = currentNodes.find(n => n.id === link.target);
+        const sourceNode = currentNodes.find(n => compareIds(n, link.source));
+        const targetNode = currentNodes.find(n => compareIds(n, link.target));
         const line = document.getElementById(`link-${idx}`);
         if (line && sourceNode && targetNode) {
           line.setAttribute('x1', sourceNode.x);
@@ -1390,10 +1403,10 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
         // Instantly redraw lines
         links.forEach((link, idx) => {
-          if (link.source === node.id || link.target === node.id) {
+          if (compareIds(link.source, node) || compareIds(link.target, node)) {
             const line = document.getElementById(`link-${idx}`);
-            const sourceNode = nodesStateRef.current.find(n => n.id === link.source);
-            const targetNode = nodesStateRef.current.find(n => n.id === link.target);
+            const sourceNode = nodesStateRef.current.find(n => compareIds(n, link.source));
+            const targetNode = nodesStateRef.current.find(n => compareIds(n, link.target));
             if (line && sourceNode && targetNode) {
               line.setAttribute('x1', sourceNode.x);
               line.setAttribute('y1', sourceNode.y);
@@ -1912,53 +1925,55 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
       {/* Top Filter and Controls Bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: '#090d16',
-        backdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255, 102, 0, 0.25)',
-        padding: '12px 18px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255, 255, 255, 0.05)',
-        gap: '1rem',
-        flexWrap: 'wrap',
-        zIndex: isFullscreen ? 100000 : 1
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Período de Análise:</span>
-          <select
-            value={auditPeriodFilter}
-            onChange={(e) => setAuditPeriodFilter(e.target.value)}
-            style={{
-              background: '#0f172a',
-              border: '1px solid rgba(255, 102, 0, 0.4)',
-              color: '#ffffff',
-              borderRadius: '6px',
-              padding: '4px 10px',
-              fontSize: '0.75rem',
-              fontWeight: 'bold',
-              outline: 'none',
-              cursor: 'pointer',
-              boxShadow: '0 0 12px rgba(255, 102, 0, 0.15)'
-            }}
-          >
-            <option value="all" style={{ background: '#0f172a', color: '#ffffff' }}>Qualquer data (Completo)</option>
-            {uniqueMonths.map(m => (
-              <option key={m} value={m} style={{ background: '#0f172a', color: '#ffffff' }}>{formatPeriod(m)}</option>
-            ))}
-          </select>
-        </div>
+      {!isFullscreen && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#090d16',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 102, 0, 0.25)',
+          padding: '12px 18px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255, 255, 255, 0.05)',
+          gap: '1rem',
+          flexWrap: 'wrap',
+          zIndex: 1
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Período de Análise:</span>
+            <select
+              value={auditPeriodFilter}
+              onChange={(e) => setAuditPeriodFilter(e.target.value)}
+              style={{
+                background: '#0f172a',
+                border: '1px solid rgba(255, 102, 0, 0.4)',
+                color: '#ffffff',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                outline: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 0 12px rgba(255, 102, 0, 0.15)'
+              }}
+            >
+              <option value="all" style={{ background: '#0f172a', color: '#ffffff' }}>Qualquer data (Completo)</option>
+              {uniqueMonths.map(m => (
+                <option key={m} value={m} style={{ background: '#0f172a', color: '#ffffff' }}>{formatPeriod(m)}</option>
+              ))}
+            </select>
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#ffffff' }}>
-          <span style={{ color: '#ffffff', fontWeight: '500' }}>Status de Conexão:</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#22c55e', fontWeight: 'bold' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px #22c55e' }}></span>
-            Monitorando Banco (Supabase)
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#ffffff' }}>
+            <span style={{ color: '#ffffff', fontWeight: '500' }}>Status de Conexão:</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#22c55e', fontWeight: 'bold' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px #22c55e' }}></span>
+              Monitorando Banco (Supabase)
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Canvas + Sidebar Split */}
       <div 
@@ -2544,8 +2559,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 
                 {/* 1. Links / Connections */}
                 {links.map((link, idx) => {
-                  const sourceNode = nodes.find(n => n.id === link.source);
-                  const targetNode = nodes.find(n => n.id === link.target);
+                  const sourceNode = nodes.find(n => compareIds(n, link.source));
+                  const targetNode = nodes.find(n => compareIds(n, link.target));
                   
                   const sourceMatches = sourceNode && (!activeLegendFilter || (
                     (activeLegendFilter === 'critical' && sourceNode.type === 'inconsistency' && sourceNode.severity === 'critical') ||
@@ -2561,8 +2576,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                     (activeLegendFilter === 'healthy' && (targetNode.type === 'fatura' || targetNode.type === 'conta_energia') && !nodesWithInconsistencies.has(targetNode.id))
                   ));
                   
-                  const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
-                  const isLinkSelected = selectedNode && (selectedNode.id === link.source || selectedNode.id === link.target);
+                  const isHighlighted = hoveredNode && (compareIds(hoveredNode, link.source) || compareIds(hoveredNode, link.target));
+                  const isLinkSelected = selectedNode && (compareIds(selectedNode, link.source) || compareIds(selectedNode, link.target));
                   const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches) && !isLinkSelected && !isHighlighted;
                   
                   const isDimmedLink = isLinkDimmedByLegend || (
@@ -2595,11 +2610,11 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
                 {/* 2. Glow ring around pulsing inconsistency nodes & active status nodes */}
                 {nodes.map(node => {
-                  const isSelected = selectedNode && selectedNode.id === node.id;
-                  const isHovered = hoveredNode && hoveredNode.id === node.id;
+                  const isSelected = selectedNode && compareIds(selectedNode, node);
+                  const isHovered = hoveredNode && compareIds(hoveredNode, node);
                   const isConnectedToSelected = selectedNode && links.some(l => 
-                    (l.source === selectedNode.id && l.target === node.id) ||
-                    (l.target === selectedNode.id && l.source === node.id)
+                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || (
@@ -2612,8 +2627,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
-                    (l.source === hoveredNode.id && l.target === node.id) ||
-                    (l.target === hoveredNode.id && l.source === node.id)
+                    (compareIds(l.source, hoveredNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, hoveredNode) && compareIds(l.source, node))
                   );
                   
                   const isDimmed = isDimmedByLegend || (
@@ -2639,31 +2654,31 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                       ringFilter = 'url(#glow-warn)';
                     }
                   } else if (node.type === 'uc') {
-                    ringStroke = '#22c55e';
+                    ringStroke = node.stroke || '#22c55e';
                     ringFilter = 'url(#glow-success)';
                   } else if (node.type === 'subscriber') {
-                    ringStroke = '#3b82f6';
+                    ringStroke = node.stroke || '#3b82f6';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'fatura') {
-                    ringStroke = '#ec4899';
+                    ringStroke = node.stroke || '#ec4899';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'conta_energia') {
-                    ringStroke = '#06b6d4';
+                    ringStroke = node.stroke || '#06b6d4';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'lead') {
-                    ringStroke = '#a855f7';
+                    ringStroke = node.stroke || '#a855f7';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'originator') {
-                    ringStroke = '#f97316';
+                    ringStroke = node.stroke || '#f97316';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'supplier') {
-                    ringStroke = '#8b5cf6';
+                    ringStroke = node.stroke || '#8b5cf6';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'usina') {
-                    ringStroke = '#14b8a6';
+                    ringStroke = node.stroke || '#14b8a6';
                     ringFilter = 'url(#glow-primary)';
                   } else if (node.type === 'concessionaria') {
-                    ringStroke = '#eab308';
+                    ringStroke = node.stroke || '#eab308';
                     ringFilter = 'url(#glow-warn)';
                   }
                   
@@ -2687,11 +2702,11 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
                 {/* 3. Node Circles */}
                 {nodes.map(node => {
-                  const isSelected = selectedNode && selectedNode.id === node.id;
-                  const isHovered = hoveredNode && hoveredNode.id === node.id;
+                  const isSelected = selectedNode && compareIds(selectedNode, node);
+                  const isHovered = hoveredNode && compareIds(hoveredNode, node);
                   const isConnectedToSelected = selectedNode && links.some(l => 
-                    (l.source === selectedNode.id && l.target === node.id) ||
-                    (l.target === selectedNode.id && l.source === node.id)
+                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || (
@@ -2704,8 +2719,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
-                    (l.source === hoveredNode.id && l.target === node.id) ||
-                    (l.target === hoveredNode.id && l.source === node.id)
+                    (compareIds(l.source, hoveredNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, hoveredNode) && compareIds(l.source, node))
                   );
                   
                   const isDimmed = isDimmedByLegend || (
@@ -2745,13 +2760,13 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   const entityFilter = getNodeGlow(node);
 
                   let nodeFill = 'url(#silver-gradient)';
-                  let nodeStroke = 'rgba(255, 255, 255, 0.2)';
+                  let nodeStroke = node.stroke || 'rgba(255, 255, 255, 0.2)';
                   let nodeFilter = 'url(#glow-silver)';
 
                   if (activeLegendFilter) {
                     if (matchesLegendFilter) {
                       nodeFill = entityColor;
-                      nodeStroke = entityColor;
+                      nodeStroke = node.stroke || entityColor;
                       nodeFilter = entityFilter;
                     } else {
                       nodeFill = '#111622';
@@ -2761,11 +2776,11 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   } else if (selectedNode) {
                     if (isSelected) {
                       nodeFill = entityColor;
-                      nodeStroke = entityColor;
+                      nodeStroke = node.stroke || entityColor;
                       nodeFilter = entityFilter;
                     } else if (isConnectedToSelected) {
                       nodeFill = entityColor;
-                      nodeStroke = entityColor;
+                      nodeStroke = node.stroke || entityColor;
                       nodeFilter = entityFilter;
                     } else {
                       nodeFill = '#111622';
@@ -2805,11 +2820,11 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
                 {/* 4. Labels */}
                 {nodes.map(node => {
-                  const isSelected = selectedNode && selectedNode.id === node.id;
-                  const isHovered = hoveredNode && hoveredNode.id === node.id;
+                  const isSelected = selectedNode && compareIds(selectedNode, node);
+                  const isHovered = hoveredNode && compareIds(hoveredNode, node);
                   const isConnectedToSelected = selectedNode && links.some(l => 
-                    (l.source === selectedNode.id && l.target === node.id) ||
-                    (l.target === selectedNode.id && l.source === node.id)
+                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
                   );
                   
                   const matchesLegendFilter = !activeLegendFilter || (
@@ -2822,8 +2837,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   );
                   const isDimmedByLegend = activeLegendFilter && !matchesLegendFilter && !isSelected && !isConnectedToSelected;
                   const isNodeConnectedToHovered = hoveredNode && links.some(l => 
-                    (l.source === hoveredNode.id && l.target === node.id) ||
-                    (l.target === hoveredNode.id && l.source === node.id)
+                    (compareIds(l.source, hoveredNode) && compareIds(l.target, node)) ||
+                    (compareIds(l.target, hoveredNode) && compareIds(l.source, node))
                   );
                   
                   const isDimmed = isDimmedByLegend || (
