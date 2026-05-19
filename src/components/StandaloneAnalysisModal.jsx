@@ -409,7 +409,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             const { data, error } = await supabase.from('invoices').insert(payload).select().single();
             if (error) {
                 if (error.code === '23505' || error.message.includes('duplicate key value')) {
-                    const confirmOverwrite = window.confirm('Atenção, Já existe uma conta de energia para essa unidade no mesmo periodo, deseja salvar assim mesmo (sobrescrevendo a anterior)?');
+                    const confirmOverwrite = await showConfirm(
+                        'Já existe uma conta de energia para essa unidade no mesmo período de referência. Deseja salvar assim mesmo (sobrescrevendo a anterior)?',
+                        'Atenção: Conta Duplicada',
+                        'Sobrescrever',
+                        'Cancelar'
+                    );
                     if (confirmOverwrite) {
                         const { data: upsertData, error: upsertError } = await supabase.from('invoices').upsert(payload, { onConflict: 'uc_id,mes_referencia' }).select().single();
                         if (upsertError) throw upsertError;
