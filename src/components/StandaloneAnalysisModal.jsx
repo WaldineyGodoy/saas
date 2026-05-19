@@ -318,8 +318,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         iluminacao_publica: parsedData.iluminacao_publica ? formatCurrency(parsedData.iluminacao_publica) : '',
                         outros_lancamentos: parsedData.outros_lancamentos ? formatCurrency(parsedData.outros_lancamentos) : '',
                         linha_digitavel: parsedData.linha_digitavel || '',
-                        pix_string: parsedData.pix_string || '',
-                        valor_concessionaria: parsedData.valorTotal || parsedData.valor_concessionaria || ''
+                        pix_string: parsedData.pix_string || ''
                     }));
 
                     showAlert('Conta processada com sucesso!', 'success');
