@@ -491,11 +491,233 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, backdropFilter: 'blur(6px)' }}>
             <div style={{ background: '#f8fafc', borderRadius: '24px', width: '95%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)', display: 'flex', flexDirection: 'column' }}>
+                <style>{`
+                    /* Premium Sandbox Modal Button System */
+                    .sandbox-btn {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 0.5rem;
+                        padding: 0.75rem 1.25rem;
+                        height: 44px;
+                        border-radius: 12px;
+                        font-size: 0.85rem;
+                        font-weight: 700;
+                        cursor: pointer;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        box-sizing: border-box;
+                        user-select: none;
+                        white-space: nowrap;
+                    }
+
+                    .sandbox-btn-discard {
+                        background-color: #fef2f2;
+                        border: 1px solid #fee2e2;
+                        color: #ef4444;
+                    }
+
+                    .sandbox-btn-discard:hover:not(:disabled) {
+                        background-color: #fee2e2;
+                        border-color: #fca5a5;
+                        color: #dc2626;
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.08);
+                    }
+
+                    .sandbox-btn-discard:active:not(:disabled) {
+                        transform: translateY(0);
+                    }
+
+                    .sandbox-btn-neutral {
+                        background-color: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        color: #64748b;
+                    }
+
+                    .sandbox-btn-neutral:hover:not(:disabled) {
+                        background-color: #f8fafc;
+                        border-color: #94a3b8;
+                        color: #334155;
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                    }
+
+                    .sandbox-btn-neutral:active:not(:disabled) {
+                        transform: translateY(0);
+                    }
+
+                    .sandbox-btn-secondary {
+                        background-color: rgba(0, 51, 102, 0.04);
+                        border: 1px solid var(--color-blue, #003366);
+                        color: var(--color-blue, #003366);
+                    }
+
+                    .sandbox-btn-secondary:hover:not(:disabled) {
+                        background-color: rgba(0, 51, 102, 0.08);
+                        border-color: var(--color-blue-hover, #002244);
+                        color: var(--color-blue-hover, #002244);
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(0, 51, 102, 0.08);
+                    }
+
+                    .sandbox-btn-secondary:active:not(:disabled) {
+                        transform: translateY(0);
+                    }
+
+                    .sandbox-btn-primary {
+                        background-color: var(--color-blue, #003366);
+                        border: 1px solid var(--color-blue, #003366);
+                        color: #ffffff;
+                        box-shadow: 0 4px 12px rgba(0, 51, 102, 0.2);
+                    }
+
+                    .sandbox-btn-primary:hover:not(:disabled) {
+                        background-color: var(--color-blue-hover, #002244);
+                        border-color: var(--color-blue-hover, #002244);
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 16px rgba(0, 51, 102, 0.3);
+                    }
+
+                    .sandbox-btn-primary:active:not(:disabled) {
+                        transform: translateY(0);
+                    }
+
+                    .sandbox-btn-accent {
+                        background-color: var(--color-orange, #FF6600);
+                        border: 1px solid var(--color-orange, #FF6600);
+                        color: #ffffff;
+                        box-shadow: 0 4px 12px rgba(255, 102, 0, 0.2);
+                    }
+
+                    .sandbox-btn-accent:hover:not(:disabled) {
+                        background-color: var(--color-orange-hover, #e65c00);
+                        border-color: var(--color-orange-hover, #e65c00);
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 16px rgba(255, 102, 0, 0.3);
+                    }
+
+                    .sandbox-btn-accent:active:not(:disabled) {
+                        transform: translateY(0);
+                    }
+
+                    .sandbox-btn:disabled {
+                        opacity: 0.65;
+                        cursor: not-allowed;
+                        transform: none !important;
+                        box-shadow: none !important;
+                    }
+
+                    /* Sandbox Footer Layout */
+                    .sandbox-footer {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-top: 1.5rem;
+                        border-top: 1px solid #e2e8f0;
+                        padding-top: 1.25rem;
+                        gap: 0.75rem;
+                    }
+
+                    .sandbox-footer-end {
+                        justify-content: flex-end;
+                    }
+
+                    .sandbox-footer-right {
+                        display: flex;
+                        gap: 0.75rem;
+                        align-items: center;
+                    }
+
+                    @media (max-width: 768px) {
+                        .sandbox-footer {
+                            flex-direction: column-reverse;
+                            align-items: stretch;
+                            gap: 0.75rem;
+                        }
+                        
+                        .sandbox-footer-right {
+                            flex-direction: column;
+                            align-items: stretch;
+                            width: 100%;
+                            gap: 0.75rem;
+                        }
+
+                        .sandbox-btn {
+                            width: 100%;
+                        }
+                    }
+
+
+                    /* Beautiful card container */
+                    .sandbox-card {
+                        background: #ffffff;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 20px;
+                        padding: 1.5rem;
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+                        transition: all 0.2s ease-in-out;
+                    }
+                    .sandbox-card:hover {
+                        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+                    }
+
+                    .sandbox-close-btn {
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        color: #94a3b8;
+                        transition: all 0.2s ease-in-out;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 0.25rem;
+                        border-radius: 50%;
+                    }
+                    .sandbox-close-btn:hover {
+                        color: #475569;
+                        background-color: #f1f5f9;
+                        transform: rotate(90deg);
+                    }
+
+                    /* Premium input controls */
+                    .sandbox-input {
+                        width: 100%;
+                        padding: 0.6rem 0.85rem;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 10px;
+                        font-size: 0.875rem;
+                        background-color: #f8fafc;
+                        color: #0f172a;
+                        transition: all 0.2s ease-in-out;
+                        box-sizing: border-box;
+                    }
+
+                    .sandbox-input:focus {
+                        background-color: #ffffff;
+                        border-color: var(--color-blue, #003366);
+                        outline: none;
+                        box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.15);
+                    }
+
+                    .sandbox-input::placeholder {
+                        color: #94a3b8;
+                    }
+
+                    .sandbox-label {
+                        display: block;
+                        font-size: 0.725rem;
+                        font-weight: 700;
+                        color: #475569;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                        margin-bottom: 0.35rem;
+                    }
+                `}</style>
                 
                 {/* Header */}
                 <div style={{ padding: '1.5rem', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: '24px', borderTopRightRadius: '24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ background: 'var(--color-blue-light, #eff6ff)', color: 'var(--color-blue, #2563eb)', padding: '0.5rem', borderRadius: '12px' }}>
+                        <div style={{ background: 'var(--color-blue-light, #eff6ff)', color: 'var(--color-blue, #003366)', padding: '0.5rem', borderRadius: '12px' }}>
                             <Calculator size={24} />
                         </div>
                         <div>
@@ -503,7 +725,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                             <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Simulador de faturamento e auditoria operacional de contas da concessionária</p>
                         </div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', transition: 'color 0.2s' }}>
+                    <button onClick={onClose} className="sandbox-close-btn">
                         <X size={24} />
                     </button>
                 </div>
@@ -700,29 +922,19 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                                <div className="sandbox-footer sandbox-footer-end">
                                     <button 
                                         onClick={onClose} 
-                                        style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', color: '#64748b' }}
+                                        className="sandbox-btn sandbox-btn-neutral"
                                     >
-                                        Cancelar
+                                        <X size={16} /> Cancelar
                                     </button>
                                     <button 
                                         onClick={triggerUpload}
                                         disabled={!pdfFile || !selectedUcId}
-                                        style={{ 
-                                            padding: '0.75rem 2rem', 
-                                            borderRadius: '12px', 
-                                            border: 'none', 
-                                            background: (!pdfFile || !selectedUcId) ? '#94a3b8' : (branding?.primary_color || '#2563eb'), 
-                                            color: 'white', 
-                                            cursor: (!pdfFile || !selectedUcId) ? 'not-allowed' : 'pointer', 
-                                            fontWeight: 800, 
-                                            fontSize: '0.9rem',
-                                            boxShadow: (!pdfFile || !selectedUcId) ? 'none' : '0 4px 10px rgba(37, 99, 235, 0.25)' 
-                                        }}
+                                        className="sandbox-btn sandbox-btn-primary"
                                     >
-                                        Analisar Conta de Energia
+                                        <Calculator size={16} /> Analisar Conta de Energia
                                     </button>
                                 </div>
                             </div>
@@ -732,94 +944,97 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         {step === 'sandbox' && (
                             <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
                                     
                                     {/* Coluna Concessionária */}
-                                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.25rem' }}>
-                                        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontWeight: 800, fontSize: '0.9rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                                    <div className="sandbox-card" style={{ padding: '1.25rem' }}>
+                                        <h4 className="sandbox-card-title" style={{ color: '#0f172a', fontWeight: 800, fontSize: '0.95rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', marginBottom: '1.25rem', marginTop: 0 }}>
                                             <FileText size={18} style={{ color: '#64748b' }} /> Concessionária (Valores Auditados)
                                         </h4>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Mês Referência</label>
+                                                <label className="sandbox-label">Mês Referência</label>
                                                 <input 
                                                     type="month" 
                                                     value={formData.mes_referencia} 
                                                     onChange={e => setFormData({ ...formData, mes_referencia: e.target.value })} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    className="sandbox-input" 
                                                 />
                                             </div>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Vencimento</label>
+                                                <label className="sandbox-label">Vencimento</label>
                                                 <input 
                                                     type="date" 
                                                     value={formData.vencimento} 
                                                     onChange={e => setFormData({ ...formData, vencimento: e.target.value })} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    className="sandbox-input" 
                                                 />
                                             </div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Consumo Total (kWh)</label>
+                                                <label className="sandbox-label">Consumo Total (kWh)</label>
                                                 <input 
                                                     type="number" 
                                                     value={formData.consumo_kwh} 
                                                     onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }} 
+                                                    className="sandbox-input"
+                                                    style={{ fontWeight: 'bold' }} 
                                                 />
                                             </div>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Energia Compensada (kWh)</label>
+                                                <label className="sandbox-label">Energia Compensada (kWh)</label>
                                                 <input 
                                                     type="number" 
                                                     value={formData.consumo_compensado} 
                                                     onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' }} 
+                                                    className="sandbox-input"
+                                                    style={{ fontWeight: 'bold' }} 
                                                 />
                                             </div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Consumo em Reais (R$)</label>
+                                                <label className="sandbox-label">Consumo em Reais (R$)</label>
                                                 <input 
                                                     type="text" 
                                                     value={formData.consumo_reais} 
                                                     onChange={e => handleCurrencyInputChange('consumo_reais', e.target.value)} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    className="sandbox-input" 
                                                 />
                                             </div>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Iluminação Pública</label>
+                                                <label className="sandbox-label">Iluminação Pública</label>
                                                 <input 
                                                     type="text" 
                                                     value={formData.iluminacao_publica} 
                                                     onChange={e => handleCurrencyInputChange('iluminacao_publica', e.target.value)} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    className="sandbox-input" 
                                                 />
                                             </div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Taxa Mínima / Outros</label>
+                                                <label className="sandbox-label">Taxa Mínima / Outros</label>
                                                 <input 
                                                     type="text" 
                                                     value={formData.outros_lancamentos} 
                                                     onChange={e => handleCurrencyInputChange('outros_lancamentos', e.target.value)} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    className="sandbox-input" 
                                                 />
                                             </div>
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Total Concessionária (Lido)</label>
+                                                <label className="sandbox-label">Total Concessionária (Lido)</label>
                                                 <input 
                                                     type="text" 
-                                                    value={formatCurrency(formData.valor_concessionaria)} 
+                                                    value={formData.valor_concessionaria} 
                                                     onChange={e => handleCurrencyInputChange('valor_concessionaria', e.target.value)} 
-                                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold', color: '#059669' }} 
+                                                    className="sandbox-input"
+                                                    style={{ fontWeight: 'bold', color: '#059669' }} 
                                                 />
                                             </div>
                                         </div>
@@ -837,10 +1052,10 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                     </div>
 
                                     {/* Coluna Simulação Assinante */}
-                                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div className="sandbox-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                         <div>
-                                            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontWeight: 800, fontSize: '0.9rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-                                                <Zap size={18} style={{ color: 'var(--color-orange, #f97316)' }} /> Assinante (Simulação Sandbox)
+                                            <h4 className="sandbox-card-title" style={{ color: '#0f172a', fontWeight: 800, fontSize: '0.95rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem', marginBottom: '1.25rem', marginTop: 0 }}>
+                                                <Zap size={18} style={{ color: 'var(--color-orange, #FF6600)' }} /> Assinante (Simulação Sandbox)
                                             </h4>
 
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -854,7 +1069,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                             type="number" 
                                                             value={formData.desconto_aplicado} 
                                                             onChange={e => setFormData({ ...formData, desconto_aplicado: e.target.value })}
-                                                            style={{ width: '60px', padding: '0.35rem', borderRadius: '8px', border: '1px solid #d8b4fe', textAlign: 'center', fontWeight: 'bold', fontSize: '0.9rem' }} 
+                                                            style={{ width: '64px', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid #d8b4fe', textAlign: 'center', fontWeight: 'bold', fontSize: '0.9rem', outline: 'none', transition: 'border-color 0.2s', backgroundColor: 'white' }} 
                                                         />
                                                         <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: '1rem' }}>%</span>
                                                     </div>
@@ -906,82 +1121,54 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 {/* Seção de Alertas do Validador */}
                                 {rendersAlerts()}
 
-                                {/* Chaves de Pagamento */}
+                                 {/* Chaves de Pagamento */}
                                 <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Chaves de Pagamento da Concessionária</h5>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Linha Digitável</label>
+                                            <label className="sandbox-label">Linha Digitável</label>
                                             <input 
                                                 type="text" 
                                                 value={formData.linha_digitavel} 
                                                 onChange={e => setFormData({ ...formData, linha_digitavel: e.target.value })} 
                                                 placeholder="Código de barras da conta..." 
-                                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                className="sandbox-input" 
                                             />
                                         </div>
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>PIX Copia e Cola</label>
+                                            <label className="sandbox-label">PIX Copia e Cola</label>
                                             <input 
                                                 type="text" 
                                                 value={formData.pix_string} 
                                                 onChange={e => setFormData({ ...formData, pix_string: e.target.value })} 
                                                 placeholder="PIX da conta..." 
-                                                style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                className="sandbox-input" 
                                             />
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Passo C: Ações de Fechamento */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                                <div className="sandbox-footer">
                                     <button 
                                         onClick={handleReset} 
                                         disabled={isSubmitting}
-                                        style={{ padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid #fecaca', background: '#fef2f2', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#dc2626', transition: 'all 0.2s' }}
+                                        className="sandbox-btn sandbox-btn-discard"
                                     >
-                                        Descartar Análise
+                                        <X size={16} /> Descartar Análise
                                     </button>
 
-                                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                    <div className="sandbox-footer-right">
                                         <button 
                                             onClick={() => saveInvoice('sem_faturamento')}
                                             disabled={isSubmitting}
-                                            style={{ 
-                                                padding: '0.75rem 1.25rem', 
-                                                borderRadius: '12px', 
-                                                border: '1px solid #bfdbfe', 
-                                                background: '#eff6ff', 
-                                                cursor: 'pointer', 
-                                                fontWeight: 700, 
-                                                fontSize: '0.9rem', 
-                                                color: '#2563eb', 
-                                                transition: 'all 0.2s',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.4rem'
-                                            }}
+                                            className="sandbox-btn sandbox-btn-secondary"
                                         >
                                             <Ban size={16} /> Registrar Operacional (Sem Faturamento)
                                         </button>
                                         <button 
                                             onClick={() => saveInvoice('a_vencer')}
                                             disabled={isSubmitting}
-                                            style={{ 
-                                                padding: '0.75rem 1.5rem', 
-                                                borderRadius: '12px', 
-                                                border: 'none', 
-                                                background: branding?.primary_color || '#2563eb', 
-                                                cursor: 'pointer', 
-                                                fontWeight: 800, 
-                                                fontSize: '0.9rem', 
-                                                color: 'white', 
-                                                transition: 'all 0.2s',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.4rem',
-                                                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-                                            }}
+                                            className="sandbox-btn sandbox-btn-accent"
                                         >
                                             <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
                                         </button>
