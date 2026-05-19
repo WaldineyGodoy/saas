@@ -89,7 +89,14 @@ serve(async (req) => {
     }
     
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
-    const othersMatch = fullText.match(/(?:Outros\s*Lançamentos|Adicionais)[^\d]*([\d,.]+)/i);
+    
+    // Outros Lançamentos (Multas, Juros, Parcelamentos)
+    let outros_lancamentos = 0;
+    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Parc\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
+    const othersMatches = [...fullText.matchAll(othersRegex)];
+    for (const match of othersMatches) {
+        outros_lancamentos += parseValue(match[1]);
+    }
 
     // Consumo Reais: Pega especificamente o VALOR (R$) que é a 3ª coluna de números após "kWh"
     // Ex: Consumo-TUSD kWh 753,00 0,57337503 431,75
@@ -164,7 +171,7 @@ serve(async (req) => {
         vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
         valor_a_pagar: valor_a_pagar,
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
-        outros_lancamentos: parseValue(othersMatch ? othersMatch[1] : null),
+        outros_lancamentos: outros_lancamentos,
         linha_digitavel: linha_digitavel
     };
 

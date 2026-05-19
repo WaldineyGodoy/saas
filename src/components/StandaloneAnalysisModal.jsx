@@ -1020,7 +1020,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
-                                                <label className="sandbox-label">Taxa Mínima / Outros</label>
+                                                <label className="sandbox-label">Outros</label>
                                                 <input 
                                                     type="text" 
                                                     value={formData.outros_lancamentos} 
