@@ -56,8 +56,17 @@ serve(async (req) => {
                              fullText.match(/kWh[^\d]*(\d+)/i) ||
                              fullText.match(/(\d+)\s*kWh/i);
     
-    // Iluminação Pública: pega o primeiro número que aparece após o termo
-    const cipMatch = fullText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.|Ilum\.?\s*P[uú]bl\.?\s*Municipal|Ilum\.?\s*P[uú]bl\.?)[^\d]*([\d,.]+)/i);
+    // Iluminação Pública: pega o primeiro número na MESMA LINHA
+    let iluminacao_publica = 0;
+    const cipLine = fullText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.|Ilum\.?\s*P[uú]bl\.?\s*Municipal|Ilum\.?\s*P[uú]bl\.?)[^\n]*?([\d,.]+)/i);
+    if (cipLine) {
+        const numMatch = cipLine[0].match(/([\d]+[.,][\d]+)/);
+        if (numMatch) {
+            iluminacao_publica = parseValue(numMatch[1]);
+        } else {
+            iluminacao_publica = parseValue(cipLine[1]);
+        }
+    }
 
     // Mês Referência: REF.MÊS/ANO 04/2026
     const refMonthMatch = fullText.match(/(?:REF\.?M[EÊ]S\/ANO|M[EÊ]S\s*REFER[EÊ]NCIA|REF)[^\d]*(\d{2}\/\d{2,4})/i) || 
@@ -101,14 +110,13 @@ serve(async (req) => {
         }
     }
 
-    // Linha Digitável
     let linha_digitavel = null;
     const barcodeCandidates = fullText.match(/(?:\d[\s\.\-]*){40,55}/g);
     if (barcodeCandidates) {
         for (const candidate of barcodeCandidates) {
             const clean = candidate.replace(/\D/g, '');
-            if (clean.length === 44 || clean.length === 47 || clean.length === 48) {
-                // Ignore NFe Keys (starts with state code, usually 44 digits)
+            if (clean.length >= 44 && clean.length <= 48) {
+                // Ignorar Chaves NFe (44 dígitos que não começam com 8)
                 if (clean.length === 44 && !clean.startsWith('8')) continue;
                 linha_digitavel = clean;
                 break;
@@ -141,7 +149,7 @@ serve(async (req) => {
     const result = {
         consumo_kwh: consumptionMatch ? parseInt(consumptionMatch[1].replace(/\D/g, '')) : 0,
         consumo_reais: consumo_reais,
-        iluminacao_publica: parseValue(cipMatch ? cipMatch[1] : null),
+        iluminacao_publica: iluminacao_publica,
         mes_referencia: parseMesRef(refMonthMatch ? refMonthMatch[1] : null),
         vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
         valor_a_pagar: parseValue(totalAmountMatch ? totalAmountMatch[1] : null),

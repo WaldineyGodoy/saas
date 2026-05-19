@@ -311,6 +311,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         mes_referencia: parsedData.mes_referencia ? parsedData.mes_referencia.substring(0, 7) : prev.mes_referencia,
                         vencimento: parsedData.vencimento ? parsedData.vencimento.split('T')[0] : prev.vencimento,
                         data_leitura: parsedData.data_leitura ? parsedData.data_leitura.split('T')[0] : '',
+                        valor_concessionaria: parsedData.valor_a_pagar !== undefined && parsedData.valor_a_pagar !== null ? formatCurrency(parsedData.valor_a_pagar) : (parsedData.valorTotal ? formatCurrency(parsedData.valorTotal) : ''),
                         consumo_kwh: parsedData.consumo_kwh !== undefined ? parsedData.consumo_kwh : '',
                         consumo_compensado: extractedCompensado !== undefined ? extractedCompensado : '',
                         consumo_reais: parsedData.consumo_reais !== undefined ? formatCurrency(parsedData.consumo_reais) : formatCurrency(parsedData.valorTotal || 0),
