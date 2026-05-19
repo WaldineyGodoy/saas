@@ -56,16 +56,11 @@ serve(async (req) => {
                              fullText.match(/kWh[^\d]*(\d+)/i) ||
                              fullText.match(/(\d+)\s*kWh/i);
     
-    // Iluminação Pública: pega o primeiro número na MESMA LINHA
+    // Iluminação Pública: Regex a prova de balas para lidar com quebras de linha ou espaçamentos malucos
     let iluminacao_publica = 0;
-    const cipLine = fullText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.|Ilum\.?\s*P[uú]bl\.?\s*Municipal|Ilum\.?\s*P[uú]bl\.?)[^\n]*?([\d,.]+)/i);
-    if (cipLine) {
-        const numMatch = cipLine[0].match(/([\d]+[.,][\d]+)/);
-        if (numMatch) {
-            iluminacao_publica = parseValue(numMatch[1]);
-        } else {
-            iluminacao_publica = parseValue(cipLine[1]);
-        }
+    const cipMatch = fullText.match(/(?:Ilum[\s\S]{0,30}Municipal|Ilumina[çc][ãa]o[\s\S]{0,10}P[úu]blica|COSIP|CIP-MUNICIP)[\s\S]{0,20}?(\d{1,4},\d{2})/i);
+    if (cipMatch) {
+        iluminacao_publica = parseValue(cipMatch[1]);
     }
 
     // Mês Referência: REF.MÊS/ANO 04/2026
@@ -74,8 +69,15 @@ serve(async (req) => {
 
     const dueDateMatch = fullText.match(/Vencimento[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     
-    // Total a Pagar: TOTAL A PAGAR R$ 826,83
-    const totalAmountMatch = fullText.match(/(?:TOTAL\s*A\s*PAGAR|Valor\s*a\s*Pagar|Total)[^\d]*([\d,.]+)/i);
+    // Total a Pagar: Pega a última ocorrência da palavra TOTAL seguida de um valor (geralmente é o valor final no rodapé)
+    let valor_a_pagar = 0;
+    const totalAmountMatches = [...fullText.matchAll(/TOTAL[\s\S]{0,40}?(\d{1,5},\d{2})/gi)];
+    if (totalAmountMatches.length > 0) {
+        valor_a_pagar = parseValue(totalAmountMatches[totalAmountMatches.length - 1][1]);
+    } else {
+        const fallbackMatch = fullText.match(/Valor\s*a\s*Pagar[^\d]*([\d,.]+)/i);
+        if (fallbackMatch) valor_a_pagar = parseValue(fallbackMatch[1]);
+    }
     
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     const othersMatch = fullText.match(/(?:Outros\s*Lançamentos|Adicionais)[^\d]*([\d,.]+)/i);
@@ -109,17 +111,23 @@ serve(async (req) => {
             }
         }
     }
-
+       // Linha Digitável: Estratégia imbatível -> Limpar todos os espaços do documento inteiro e procurar a sequência de 44 a 48 dígitos que começa com '8' (Padrão Arrecadação)
     let linha_digitavel = null;
-    const barcodeCandidates = fullText.match(/(?:\d[\s\.\-]*){40,55}/g);
-    if (barcodeCandidates) {
-        for (const candidate of barcodeCandidates) {
-            const clean = candidate.replace(/\D/g, '');
-            if (clean.length >= 44 && clean.length <= 48) {
-                // Ignorar Chaves NFe (44 dígitos que não começam com 8)
-                if (clean.length === 44 && !clean.startsWith('8')) continue;
-                linha_digitavel = clean;
-                break;
+    const allNumbersText = fullText.replace(/[\s\.\-\n\r\t_]/g, '');
+    const utilityBarcodeMatch = allNumbersText.match(/8\d{43,47}/);
+    if (utilityBarcodeMatch) {
+        linha_digitavel = utilityBarcodeMatch[0];
+    } else {
+        // Fallback antigo
+        const barcodeCandidates = fullText.match(/(?:\d[\s\.\-]*){40,55}/g);
+        if (barcodeCandidates) {
+            for (const candidate of barcodeCandidates) {
+                const clean = candidate.replace(/\D/g, '');
+                if (clean.length >= 44 && clean.length <= 48) {
+                    if (clean.length === 44 && !clean.startsWith('8')) continue;
+                    linha_digitavel = clean;
+                    break;
+                }
             }
         }
     }
@@ -152,7 +160,7 @@ serve(async (req) => {
         iluminacao_publica: iluminacao_publica,
         mes_referencia: parseMesRef(refMonthMatch ? refMonthMatch[1] : null),
         vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
-        valor_a_pagar: parseValue(totalAmountMatch ? totalAmountMatch[1] : null),
+        valor_a_pagar: valor_a_pagar,
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: parseValue(othersMatch ? othersMatch[1] : null),
         linha_digitavel: linha_digitavel
