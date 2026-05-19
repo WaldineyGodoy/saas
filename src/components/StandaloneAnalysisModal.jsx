@@ -86,6 +86,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     const [formData, setFormData] = useState({
         mes_referencia: new Date().toISOString().substring(0, 7), // YYYY-MM
         vencimento: '',
+        data_leitura_anterior: '',
         data_leitura: '',
         consumo_kwh: '',
         consumo_compensado: '',
@@ -312,6 +313,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         ...prev,
                         mes_referencia: parsedData.mes_referencia ? parsedData.mes_referencia.substring(0, 7) : prev.mes_referencia,
                         vencimento: parsedData.vencimento ? parsedData.vencimento.split('T')[0] : prev.vencimento,
+                        data_leitura_anterior: parsedData.data_leitura_anterior ? parsedData.data_leitura_anterior.split('T')[0] : '',
                         data_leitura: parsedData.data_leitura ? parsedData.data_leitura.split('T')[0] : '',
                         valor_concessionaria: parsedData.valor_a_pagar !== undefined && parsedData.valor_a_pagar !== null ? formatCurrency(parsedData.valor_a_pagar) : (parsedData.valorTotal ? formatCurrency(parsedData.valorTotal) : ''),
                         consumo_kwh: parsedData.consumo_kwh !== undefined ? parsedData.consumo_kwh : '',
@@ -385,6 +387,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             uc_id: selectedUcId,
             mes_referencia: `${formData.mes_referencia}-01`,
             vencimento: formData.vencimento || null,
+            data_leitura_anterior: formData.data_leitura_anterior || null,
             data_leitura: formData.data_leitura || null,
             consumo_kwh: Number(formData.consumo_kwh) || 0,
             consumo_compensado: Number(formData.consumo_compensado) || 0,
@@ -997,6 +1000,27 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     type="date" 
                                                     value={formData.vencimento} 
                                                     onChange={e => setFormData({ ...formData, vencimento: e.target.value })} 
+                                                    className="sandbox-input" 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                            <div>
+                                                <label className="sandbox-label">Leitura Anterior</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={formData.data_leitura_anterior} 
+                                                    onChange={e => setFormData({ ...formData, data_leitura_anterior: e.target.value })} 
+                                                    className="sandbox-input" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="sandbox-label">Leitura Atual</label>
+                                                <input 
+                                                    type="date" 
+                                                    value={formData.data_leitura} 
+                                                    onChange={e => setFormData({ ...formData, data_leitura: e.target.value })} 
                                                     className="sandbox-input" 
                                                 />
                                             </div>

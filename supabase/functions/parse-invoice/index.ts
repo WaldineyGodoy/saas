@@ -88,6 +88,7 @@ serve(async (req) => {
         if (fallbackMatch) valor_a_pagar = parseValue(fallbackMatch[1]);
     }
     
+    const prevReadingMatch = fullText.match(/Leitura\s*Anterior[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     
     // Outros Lançamentos (Multas, Juros, Parcelamentos)
@@ -170,6 +171,7 @@ serve(async (req) => {
         mes_referencia: parseMesRef(refMonthMatch ? refMonthMatch[1] : null),
         vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
         valor_a_pagar: valor_a_pagar,
+        data_leitura_anterior: formatDate(prevReadingMatch ? prevReadingMatch[1] : null),
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: outros_lancamentos,
         linha_digitavel: linha_digitavel
