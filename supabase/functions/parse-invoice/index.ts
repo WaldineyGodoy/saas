@@ -31,7 +31,7 @@ serve(async (req) => {
     // Usando unpdf via esm.sh com canvas externalizado para evitar erros de compilação em Deno
     const unpdfModule = await import("https://esm.sh/unpdf@0.5.1?external=canvas");
     const getDocumentProxy = unpdfModule.getDocumentProxy || unpdfModule.default?.getDocumentProxy;
-    const extractText = unpdfModule.extractText || unpdfModule.default?.extractText;
+    const extractText = unpdfModule.extractPDFText || unpdfModule.extractText || unpdfModule.default?.extractPDFText || unpdfModule.default?.extractText;
 
     if (!getDocumentProxy || !extractText) {
       throw new Error("Não foi possível carregar as funções de extração de PDF do pacote 'unpdf'. Verifique a versão.");
