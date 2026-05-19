@@ -803,7 +803,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             {/* Tab Content: Técnico */}
                             {activeTab === 'tecnico' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1.25rem' }}>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Status</label>
                                             <select
@@ -812,6 +812,16 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                             >
                                                 {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Unidade</label>
+                                            <select
+                                                value={formData.tipo_unidade}
+                                                onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            >
+                                                {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                             </select>
                                         </div>
                                         <div>
