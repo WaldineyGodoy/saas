@@ -118,6 +118,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             setEditData({
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento || '',
+                data_leitura_anterior: invoice.data_leitura_anterior || '',
+                data_leitura: invoice.data_leitura || '',
                 consumo_kwh: invoice.consumo_kwh || 0,
                 consumo_compensado: invoice.consumo_compensado || 0,
                 consumo_reais: invoice.consumo_reais || 0,
@@ -361,6 +363,40 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             const [year, month] = invoice.mes_referencia.split('-');
                                             return new Date(year, parseInt(month) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
                                         })() : 'N/A'}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Grid de Leituras */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Leitura Anterior</div>
+                                {isEditing ? (
+                                    <input 
+                                        type="date" 
+                                        value={editData.data_leitura_anterior || ''} 
+                                        onChange={e => handleEditChange('data_leitura_anterior', e.target.value)}
+                                        style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.9rem', marginTop: '0.25rem' }}
+                                    />
+                                ) : (
+                                    <div style={{ fontWeight: 800, color: '#1e293b', fontSize: '1.1rem' }}>
+                                        {invoice.data_leitura_anterior ? new Date(invoice.data_leitura_anterior + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Leitura Atual</div>
+                                {isEditing ? (
+                                    <input 
+                                        type="date" 
+                                        value={editData.data_leitura || ''} 
+                                        onChange={e => handleEditChange('data_leitura', e.target.value)}
+                                        style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.9rem', marginTop: '0.25rem' }}
+                                    />
+                                ) : (
+                                    <div style={{ fontWeight: 800, color: '#1e293b', fontSize: '1.1rem' }}>
+                                        {invoice.data_leitura ? new Date(invoice.data_leitura + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
                                     </div>
                                 )}
                             </div>
