@@ -28,9 +28,8 @@ serve(async (req) => {
       throw new Error('pdfBase64 ou pdfUrl é obrigatório')
     }
 
-    // Usando unpdf que é otimizado para ambientes serverless (sem canvas)
-    // Usamos o import dinâmico com resolução robusta ESM/CJS para garantir que o bundling remoto funcione no Deno
-    const unpdfModule = await import("npm:unpdf@0.5.1");
+    // Usando unpdf via esm.sh com canvas externalizado para evitar erros de compilação em Deno
+    const unpdfModule = await import("https://esm.sh/unpdf@0.5.1?external=canvas");
     const getDocumentProxy = unpdfModule.getDocumentProxy || unpdfModule.default?.getDocumentProxy;
     const extractText = unpdfModule.extractText || unpdfModule.default?.extractText;
 
