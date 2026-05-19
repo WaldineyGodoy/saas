@@ -220,7 +220,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
             let valorAPagar = 0;
             if (compensado > 0) {
-                valorAPagar = energiaCompensadaReais + tarifaMinimaExcedentes + ip + outros;
+                // 'outros' removido da soma por ter apenas caráter informativo
+                valorAPagar = energiaCompensadaReais + tarifaMinimaExcedentes + ip;
             } else {
                 valorAPagar = concessionariaVal;
             }
@@ -403,7 +404,34 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
         try {
             const { data, error } = await supabase.from('invoices').insert(payload).select().single();
-            if (error) throw error;
+            if (error) {
+                if (error.code === '23505' || error.message.includes('duplicate key value')) {
+                    const confirmOverwrite = window.confirm('Atenção, Já existe uma conta de energia para essa unidade no mesmo periodo, deseja salvar assim mesmo (sobrescrevendo a anterior)?');
+                    if (confirmOverwrite) {
+                        const { data: upsertData, error: upsertError } = await supabase.from('invoices').upsert(payload, { onConflict: 'uc_id,mes_referencia' }).select().single();
+                        if (upsertError) throw upsertError;
+                        if (saveStatus === 'a_vencer' && upsertData) {
+                            showAlert('Fatura ativa atualizada! Gerando boleto de faturamento...', 'info');
+                            try {
+                                await createAsaasCharge(upsertData.id, 'invoice');
+                                showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
+                            } catch (asaasErr) {
+                                console.error('Erro na emissão automática do Asaas:', asaasErr);
+                                showAlert('Fatura atualizada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
+                            }
+                        } else {
+                            showAlert('Conta atualizada com sucesso (Operacional Sem Cobrança)!', 'success');
+                        }
+                        if (onSave) onSave();
+                        onClose();
+                        return;
+                    } else {
+                        return; // Usuário cancelou
+                    }
+                } else {
+                    throw error;
+                }
+            }
 
             if (saveStatus === 'a_vencer' && data) {
                 showAlert('Fatura ativa criada localmente! Gerando boleto de faturamento...', 'info');
@@ -1122,33 +1150,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 {/* Seção de Alertas do Validador */}
                                 {rendersAlerts()}
 
-                                 {/* Chaves de Pagamento */}
-                                <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Chaves de Pagamento da Concessionária</h5>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                        <div>
-                                            <label className="sandbox-label">Linha Digitável</label>
-                                            <input 
-                                                type="text" 
-                                                value={formData.linha_digitavel} 
-                                                onChange={e => setFormData({ ...formData, linha_digitavel: e.target.value })} 
-                                                placeholder="Código de barras da conta..." 
-                                                className="sandbox-input" 
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="sandbox-label">PIX Copia e Cola</label>
-                                            <input 
-                                                type="text" 
-                                                value={formData.pix_string} 
-                                                onChange={e => setFormData({ ...formData, pix_string: e.target.value })} 
-                                                placeholder="PIX da conta..." 
-                                                className="sandbox-input" 
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* Status da Conta de Energia (Concessionária) */}
                                 <div style={{ background: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                     <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Status de Pagamento (Concessionária)</h5>
@@ -1163,9 +1164,39 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                             <option value="pago">Pago</option>
                                             <option value="vencida">Vencida</option>
                                             <option value="parcelada">Parcelada</option>
+                                            <option value="contestada">Contestada</option>
                                         </select>
                                     </div>
                                 </div>
+
+                                 {/* Chaves de Pagamento */}
+                                 <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Chaves de Pagamento da Concessionária</h5>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                        <div>
+                                            <label className="sandbox-label">Linha Digitável</label>
+                                            <input 
+                                                type="text" 
+                                                value={formData.linha_digitavel} 
+                                                onChange={e => setFormData({ ...formData, linha_digitavel: e.target.value })}
+                                                placeholder="Código de barras da conta..." 
+                                                className="sandbox-input" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="sandbox-label">PIX Copia e Cola</label>
+                                            <input 
+                                                type="text" 
+                                                value={formData.pix_string} 
+                                                onChange={e => setFormData({ ...formData, pix_string: e.target.value })}
+                                                placeholder="PIX da conta..." 
+                                                className="sandbox-input" 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+
 
                                 <div className="sandbox-footer">
                                     <button 
