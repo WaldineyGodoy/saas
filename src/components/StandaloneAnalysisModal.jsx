@@ -215,8 +215,14 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
             const ip = typeof formData.iluminacao_publica === 'string' ? parseCurrency(formData.iluminacao_publica) : (Number(formData.iluminacao_publica) || 0);
             const outros = typeof formData.outros_lancamentos === 'string' ? parseCurrency(formData.outros_lancamentos) : (Number(formData.outros_lancamentos) || 0);
+            const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || 0);
 
-            const valorAPagar = energiaCompensadaReais + tarifaMinimaExcedentes + ip + outros;
+            let valorAPagar = 0;
+            if (compensado > 0) {
+                valorAPagar = energiaCompensadaReais + tarifaMinimaExcedentes + ip + outros;
+            } else {
+                valorAPagar = concessionariaVal;
+            }
 
             // Tarifa Efetiva = Consumo em Reais / Consumo Kwh
             const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
@@ -236,6 +242,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         formData.consumo_reais,
         formData.iluminacao_publica,
         formData.outros_lancamentos,
+        formData.valor_concessionaria,
         formData.desconto_aplicado,
         selectedUc
     ]);
@@ -432,7 +439,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
         const diffTariff = selectedUc ? Math.abs(simulation.tarifaEfetiva - Number(selectedUc.tarifa_concessionaria)) : 0;
 
+        const consumo = Number(formData.consumo_kwh) || 0;
+        const compensado = Number(formData.consumo_compensado) || 0;
+
         const alerts = [];
+
+        if (compensado === 0) {
+            alerts.push({
+                type: 'compensation',
+                message: `Ausência de Compensação: A fatura não apresenta energia compensada. O boleto do assinante será gerado com o valor integral da concessionária.`
+            });
+        } else if (compensado < consumo) {
+            alerts.push({
+                type: 'compensation',
+                message: `Compensação Parcial: A energia compensada (${compensado} kWh) é menor que o consumo total (${consumo} kWh).`
+            });
+        }
 
         if (selectedUc && diffTariff > 0.02) {
             alerts.push({

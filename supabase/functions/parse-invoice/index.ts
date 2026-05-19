@@ -56,12 +56,11 @@ serve(async (req) => {
                              fullText.match(/kWh[^\d]*(\d+)/i) ||
                              fullText.match(/(\d+)\s*kWh/i);
     
-    const cipMatch = fullText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d,.]+)/i) ||
-                     fullText.match(/Ilum\.?\s*P[uú]bl\.?[^\d]*([\d,.]+)/i);
+    const cipMatch = fullText.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.|Ilum\.?\s*P[uú]bl\.?\s*Municipal|Ilum\.?\s*P[uú]bl\.?)[^\d]*([\d,.]+)/i);
 
-    const refMonthMatch = fullText.match(/Mês\s*Referência[:\s]*(\w{3}\/\d{2,4})|REF[:\s]*(\w{3}\/\d{2,4})/i);
-    const dueDateMatch = fullText.match(/Vencimento[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-    const totalAmountMatch = fullText.match(/Total\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)|Valor\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)/i);
+    const refMonthMatch = fullText.match(/M[êe]s\s*Refer[êe]ncia[:\s]*(\w{3}\/\d{2,4})|REF\.?\s*M[ÊE]S\/ANO[\s\n]*(\d{2}\/\d{4})|REF[:\s]*(\w{3}\/\d{2,4})/i);
+    const dueDateMatch = fullText.match(/Vencimento[:\s\n]*(\d{2}\/\d{2}\/\d{2,4})/i);
+    const totalAmountMatch = fullText.match(/TOTAL\s+A\s+PAGAR[\s\n]*(?:R\$)?[\s\n]*([\d,.]+)/i) || fullText.match(/Valor\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)/i);
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
     const othersMatch = fullText.match(/(?:Outros\s*Lançamentos|Adicionais)[:\s]*R\$?\s*([\d,.]+)/i);
 
@@ -71,6 +70,38 @@ serve(async (req) => {
         if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
         return parseFloat(raw);
     };
+
+    // Consumo Reais (Soma TUSD e TE ou Valores Genéricos)
+    let consumo_reais = 0;
+    const extractLastNumber = (line: string) => {
+        const matches = line.match(/([\d,.]+)/g);
+        return matches ? parseValue(matches[matches.length - 1]) : 0;
+    };
+    const tusdLine = fullText.match(/Consumo-TUSD[^\n]*/i);
+    const teLine = fullText.match(/Consumo-TE[^\n]*/i);
+    if (tusdLine && teLine) {
+        consumo_reais = extractLastNumber(tusdLine[0]) + extractLastNumber(teLine[0]);
+    } else {
+        const energiaAtivaReais = fullText.match(/Energia Ativa[^\n]*/i);
+        if (energiaAtivaReais) {
+            consumo_reais = extractLastNumber(energiaAtivaReais[0]);
+        }
+    }
+
+    // Linha Digitável
+    let linha_digitavel = null;
+    const barcodeCandidates = fullText.match(/(?:\d[\s\.\-]*){40,55}/g);
+    if (barcodeCandidates) {
+        for (const candidate of barcodeCandidates) {
+            const clean = candidate.replace(/\D/g, '');
+            if (clean.length === 44 || clean.length === 47 || clean.length === 48) {
+                // Ignore NFe Keys (starts with state code, usually 44 digits)
+                if (clean.length === 44 && !clean.startsWith('8')) continue;
+                linha_digitavel = clean;
+                break;
+            }
+        }
+    }
 
     const formatDate = (raw: string | null) => {
         if (!raw) return null;
@@ -96,12 +127,14 @@ serve(async (req) => {
 
     const result = {
         consumo_kwh: consumptionMatch ? parseInt(consumptionMatch[1].replace(/\D/g, '')) : 0,
+        consumo_reais: consumo_reais,
         iluminacao_publica: parseValue(cipMatch ? cipMatch[1] : null),
-        mes_referencia: parseMesRef(refMonthMatch ? (refMonthMatch[1] || refMonthMatch[2]) : null),
+        mes_referencia: parseMesRef(refMonthMatch ? (refMonthMatch[1] || refMonthMatch[2] || refMonthMatch[3]) : null),
         vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
         valor_a_pagar: parseValue(totalAmountMatch ? (totalAmountMatch[1] || totalAmountMatch[2]) : null),
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
-        outros_lancamentos: parseValue(othersMatch ? othersMatch[1] : null)
+        outros_lancamentos: parseValue(othersMatch ? othersMatch[1] : null),
+        linha_digitavel: linha_digitavel
     };
 
     return new Response(JSON.stringify(result), {
