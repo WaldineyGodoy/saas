@@ -28,9 +28,9 @@ serve(async (req) => {
       throw new Error('pdfBase64 ou pdfUrl é obrigatório')
     }
 
-    // Usando @unpdf/core que é otimizado para ambientes serverless (sem canvas)
+    // Usando unpdf que é otimizado para ambientes serverless (sem canvas)
     // Usamos o import dinâmico para garantir que o bundling remoto não falhe por pacotes nativos
-    const { getDocumentProxy, extractText } = await import("npm:@unpdf/core@0.5.1");
+    const { getDocumentProxy, extractText } = await import("npm:unpdf@0.5.1");
     
     const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
     const { text } = await extractText(pdf);
