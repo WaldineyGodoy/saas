@@ -23,6 +23,60 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     const [selectedUc, setSelectedUc] = useState(null);
     const [pdfFile, setPdfFile] = useState(null);
     
+    // UCs completas (com todos os status) e estados de pesquisa
+    const [allUcs, setAllUcs] = useState([]);
+    const [isLoadingUcs, setIsLoadingUcs] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Carrega todas as UCs sem restrição de status
+    useEffect(() => {
+        const fetchAllUcs = async () => {
+            setIsLoadingUcs(true);
+            try {
+                const { data, error } = await supabase
+                    .from('consumer_units')
+                    .select(`
+                        id, numero_uc, concessionaria, titular_conta, status,
+                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                        subscribers!consumer_units_subscriber_id_fkey(name),
+                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                    `)
+                    .order('titular_conta');
+                if (error) throw error;
+                setAllUcs(data || []);
+            } catch (err) {
+                console.error("Erro ao buscar todas as UCs no sandbox:", err);
+                setAllUcs(ucs || []);
+            } finally {
+                setIsLoadingUcs(false);
+            }
+        };
+
+        if (isOpen) {
+            fetchAllUcs();
+        }
+    }, [isOpen, ucs]);
+
+    // Fecha o dropdown ao clicar fora
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Limpa estados ao fechar o modal
+    useEffect(() => {
+        if (!isOpen) {
+            handleReset();
+        }
+    }, [isOpen]);
+
     // Status e micro-interações do loader
     const [isParsing, setIsParsing] = useState(false);
     const [loaderMessage, setLoaderMessage] = useState('Processando PDF...');
@@ -68,10 +122,47 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         return isNegative ? -value : value;
     };
 
+    // Filtros e badge de status da pesquisa de UCs
+    const filteredUcs = allUcs.filter(uc => {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+        
+        const numeroUcMatches = uc.numero_uc?.toLowerCase().includes(term);
+        const titularMatches = uc.titular_conta?.toLowerCase().includes(term);
+        const subscriberMatches = uc.subscribers?.name?.toLowerCase().includes(term);
+        const titularFaturaMatches = uc.titular_fatura?.name?.toLowerCase().includes(term);
+        
+        return numeroUcMatches || titularMatches || subscriberMatches || titularFaturaMatches;
+    });
+
+    const getStatusLabelAndColor = (status) => {
+        switch (String(status).toLowerCase()) {
+            case 'ativo':
+                return { label: 'Ativo', bg: '#ecfdf5', color: '#059669' };
+            case 'desconectado':
+                return { label: 'Desconectado', bg: '#fef3c7', color: '#d97706' };
+            case 'cancelado':
+                return { label: 'Cancelado', bg: '#fef2f2', color: '#dc2626' };
+            default:
+                return { label: status || 'Outro', bg: '#f1f5f9', color: '#64748b' };
+        }
+    };
+
+    const handleSelectUc = (uc) => {
+        setSelectedUcId(uc.id);
+        setSelectedUc(uc);
+        setSearchTerm(`UC: ${uc.numero_uc} - ${uc.titular_conta}`);
+        setIsDropdownOpen(false);
+        setFormData(prev => ({
+            ...prev,
+            desconto_aplicado: uc.desconto_assinante || 0
+        }));
+    };
+
     // Atualiza a UC selecionada
     useEffect(() => {
-        if (selectedUcId && ucs) {
-            const uc = ucs.find(u => u.id === selectedUcId);
+        if (selectedUcId && allUcs) {
+            const uc = allUcs.find(u => u.id === selectedUcId);
             setSelectedUc(uc);
             if (uc) {
                 setFormData(prev => ({
@@ -82,7 +173,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         } else {
             setSelectedUc(null);
         }
-    }, [selectedUcId, ucs]);
+    }, [selectedUcId, allUcs]);
 
     // Data automática de vencimento
     useEffect(() => {
@@ -250,9 +341,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         setFormData(prev => ({ ...prev, [field]: formatted }));
     };
 
-    const handleReset = () => {
+    function handleReset() {
         setPdfFile(null);
         setSelectedUcId('');
+        setSearchTerm('');
+        setIsDropdownOpen(false);
         setStep('upload');
         setFormData({
             mes_referencia: new Date().toISOString().substring(0, 7),
@@ -268,7 +361,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             valor_concessionaria: '',
             desconto_aplicado: ''
         });
-    };
+    }
 
     // Persistência no Banco
     const saveInvoice = async (saveStatus) => {
@@ -409,23 +502,144 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         {/* Passo A: Upload & Identificação */}
                         {step === 'upload' && (
                             <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <div>
+                                <div style={{ position: 'relative' }} ref={dropdownRef}>
                                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                                         Unidade Consumidora (UC) *
                                     </label>
-                                    <select
-                                        required
-                                        value={selectedUcId}
-                                        onChange={e => setSelectedUcId(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '0.95rem', background: 'white' }}
-                                    >
-                                        <option value="">Selecione a UC do Cliente...</option>
-                                        {ucs && ucs.map(uc => (
-                                            <option key={uc.id} value={uc.id}>
-                                                UC: {uc.numero_uc} - {uc.titular_conta} ({uc.concessionaria})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Pesquise por Número da UC ou Nome do Assinante..."
+                                            value={searchTerm}
+                                            onChange={(e) => {
+                                                setSearchTerm(e.target.value);
+                                                setIsDropdownOpen(true);
+                                                if (selectedUcId) {
+                                                    setSelectedUcId('');
+                                                }
+                                            }}
+                                            onFocus={() => setIsDropdownOpen(true)}
+                                            style={{ 
+                                                width: '100%', 
+                                                padding: '0.85rem 2.5rem 0.85rem 0.85rem', 
+                                                border: '1px solid #cbd5e1', 
+                                                borderRadius: '12px', 
+                                                fontSize: '0.95rem', 
+                                                background: 'white',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                        {searchTerm && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    setSearchTerm('');
+                                                    setSelectedUcId('');
+                                                }}
+                                                style={{ 
+                                                    position: 'absolute', 
+                                                    right: '12px', 
+                                                    top: '50%', 
+                                                    transform: 'translateY(-50%)', 
+                                                    background: 'none', 
+                                                    border: 'none', 
+                                                    cursor: 'pointer',
+                                                    color: '#94a3b8',
+                                                    padding: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    {isDropdownOpen && (
+                                        <div style={{ 
+                                            position: 'absolute', 
+                                            top: '100%', 
+                                            left: 0, 
+                                            right: 0, 
+                                            background: 'white', 
+                                            border: '1px solid #e2e8f0', 
+                                            borderRadius: '12px', 
+                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)', 
+                                            maxHeight: '220px', 
+                                            overflowY: 'auto', 
+                                            zIndex: 1000, 
+                                            marginTop: '4px' 
+                                        }}>
+                                            {isLoadingUcs ? (
+                                                <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.9rem', textAlign: 'center' }}>
+                                                    Carregando UCs...
+                                                </div>
+                                            ) : filteredUcs.length === 0 ? (
+                                                <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.9rem', textAlign: 'center' }}>
+                                                    Nenhuma UC encontrada.
+                                                </div>
+                                            ) : (
+                                                filteredUcs.map(uc => {
+                                                    const subscriberName = uc.subscribers?.name || uc.titular_fatura?.name || '';
+                                                    const statusBadge = getStatusLabelAndColor(uc.status);
+                                                    return (
+                                                        <div 
+                                                            key={uc.id} 
+                                                            onClick={() => handleSelectUc(uc)}
+                                                            style={{ 
+                                                                padding: '0.75rem 1rem', 
+                                                                cursor: 'pointer', 
+                                                                borderBottom: '1px solid #f1f5f9',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.2rem',
+                                                                background: selectedUcId === uc.id ? '#eff6ff' : 'white',
+                                                                transition: 'background 0.2s',
+                                                                textAlign: 'left'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                if (selectedUcId !== uc.id) {
+                                                                    e.currentTarget.style.background = '#f8fafc';
+                                                                }
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                if (selectedUcId !== uc.id) {
+                                                                    e.currentTarget.style.background = 'white';
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>
+                                                                    UC: {uc.numero_uc}
+                                                                </span>
+                                                                <span style={{ 
+                                                                    fontSize: '0.65rem', 
+                                                                    fontWeight: 800, 
+                                                                    padding: '0.1rem 0.4rem', 
+                                                                    borderRadius: '99px',
+                                                                    background: statusBadge.bg,
+                                                                    color: statusBadge.color,
+                                                                    textTransform: 'uppercase'
+                                                                }}>
+                                                                    {statusBadge.label}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b' }}>
+                                                                <span>Titular: {uc.titular_conta}</span>
+                                                                <span style={{ fontStyle: 'italic' }}>{uc.concessionaria}</span>
+                                                            </div>
+                                                            {subscriberName && (
+                                                                <div style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600 }}>
+                                                                    Assinante: {subscriberName}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div style={{ 
