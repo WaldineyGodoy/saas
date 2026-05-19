@@ -51,6 +51,13 @@ serve(async (req) => {
     const { text } = await extractText(pdf);
     const fullText = Array.isArray(text) ? text.join("\n") : (text || "");
 
+    const parseValue = (raw: string | null) => {
+        if (!raw) return 0;
+        if (raw.includes(',') && raw.includes('.')) return parseFloat(raw.replace(/\./g, '').replace(',', '.'));
+        if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
+        return parseFloat(raw);
+    };
+
     // Padrões de Extração (Regex)
     const consumptionMatch = fullText.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) || 
                              fullText.match(/kWh[^\d]*(\d+)/i) ||
@@ -81,13 +88,6 @@ serve(async (req) => {
     
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     const othersMatch = fullText.match(/(?:Outros\s*Lançamentos|Adicionais)[^\d]*([\d,.]+)/i);
-
-    const parseValue = (raw: string | null) => {
-        if (!raw) return 0;
-        if (raw.includes(',') && raw.includes('.')) return parseFloat(raw.replace(/\./g, '').replace(',', '.'));
-        if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
-        return parseFloat(raw);
-    };
 
     // Consumo Reais: Pega especificamente o VALOR (R$) que é a 3ª coluna de números após "kWh"
     // Ex: Consumo-TUSD kWh 753,00 0,57337503 431,75
