@@ -15,6 +15,23 @@ const compareIds = (a, b) => {
   return String(idA).trim() === String(idB).trim();
 };
 
+const getTypeFromId = (id) => {
+  if (!id) return '';
+  const idStr = String(id);
+  if (idStr.startsWith('uc_')) return 'uc';
+  if (idStr.startsWith('subscriber_')) return 'subscriber';
+  if (idStr.startsWith('fatura_')) return 'fatura';
+  if (idStr.startsWith('conta_energia_')) return 'conta_energia';
+  if (idStr.startsWith('lead_')) return 'lead';
+  if (idStr.startsWith('originator_')) return 'originator';
+  if (idStr.startsWith('supplier_')) return 'supplier';
+  if (idStr.startsWith('usina_')) return 'usina';
+  if (idStr.startsWith('concessionaria_')) return 'concessionaria';
+  if (idStr.startsWith('inc_')) return 'inconsistency';
+  if (idStr.startsWith('inconsistency_')) return 'inconsistency';
+  return idStr.split('_')[0] || '';
+};
+
 const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, allSubscribers, allConsolidatedInvoices, allLeads, allOriginators, allSuppliers, allUsinas) => {
   if (!selNode || !targetNode) return false;
   
@@ -30,8 +47,8 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
   if (hasDirectLink) return true;
   
   // Custom indirect connection rules for premium user experience
-  const selType = typeof selNode === 'object' ? selNode.type : (selId.split('_')[0] || '');
-  const targetType = typeof targetNode === 'object' ? targetNode.type : (targetId.split('_')[0] || '');
+  const selType = typeof selNode === 'object' && selNode.type ? selNode.type : getTypeFromId(selId);
+  const targetType = typeof targetNode === 'object' && targetNode.type ? targetNode.type : getTypeFromId(targetId);
   const subscribers = allSubscribers || [];
   const consolidatedInvoices = allConsolidatedInvoices || [];
   const leads = allLeads || [];
