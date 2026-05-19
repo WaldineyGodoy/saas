@@ -2937,8 +2937,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                     compareIds(selectedNode, link.source) || 
                     compareIds(selectedNode, link.target) || 
                     (
-                      checkIsConnected(selectedNode, link.source, ucs, invoices, inconsistencies, consolidatedInvoices) &&
-                      checkIsConnected(selectedNode, link.target, ucs, invoices, inconsistencies, consolidatedInvoices)
+                      checkIsConnected(selectedNode, link.source, links, invoices, ucs, subscribers, consolidatedInvoices, leads, originators, suppliers, usinas) &&
+                      checkIsConnected(selectedNode, link.target, links, invoices, ucs, subscribers, consolidatedInvoices, leads, originators, suppliers, usinas)
                     )
                   );
                   const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches) && !isLinkSelected && !isHighlighted;
@@ -2975,7 +2975,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, links, invoices, ucs, subscribers, consolidatedInvoices, leads, originators, suppliers, usinas);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
@@ -3064,7 +3064,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, links, invoices, ucs, subscribers, consolidatedInvoices, leads, originators, suppliers, usinas);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
@@ -3179,7 +3179,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, links, invoices, ucs, subscribers, consolidatedInvoices, leads, originators, suppliers, usinas);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
