@@ -61,8 +61,10 @@ export default function InvoiceListManager() {
     };
 
     const getAnteriorLeitura = (currentInvoice) => {
+        if (currentInvoice.data_leitura_anterior) {
+            return currentInvoice.data_leitura_anterior.split('T')[0].split('-').reverse().join('/');
+        }
         if (!currentInvoice.uc_id || !currentInvoice.mes_referencia) return '-';
-        
         const [year, month] = currentInvoice.mes_referencia.split('-').map(Number);
         let prevYear = year;
         let prevMonth = month - 1;
