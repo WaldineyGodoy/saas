@@ -53,9 +53,11 @@ serve(async (req) => {
 
     const parseValue = (raw: string | null) => {
         if (!raw) return 0;
-        if (raw.includes(',') && raw.includes('.')) return parseFloat(raw.replace(/\./g, '').replace(',', '.'));
-        if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
-        return parseFloat(raw);
+        let val = raw;
+        if (val.includes(',') && val.includes('.')) val = val.replace(/\./g, '').replace(',', '.');
+        else if (val.includes(',')) val = val.replace(',', '.');
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? 0 : parsed;
     };
 
     // Padrões de Extração (Regex)
@@ -65,7 +67,7 @@ serve(async (req) => {
     
     // Iluminação Pública: Regex a prova de balas para lidar com quebras de linha ou espaçamentos malucos
     let iluminacao_publica = 0;
-    const cipMatch = fullText.match(/(?:Ilum[\s\S]{0,30}Municipal|Ilumina[çc][ãa]o[\s\S]{0,10}P[úu]blica|COSIP|CIP-MUNICIP)[\s\S]{0,20}?(\d{1,4},\d{2})/i);
+    const cipMatch = fullText.match(/(?:Ilum[\s\S]{0,30}Municipal|Ilumina[çc][ãa]o[\s\S]{0,10}P[úu]blica|COSIP|CIP-MUNICIP)[\s\S]{0,40}?(\d{1,4},\d{2})/i);
     if (cipMatch) {
         iluminacao_publica = parseValue(cipMatch[1]);
     }
@@ -78,7 +80,7 @@ serve(async (req) => {
     
     // Total a Pagar: Pega a última ocorrência da palavra TOTAL seguida de um valor (geralmente é o valor final no rodapé)
     let valor_a_pagar = 0;
-    const totalAmountMatches = [...fullText.matchAll(/TOTAL[\s\S]{0,40}?(\d{1,5},\d{2})/gi)];
+    const totalAmountMatches = [...fullText.matchAll(/TOTAL[\s\S]{0,100}?(\d{1,5},\d{2})/gi)];
     if (totalAmountMatches.length > 0) {
         valor_a_pagar = parseValue(totalAmountMatches[totalAmountMatches.length - 1][1]);
     } else {
