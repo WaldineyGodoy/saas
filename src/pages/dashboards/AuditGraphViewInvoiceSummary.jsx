@@ -96,8 +96,14 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
         return true;
       }
       // target is the energy account
-      if (targetType === 'conta_energia' && compareIds(targetId.replace('conta_energia_', ''), inc.invoice_id)) {
-        return true;
+      if (targetType === 'conta_energia') {
+        if (inc.invoice_id) {
+          if (compareIds(targetId.replace('conta_energia_', ''), inc.invoice_id)) return true;
+        } else if (inc.uc_id) {
+          const invId = targetId.replace('conta_energia_', '');
+          const inv = allInvoices.find(i => compareIds(i.id, invId));
+          if (inv && compareIds(inv.uc_id, inc.uc_id)) return true;
+        }
       }
       // target is the subscriber of the UC
       if (targetType === 'subscriber' && inc.uc_id) {
@@ -107,10 +113,16 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
         }
       }
       // target is the consolidated invoice of the energy account
-      if (targetType === 'fatura' && inc.invoice_id) {
-        const inv = allInvoices.find(i => compareIds(i.id, inc.invoice_id));
-        if (inv && compareIds(targetId.replace('fatura_', ''), inv.consolidated_invoice_id)) {
-          return true;
+      if (targetType === 'fatura') {
+        if (inc.invoice_id) {
+          const inv = allInvoices.find(i => compareIds(i.id, inc.invoice_id));
+          if (inv && compareIds(targetId.replace('fatura_', ''), inv.consolidated_invoice_id)) {
+            return true;
+          }
+        } else if (inc.uc_id) {
+          const fatId = targetId.replace('fatura_', '');
+          const hasUc = allInvoices.some(i => compareIds(i.uc_id, inc.uc_id) && compareIds(i.consolidated_invoice_id, fatId));
+          if (hasUc) return true;
         }
       }
     }
@@ -1339,22 +1351,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
             repelThreshold = 400;
           }
 
-          // If a node is selected, also push all connected nodes further apart from it and from each other
-          const activeSelected = selectedNodeRef.current;
-          if (activeSelected) {
-            const isAConnected = compareIds(nodeA, activeSelected) || links.some(l => 
-              (compareIds(l.source, activeSelected) && compareIds(l.target, nodeA)) ||
-              (compareIds(l.target, activeSelected) && compareIds(l.source, nodeA))
-            );
-            const isBConnected = compareIds(nodeB, activeSelected) || links.some(l => 
-              (compareIds(l.source, activeSelected) && compareIds(l.target, nodeB)) ||
-              (compareIds(l.target, activeSelected) && compareIds(l.source, nodeB))
-            );
-            if (isAConnected && isBConnected) {
-              effectiveRepulsion = repulsion * 2.8;
-              repelThreshold = 350;
-            }
-          }
+          // Selected node logic has been removed here to prevent explosion
+          // Panning handles the focus smoothly now without disrupting the layout.
 
           if (dist < repelThreshold) {
             const force = effectiveRepulsion / distSq;
@@ -1589,6 +1587,41 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
   const handleLegendClick = (type) => {
     setActiveLegendFilter(prev => prev === type ? null : type);
+
+    // Automatically focus and select the first/next node matching the category
+    if (type === 'critical') {
+      const crits = inconsistencies.filter(i => i.severity === 'critical');
+      if (crits.length > 0) {
+        const nextIdx = (criticalCycleIndex + 1) % crits.length;
+        setCriticalCycleIndex(nextIdx);
+        const targetInc = crits[nextIdx];
+        const node = nodes.find(n => n.id === targetInc.id);
+        if (node) handleNodeClick(node);
+      }
+    } else if (type === 'warning') {
+      const warns = inconsistencies.filter(i => i.severity === 'warning');
+      if (warns.length > 0) {
+        const nextIdx = (warningCycleIndex + 1) % warns.length;
+        setWarningCycleIndex(nextIdx);
+        const targetInc = warns[nextIdx];
+        const node = nodes.find(n => n.id === targetInc.id);
+        if (node) handleNodeClick(node);
+      }
+    } else if (type === 'uc') {
+      if (ucs.length > 0) {
+        const nextIdx = (ucCycleIndex + 1) % ucs.length;
+        setUcCycleIndex(nextIdx);
+        const targetUc = ucs[nextIdx];
+        const node = nodes.find(n => n.id === `uc_${targetUc.id}`);
+        if (node) handleNodeClick(node);
+      }
+    } else {
+      setSelectedNode(null); // Clear selection for 'healthy' or other filters
+      setActiveAlertId(null);
+      setPanX(0);
+      setPanY(0);
+      setZoom(1);
+    }
   };
 
   // Agent Actions
