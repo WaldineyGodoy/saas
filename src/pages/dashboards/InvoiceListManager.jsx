@@ -1242,12 +1242,15 @@ export default function InvoiceListManager() {
                             <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                 <History size={16} /> Histórico
                             </button>
-                            <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'white', color: 'var(--color-blue)', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--color-blue)', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <BarChart2 size={16} /> Análise Avulsa de Conta
-                            </button>
-                            <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <Plus size={16} /> {activeTab === 'contas_energia' ? 'Conta de Energia' : 'Nova Fatura'}
-                            </button>
+                            {activeTab === 'faturas' ? (
+                                <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Plus size={16} /> Nova Fatura
+                                </button>
+                            ) : (
+                                <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Plus size={16} /> Nova Conta
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
