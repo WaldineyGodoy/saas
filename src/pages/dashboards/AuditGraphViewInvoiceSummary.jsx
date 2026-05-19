@@ -125,13 +125,6 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
       if (targetType === 'fatura' && compareIds(targetId.replace('fatura_', ''), inv.consolidated_invoice_id)) {
         return true;
       }
-      // target is subscriber of its UC
-      if (targetType === 'subscriber' && inv.uc_id) {
-        const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
-        if (uc && compareIds(targetId.replace('subscriber_', ''), uc.subscriber_id)) {
-          return true;
-        }
-      }
       // target is UC
       if (targetType === 'uc' && compareIds(targetId.replace('uc_', ''), inv.uc_id)) {
         return true;
@@ -163,10 +156,6 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
           compareIds(inv.uc_id, targetUcId)
         );
       }
-      // target is subscriber
-      if (targetType === 'subscriber' && compareIds(targetId.replace('subscriber_', ''), fat.subscriber_id)) {
-        return true;
-      }
     }
   }
 
@@ -178,12 +167,6 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
       const targetUcId = targetId.replace('uc_', '');
       const targetUc = allUcs.find(u => compareIds(u.id, targetUcId));
       return targetUc && compareIds(targetUc.subscriber_id, rawSubId);
-    }
-    // target is consolidated invoice of this subscriber
-    if (targetType === 'fatura') {
-      const targetFatId = targetId.replace('fatura_', '');
-      const targetFat = consolidatedInvoices.find(f => compareIds(f.id, targetFatId));
-      return targetFat && compareIds(targetFat.subscriber_id, rawSubId);
     }
   }
 
@@ -569,39 +552,94 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       }
     });
 
-    // Rule 3: Sobreposição de Períodos de Leitura
-    // For each UC, check chronological dates
+    // Rule 3, 4 & 5: Sequência Cronológica (Sobreposição, Gap e Variação Anômala)
     allUcs.forEach(uc => {
       const ucInvoices = activeInvoices
-        .filter(i => i.uc_id === uc.id && i.data_leitura)
-        .sort((a, b) => new Date(a.mes_referencia) - new Date(b.mes_referencia));
+        .filter(i => compareIds(i.uc_id, uc.id))
+        .sort((a, b) => {
+          const dateA = new Date(a.mes_referencia || a.data_leitura);
+          const dateB = new Date(b.mes_referencia || b.data_leitura);
+          return dateA - dateB;
+        });
 
       for (let i = 0; i < ucInvoices.length - 1; i++) {
         const current = ucInvoices[i];
         const next = ucInvoices[i + 1];
 
-        const dateCurrent = new Date(current.data_leitura);
-        const dateNext = new Date(next.data_leitura);
+        if (!current.mes_referencia || !next.mes_referencia) continue;
 
-        // Compute difference in days
-        const diffTime = Math.abs(dateNext - dateCurrent);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const dateCurrent = new Date(current.mes_referencia + 'T00:00:00');
+        const dateNext = new Date(next.mes_referencia + 'T00:00:00');
 
-        if (diffDays < 20) {
+        // Rule 3: Mês Sem Faturamento (Gap Detection)
+        const monthsDiff = (dateNext.getFullYear() - dateCurrent.getFullYear()) * 12 + (dateNext.getMonth() - dateCurrent.getMonth());
+        
+        if (monthsDiff > 1) {
           addInconsistency(
-            'overlap',
+            'missing_month',
             'critical',
-            'Sobreposição de Leituras',
-            `O período de leitura entre a fatura de ${current.mes_referencia.substring(5, 7)}/${current.mes_referencia.substring(0, 4)} e ${next.mes_referencia.substring(5, 7)}/${next.mes_referencia.substring(0, 4)} é de apenas ${diffDays} dias, sugerindo sobreposição ou erro de leitura física.`,
+            'Mês Sem Faturamento',
+            `Foi detectado um salto de ${monthsDiff - 1} mês(es) sem faturamento entre ${current.mes_referencia.substring(5, 7)}/${current.mes_referencia.substring(0, 4)} e ${next.mes_referencia.substring(5, 7)}/${next.mes_referencia.substring(0, 4)} para a UC ${uc.numero_uc}.`,
+            uc.id,
+            null,
+            { monthsDiff, currentInvoice: current.id, nextInvoice: next.id }
+          );
+        }
+
+        // Rule 4: Leitura Sobreposta ou Redundante
+        if (current.data_leitura && next.data_leitura) {
+          const dateReadCurrent = new Date(current.data_leitura);
+          const dateReadNext = new Date(next.data_leitura);
+          const diffDays = Math.ceil(Math.abs(dateReadNext - dateReadCurrent) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays < 20 && diffDays > 0) {
+            addInconsistency(
+              'overlap',
+              'critical',
+              'Sobreposição de Leituras',
+              `O período de leitura entre as faturas de ${current.mes_referencia.substring(5, 7)}/${current.mes_referencia.substring(0, 4)} e ${next.mes_referencia.substring(5, 7)}/${next.mes_referencia.substring(0, 4)} é de apenas ${diffDays} dias.`,
+              uc.id,
+              next.id,
+              { days: diffDays, currentInvoice: current.id, nextInvoice: next.id }
+            );
+          }
+        }
+        
+        if (monthsDiff === 0 && current.status === next.status) {
+          addInconsistency(
+            'redundant_period',
+            'warning',
+            'Período Redundante com Mesmo Status',
+            `Encontradas duas contas de energia para o mesmo período de referência (${current.mes_referencia.substring(5, 7)}/${current.mes_referencia.substring(0, 4)}) com o mesmo status (${current.status}).`,
             uc.id,
             next.id,
-            { days: diffDays, currentInvoice: current.id, nextInvoice: next.id }
+            { currentInvoice: current.id, nextInvoice: next.id }
           );
+        }
+
+        // Rule 5: Faturamento Fora do Padrão (Variação de 50%)
+        const valCur = Number(current.valor_concessionaria) || 0;
+        const valNext = Number(next.valor_concessionaria) || 0;
+        
+        if (valCur > 0 && valNext > 0) {
+          const variation = Math.abs(valNext - valCur) / valCur;
+          if (variation > 0.5) { // 50% threshold
+            const direction = valNext > valCur ? 'aumento' : 'queda';
+            addInconsistency(
+              'abnormal_billing',
+              'warning',
+              'Faturamento Fora do Padrão',
+              `Identificamos um ${direction} anômalo de ${(variation * 100).toFixed(1)}% no valor da concessionária de ${current.mes_referencia.substring(5, 7)}/${current.mes_referencia.substring(0, 4)} (R$ ${valCur.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) para ${next.mes_referencia.substring(5, 7)}/${next.mes_referencia.substring(0, 4)} (R$ ${valNext.toLocaleString('pt-BR', {minimumFractionDigits: 2})}).`,
+              uc.id,
+              next.id,
+              { variation, currentInvoice: current.id, nextInvoice: next.id }
+            );
+          }
         }
       }
     });
 
-    // Rule 4: Erro de Faturamento (Divergência de Valores Extremas)
+    // Rule 6: Erro de Faturamento (Divergência de Valores Extremas)
     activeInvoices.forEach(inv => {
       const valConcessionaria = Number(inv.valor_concessionaria) || 0;
       const valAPagar = Number(inv.valor_a_pagar) || 0;
@@ -610,12 +648,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         ? new Date(inv.mes_referencia + 'T00:00:00').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
         : '-';
 
-      // Discrepancy where subscriber payment is unusually high compared to concessionaire bill,
-      // or concessionaire has value but subscriber is paid 0, or subscriber is significantly higher (10x+)
       if (valConcessionaria > 0 && valAPagar > 0) {
         const ratio = valAPagar / valConcessionaria;
-        
-        // Apply custom trained rules (max_ratio)
         const maxRatioRule = customRules.find(r => r.type === 'max_ratio');
         const isIgnoredByRatio = maxRatioRule && (Math.abs(ratio - 1) < (maxRatioRule.value / 100));
 
@@ -624,7 +658,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
             'billing_error',
             'critical',
             'Divergência Crítica de Faturamento',
-            `Divergência matemática detectada na fatura de ${mesRef}. Valor Concessionária: R$ ${valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} vs. Valor Cobrado do Assinante: R$ ${valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+            `Divergência matemática detectada na fatura de ${mesRef}. Valor Concessionária: R$ ${valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} vs. Valor Cobrado: R$ ${valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
             inv.uc_id,
             inv.id,
             { valConcessionaria, valAPagar, ratio }
@@ -633,9 +667,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       }
     });
 
-    // Rule 5: Fatura Sem Compensação
+    // Rule 7: Fatura Sem Compensação
     activeInvoices.forEach(inv => {
-      // If UC is auto-consumo-remoto, expected to have compensation
       if (inv.consumer_units?.modalidade === 'auto_consumo_remoto') {
         const consumoKwh = Number(inv.consumo_kwh) || 0;
         const compensado = Number(inv.consumo_compensado) || 0;
@@ -773,12 +806,15 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           if (uc.subscriber_id) visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
           if (uc.usina_id) visibleNodeIds.add(`usina_${uc.usina_id}`);
           if (uc.concessionaria) visibleNodeIds.add(`concessionaria_${uc.concessionaria}`);
-          // Include energy bills for this UC
+          
+          // Include faturas and energy bills for this UC
           const ucInvs = allInvoices.filter(i => compareIds(i.uc_id, rawUcId));
           ucInvs.forEach(inv => {
-            visibleNodeIds.add(`conta_energia_${inv.id}`);
             if (inv.consolidated_invoice_id) {
               visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+              visibleNodeIds.add(`conta_energia_${inv.id}`);
+            } else {
+              visibleNodeIds.add(`conta_energia_${inv.id}`);
             }
           });
         }
@@ -788,15 +824,18 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         if (sub) {
           if (sub.originator_id) visibleNodeIds.add(`originator_${sub.originator_id}`);
           if (sub.lead_id) visibleNodeIds.add(`lead_${sub.lead_id}`);
-          // Include UCs
+          
+          // Include UCs, Faturas, and Bills
           const subUcs = allUcs.filter(u => compareIds(u.subscriber_id, rawSubId));
           subUcs.forEach(uc => {
             visibleNodeIds.add(`uc_${uc.id}`);
             const ucInvs = allInvoices.filter(i => compareIds(i.uc_id, uc.id));
             ucInvs.forEach(inv => {
-              visibleNodeIds.add(`conta_energia_${inv.id}`);
               if (inv.consolidated_invoice_id) {
                 visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+                visibleNodeIds.add(`conta_energia_${inv.id}`);
+              } else {
+                visibleNodeIds.add(`conta_energia_${inv.id}`);
               }
             });
           });
@@ -805,6 +844,9 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         const rawInvId = selId.replace('conta_energia_', '');
         const inv = allInvoices.find(i => compareIds(i.id, rawInvId));
         if (inv) {
+          if (inv.consolidated_invoice_id) {
+            visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+          }
           if (inv.uc_id) {
             visibleNodeIds.add(`uc_${inv.uc_id}`);
             const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
@@ -812,21 +854,20 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
               visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
             }
           }
-          if (inv.consolidated_invoice_id) {
-            visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
-          }
         }
       } else if (selId.startsWith('fatura_')) {
         const rawFatId = selId.replace('fatura_', '');
-        const fat = consolidatedInvoices.find(f => compareIds(f.id, rawFatId));
-        if (fat) {
-          if (fat.subscriber_id) visibleNodeIds.add(`subscriber_${fat.subscriber_id}`);
-          const fatInvs = allInvoices.filter(i => compareIds(i.consolidated_invoice_id, rawFatId));
-          fatInvs.forEach(inv => {
-            visibleNodeIds.add(`conta_energia_${inv.id}`);
-            if (inv.uc_id) visibleNodeIds.add(`uc_${inv.uc_id}`);
-          });
-        }
+        const fatInvs = allInvoices.filter(i => compareIds(i.consolidated_invoice_id, rawFatId));
+        fatInvs.forEach(inv => {
+          visibleNodeIds.add(`conta_energia_${inv.id}`);
+          if (inv.uc_id) {
+            visibleNodeIds.add(`uc_${inv.uc_id}`);
+            const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
+            if (uc && uc.subscriber_id) {
+              visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
+            }
+          }
+        });
       } else if (selId.startsWith('inc_') || allInconsistencies.some(inc => inc.id === selId)) {
         const inc = allInconsistencies.find(i => i.id === selId);
         if (inc) {
@@ -1084,14 +1125,21 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         };
         newNodes.push(setNodeCoords(node));
 
-        if (fat.subscriber_id) {
+        // Link Fatura to UC based on the invoices it aggregates
+        const fatInvs = allInvoices.filter(i => compareIds(i.consolidated_invoice_id, fat.id));
+        const fatUcs = new Set();
+        fatInvs.forEach(inv => {
+          if (inv.uc_id) fatUcs.add(`uc_${inv.uc_id}`);
+        });
+        
+        fatUcs.forEach(ucId => {
           newLinks.push({
             source: fatId,
-            target: `subscriber_${fat.subscriber_id}`,
+            target: ucId,
             color: 'rgba(236, 72, 153, 0.25)',
             width: 1.5
           });
-        }
+        });
       }
     });
 
@@ -1119,19 +1167,18 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         };
         newNodes.push(setNodeCoords(node));
 
-        if (inv.uc_id) {
-          newLinks.push({
-            source: invId,
-            target: `uc_${inv.uc_id}`,
-            color: 'rgba(6, 182, 212, 0.25)',
-            width: 1
-          });
-        }
         if (inv.consolidated_invoice_id) {
           newLinks.push({
             source: invId,
             target: `fatura_${inv.consolidated_invoice_id}`,
             color: 'rgba(236, 72, 153, 0.25)',
+            width: 1
+          });
+        } else if (inv.uc_id) {
+          newLinks.push({
+            source: invId,
+            target: `uc_${inv.uc_id}`,
+            color: 'rgba(6, 182, 212, 0.25)',
             width: 1
           });
         }
