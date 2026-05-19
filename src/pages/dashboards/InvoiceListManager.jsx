@@ -101,7 +101,8 @@ export default function InvoiceListManager() {
         } else {
             // Contas de energia (Concessionária)
             if (inv.consumer_units?.modalidade !== 'auto_consumo_remoto') return false;
-            if (inv.status === 'sem_faturamento') return false;
+            // Contas 'sem_faturamento' (apenas operacionais) devem aparecer aqui, pois são contas da concessionária.
+            // if (inv.status === 'sem_faturamento') return false;
 
             if (statusFilter) {
                 const ebStatus = inv.energy_bill_status || 'pendente';

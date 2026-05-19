@@ -95,7 +95,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         linha_digitavel: '',
         pix_string: '',
         valor_concessionaria: '',
-        desconto_aplicado: ''
+        desconto_aplicado: '',
+        energy_bill_status: 'pendente'
     });
 
     // Simulações Calculadas
@@ -396,7 +397,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             linha_digitavel: formData.linha_digitavel || null,
             pix_string: formData.pix_string || null,
             desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.desconto_assinante || 0),
-            energy_bill_status: saveStatus === 'sem_faturamento' ? 'pago' : 'pendente', // Operacional avulso pré-setado
+            energy_bill_status: formData.energy_bill_status || 'pendente',
             status: saveStatus
         };
 
@@ -1145,6 +1146,24 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                 className="sandbox-input" 
                                             />
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Status da Conta de Energia (Concessionária) */}
+                                <div style={{ background: 'white', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Status de Pagamento (Concessionária)</h5>
+                                    <div>
+                                        <select 
+                                            value={formData.energy_bill_status || 'pendente'}
+                                            onChange={e => setFormData({ ...formData, energy_bill_status: e.target.value })}
+                                            className="sandbox-input"
+                                            style={{ cursor: 'pointer', fontWeight: 600, color: '#0f172a' }}
+                                        >
+                                            <option value="pendente">Pendente</option>
+                                            <option value="pago">Pago</option>
+                                            <option value="vencida">Vencida</option>
+                                            <option value="parcelada">Parcelada</option>
+                                        </select>
                                     </div>
                                 </div>
 
