@@ -28,10 +28,20 @@ serve(async (req) => {
       throw new Error('pdfBase64 ou pdfUrl é obrigatório')
     }
 
-    // Usando unpdf via esm.sh com canvas externalizado para evitar erros de compilação em Deno
-    const unpdfModule = await import("https://esm.sh/unpdf@0.5.1?external=canvas");
+    // Usando unpdf via esm.sh na versão 1.6.2, injetando manualmente o pdfjs bundle
+    // para evitar o erro de dynamic import "PDF.js is not available" nas Edge Functions do Supabase.
+    const unpdfModule = await import("https://esm.sh/unpdf@1.6.2");
+    const pdfjsModule = await import("https://esm.sh/unpdf@1.6.2/dist/pdfjs.mjs");
+
+    const configureUnPDF = unpdfModule.configureUnPDF || unpdfModule.default?.configureUnPDF;
+    if (configureUnPDF) {
+      await configureUnPDF({
+        pdfjs: async () => pdfjsModule
+      });
+    }
+
     const getDocumentProxy = unpdfModule.getDocumentProxy || unpdfModule.default?.getDocumentProxy;
-    const extractText = unpdfModule.extractPDFText || unpdfModule.extractText || unpdfModule.default?.extractPDFText || unpdfModule.default?.extractText;
+    const extractText = unpdfModule.extractText || unpdfModule.default?.extractText;
 
     if (!getDocumentProxy || !extractText) {
       throw new Error("Não foi possível carregar as funções de extração de PDF do pacote 'unpdf'. Verifique a versão.");
