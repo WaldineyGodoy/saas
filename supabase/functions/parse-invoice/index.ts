@@ -29,12 +29,18 @@ serve(async (req) => {
     }
 
     // Usando unpdf que é otimizado para ambientes serverless (sem canvas)
-    // Usamos o import dinâmico para garantir que o bundling remoto não falhe por pacotes nativos
-    const { getDocumentProxy, extractText } = await import("npm:unpdf@0.5.1");
+    // Usamos o import dinâmico com resolução robusta ESM/CJS para garantir que o bundling remoto funcione no Deno
+    const unpdfModule = await import("npm:unpdf@0.5.1");
+    const getDocumentProxy = unpdfModule.getDocumentProxy || unpdfModule.default?.getDocumentProxy;
+    const extractText = unpdfModule.extractText || unpdfModule.default?.extractText;
+
+    if (!getDocumentProxy || !extractText) {
+      throw new Error("Não foi possível carregar as funções de extração de PDF do pacote 'unpdf'. Verifique a versão.");
+    }
     
     const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
     const { text } = await extractText(pdf);
-    const fullText = text.join("\n");
+    const fullText = Array.isArray(text) ? text.join("\n") : (text || "");
 
     // Padrões de Extração (Regex)
     const consumptionMatch = fullText.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) || 
