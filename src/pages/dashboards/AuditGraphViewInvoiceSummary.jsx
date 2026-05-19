@@ -15,6 +15,231 @@ const compareIds = (a, b) => {
   return String(idA).trim() === String(idB).trim();
 };
 
+const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, allSubscribers, allConsolidatedInvoices, allLeads, allOriginators, allSuppliers, allUsinas) => {
+  if (!selNode || !targetNode) return false;
+  
+  const selId = typeof selNode === 'object' ? selNode.id : selNode;
+  const targetId = typeof targetNode === 'object' ? targetNode.id : targetNode;
+  if (compareIds(selId, targetId)) return true;
+
+  // Direct link check
+  const hasDirectLink = allLinks.some(l => 
+    (compareIds(l.source, selId) && compareIds(l.target, targetId)) ||
+    (compareIds(l.target, selId) && compareIds(l.source, targetId))
+  );
+  if (hasDirectLink) return true;
+  
+  // Custom indirect connection rules for premium user experience
+  const selType = typeof selNode === 'object' ? selNode.type : (selId.split('_')[0] || '');
+  const targetType = typeof targetNode === 'object' ? targetNode.type : (targetId.split('_')[0] || '');
+  const subscribers = allSubscribers || [];
+  const consolidatedInvoices = allConsolidatedInvoices || [];
+  const leads = allLeads || [];
+  const originators = allOriginators || [];
+  const suppliers = allSuppliers || [];
+  const usinas = allUsinas || [];
+  
+  // 1. If selected is UC
+  if (selType === 'uc') {
+    const rawUcId = String(selId).replace('uc_', '');
+    const uc = allUcs.find(u => compareIds(u.id, rawUcId));
+    if (uc) {
+      // target is subscriber of this UC
+      if (targetType === 'subscriber' && compareIds(targetId.replace('subscriber_', ''), uc.subscriber_id)) {
+        return true;
+      }
+      // target is energy account of this UC
+      if (targetType === 'conta_energia') {
+        const targetInvId = targetId.replace('conta_energia_', '');
+        const targetInv = allInvoices.find(i => compareIds(i.id, targetInvId));
+        return targetInv && compareIds(targetInv.uc_id, rawUcId);
+      }
+      // target is consolidated invoice of any energy account of this UC
+      if (targetType === 'fatura') {
+        const targetFatId = targetId.replace('fatura_', '');
+        return allInvoices.some(inv => 
+          compareIds(inv.uc_id, rawUcId) && 
+          compareIds(inv.consolidated_invoice_id, targetFatId)
+        );
+      }
+      // target is an inconsistency related to this UC
+      if (targetType === 'inconsistency' || String(targetId).startsWith('inc_')) {
+        const targetInc = targetNode.inconsistencyData || targetNode;
+        return compareIds(targetInc?.uc_id, rawUcId) || compareIds(targetNode.uc_id, rawUcId);
+      }
+    }
+  }
+  
+  // 2. If selected is Inconsistency
+  if (selType === 'inconsistency' || String(selId).startsWith('inc_')) {
+    const inc = selNode.inconsistencyData || selNode;
+    if (inc) {
+      // target is the UC
+      if (targetType === 'uc' && compareIds(targetId.replace('uc_', ''), inc.uc_id)) {
+        return true;
+      }
+      // target is the energy account
+      if (targetType === 'conta_energia' && compareIds(targetId.replace('conta_energia_', ''), inc.invoice_id)) {
+        return true;
+      }
+      // target is the subscriber of the UC
+      if (targetType === 'subscriber' && inc.uc_id) {
+        const uc = allUcs.find(u => compareIds(u.id, inc.uc_id));
+        if (uc && compareIds(targetId.replace('subscriber_', ''), uc.subscriber_id)) {
+          return true;
+        }
+      }
+      // target is the consolidated invoice of the energy account
+      if (targetType === 'fatura' && inc.invoice_id) {
+        const inv = allInvoices.find(i => compareIds(i.id, inc.invoice_id));
+        if (inv && compareIds(targetId.replace('fatura_', ''), inv.consolidated_invoice_id)) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  // 3. If selected is Energy Account (Conta de Energia)
+  if (selType === 'conta_energia') {
+    const rawInvId = String(selId).replace('conta_energia_', '');
+    const inv = allInvoices.find(i => compareIds(i.id, rawInvId));
+    if (inv) {
+      // target is consolidated invoice
+      if (targetType === 'fatura' && compareIds(targetId.replace('fatura_', ''), inv.consolidated_invoice_id)) {
+        return true;
+      }
+      // target is subscriber of its UC
+      if (targetType === 'subscriber' && inv.uc_id) {
+        const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
+        if (uc && compareIds(targetId.replace('subscriber_', ''), uc.subscriber_id)) {
+          return true;
+        }
+      }
+      // target is UC
+      if (targetType === 'uc' && compareIds(targetId.replace('uc_', ''), inv.uc_id)) {
+        return true;
+      }
+      // target is an inconsistency of this energy account
+      if (targetType === 'inconsistency' || String(targetId).startsWith('inc_')) {
+        const targetInc = targetNode.inconsistencyData || targetNode;
+        return compareIds(targetInc?.invoice_id, rawInvId) || compareIds(targetNode.invoice_id, rawInvId);
+      }
+    }
+  }
+
+  // 4. If selected is Consolidated Invoice (Fatura)
+  if (selType === 'fatura') {
+    const rawFatId = String(selId).replace('fatura_', '');
+    const fat = consolidatedInvoices.find(f => compareIds(f.id, rawFatId));
+    if (fat) {
+      // target is energy account of this consolidated invoice
+      if (targetType === 'conta_energia') {
+        const targetInvId = targetId.replace('conta_energia_', '');
+        const targetInv = allInvoices.find(i => compareIds(i.id, targetInvId));
+        return targetInv && compareIds(targetInv.consolidated_invoice_id, rawFatId);
+      }
+      // target is UC of those energy accounts
+      if (targetType === 'uc') {
+        const targetUcId = targetId.replace('uc_', '');
+        return allInvoices.some(inv => 
+          compareIds(inv.consolidated_invoice_id, rawFatId) && 
+          compareIds(inv.uc_id, targetUcId)
+        );
+      }
+      // target is subscriber
+      if (targetType === 'subscriber' && compareIds(targetId.replace('subscriber_', ''), fat.subscriber_id)) {
+        return true;
+      }
+    }
+  }
+
+  // 5. If selected is Subscriber (Assinante)
+  if (selType === 'subscriber') {
+    const rawSubId = String(selId).replace('subscriber_', '');
+    // target is UC of this subscriber
+    if (targetType === 'uc') {
+      const targetUcId = targetId.replace('uc_', '');
+      const targetUc = allUcs.find(u => compareIds(u.id, targetUcId));
+      return targetUc && compareIds(targetUc.subscriber_id, rawSubId);
+    }
+    // target is consolidated invoice of this subscriber
+    if (targetType === 'fatura') {
+      const targetFatId = targetId.replace('fatura_', '');
+      const targetFat = consolidatedInvoices.find(f => compareIds(f.id, targetFatId));
+      return targetFat && compareIds(targetFat.subscriber_id, rawSubId);
+    }
+  }
+
+  // 6. Additional CRM Entities (Leads, Originadores, Usinas, Concessionárias, Fornecedores)
+  if (selType === 'lead') {
+    const rawLeadId = String(selId).replace('lead_', '');
+    const lead = leads.find(l => compareIds(l.id, rawLeadId));
+    if (lead) {
+      if (targetType === 'originator' && compareIds(targetId.replace('originator_', ''), lead.originator_id)) return true;
+      if (targetType === 'subscriber' && compareIds(targetId.replace('subscriber_', ''), lead.subscriber_id)) return true;
+      if (targetType === 'concessionaria' && compareIds(targetId.replace('concessionaria_', ''), lead.concessionaria)) return true;
+    }
+  }
+
+  if (selType === 'originator') {
+    const rawOrigId = String(selId).replace('originator_', '');
+    if (targetType === 'lead') {
+      const targetLeadId = targetId.replace('lead_', '');
+      const targetLead = leads.find(l => compareIds(l.id, targetLeadId));
+      return targetLead && compareIds(targetLead.originator_id, rawOrigId);
+    }
+    if (targetType === 'subscriber') {
+      const targetSubId = targetId.replace('subscriber_', '');
+      const targetSub = subscribers.find(s => compareIds(s.id, targetSubId));
+      return targetSub && compareIds(targetSub.originator_id, rawOrigId);
+    }
+  }
+
+  if (selType === 'supplier') {
+    const rawSuppId = String(selId).replace('supplier_', '');
+    if (targetType === 'usina') {
+      const targetUsinaId = targetId.replace('usina_', '');
+      const targetUsina = usinas.find(u => compareIds(u.id, targetUsinaId));
+      return targetUsina && compareIds(targetUsina.supplier_id, rawSuppId);
+    }
+  }
+
+  if (selType === 'usina') {
+    const rawUsinaId = String(selId).replace('usina_', '');
+    const u = usinas.find(x => compareIds(x.id, rawUsinaId));
+    if (u) {
+      if (targetType === 'supplier' && compareIds(targetId.replace('supplier_', ''), u.supplier_id)) return true;
+      if (targetType === 'concessionaria' && compareIds(targetId.replace('concessionaria_', ''), u.concessionaria)) return true;
+      if (targetType === 'uc') {
+        const targetUcId = targetId.replace('uc_', '');
+        const targetUc = allUcs.find(uc => compareIds(uc.id, targetUcId));
+        return targetUc && compareIds(targetUc.usina_id, rawUsinaId);
+      }
+    }
+  }
+
+  if (selType === 'concessionaria') {
+    const rawConc = String(selId).replace('concessionaria_', '');
+    if (targetType === 'uc') {
+      const targetUcId = targetId.replace('uc_', '');
+      const targetUc = allUcs.find(uc => compareIds(uc.id, targetUcId));
+      return targetUc && compareIds(targetUc.concessionaria, rawConc);
+    }
+    if (targetType === 'lead') {
+      const targetLeadId = targetId.replace('lead_', '');
+      const targetLead = leads.find(l => compareIds(l.id, targetLeadId));
+      return targetLead && compareIds(targetLead.concessionaria, rawConc);
+    }
+    if (targetType === 'usina') {
+      const targetUsinaId = targetId.replace('usina_', '');
+      const targetUsina = usinas.find(u => compareIds(u.id, targetUsinaId));
+      return targetUsina && compareIds(targetUsina.concessionaria, rawConc);
+    }
+  }
+
+  return false;
+};
+
 export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   const { showAlert, showConfirm } = useUI();
   const [loading, setLoading] = useState(true);
@@ -141,7 +366,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     }
   }, [chatMessages]);
 
-  // Re-run audit scanning when custom rules or period filter changes
+  // Re-run audit scanning when custom rules, period filter, selected node or healthy visible changes
   useEffect(() => {
     if (invoices.length > 0) {
       runAudit(
@@ -155,7 +380,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         consolidatedInvoices
       );
     }
-  }, [customRules, auditPeriodFilter, leads, originators, subscribers, suppliers, usinas, consolidatedInvoices]);
+  }, [customRules, auditPeriodFilter, leads, originators, subscribers, suppliers, usinas, consolidatedInvoices, selectedNode, healthyVisible]);
 
   const fetchAuditData = async () => {
     setLoading(true);
@@ -500,9 +725,140 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       }
     });
 
+    const visibleNodeIds = new Set();
+    
+    // Add all inconsistencies
+    allInconsistencies.forEach(inc => visibleNodeIds.add(inc.id));
+    
+    // Add all nodes with inconsistencies
+    nodesWithInconsistencies.forEach(id => visibleNodeIds.add(id));
+    
+    // If healthy visible, add everything
+    if (healthyVisible) {
+      allUcs.forEach(uc => visibleNodeIds.add(`uc_${uc.id}`));
+      allInvoices.forEach(inv => visibleNodeIds.add(`conta_energia_${inv.id}`));
+      subscribers.forEach(sub => visibleNodeIds.add(`subscriber_${sub.id}`));
+      leads.forEach(l => visibleNodeIds.add(`lead_${l.id}`));
+      originators.forEach(o => visibleNodeIds.add(`originator_${o.id}`));
+      suppliers.forEach(s => visibleNodeIds.add(`supplier_${s.id}`));
+      usinas.forEach(u => visibleNodeIds.add(`usina_${u.id}`));
+    }
+    
+    // If a node is selected, dynamically include it and its immediate neighbors (even if healthyVisible is false)
+    if (selectedNode) {
+      const selId = typeof selectedNode === 'object' ? selectedNode.id : selectedNode;
+      visibleNodeIds.add(selId);
+      
+      if (selId.startsWith('uc_')) {
+        const rawUcId = selId.replace('uc_', '');
+        const uc = allUcs.find(u => compareIds(u.id, rawUcId));
+        if (uc) {
+          if (uc.subscriber_id) visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
+          if (uc.usina_id) visibleNodeIds.add(`usina_${uc.usina_id}`);
+          if (uc.concessionaria) visibleNodeIds.add(`concessionaria_${uc.concessionaria}`);
+          // Include energy bills for this UC
+          const ucInvs = allInvoices.filter(i => compareIds(i.uc_id, rawUcId));
+          ucInvs.forEach(inv => {
+            visibleNodeIds.add(`conta_energia_${inv.id}`);
+            if (inv.consolidated_invoice_id) {
+              visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+            }
+          });
+        }
+      } else if (selId.startsWith('subscriber_')) {
+        const rawSubId = selId.replace('subscriber_', '');
+        const sub = subscribers.find(s => compareIds(s.id, rawSubId));
+        if (sub) {
+          if (sub.originator_id) visibleNodeIds.add(`originator_${sub.originator_id}`);
+          if (sub.lead_id) visibleNodeIds.add(`lead_${sub.lead_id}`);
+          // Include UCs
+          const subUcs = allUcs.filter(u => compareIds(u.subscriber_id, rawSubId));
+          subUcs.forEach(uc => {
+            visibleNodeIds.add(`uc_${uc.id}`);
+            const ucInvs = allInvoices.filter(i => compareIds(i.uc_id, uc.id));
+            ucInvs.forEach(inv => {
+              visibleNodeIds.add(`conta_energia_${inv.id}`);
+              if (inv.consolidated_invoice_id) {
+                visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+              }
+            });
+          });
+        }
+      } else if (selId.startsWith('conta_energia_')) {
+        const rawInvId = selId.replace('conta_energia_', '');
+        const inv = allInvoices.find(i => compareIds(i.id, rawInvId));
+        if (inv) {
+          if (inv.uc_id) {
+            visibleNodeIds.add(`uc_${inv.uc_id}`);
+            const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
+            if (uc && uc.subscriber_id) {
+              visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
+            }
+          }
+          if (inv.consolidated_invoice_id) {
+            visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+          }
+        }
+      } else if (selId.startsWith('fatura_')) {
+        const rawFatId = selId.replace('fatura_', '');
+        const fat = consolidatedInvoices.find(f => compareIds(f.id, rawFatId));
+        if (fat) {
+          if (fat.subscriber_id) visibleNodeIds.add(`subscriber_${fat.subscriber_id}`);
+          const fatInvs = allInvoices.filter(i => compareIds(i.consolidated_invoice_id, rawFatId));
+          fatInvs.forEach(inv => {
+            visibleNodeIds.add(`conta_energia_${inv.id}`);
+            if (inv.uc_id) visibleNodeIds.add(`uc_${inv.uc_id}`);
+          });
+        }
+      } else if (selId.startsWith('inc_') || allInconsistencies.some(inc => inc.id === selId)) {
+        const inc = allInconsistencies.find(i => i.id === selId);
+        if (inc) {
+          if (inc.uc_id) {
+            visibleNodeIds.add(`uc_${inc.uc_id}`);
+            const uc = allUcs.find(u => compareIds(u.id, inc.uc_id));
+            if (uc && uc.subscriber_id) visibleNodeIds.add(`subscriber_${uc.subscriber_id}`);
+          }
+          if (inc.invoice_id) {
+            visibleNodeIds.add(`conta_energia_${inc.invoice_id}`);
+            const inv = allInvoices.find(i => compareIds(i.id, inc.invoice_id));
+            if (inv && inv.consolidated_invoice_id) {
+              visibleNodeIds.add(`fatura_${inv.consolidated_invoice_id}`);
+            }
+          }
+        }
+      } else if (selId.startsWith('lead_')) {
+        const rawLeadId = selId.replace('lead_', '');
+        const lead = leads.find(l => compareIds(l.id, rawLeadId));
+        if (lead) {
+          if (lead.originator_id) visibleNodeIds.add(`originator_${lead.originator_id}`);
+          if (lead.subscriber_id) visibleNodeIds.add(`subscriber_${lead.subscriber_id}`);
+          if (lead.concessionaria) visibleNodeIds.add(`concessionaria_${lead.concessionaria}`);
+        }
+      } else if (selId.startsWith('originator_')) {
+        const rawOrigId = selId.replace('originator_', '');
+        leads.filter(l => compareIds(l.originator_id, rawOrigId)).forEach(l => visibleNodeIds.add(`lead_${l.id}`));
+        subscribers.filter(s => compareIds(s.originator_id, rawOrigId)).forEach(s => visibleNodeIds.add(`subscriber_${s.id}`));
+      } else if (selId.startsWith('supplier_')) {
+        const rawSuppId = selId.replace('supplier_', '');
+        usinas.filter(u => compareIds(u.supplier_id, rawSuppId)).forEach(u => visibleNodeIds.add(`usina_${u.id}`));
+      } else if (selId.startsWith('usina_')) {
+        const rawUsinaId = selId.replace('usina_', '');
+        const u = usinas.find(x => compareIds(x.id, rawUsinaId));
+        if (u) {
+          if (u.supplier_id) visibleNodeIds.add(`supplier_${u.supplier_id}`);
+          if (u.concessionaria) visibleNodeIds.add(`concessionaria_${u.concessionaria}`);
+          allUcs.filter(uc => compareIds(uc.usina_id, rawUsinaId)).forEach(uc => visibleNodeIds.add(`uc_${uc.id}`));
+        }
+      } else if (selId.startsWith('concessionaria_')) {
+        const rawConc = selId.replace('concessionaria_', '');
+        allUcs.filter(uc => compareIds(uc.concessionaria, rawConc)).forEach(uc => visibleNodeIds.add(`uc_${uc.id}`));
+        leads.filter(l => compareIds(l.concessionaria, rawConc)).forEach(l => visibleNodeIds.add(`lead_${l.id}`));
+        usinas.filter(u => compareIds(u.concessionaria, rawConc)).forEach(u => visibleNodeIds.add(`usina_${u.id}`));
+      }
+    }
+
     const shouldInclude = (nodeId) => {
-      if (healthyVisible) return true;
-      return nodesWithInconsistencies.has(nodeId) || nodeId.startsWith('inc_');
+      return visibleNodeIds.has(nodeId);
     };
 
     // 1. Add Inconsistencies as central pulsing nodes
@@ -2577,7 +2933,14 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                   ));
                   
                   const isHighlighted = hoveredNode && (compareIds(hoveredNode, link.source) || compareIds(hoveredNode, link.target));
-                  const isLinkSelected = selectedNode && (compareIds(selectedNode, link.source) || compareIds(selectedNode, link.target));
+                  const isLinkSelected = selectedNode && (
+                    compareIds(selectedNode, link.source) || 
+                    compareIds(selectedNode, link.target) || 
+                    (
+                      checkIsConnected(selectedNode, link.source, ucs, invoices, inconsistencies, consolidatedInvoices) &&
+                      checkIsConnected(selectedNode, link.target, ucs, invoices, inconsistencies, consolidatedInvoices)
+                    )
+                  );
                   const isLinkDimmedByLegend = activeLegendFilter && (!sourceMatches || !targetMatches) && !isLinkSelected && !isHighlighted;
                   
                   const isDimmedLink = isLinkDimmedByLegend || (
@@ -2612,10 +2975,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && links.some(l => 
-                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
-                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
-                  );
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
@@ -2704,10 +3064,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && links.some(l => 
-                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
-                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
-                  );
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
@@ -2822,10 +3179,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 {nodes.map(node => {
                   const isSelected = selectedNode && compareIds(selectedNode, node);
                   const isHovered = hoveredNode && compareIds(hoveredNode, node);
-                  const isConnectedToSelected = selectedNode && links.some(l => 
-                    (compareIds(l.source, selectedNode) && compareIds(l.target, node)) ||
-                    (compareIds(l.target, selectedNode) && compareIds(l.source, node))
-                  );
+                  const isConnectedToSelected = selectedNode && checkIsConnected(selectedNode, node, ucs, invoices, inconsistencies, consolidatedInvoices);
                   
                   const matchesLegendFilter = !activeLegendFilter || (
                     (activeLegendFilter === 'critical' && node.type === 'inconsistency' && node.severity === 'critical') ||
