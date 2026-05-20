@@ -136,6 +136,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         tarifa_minima: '', // Calculated/Displayed
         desconto_assinante: '',
         dia_vencimento: 10,
+        data_ativacao: '',
         cep: '',
         rua: '',
         numero: '',
@@ -280,6 +281,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     return val || '';
                 })(),
                 dia_vencimento: consumerUnit.dia_vencimento || 10,
+                data_ativacao: consumerUnit.data_ativacao || '',
                 cep: maskCEP(consumerUnit.address?.cep || ''),
                 rua: consumerUnit.address?.rua || '',
                 numero: consumerUnit.address?.numero || '',
@@ -438,6 +440,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 fio_b: parseCurrency(formData.fio_b),
                 desconto_assinante: Number(formData.desconto_assinante),
                 dia_vencimento: Number(formData.dia_vencimento),
+                data_ativacao: formData.data_ativacao || null,
                 address: {
                     cep: formData.cep.replace(/\D/g, ''),
                     rua: formData.rua,
@@ -803,16 +806,34 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             {/* Tab Content: Técnico */}
                             {activeTab === 'tecnico' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.25rem' }}>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Status</label>
                                             <select
                                                 value={formData.status}
-                                                onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                                onChange={e => {
+                                                    const newStatus = e.target.value;
+                                                    setFormData(prev => {
+                                                        const updated = { ...prev, status: newStatus };
+                                                        if (newStatus === 'ativo' && !prev.data_ativacao) {
+                                                            updated.data_ativacao = new Date().toISOString().split('T')[0];
+                                                        }
+                                                        return updated;
+                                                    });
+                                                }}
                                                 style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                             >
                                                 {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                             </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Data de Ativação</label>
+                                            <input
+                                                type="date"
+                                                value={formData.data_ativacao}
+                                                onChange={e => setFormData({ ...formData, data_ativacao: e.target.value })}
+                                                style={{ width: '100%', padding: '0.62rem 0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', color: '#0f172a' }}
+                                            />
                                         </div>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Unidade</label>
