@@ -679,12 +679,187 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       }
     });
 
-    // Rule 7: Fatura Sem Compensação
+    // Rule 7: Auditoria de Geração e Compensação de Energia (Rateio por Prioridade e Regra Temporal de 3 Fatores)
+    // 7.1. Group beneficiary UCs by usina
+    const usinasBeneficiaries = {};
+    allUcs.forEach(uc => {
+      if (uc.usina_id && uc.tipo_unidade === 'beneficiaria') {
+        if (!usinasBeneficiaries[uc.usina_id]) {
+          usinasBeneficiaries[uc.usina_id] = [];
+        }
+        usinasBeneficiaries[uc.usina_id].push(uc);
+      }
+    });
+
+    // Sort beneficiaries of each usina by priority (ascending)
+    Object.keys(usinasBeneficiaries).forEach(usinaId => {
+      usinasBeneficiaries[usinaId].sort((a, b) => (Number(a.prioridade) || 999) - (Number(b.prioridade) || 999));
+    });
+
+    // 7.2. Get all unique reference months in active invoices
+    const uniqueRefMonths = [...new Set(activeInvoices.map(i => i.mes_referencia?.substring(0, 7)).filter(Boolean))];
+
+    // Track processed invoices to avoid double alerting
+    const invoicesProcessedByRateio = new Set();
+
+    uniqueRefMonths.forEach(refMonth => {
+      const mesRefLabel = new Date(refMonth + '-02T00:00:00').toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+      Object.entries(usinasBeneficiaries).forEach(([usinaId, beneficiaries]) => {
+        // Find generator UC
+        const ug = allUcs.find(u => compareIds(u.usina_id, usinaId) && u.tipo_unidade === 'geradora');
+        const usinaObj = usinas.find(u => compareIds(u.id, usinaId));
+        const usinaNome = usinaObj?.nome || `Usina #${usinaId}`;
+
+        // Find generator invoice for this reference period
+        const ugInvoice = allInvoices.find(i => 
+          compareIds(i.uc_id, ug?.id) && 
+          i.mes_referencia?.substring(0, 7) === refMonth &&
+          i.status !== 'cancelado'
+        );
+
+        const injectedEnergy = Number(ugInvoice?.energia_injetada) || 0;
+        const ugReadingDate = ugInvoice?.data_leitura;
+
+        // Perform priority simulation
+        let remainingSaldo = injectedEnergy;
+        const periodSimulation = [];
+
+        beneficiaries.forEach(uc => {
+          const benInvoice = activeInvoices.find(i => 
+            compareIds(i.uc_id, uc.id) && 
+            i.mes_referencia?.substring(0, 7) === refMonth
+          );
+
+          if (!benInvoice) return;
+
+          invoicesProcessedByRateio.add(benInvoice.id);
+
+          const consumoKwh = Number(benInvoice.consumo_kwh) || 0;
+          const actualComp = Number(benInvoice.consumo_compensado) || 0;
+
+          // 3-factor chronological check
+          const hasUgReading = !!ugReadingDate;
+          const isUcActive = uc.status === 'ativo';
+          
+          const isActivationPosterior = uc.data_ativacao && ugReadingDate && (new Date(uc.data_ativacao) > new Date(ugReadingDate));
+          const isReadingPosterior = benInvoice.data_leitura && ugReadingDate && (new Date(benInvoice.data_leitura) > new Date(ugReadingDate));
+          const hasInjectedEnergy = injectedEnergy > 0;
+
+          const eligible = isUcActive && hasUgReading && isActivationPosterior && isReadingPosterior && hasInjectedEnergy;
+
+          let expectedComp = 0;
+          let failureReason = '';
+
+          if (eligible) {
+            expectedComp = Math.min(consumoKwh, remainingSaldo);
+            remainingSaldo -= expectedComp;
+          } else {
+            if (!hasUgReading) failureReason = 'Sem leitura/fatura da Unidade Geradora correspondente no período.';
+            else if (!hasInjectedEnergy) failureReason = `Unidade Geradora não possui energia injetada registrada (${injectedEnergy} kWh).`;
+            else if (!isUcActive) failureReason = `Unidade Consumidora está inativa (status: ${uc.status}).`;
+            else if (!uc.data_ativacao) failureReason = 'Unidade Consumidora não possui data de ativação cadastrada.';
+            else if (!isActivationPosterior) failureReason = `Data de ativação da UC (${uc.data_ativacao}) não é posterior à leitura da geradora (${ugReadingDate}).`;
+            else if (!benInvoice.data_leitura) failureReason = 'Fatura da UC não possui data de leitura cadastrada.';
+            else if (!isReadingPosterior) failureReason = `Data de leitura da UC (${benInvoice.data_leitura}) não é posterior à leitura da geradora (${ugReadingDate}).`;
+          }
+
+          periodSimulation.push({
+            invoiceId: benInvoice.id,
+            ucId: uc.id,
+            ucNum: uc.numero_uc,
+            titular: uc.titular_conta,
+            prioridade: uc.prioridade || 999,
+            eligible,
+            consumoKwh,
+            expectedComp,
+            actualComp,
+            remainingSaldoAfter: remainingSaldo,
+            failureReason,
+            injectedEnergy,
+            ugReadingDate,
+            data_ativacao: uc.data_ativacao,
+            data_leitura: benInvoice.data_leitura
+          });
+        });
+
+        // Check Teto de Compensação
+        const totalActualComp = periodSimulation.reduce((sum, item) => sum + item.actualComp, 0);
+        if (injectedEnergy > 0 && totalActualComp > injectedEnergy) {
+          addInconsistency(
+            'excess_compensation',
+            'critical',
+            'Estouro do Teto de Geração',
+            `A soma das energias compensadas pelas UCs da ${usinaNome} (${totalActualComp.toLocaleString('pt-BR')} kWh) superou a energia total injetada pela UG (${injectedEnergy.toLocaleString('pt-BR')} kWh) no mês de ${mesRefLabel}.`,
+            ug?.id,
+            ugInvoice?.id,
+            { totalActualComp, injectedEnergy, usinaNome }
+          );
+        }
+
+        // Check for lack of compensation when expected
+        periodSimulation.forEach(item => {
+          if (item.eligible && item.expectedComp > 0 && item.actualComp < item.expectedComp) {
+            const severity = item.actualComp === 0 ? 'critical' : 'warning';
+            const title = item.actualComp === 0 ? 'Crédito Não Compensado' : 'Compensação Parcial Insuficiente';
+            
+            let description = `A UC ${item.ucNum} (Prioridade ${item.prioridade}) deveria ter recebido ${item.expectedComp.toLocaleString('pt-BR')} kWh em ${mesRefLabel} (simulação de rateio de ${item.injectedEnergy.toLocaleString('pt-BR')} kWh injetados na ${usinaNome}), `;
+            if (item.actualComp === 0) {
+              description += `mas nenhuma energia compensada foi registrada na fatura.`;
+            } else {
+              description += `mas registrou apenas ${item.actualComp.toLocaleString('pt-BR')} kWh compensados (diferença de ${(item.expectedComp - item.actualComp).toLocaleString('pt-BR')} kWh).`;
+            }
+
+            addInconsistency(
+              'no_compensation',
+              severity,
+              title,
+              description,
+              item.ucId,
+              item.invoiceId,
+              {
+                consumoKwh: item.consumoKwh,
+                expectedComp: item.expectedComp,
+                actualComp: item.actualComp,
+                prioridade: item.prioridade,
+                usinaNome,
+                simDetails: item
+              }
+            );
+          } else if (!item.eligible && item.actualComp > 0) {
+            // Raised credit for ineligible UC - warning
+            addInconsistency(
+              'no_compensation',
+              'warning',
+              'Compensação Indevida (UC Inelegível)',
+              `A UC ${item.ucNum} recebeu ${item.actualComp.toLocaleString('pt-BR')} kWh de compensação em ${mesRefLabel}, porém foi classificada como inelegível: ${item.failureReason}`,
+              item.ucId,
+              item.invoiceId,
+              {
+                consumoKwh: item.consumoKwh,
+                expectedComp: 0,
+                actualComp: item.actualComp,
+                prioridade: item.prioridade,
+                usinaNome,
+                simDetails: item
+              }
+            );
+          }
+        });
+      });
+    });
+
+    // Fallback checking for Auto Consumo Remoto UCs that are NOT participating in any Usina (or skipped in rateio)
     activeInvoices.forEach(inv => {
-      if (inv.consumer_units?.modalidade === 'auto_consumo_remoto') {
+      if (invoicesProcessedByRateio.has(inv.id)) return;
+
+      const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
+      if (!uc) return;
+
+      if (uc.modalidade === 'auto_consumo_remoto') {
         const consumoKwh = Number(inv.consumo_kwh) || 0;
         const compensado = Number(inv.consumo_compensado) || 0;
-        const ucNum = inv.consumer_units?.numero_uc || 'UC';
+        const ucNum = uc.numero_uc || 'UC';
         const mesRef = inv.mes_referencia 
           ? new Date(inv.mes_referencia + 'T00:00:00').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
           : '-';
@@ -693,8 +868,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           addInconsistency(
             'no_compensation',
             'warning',
-            'Fatura sem Compensação de Crédito',
-            `A fatura de ${mesRef} registra consumo de ${consumoKwh} kWh, porém zero créditos compensados, apesar de a UC ${ucNum} ser de Auto Consumo Remoto ativa.`,
+            'Fatura sem Compensação (Auto Consumo Sem Usina)',
+            `A fatura de ${mesRef} registra consumo de ${consumoKwh} kWh, porém zero créditos compensados. Esta UC de Auto Consumo Remoto não está vinculada a nenhuma Usina ativa no CRM.`,
             inv.uc_id,
             inv.id,
             { consumoKwh }
@@ -1463,6 +1638,49 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     return 0.05;
   };
 
+  const getAgentInconsistencyDescription = (inc) => {
+    let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
+    if (inc.type === 'duplicate_bill') {
+      msg += `Detectei que foram emitidas duas faturas redundantes no mesmo mês de referência para a mesma Unidade Consumidora. Isso causará cobranças duplicadas ao cliente.\n\n**Recomendação:** Excluir a fatura excedente ou colocá-la como 'Sem Faturamento'.`;
+    } else if (inc.type === 'duplicate_ref') {
+      msg += `Esta Unidade Consumidora possui faturas redundantes ou sobrepostas declaradas para o mesmo mês de referência. Isso causa divergências no faturamento financeiro.\n\n**Recomendação:** Auditar as datas de vencimento ou ajustar os meses de referência.`;
+    } else if (inc.type === 'overlap') {
+      msg += `As datas de leituras registradas possuem um intervalo de apenas **${inc.details.days} dias**. Os ciclos normais de concessionárias devem possuir entre 28 e 33 dias. Isso indica que as faturas foram extraídas de forma errada ou duplicada.\n\n**Recomendação:** Disparar um re-scrapear automático do portal da concessionária para normalizar os dados.`;
+    } else if (inc.type === 'billing_error') {
+      msg += `Encontrei uma incompatibilidade matemática crítica: o valor cobrado do Assinante (**R$ ${inc.details.valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**) possui um desvio de **${Math.round(inc.details.ratio * 100)}%** sobre o valor original da concessionária (**R$ ${inc.details.valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n**Recomendação:** Auditar as tarifas e refazer a conta.`;
+    } else if (inc.type === 'excess_compensation') {
+      msg += `A distribuidora creditou um total de **${inc.details.totalActualComp.toLocaleString('pt-BR')} kWh** nas faturas beneficiárias, excedendo a energia total injetada de **${inc.details.injectedEnergy.toLocaleString('pt-BR')} kWh** da usina **${inc.details.usinaNome}**.\n\nIsso pode indicar um erro de digitação de valores na extração ou uma concessão indevida pela concessionária que será estornada posteriormente.\n\n**Recomendação:** Auditar as faturas da concessionária e ajustar os valores lançados.`;
+    } else if (inc.type === 'no_compensation') {
+      const det = inc.details;
+      if (det.simDetails) {
+        const sim = det.simDetails;
+        msg += `Análise detalhada para a UC **${sim.ucNum}** (${det.usinaNome}):\n\n`;
+        if (sim.actualComp > 0) {
+          msg += `* **Status:** Compensação parcial de **${sim.actualComp.toLocaleString('pt-BR')} kWh** registrada, mas o esperado pelo rateio era **${sim.expectedComp.toLocaleString('pt-BR')} kWh**.\n`;
+        } else {
+          msg += `* **Status:** Zero créditos compensados, enquanto o esperado pelo rateio era de **${sim.expectedComp.toLocaleString('pt-BR')} kWh**.\n`;
+        }
+        msg += `* **Prioridade de Rateio:** Nível **${sim.prioridade}**\n`;
+        msg += `* **Consumo Total:** **${sim.consumoKwh.toLocaleString('pt-BR')} kWh**\n`;
+        msg += `* **Geração da Usina:** **${sim.injectedEnergy.toLocaleString('pt-BR')} kWh** injetados (Leitura UG: **${sim.ugReadingDate || 'Não disponível'}**)\n\n`;
+        
+        msg += `**🔍 Fatores da Elegibilidade Temporal (3 Análises Críticas):**\n`;
+        msg += `1. **Leitura da Geradora (UG):** \`${sim.ugReadingDate || 'Não cadastrado'}\`\n`;
+        msg += `2. **Ativação da Beneficiária (UC):** \`${sim.data_ativacao || 'Não cadastrado'}\` (Posterior? ✅ Sim)\n`;
+        msg += `3. **Leitura da Beneficiária (UC):** \`${sim.data_leitura || 'Não cadastrado'}\` (Posterior? ✅ Sim)\n\n`;
+        
+        if (sim.actualComp > 0) {
+          msg += `**Causa provável:** O rateio da concessionária pode ter sido executado parcialmente ou houve consumo incorreto de créditos na fila de prioridades.\n\n**Recomendação:** Revisar o extrato de rateio na concessionária para reaver a diferença de **${(sim.expectedComp - sim.actualComp).toLocaleString('pt-BR')} kWh**.`;
+        } else {
+          msg += `**Causa provável:** A distribuidora não processou o faturamento de crédito de compensação para a UC neste mês, apesar de haver saldo gerado suficiente (${sim.injectedEnergy.toLocaleString('pt-BR')} kWh) e a UC estar plenamente ativa e qualificada cronologicamente.\n\n**Recomendação:** Abrir uma reclamação formal junto à concessionária anexando o relatório de geração solar da ${det.usinaNome}.`;
+        }
+      } else {
+        msg += `A UC de Auto Consumo registrou consumo de **${det.consumoKwh} kWh**, porém a concessionária não creditou nenhuma energia compensada. Isso pode significar que a distribuidora não aplicou a compensação neste mês ou que as credenciais do portal estão desatualizadas ou que a UC não está vinculada a uma usina ativa.\n\n**Recomendação:** Verificar junto à concessionária ou associar a UC a uma usina para rateio.`;
+      }
+    }
+    return msg;
+  };
+
   // Node Clicking / Interactive Focus zoom
   const handleNodeClick = (node, shouldOpenModal = false) => {
     setSelectedNode(node);
@@ -1476,18 +1694,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           setActiveAlertId(inc.id);
           setAgentStatus('action');
           
-          let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
-          if (inc.type === 'duplicate_bill') {
-            msg += `Detectei que foram emitidas duas faturas redundantes no mesmo mês de referência para a mesma Unidade Consumidora. Isso causará cobranças duplicadas ao cliente.\n\n**Recomendação:** Excluir a fatura excedente ou colocá-la como 'Sem Faturamento'.`;
-          } else if (inc.type === 'duplicate_ref') {
-            msg += `Esta Unidade Consumidora possui faturas redundantes ou sobrepostas declaradas para o mesmo mês de referência. Isso causa divergências no faturamento financeiro.\n\n**Recomendação:** Auditar as datas de vencimento ou ajustar os meses de referência.`;
-          } else if (inc.type === 'overlap') {
-            msg += `As datas de leituras registradas possuem um intervalo de apenas **${inc.details.days} dias**. Os ciclos normais de concessionárias devem possuir entre 28 e 33 dias. Isso indica que as faturas foram extraídas de forma errada ou duplicada.\n\n**Recomendação:** Disparar um re-scrapear automático do portal da concessionária para normalizar os dados.`;
-          } else if (inc.type === 'billing_error') {
-            msg += `Encontrei uma incompatibilidade matemática crítica: o valor cobrado do Assinante (**R$ ${inc.details.valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**) possui um desvio de **${Math.round(inc.details.ratio * 100)}%** sobre o valor original da concessionária (**R$ ${inc.details.valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n**Recomendação:** Auditar as tarifas e refazer a conta.`;
-          } else if (inc.type === 'no_compensation') {
-            msg += `A UC de Auto Consumo registrou consumo significativo de **${inc.details.consumoKwh} kWh**, porém a concessionária não creditou nenhuma energia compensada. Isso pode significar que a distribuidora não aplicou a compensação neste mês ou que as credenciais do portal estão desatualizadas.\n\n**Recomendação:** Verificar junto à concessionária ou revisar a compensação.`;
-          }
+          const msg = getAgentInconsistencyDescription(inc);
           setAgentMessage(msg);
         }
       }
@@ -1538,18 +1745,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     }
 
     // Set agent message detailing the discrepancy
-    let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
-    if (inc.type === 'duplicate_bill') {
-      msg += `Detectei que foram emitidas duas faturas redundantes no mesmo mês de referência para a mesma Unidade Consumidora. Isso causará cobranças duplicadas ao cliente.\n\n**Recomendação:** Excluir a fatura excedente ou colocá-la como 'Sem Faturamento'.`;
-    } else if (inc.type === 'duplicate_ref') {
-      msg += `Esta Unidade Consumidora possui faturas redundantes ou sobrepostas declaradas para o mesmo mês de referência. Isso causa divergências no faturamento financeiro.\n\n**Recomendação:** Auditar as datas de vencimento ou ajustar os meses de referência.`;
-    } else if (inc.type === 'overlap') {
-      msg += `As datas de leituras registradas possuem um intervalo de apenas **${inc.details.days} dias**. Os ciclos normais de concessionárias devem possuir entre 28 e 33 dias. Isso indica que as faturas foram extraídas de forma errada ou duplicada.\n\n**Recomendação:** Disparar um re-scrapear automático do portal da concessionária para normalizar os dados.`;
-    } else if (inc.type === 'billing_error') {
-      msg += `Encontrei uma incompatibilidade matemática crítica: o valor cobrado do Assinante (**R$ ${inc.details.valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**) possui um desvio de **${Math.round(inc.details.ratio * 100)}%** sobre o valor original da concessionária (**R$ ${inc.details.valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n**Recomendação:** Auditar as tarifas e refazer a conta.`;
-    } else if (inc.type === 'no_compensation') {
-      msg += `A UC de Auto Consumo registrou consumo significativo de **${inc.details.consumoKwh} kWh**, porém a concessionária não creditou nenhuma energia compensada. Isso pode significar que a distribuidora não aplicou a compensação neste mês ou que as credenciais do portal estão desatualizadas.\n\n**Recomendação:** Verificar junto à concessionária ou revisar a compensação.`;
-    }
+    const msg = getAgentInconsistencyDescription(inc);
     setAgentMessage(msg);
   };
 
@@ -1560,20 +1756,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     setActiveInconsistency(inc);
     
     // Specific Agent message detailing the discrepancy
-    let msg = `### 🤖 Análise Agêntica: ${inc.title}\n\n`;
-    
-    if (inc.type === 'duplicate_bill') {
-      msg += `Detectei que foram emitidas duas faturas redundantes no mesmo mês de referência para a mesma Unidade Consumidora. Isso causará cobranças duplicadas ao cliente.\n\n**Recomendação:** Excluir a fatura excedente ou colocá-la como 'Sem Faturamento'.`;
-    } else if (inc.type === 'duplicate_ref') {
-      msg += `Esta Unidade Consumidora possui faturas redundantes ou sobrepostas declaradas para o mesmo mês de referência. Isso causa divergências no faturamento financeiro.\n\n**Recomendação:** Auditar as datas de vencimento ou ajustar os meses de referência.`;
-    } else if (inc.type === 'overlap') {
-      msg += `As datas de leituras registradas possuem um intervalo de apenas **${inc.details.days} dias**. Os ciclos normais de concessionárias devem possuir entre 28 e 33 dias. Isso indica que as faturas foram extraídas de forma errada ou duplicada.\n\n**Recomendação:** Disparar um re-scrapear automático do portal da concessionária para normalizar os dados.`;
-    } else if (inc.type === 'billing_error') {
-      msg += `Encontrei uma incompatibilidade matemática crítica: o valor cobrado do Assinante (**R$ ${inc.details.valAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**) possui um desvio de **${Math.round(inc.details.ratio * 100)}%** sobre o valor original da concessionária (**R$ ${inc.details.valConcessionaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**).\n\n**Recomendação:** Auditar as tarifas e refazer a conta.`;
-    } else if (inc.type === 'no_compensation') {
-      msg += `A UC de Auto Consumo registrou consumo significativo de **${inc.details.consumoKwh} kWh**, porém a concessionária não creditou nenhuma energia compensada. Isso pode significar que a distribuidora não aplicou a compensação neste mês ou que as credenciais do portal estão desatualizadas.\n\n**Recomendação:** Verificar junto à concessionária ou revisar a compensação.`;
-    }
-
+    const msg = getAgentInconsistencyDescription(inc);
     setAgentMessage(msg);
 
     // Focus on the inconsistency node
@@ -3601,6 +3784,80 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 </p>
               </div>
 
+              {/* Chronological & priority simulation visual details for compensation failures */}
+              {activeInconsistency.type === 'no_compensation' && activeInconsistency.details?.simDetails && (() => {
+                const sim = activeInconsistency.details.simDetails;
+                return (
+                  <div style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '10px',
+                    padding: '14px',
+                    fontSize: '0.75rem',
+                    color: '#e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem'
+                  }}>
+                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Layers size={12} /> RESUMO DA SIMULAÇÃO DE RATEIO (PRIORIDADES)
+                    </span>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', padding: '4px 0' }}>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Complexo Solar:</span>
+                        <div style={{ fontWeight: '700', color: '#f8fafc' }}>{activeInconsistency.details.usinaNome}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Fila Rateio:</span>
+                        <div style={{ fontWeight: '700', color: '#f8fafc' }}>Prioridade #{sim.prioridade}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Geração Injetada (UG):</span>
+                        <div style={{ fontWeight: '700', color: '#10b981' }}>{sim.injectedEnergy.toLocaleString('pt-BR')} kWh</div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Consumo Consumidora:</span>
+                        <div style={{ fontWeight: '700', color: '#f59e0b' }}>{sim.consumoKwh.toLocaleString('pt-BR')} kWh</div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Compensação Esperada:</span>
+                        <div style={{ fontWeight: '700', color: '#3b82f6' }}>{sim.expectedComp.toLocaleString('pt-BR')} kWh</div>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94a3b8', fontSize: '0.65rem', display: 'block' }}>Crédito Efetivo:</span>
+                        <div style={{ fontWeight: '700', color: sim.actualComp > 0 ? '#10b981' : '#ef4444' }}>{sim.actualComp.toLocaleString('pt-BR')} kWh</div>
+                      </div>
+                    </div>
+
+                    <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
+                    
+                    <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#a855f7', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Globe size={12} />⏱️ AS 3 VALIDAÇÕES CRONOLÓGICAS (CRM PLAYBOOK)
+                    </span>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(0,0,0,0.15)', padding: '8px 12px', borderRadius: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>1. Data Leitura UG:</span>
+                        <span style={{ fontWeight: '600', fontFamily: 'monospace', color: '#f8fafc' }}>{sim.ugReadingDate || '-'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>2. Data Ativação UC:</span>
+                        <span style={{ fontWeight: '600', fontFamily: 'monospace', color: sim.eligible ? '#10b981' : '#ef4444' }}>
+                          {sim.data_ativacao || 'Pendente'} {sim.eligible ? ' (Posterior ✅)' : ''}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>3. Data Leitura UC:</span>
+                        <span style={{ fontWeight: '600', fontFamily: 'monospace', color: sim.eligible ? '#10b981' : '#ef4444' }}>
+                          {sim.data_leitura || 'Pendente'} {sim.eligible ? ' (Posterior ✅)' : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Recommendation Box */}
               <div style={{
                 background: 'rgba(255, 102, 0, 0.05)',
@@ -3618,6 +3875,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                     {activeInconsistency.type === 'duplicate_ref' && 'Ajustar as datas de leitura ou os meses de referência redundantes.'}
                     {activeInconsistency.type === 'overlap' && 'Disparar um re-scrapear automático do portal da concessionária.'}
                     {activeInconsistency.type === 'billing_error' && 'Revisar a fórmula tarifária do assinante ou atualizar o desconto contratual.'}
+                    {activeInconsistency.type === 'excess_compensation' && 'Reajustar a tabela de rateio na distribuidora ou auditar faturas lançadas duplicadamente.'}
                     {activeInconsistency.type === 'no_compensation' && 'Verificar pendências junto à concessionária ou revisar as credenciais do portal.'}
                   </p>
                 </div>

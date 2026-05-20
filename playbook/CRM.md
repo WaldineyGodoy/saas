@@ -84,6 +84,58 @@ Gestão centralizada de comunicações e automações de mensagens.
 - **Auto-Geração no Reenvio**: Se o PDF consolidado for removido ou não existir no Storage, ele é gerado automaticamente ao disparar um "Reenviar Notificação".
 - **Logs de Diagnóstico**: Alertas no console para identificar falhas de renderização em componentes ocultos (capture targets).
 
+### 🔍 Auditoria de Energia Compensada
+
+Este módulo define as regras e gatilhos de alerta para a auditoria de faturas de energia, garantindo a validação precisa dos créditos injetados e compensados entre as Unidades Geradoras (UG) e Unidades Consumidoras (UC) Beneficiárias.
+
+#### ⚠️ Gatilho de Alerta Principal
+Um alerta de auditoria deve ser acendido imediatamente se a **energia compensada for zero ou menor que o consumo total** na fatura de uma UC ativa elegível.
+
+#### 🛠️ As 3 Análises Temporais Críticas
+Para validar se a ausência de compensação é devida ou se há um erro da concessionária, o sistema deve executar a seguinte checagem de três fatores cronológicos:
+1. **Data de Leitura Atual da Unidade Geradora (UG)**: Data do fechamento de geração.
+2. **Data de Ativação da Unidade Consumidora Beneficiária (UC)**: Data em que a UC foi inserida no rateio da usina.
+3. **Data de Leitura Atual da Unidade Consumidora Beneficiária (UC)**: Data da fatura em auditoria.
+
+> [!IMPORTANT]
+> **Regra Temporal de Elegibilidade**: 
+> A **Data de Ativação da UC Beneficiária** (2) e a **Data de Leitura Atual da UC Beneficiária** (3) devem ser obrigatoriamente **posteriores** à **Data de Leitura Atual da Unidade Geradora** (1).
+
+#### ⚡ Regras de Distribuição e Limites de Compensação
+Para que a compensação ocorra regularmente no período auditado, as seguintes condições de saldo devem ser atendidas:
+- **Energia Injetada Presente**: Deve haver registro de energia injetada na data de leitura da Unidade Geradora correspondente.
+- **Teto de Compensação**: A soma de todas as energias compensadas pelas UCs beneficiárias no período **não pode ser superior** à energia total injetada pela UG.
+
+#### 🎯 Sistema de Rateio por Prioridade
+Em cenários onde a UG e as UCs utilizam o sistema de **rateio por prioridade**, a distribuição e contabilização dos créditos de energia compensada seguem estritamente a ordem de prioridade definida na UC (da prioridade mais alta/menor número para a mais baixa/maior número):
+
+- **Consumo Parcial**: Se o saldo injetado restante não cobrir todo o consumo de uma UC beneficiária, ela compensará apenas o limite disponível, zerando o saldo para as próximas prioridades.
+- **Alocação de Saldo**: Se restar energia injetada após a compensação de todas as UCs beneficiárias com prioridade ativa, o excedente deve ser alocado na **Conta Saldo** (créditos acumulados para ciclos futuros).
+
+##### Exemplos Práticos de Simulação de Rateio:
+- **Exemplo 1 (Gargalo de Saldo)**: 
+  - Energia injetada pela UG: `10.000 kWh`
+  - **UC Prioridade 1**: Compensou `9.000 kWh` (restam `1.000 kWh`)
+  - **UC Prioridade 2**: Consumiu `2.000 kWh` $\rightarrow$ **Compensará apenas o saldo de `1.000 kWh`**.
+- **Exemplo 2 (Geração Excedente / Conta Saldo)**: 
+  - Energia injetada pela UG: `11.000 kWh`
+  - **UC Prioridade 1**: Compensou `9.000 kWh` (restam `2.000 kWh`)
+  - **UC Prioridade 2**: Compensou `1.000 kWh` (restam `1.000 kWh`)
+  - **Resultado**: `1.000 kWh` excedentes serão alocados na **Conta Saldo** (saldo acumulado).
+- **Exemplo 3 (Distribuição Multi-UC)**: 
+  - Energia injetada pela UG: `11.000 kWh`
+  - **UC Prioridade 1**: Compensou `9.000 kWh` (restam `2.000 kWh`)
+  - **UC Prioridade 2**: Compensou `1.000 kWh` (restam `1.000 kWh`)
+  - **UC Prioridade 3**: Compensou `1.000 kWh` (restam `0 kWh`).
+- **Exemplo 4 (Excesso de Prioridades sem Saldo)**: 
+  - Energia injetada pela UG: `10.000 kWh`
+  - **UC Prioridade 1**: Compensou `9.000 kWh` (restam `1.000 kWh`)
+  - **UC Prioridade 2**: Compensou `1.000 kWh` (restam `0 kWh`)
+  - **UC Prioridade 3**: **Não recebe compensação** de energia por esgotamento de saldo.
+
+#### 💾 Ação Pós-Auditoria
+Se todos os critérios temporais, de saldo e de prioridade forem validados e atendidos com sucesso, a compensação apurada **deve ser registrada na conta de energia** correspondente para faturamento e integridade financeira do sistema.
+
 ---
 
 ## 3. Gatilhos e Automações (Triggers)

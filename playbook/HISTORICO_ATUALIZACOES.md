@@ -2,6 +2,14 @@
 
 ---
 
+## [19/05/2026] - Registro de Diretrizes de Auditoria de Energia Compensada
+- **Regras de Negócio de Auditoria**: Registro formal das especificações e critérios de auditoria para faturas de energia no Playbook CRM.
+- **Tratamento de Alertas**: Definição do gatilho de alerta para faturas onde a energia compensada for zero ou menor que o consumo total.
+- **Análises Temporais**: Estabelecidas as 3 checagens cronológicas fundamentais: (1) Data de Leitura da Unidade Geradora, (2) Data de Ativação da UC Beneficiária, e (3) Data de Leitura da UC Beneficiária.
+- **Lógica de Rateio por Prioridade**: Definição exaustiva do fluxo de alocação de créditos de energia injetada entre UCs beneficiárias de acordo com a prioridade, incluindo tratamento de consumo parcial, destinação de saldos remanescentes para a Conta Saldo e restrições de distribuição.
+
+---
+
 ## [17/05/2026] - Correção do Webhook Pagamento Pix e Reativação Automática da Fila
 - **Token de Autenticação do Webhook**: Identificado que o webhook de transferências e repasses ("Pagamento Pix") estava sem o token de segurança (`authToken`) configurado no painel do Asaas. Isso fazia com que o Asaas enviasse requisições sem o cabeçalho `asaas-access-token`, resultando em bloqueio `401 Unauthorized` e interrompendo a fila automática por falhas repetidas.
 - **Resolução Programática**: Atualizada a configuração do webhook diretamente via API do Asaas, definindo o `authToken` esperado (`whsec_3NAl_NtipeuVu1VSmXC6qBBLJXdtUUkjQOJa_MD_D1I`) e removendo o estado interrompido (`interrupted: false`).
