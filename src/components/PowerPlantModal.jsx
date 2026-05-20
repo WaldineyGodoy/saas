@@ -11,6 +11,7 @@ import {
     Paperclip, Send, Loader2, Info, History, Clock
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
 import {
     DndContext,
@@ -248,6 +249,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
 };
 
 export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
+    const { profile } = useAuth();
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const [suppliers, setSuppliers] = useState([]);
@@ -329,6 +331,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
+    const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
         if (!id) return;
@@ -341,6 +344,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 created_by: profile?.id
             });
             if (error) throw error;
+            setHistoryRefreshKey(prev => prev + 1);
         } catch (error) {
             console.error('Error adding history:', error);
         }
@@ -2738,6 +2742,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         entityId={usina?.id}
                                         entityName={formData.name || usina?.name}
                                         isInline={true}
+                                        refreshTrigger={historyRefreshKey}
                                     />
                                 </div>
                             </div>

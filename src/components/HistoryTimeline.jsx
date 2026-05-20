@@ -52,7 +52,7 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
         </div>
     );
 };
-export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false, compact = false, hideHeader = false }) {
+export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false, compact = false, hideHeader = false, refreshTrigger }) {
     const { profile } = useAuth();
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
@@ -65,7 +65,7 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
 
     useEffect(() => {
         fetchHistory();
-    }, [entityId]);
+    }, [entityId, refreshTrigger]);
 
     const fetchHistory = async () => {
         setLoading(true);

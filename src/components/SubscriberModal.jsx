@@ -45,6 +45,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
+    const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
     const hiddenRef = useRef(null);
     const hiddenConsolidatedRef = useRef(null);
     const contractPage1Ref = useRef(null);
@@ -78,6 +79,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 console.error('Supabase Error adding history:', error);
                 throw error;
             }
+            setHistoryRefreshKey(prev => prev + 1);
         } catch (error) {
             console.error('Error adding history:', error);
             // Optionally show alert if it's a critical failure, but usually history is silent
@@ -2749,6 +2751,7 @@ Associado`;
                                         entityName={formData.name}
                                         onClose={() => setActiveTab('dados')}
                                         isInline={true}
+                                        refreshTrigger={historyRefreshKey}
                                     />
                                 </div>
                             </div>
@@ -3038,6 +3041,7 @@ Associado`;
                     entityName={formData.name}
                     onClose={() => setShowHistory(false)}
                     isInline={true}
+                    refreshTrigger={historyRefreshKey}
                 />
             )}
 
