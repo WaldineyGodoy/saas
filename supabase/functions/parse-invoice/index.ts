@@ -60,10 +60,21 @@ serve(async (req) => {
         return isNaN(parsed) ? 0 : parsed;
     };
 
+    const parseConsumption = (raw: string | null) => {
+        if (!raw) return 0;
+        let cleaned = raw.trim();
+        if (cleaned.includes(',')) {
+            cleaned = cleaned.split(',')[0];
+        }
+        cleaned = cleaned.replace(/\D/g, '');
+        const parsed = parseInt(cleaned, 10);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
     // Padrões de Extração (Regex)
-    const consumptionMatch = fullText.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) || 
-                             fullText.match(/kWh[^\d]*(\d+)/i) ||
-                             fullText.match(/(\d+)\s*kWh/i);
+    const consumptionMatch = fullText.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*([\d.,]+)[^\d]*kWh/i) || 
+                             fullText.match(/kWh[^\d]*([\d.,]+)/i) ||
+                             fullText.match(/([\d.,]+)\s*kWh/i);
     
     // Iluminação Pública: Regex a prova de balas para lidar com quebras de linha ou espaçamentos malucos
     let iluminacao_publica = 0;
@@ -165,7 +176,7 @@ serve(async (req) => {
     };
 
     const result = {
-        consumo_kwh: consumptionMatch ? parseInt(consumptionMatch[1].replace(/\D/g, '')) : 0,
+        consumo_kwh: consumptionMatch ? parseConsumption(consumptionMatch[1]) : 0,
         consumo_reais: consumo_reais,
         iluminacao_publica: iluminacao_publica,
         mes_referencia: parseMesRef(refMonthMatch ? refMonthMatch[1] : null),
