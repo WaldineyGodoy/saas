@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar as CalendarIcon, List, Layout, Info, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, List, Layout, Info, Download, Pencil, Trash2 } from 'lucide-react';
+import { useUI } from '../../contexts/UIContext';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 
 import ScraperTriggerModal from '../../components/ScraperTriggerModal';
@@ -351,7 +352,33 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     );
 }
 
+const getStatusBadgeStyle = (status) => {
+    switch (status) {
+        case 'ativo':
+            return { bg: '#dcfce7', text: '#15803d', label: 'Ativo' };
+        case 'em_ativacao':
+            return { bg: '#eff6ff', text: '#1d4ed8', label: 'Em Ativação' };
+        case 'em_transf_titularidade':
+            return { bg: '#fce7f3', text: '#be185d', label: 'Em Transf. Titularidade' };
+        case 'aguardando_conexao':
+            return { bg: '#fef9c3', text: '#a16207', label: 'Aguardando Conexão' };
+        case 'sem_geracao':
+            return { bg: '#f1f5f9', text: '#475569', label: 'Sem Geração' };
+        case 'em_atraso':
+            return { bg: '#ffe4e6', text: '#b91c1c', label: 'Em Atraso' };
+        case 'desconectado':
+            return { bg: '#f3e8ff', text: '#6b21a8', label: 'Desconectado' };
+        case 'cancelado':
+            return { bg: '#fee2e2', text: '#991b1b', label: 'Cancelado' };
+        case 'cancelado_inadimplente':
+            return { bg: '#fee2e2', text: '#991b1b', label: 'Cancelado (Inad.)' };
+        default:
+            return { bg: '#f1f5f9', text: '#475569', label: status?.replace('_', ' ').toUpperCase() || '-' };
+    }
+};
+
 export default function ConsumerUnitList() {
+    const { showAlert, showConfirm } = useUI();
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -386,6 +413,7 @@ export default function ConsumerUnitList() {
             u.numero_uc?.toLowerCase().includes(lower) ||
             u.subscriber?.name?.toLowerCase().includes(lower) ||
             u.titular_fatura?.name?.toLowerCase().includes(lower) ||
+            u.titular_conta?.toLowerCase().includes(lower) ||
             u.concessionaria?.toLowerCase().includes(lower) ||
             u.address?.cidade?.toLowerCase().includes(lower) ||
             u.status?.toLowerCase().includes(lower)
@@ -819,62 +847,137 @@ export default function ConsumerUnitList() {
                                 {filteredUnits.length === 0 ? (
                                     <p style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma Unidade Consumidora encontrada.</p>
                                 ) : (
-                                    <table className="table">
+                                    <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr>
-                                                <th style={{ background: '#f8fafc' }}>UC</th>
-                                                <th style={{ background: '#f8fafc' }}>Concessionária</th>
-                                                <th style={{ background: '#f8fafc' }}>Assinante</th>
-                                                <th style={{ background: '#f8fafc' }}>Franquia</th>
-                                                <th style={{ background: '#f8fafc' }}>Status</th>
-                                                <th style={{ background: '#f8fafc' }}>Cidade</th>
-                                                <th style={{ background: '#f8fafc' }}>Ações</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>UC</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Concessionária</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Assinante</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Identificação na Fatura</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Franquia</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Status</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {filteredUnits.map(uc => (
-                                                <tr key={uc.id} style={{ transition: 'background 0.2s' }}>
-                                                    <td style={{ fontWeight: '700', color: '#1e293b' }}>{uc.numero_uc}</td>
-                                                    <td style={{ color: '#64748b' }}>{uc.concessionaria || '-'}</td>
-                                                    <td>
-                                                        <div style={{ fontWeight: '700', color: '#334155' }}>{uc.subscriber?.name || '-'}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{uc.subscriber?.cpf_cnpj}</div>
-                                                    </td>
-                                                    <td style={{ fontWeight: '600', color: 'var(--color-success)' }}>
-                                                        {uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}
-                                                    </td>
-                                                    <td>
-                                                        <span className="badge" style={{
-                                                            padding: '0.35rem 0.75rem',
-                                                            borderRadius: '99px',
-                                                            background: uc.status === 'ativo' ? '#dcfce7' :
-                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#fee2e2' : '#f1f5f9',
-                                                            color: uc.status === 'ativo' ? '#166534' :
-                                                                uc.status === 'em_atraso' || uc.status === 'cancelado_inadimplente' ? '#991b1b' : '#475569',
-                                                            fontSize: '0.7rem',
-                                                            fontWeight: '700'
-                                                        }}>
-                                                            {uc.status?.replace('_', ' ').toUpperCase()}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ color: '#64748b' }}>{uc.address?.cidade} / {uc.address?.uf}</td>
-                                                    <td>
-                                                        <button
-                                                            onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
-                                                            className="btn btn-secondary"
-                                                            style={{
-                                                                padding: '0.4rem 0.8rem',
+                                            {filteredUnits.map(uc => {
+                                                const badgeStyle = getStatusBadgeStyle(uc.status);
+                                                return (
+                                                    <tr key={uc.id} style={{ borderBottom: '1px solid #e2e8f0', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                        <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                            <span 
+                                                                onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
+                                                                style={{
+                                                                    color: '#1d4ed8',
+                                                                    background: '#eff6ff',
+                                                                    padding: '6px 12px',
+                                                                    borderRadius: '9999px',
+                                                                    fontWeight: '600',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-block',
+                                                                    transition: 'all 0.2s',
+                                                                    fontSize: '0.85rem'
+                                                                }}
+                                                                onMouseOver={e => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                                                onMouseOut={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                                                            >
+                                                                {uc.numero_uc}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '14px 16px', color: '#475569', fontWeight: '500', verticalAlign: 'middle' }}>{uc.concessionaria || '-'}</td>
+                                                        <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                            <div style={{ fontWeight: '700', color: '#1e293b' }}>{uc.subscriber?.name || '-'}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{uc.subscriber?.cpf_cnpj}</div>
+                                                        </td>
+                                                        <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: '600', verticalAlign: 'middle' }}>
+                                                            {uc.titular_conta || '-'}
+                                                        </td>
+                                                        <td style={{ padding: '14px 16px', fontWeight: '700', color: '#16a34a', verticalAlign: 'middle' }}>
+                                                            {uc.franquia ? `${Number(uc.franquia).toLocaleString('pt-BR')} kWh` : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                            <span className="badge" style={{
+                                                                padding: '6px 12px',
+                                                                borderRadius: '9999px',
+                                                                background: badgeStyle.bg,
+                                                                color: badgeStyle.text,
                                                                 fontSize: '0.75rem',
-                                                                borderRadius: '6px',
-                                                                fontWeight: '600',
-                                                                border: '1px solid #e2e8f0'
-                                                            }}
-                                                        >
-                                                            Editar
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                                fontWeight: '700',
+                                                                display: 'inline-block'
+                                                            }}>
+                                                                {badgeStyle.label}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                                                                <button
+                                                                    onClick={() => { setEditingUnit(uc); setIsModalOpen(true); }}
+                                                                    style={{
+                                                                        padding: '6px 10px',
+                                                                        background: '#eff6ff',
+                                                                        border: 'none',
+                                                                        borderRadius: '8px',
+                                                                        cursor: 'pointer',
+                                                                        color: '#2563eb',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px',
+                                                                        fontSize: '0.8rem',
+                                                                        fontWeight: '600',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                    onMouseOver={e => { e.currentTarget.style.background = '#dbeafe'; }}
+                                                                    onMouseOut={e => { e.currentTarget.style.background = '#eff6ff'; }}
+                                                                    title="Editar UC"
+                                                                >
+                                                                    <Pencil size={14} />
+                                                                    <span>Editar</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        const confirm = await showConfirm(
+                                                                            `Tem certeza que deseja excluir permanentemente a Unidade Consumidora ${uc.numero_uc}? Esta ação não pode ser desfeita.`,
+                                                                            'Excluir Unidade Consumidora',
+                                                                            'Excluir',
+                                                                            'Cancelar'
+                                                                        );
+                                                                        if (confirm) {
+                                                                            try {
+                                                                                const { error } = await supabase.from('consumer_units').delete().eq('id', uc.id);
+                                                                                if (error) throw error;
+                                                                                showAlert('Unidade Consumidora excluída com sucesso!', 'success');
+                                                                                fetchUnits();
+                                                                            } catch (err) {
+                                                                                showAlert('Erro ao excluir Unidade Consumidora: ' + err.message, 'error');
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '6px 10px',
+                                                                        background: '#fef2f2',
+                                                                        border: 'none',
+                                                                        borderRadius: '8px',
+                                                                        cursor: 'pointer',
+                                                                        color: '#dc2626',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px',
+                                                                        fontSize: '0.8rem',
+                                                                        fontWeight: '600',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                    onMouseOver={e => { e.currentTarget.style.background = '#fee2e2'; }}
+                                                                    onMouseOut={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                                                                    title="Excluir UC"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                    <span>Excluir</span>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 )}
