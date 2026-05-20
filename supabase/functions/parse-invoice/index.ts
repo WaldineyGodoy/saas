@@ -118,6 +118,13 @@ serve(async (req) => {
         }
     }
 
+    // Saldo atualizado de créditos (kWh)
+    let saldo_kwh = 0;
+    const saldoMatch = fullText.match(/Saldo\s+atualizado\s+de\s+cr[eé]ditos\s*=\s*([\d.,]+)/i);
+    if (saldoMatch) {
+        saldo_kwh = parseConsumption(saldoMatch[1]);
+    }
+
     // Outros Lançamentos (Multas, Juros, Parcelamentos)
     let outros_lancamentos = 0;
     const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Parc\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
@@ -202,7 +209,8 @@ serve(async (req) => {
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: outros_lancamentos,
         linha_digitavel: linha_digitavel,
-        energia_injetada: energia_injetada
+        energia_injetada: energia_injetada,
+        saldo_kwh: saldo_kwh
     };
 
     return new Response(JSON.stringify(result), {

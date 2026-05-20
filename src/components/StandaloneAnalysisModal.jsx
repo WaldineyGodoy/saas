@@ -90,6 +90,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         data_leitura: '',
         consumo_kwh: '',
         energia_injetada: '',
+        saldo_kwh: '',
         consumo_compensado: '',
         consumo_reais: '',
         iluminacao_publica: '',
@@ -275,6 +276,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
                     let extractedCompensado = parsedData.consumo_compensado;
                     let extractedInjetada = parsedData.energia_injetada;
+                    let extractedSaldo = parsedData.saldo_kwh;
 
                     // Fallback local redundante/completo para extração e robustez
                     try {
@@ -288,6 +290,16 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         }
                         const cleanText = fullText.replace(/\s+/g, ' ');
                         const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
+                        const parseConsumption = (raw) => {
+                            if (!raw) return 0;
+                            let cleaned = raw.trim();
+                            if (cleaned.includes(',')) {
+                                cleaned = cleaned.split(',')[0];
+                            }
+                            cleaned = cleaned.replace(/\D/g, '');
+                            const parsed = parseInt(cleaned, 10);
+                            return isNaN(parsed) ? 0 : parsed;
+                        };
 
                         // 1. Fallback local de Consumo Compensado se necessário
                         if (!extractedCompensado) {
@@ -311,17 +323,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         // 2. Fallback local de Energia Injetada se necessário
                         if (!extractedInjetada) {
                             let parsedEnergiaInjetada = 0;
-                            const parseConsumption = (raw) => {
-                                if (!raw) return 0;
-                                let cleaned = raw.trim();
-                                if (cleaned.includes(',')) {
-                                    cleaned = cleaned.split(',')[0];
-                                }
-                                cleaned = cleaned.replace(/\D/g, '');
-                                const parsed = parseInt(cleaned, 10);
-                                return isNaN(parsed) ? 0 : parsed;
-                            };
-
                             const injetadaMatch = cleanText.match(/Energia\s+Ativa\s+Injetada\s+(?:[A-Za-zÀ-ÖØ-öø-ÿ]+\s+)?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i);
                             if (injetadaMatch) {
                                 parsedEnergiaInjetada = parseConsumption(injetadaMatch[4]);
@@ -343,6 +344,14 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 extractedInjetada = parsedEnergiaInjetada;
                             }
                         }
+
+                        // 3. Fallback local de Saldo de Créditos se necessário
+                        if (!extractedSaldo) {
+                            const saldoMatch = cleanText.match(/Saldo\s+atualizado\s+de\s+cr[eé]ditos\s*=\s*([\d.,]+)/i);
+                            if (saldoMatch) {
+                                extractedSaldo = parseConsumption(saldoMatch[1]);
+                            }
+                        }
                     } catch (fallbackErr) {
                         console.warn('Erro ao rodar o fallback local:', fallbackErr);
                     }
@@ -357,6 +366,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         valor_concessionaria: parsedData.valor_a_pagar !== undefined && parsedData.valor_a_pagar !== null ? formatCurrency(parsedData.valor_a_pagar) : (parsedData.valorTotal ? formatCurrency(parsedData.valorTotal) : ''),
                         consumo_kwh: parsedData.consumo_kwh !== undefined ? parsedData.consumo_kwh : '',
                         energia_injetada: extractedInjetada !== undefined && extractedInjetada !== null ? extractedInjetada : '',
+                        saldo_kwh: extractedSaldo !== undefined && extractedSaldo !== null ? extractedSaldo : '',
                         consumo_compensado: extractedCompensado !== undefined ? extractedCompensado : '',
                         consumo_reais: parsedData.consumo_reais !== undefined ? formatCurrency(parsedData.consumo_reais) : formatCurrency(parsedData.valorTotal || 0),
                         iluminacao_publica: parsedData.iluminacao_publica ? formatCurrency(parsedData.iluminacao_publica) : '',
@@ -404,6 +414,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             data_leitura: '',
             consumo_kwh: '',
             energia_injetada: '',
+            saldo_kwh: '',
             consumo_compensado: '',
             consumo_reais: '',
             iluminacao_publica: '',
@@ -432,6 +443,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             data_leitura: formData.data_leitura || null,
             consumo_kwh: Number(formData.consumo_kwh) || 0,
             energia_injetada: Number(formData.energia_injetada) || 0,
+            saldo_kwh: Number(formData.saldo_kwh) || 0,
             consumo_compensado: Number(formData.consumo_compensado) || 0,
             consumo_reais: simulation.energiaCompensadaReais + simulation.tarifaMinimaExcedentes,
             iluminacao_publica: ip,
@@ -1140,7 +1152,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                                            <div style={{ gridColumn: 'span 2' }}>
+                                            <div>
+                                                <label className="sandbox-label" style={{ color: '#16a34a', fontWeight: 'bold' }}>Saldo kWh</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={formData.saldo_kwh} 
+                                                    onChange={e => setFormData(prev => ({ ...prev, saldo_kwh: e.target.value }))} 
+                                                    className="sandbox-input"
+                                                    style={{ color: '#16a34a', fontWeight: 'bold', width: '100%' }} 
+                                                    placeholder="0"
+                                                />
+                                            </div>
+                                            <div>
                                                 <label className="sandbox-label">Total Concessionária (Lido)</label>
                                                 <input 
                                                     type="text" 
@@ -1215,6 +1238,19 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
                                                             <span style={{ color: '#64748b' }}>Energia Injetada:</span>
                                                             <span style={{ color: '#0284c7', fontWeight: 'bold' }}>{formData.energia_injetada} kWh</span>
+                                                        </div>
+                                                    )}
+                                                    {Number(formData.saldo_kwh) > 0 && (
+                                                        <div style={{ 
+                                                            display: 'flex', 
+                                                            justifyContent: 'space-between', 
+                                                            fontSize: '0.8rem', 
+                                                            borderTop: Number(formData.energia_injetada) > 0 ? 'none' : '1px dashed #e2e8f0', 
+                                                            paddingTop: Number(formData.energia_injetada) > 0 ? '0' : '0.4rem', 
+                                                            marginTop: Number(formData.energia_injetada) > 0 ? '0' : '0.2rem' 
+                                                        }}>
+                                                            <span style={{ color: '#64748b' }}>Saldo de Créditos:</span>
+                                                            <span style={{ color: '#16a34a', fontWeight: 'bold' }}>{formData.saldo_kwh} kWh</span>
                                                         </div>
                                                     )}
                                                 </div>
