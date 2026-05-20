@@ -787,6 +787,9 @@ export default function GraphNodeView() {
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>Distribuidora:</span><span style={{ color: '#eab308', fontWeight: 'bold' }}>{rawData.concessionaria || '-'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>Consumo Compensado:</span><span style={{ color: '#06b6d4', fontWeight: 'bold' }}>{rawData.consumo_compensado} kWh</span></div>
+                  {rawData.energia_injetada !== undefined && rawData.energia_injetada !== null && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>Energia Injetada:</span><span style={{ color: '#0284c7', fontWeight: 'bold' }}>{rawData.energia_injetada} kWh</span></div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>Valor Distribuidora:</span><span style={{ color: '#e2e8f0', fontWeight: 'bold' }}>R$ {(Number(rawData.valor_concessionaria) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>Tarifa Aplicada:</span><span style={{ color: '#cbd5e1' }}>R$ {rawData.valor_tarifa || '-'}</span></div>
                 </>

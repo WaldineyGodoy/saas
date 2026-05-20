@@ -89,6 +89,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         data_leitura_anterior: '',
         data_leitura: '',
         consumo_kwh: '',
+        energia_injetada: '',
         consumo_compensado: '',
         consumo_reais: '',
         iluminacao_publica: '',
@@ -273,21 +274,23 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                     const parsedData = await parseInvoice(base64);
 
                     let extractedCompensado = parsedData.consumo_compensado;
+                    let extractedInjetada = parsedData.energia_injetada;
 
-                    // Fallback local se a Edge Function retornar compensado nulo/zero
-                    if (!extractedCompensado) {
-                        try {
-                            setLoaderMessage('Executando validação de redundância...');
-                            const pdf = await pdfjsLib.getDocument({ data: atob(base64.split(',')[1] || base64) }).promise;
-                            let fullText = "";
-                            for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
-                                const page = await pdf.getPage(i);
-                                const textContent = await page.getTextContent();
-                                fullText += textContent.items.map(s => s.str).join(" ") + "\n";
-                            }
-                            const cleanText = fullText.replace(/\s+/g, ' ');
-                            const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
+                    // Fallback local redundante/completo para extração e robustez
+                    try {
+                        setLoaderMessage('Executando validação de redundância...');
+                        const pdf = await pdfjsLib.getDocument({ data: atob(base64.split(',')[1] || base64) }).promise;
+                        let fullText = "";
+                        for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            fullText += textContent.items.map(s => s.str).join(" ") + "\n";
+                        }
+                        const cleanText = fullText.replace(/\s+/g, ' ');
+                        const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
 
+                        // 1. Fallback local de Consumo Compensado se necessário
+                        if (!extractedCompensado) {
                             const compensadoMatches = cleanText.match(/G\dComp\..*?\-TE\s+kWh\s+([\d,.]+)-/gi);
                             let totalCompensado = 0;
                             if (compensadoMatches) {
@@ -303,9 +306,45 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                             if (totalCompensado > 0) {
                                 extractedCompensado = totalCompensado;
                             }
-                        } catch (fallbackErr) {
-                            console.warn('Erro ao rodar o fallback local:', fallbackErr);
                         }
+
+                        // 2. Fallback local de Energia Injetada se necessário
+                        if (!extractedInjetada) {
+                            let parsedEnergiaInjetada = 0;
+                            const parseConsumption = (raw) => {
+                                if (!raw) return 0;
+                                let cleaned = raw.trim();
+                                if (cleaned.includes(',')) {
+                                    cleaned = cleaned.split(',')[0];
+                                }
+                                cleaned = cleaned.replace(/\D/g, '');
+                                const parsed = parseInt(cleaned, 10);
+                                return isNaN(parsed) ? 0 : parsed;
+                            };
+
+                            const injetadaMatch = cleanText.match(/Energia\s+Ativa\s+Injetada\s+(?:[A-Za-zÀ-ÖØ-öø-ÿ]+\s+)?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i);
+                            if (injetadaMatch) {
+                                parsedEnergiaInjetada = parseConsumption(injetadaMatch[4]);
+                            } else {
+                                const fallbackInjetada = cleanText.match(/Energia\s+Ativa\s+Injetada[\s\S]{1,50}?([\d.,]+)/i);
+                                if (fallbackInjetada) {
+                                    const idxOf = cleanText.indexOf(fallbackInjetada[0]);
+                                    const context = cleanText.substring(idxOf, idxOf + 150);
+                                    const allNumbers = context.match(/[\d.,]+/g);
+                                    if (allNumbers && allNumbers.length >= 4) {
+                                        parsedEnergiaInjetada = parseConsumption(allNumbers[3]);
+                                    } else if (allNumbers && allNumbers.length > 0) {
+                                        parsedEnergiaInjetada = parseConsumption(allNumbers[allNumbers.length - 1]);
+                                    }
+                                }
+                            }
+
+                            if (parsedEnergiaInjetada > 0) {
+                                extractedInjetada = parsedEnergiaInjetada;
+                            }
+                        }
+                    } catch (fallbackErr) {
+                        console.warn('Erro ao rodar o fallback local:', fallbackErr);
                     }
 
                     // Preenche os dados extraídos no Passo B
@@ -317,6 +356,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         data_leitura: parsedData.data_leitura ? parsedData.data_leitura.split('T')[0] : '',
                         valor_concessionaria: parsedData.valor_a_pagar !== undefined && parsedData.valor_a_pagar !== null ? formatCurrency(parsedData.valor_a_pagar) : (parsedData.valorTotal ? formatCurrency(parsedData.valorTotal) : ''),
                         consumo_kwh: parsedData.consumo_kwh !== undefined ? parsedData.consumo_kwh : '',
+                        energia_injetada: extractedInjetada !== undefined && extractedInjetada !== null ? extractedInjetada : '',
                         consumo_compensado: extractedCompensado !== undefined ? extractedCompensado : '',
                         consumo_reais: parsedData.consumo_reais !== undefined ? formatCurrency(parsedData.consumo_reais) : formatCurrency(parsedData.valorTotal || 0),
                         iluminacao_publica: parsedData.iluminacao_publica ? formatCurrency(parsedData.iluminacao_publica) : '',
@@ -363,6 +403,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             vencimento: '',
             data_leitura: '',
             consumo_kwh: '',
+            energia_injetada: '',
             consumo_compensado: '',
             consumo_reais: '',
             iluminacao_publica: '',
@@ -390,6 +431,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             data_leitura_anterior: formData.data_leitura_anterior || null,
             data_leitura: formData.data_leitura || null,
             consumo_kwh: Number(formData.consumo_kwh) || 0,
+            energia_injetada: Number(formData.energia_injetada) || 0,
             consumo_compensado: Number(formData.consumo_compensado) || 0,
             consumo_reais: simulation.energiaCompensadaReais + simulation.tarifaMinimaExcedentes,
             iluminacao_publica: ip,
@@ -1043,6 +1085,19 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                 />
                                             </div>
                                             <div>
+                                                <label className="sandbox-label">Energia Injetada (kWh)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={formData.energia_injetada} 
+                                                    onChange={e => setFormData({ ...formData, energia_injetada: e.target.value })} 
+                                                    className="sandbox-input"
+                                                    style={{ fontWeight: 'bold', color: '#0284c7' }} 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                            <div>
                                                 <label className="sandbox-label">Energia Compensada (kWh)</label>
                                                 <input 
                                                     type="number" 
@@ -1052,9 +1107,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     style={{ fontWeight: 'bold' }} 
                                                 />
                                             </div>
-                                        </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
                                                 <label className="sandbox-label">Consumo em Reais (R$)</label>
                                                 <input 
@@ -1064,6 +1116,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     className="sandbox-input" 
                                                 />
                                             </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
                                                 <label className="sandbox-label">Iluminação Pública</label>
                                                 <input 
@@ -1073,9 +1128,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     className="sandbox-input" 
                                                 />
                                             </div>
-                                        </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                             <div>
                                                 <label className="sandbox-label">Outros</label>
                                                 <input 
@@ -1085,14 +1137,17 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     className="sandbox-input" 
                                                 />
                                             </div>
-                                            <div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                            <div style={{ gridColumn: 'span 2' }}>
                                                 <label className="sandbox-label">Total Concessionária (Lido)</label>
                                                 <input 
                                                     type="text" 
                                                     value={formData.valor_concessionaria} 
                                                     onChange={e => handleCurrencyInputChange('valor_concessionaria', e.target.value)} 
                                                     className="sandbox-input"
-                                                    style={{ fontWeight: 'bold', color: '#059669' }} 
+                                                    style={{ fontWeight: 'bold', color: '#059669', width: '100%' }} 
                                                 />
                                             </div>
                                         </div>
@@ -1156,6 +1211,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                         <span>Taxas Concessionária (IP/Outros):</span>
                                                         <span>{formatCurrency(parseCurrency(formData.iluminacao_publica) + parseCurrency(formData.outros_lancamentos))}</span>
                                                     </div>
+                                                    {Number(formData.energia_injetada) > 0 && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
+                                                            <span style={{ color: '#64748b' }}>Energia Injetada:</span>
+                                                            <span style={{ color: '#0284c7', fontWeight: 'bold' }}>{formData.energia_injetada} kWh</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

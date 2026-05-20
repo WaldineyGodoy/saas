@@ -24,6 +24,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
     const [formData, setFormData] = useState({
         uc_id: '',
         mes_referencia: new Date().toISOString().substring(0, 7), // YYYY-MM
+        consumo_kwh: '',
+        energia_injetada: '',
         consumo_compensado: 0,
         iluminacao_publica: '',
         tarifa_minima_excedentes: '',
@@ -82,6 +84,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento ? invoice.vencimento.split('T')[0] : '',
                 consumo_kwh: invoice.consumo_kwh,
+                energia_injetada: invoice.energia_injetada !== undefined && invoice.energia_injetada !== null ? invoice.energia_injetada : '',
                 consumo_compensado: invoice.consumo_compensado || 0,
                 iluminacao_publica: invoice.iluminacao_publica ? formatCurrency(invoice.iluminacao_publica) : '',
                 tarifa_minima_excedentes: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
@@ -666,6 +669,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                     setFormData(prev => {
                         const newFormData = { ...prev };
                         if (data.consumo_kwh !== undefined) newFormData.consumo_kwh = data.consumo_kwh;
+                        if (data.energia_injetada !== undefined && data.energia_injetada !== null) newFormData.energia_injetada = data.energia_injetada;
                         if (extractedConsumoCompensado !== undefined) newFormData.consumo_compensado = extractedConsumoCompensado;
                         if (data.mes_referencia) newFormData.mes_referencia = data.mes_referencia;
                         if (data.vencimento) newFormData.vencimento = data.vencimento;
@@ -825,13 +829,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
             const economiaReais = rawCompensado * rawTarifa * multiplier;
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
-            const totalToSave = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+            const totalToSave = Math.max(0, compensadaLiquida + tarifaMinimaExcedentes + ip + outros);
 
             const payload = {
                 uc_id: formData.uc_id,
                 mes_referencia: `${formData.mes_referencia}-01`,
                 vencimento: formData.vencimento,
                 consumo_kwh: Number(formData.consumo_kwh),
+                energia_injetada: formData.energia_injetada !== '' && formData.energia_injetada !== null ? Number(formData.energia_injetada) : 0,
                 consumo_reais: compensadaLiquida + tarifaMinimaExcedentes,
                 iluminacao_publica: ip,
                 tarifa_minima: tarifaMinimaExcedentes,
@@ -1177,18 +1182,24 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                     )}
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
                                     <div className="bg-white p-6 rounded-xl border border-slate-200">
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
                                             <Zap size={18} className="text-blue-500" /> Consumo (kWh)
                                         </label>
-                                        <input type="number" step="any" required value={formData.consumo_kwh} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="Ex: 450" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                        <input type="number" step="any" required value={formData.consumo_kwh || ''} onChange={e => setFormData({ ...formData, consumo_kwh: e.target.value })} placeholder="Ex: 450" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
                                     </div>
                                     <div className="bg-white p-6 rounded-xl border border-slate-200">
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
                                             <Calculator size={18} className="text-green-500" /> Consumo Compensado (kWh)
                                         </label>
-                                        <input type="number" step="any" value={formData.consumo_compensado} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} placeholder="Ex: 400" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                        <input type="number" step="any" value={formData.consumo_compensado || ''} onChange={e => setFormData({ ...formData, consumo_compensado: e.target.value })} placeholder="Ex: 400" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold' }} />
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.75rem', color: '#475569', fontWeight: 600 }}>
+                                            <Zap size={18} style={{ color: '#0284c7' }} /> Energia Injetada (kWh)
+                                        </label>
+                                        <input type="number" step="any" value={formData.energia_injetada || ''} onChange={e => setFormData({ ...formData, energia_injetada: e.target.value })} placeholder="Ex: 14760" style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1.1rem', fontWeight: 'bold', color: '#0284c7' }} />
                                     </div>
                                 </div>
                             </div>
@@ -1349,6 +1360,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                                 <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_kwh} kWh</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
+                                                <span>Energia Injetada:</span>
+                                                <span style={{ fontWeight: 700, color: '#0284c7' }}>{formData.energia_injetada || 0} kWh</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
                                                 <span>Energia Compensada:</span>
                                                 <span style={{ fontWeight: 700, color: '#2563eb' }}>{formData.consumo_compensado} kWh</span>
                                             </div>
@@ -1442,6 +1457,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
                                                 <span>Consumo Total:</span>
                                                 <span style={{ fontWeight: 700, color: '#1e293b' }}>{formData.consumo_kwh} kWh</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
+                                                <span>Energia Injetada:</span>
+                                                <span style={{ fontWeight: 700, color: '#0284c7' }}>{formData.energia_injetada || 0} kWh</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569' }}>
                                                 <span>Energia Compensada:</span>

@@ -1529,6 +1529,7 @@ export default function InvoiceListManager() {
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Leitura Atual</th>
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Consumo</th>
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Compensado</th>
+                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Injetada</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                     </tr>
@@ -1596,6 +1597,9 @@ export default function InvoiceListManager() {
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                                     {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', color: '#0284c7', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                                                    {inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-'}
                                                 </td>
                                                 <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
                                                     {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}

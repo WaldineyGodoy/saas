@@ -102,6 +102,22 @@ serve(async (req) => {
     const prevReadingMatch = fullText.match(/Leitura\s*Anterior[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     const readingDateMatch = fullText.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[^\d]*(\d{2}\/\d{2}\/\d{2,4})/i);
     
+    // Energia Ativa Injetada
+    let energia_injetada = 0;
+    const injetadaLineMatch = fullText.match(/Energia\s+Ativa\s+Injetada[^\n]*/i);
+    if (injetadaLineMatch) {
+        const lineText = injetadaLineMatch[0];
+        const fourNumbersMatch = lineText.match(/([\d.,]+)[^\d]+([\d.,]+)[^\d]+([\d.,]+)[^\d]+([\d.,]+)/);
+        if (fourNumbersMatch) {
+            energia_injetada = parseConsumption(fourNumbersMatch[4]);
+        } else {
+            const allNumbers = lineText.match(/[\d.,]+/g);
+            if (allNumbers && allNumbers.length > 0) {
+                energia_injetada = parseConsumption(allNumbers[allNumbers.length - 1]);
+            }
+        }
+    }
+
     // Outros Lançamentos (Multas, Juros, Parcelamentos)
     let outros_lancamentos = 0;
     const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Parc\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
@@ -185,7 +201,8 @@ serve(async (req) => {
         data_leitura_anterior: formatDate(prevReadingMatch ? prevReadingMatch[1] : null),
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: outros_lancamentos,
-        linha_digitavel: linha_digitavel
+        linha_digitavel: linha_digitavel,
+        energia_injetada: energia_injetada
     };
 
     return new Response(JSON.stringify(result), {

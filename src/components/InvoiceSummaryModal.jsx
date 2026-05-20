@@ -121,6 +121,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 data_leitura_anterior: invoice.data_leitura_anterior || '',
                 data_leitura: invoice.data_leitura || '',
                 consumo_kwh: invoice.consumo_kwh || 0,
+                energia_injetada: invoice.energia_injetada || 0,
                 consumo_compensado: invoice.consumo_compensado || 0,
                 consumo_reais: invoice.consumo_reais || 0,
                 iluminacao_publica: invoice.iluminacao_publica || 0,
@@ -419,6 +420,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <input type="number" value={editData.consumo_kwh} onChange={e => handleEditChange('consumo_kwh', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
                                 ) : (
                                     <span style={{ fontWeight: 700, color: '#1e293b' }}>{invoice.consumo_kwh} kWh</span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
+                                <span>Energia Injetada:</span>
+                                {isEditing ? (
+                                    <input type="number" value={editData.energia_injetada} onChange={e => handleEditChange('energia_injetada', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                ) : (
+                                    <span style={{ fontWeight: 700, color: '#0284c7' }}>{invoice.energia_injetada || 0} kWh</span>
                                 )}
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>

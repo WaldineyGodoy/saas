@@ -1166,6 +1166,12 @@ Associado`;
                                                 <span>Consumo Total (kWh)</span>
                                                 <span className="font-bold text-[#003366]">{inv.consumo_kwh} kWh</span>
                                             </div>
+                                            {inv.energia_injetada > 0 && (
+                                                <div className="flex justify-between text-[8px] font-medium text-[#0284c7]">
+                                                    <span>Energia Injetada</span>
+                                                    <span className="font-bold">{inv.energia_injetada} kWh</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between text-[8px] font-medium text-[#5ead5c]">
                                                 <span>Energia Compensada</span>
                                                 <span className="font-bold">- {inv.consumo_compensado || 0} kWh</span>
@@ -1314,6 +1320,12 @@ Associado`;
                                 <span>Consumo Compensado ({consumoCompensadoKwh.toFixed(0)} kWh):</span>
                                 <span>{formatCurrency(consumoCompensadoReais)}</span>
                             </div>
+                            {invoice.energia_injetada > 0 && (
+                                <div className="metric-line secondary" style={{ borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
+                                    <span>Energia Injetada:</span>
+                                    <span style={{ color: '#0284c7', fontWeight: 'bold' }}>{invoice.energia_injetada} kWh</span>
+                                </div>
+                            )}
                             <div className="metric-line secondary">
                                 <span>Valor da Tarifa:</span>
                                 <span>R$ {tarifa.toFixed(4)}</span>

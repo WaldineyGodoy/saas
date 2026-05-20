@@ -21,6 +21,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
         valorTotal: '',
         consumoKwh: '',
         consumoCompensado: '',
+        energiaInjetada: '',
         cipValor: '',
         outrosLancamentos: '',
         codigoCliente: '',
@@ -195,6 +196,36 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 totalCompensado = parseValue(compensadoMatch ? compensadoMatch[1] : 0);
             }
 
+            // Energia Ativa Injetada
+            let parsedEnergiaInjetada = 0;
+            const parseConsumption = (raw) => {
+                if (!raw) return 0;
+                let cleaned = raw.trim();
+                if (cleaned.includes(',')) {
+                    cleaned = cleaned.split(',')[0];
+                }
+                cleaned = cleaned.replace(/\D/g, '');
+                const parsed = parseInt(cleaned, 10);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+
+            const injetadaMatch = cleanText.match(/Energia\s+Ativa\s+Injetada\s+(?:[A-Za-zÀ-ÖØ-öø-ÿ]+\s+)?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i);
+            if (injetadaMatch) {
+                parsedEnergiaInjetada = parseConsumption(injetadaMatch[4]);
+            } else {
+                const fallbackInjetada = cleanText.match(/Energia\s+Ativa\s+Injetada[\s\S]{1,50}?([\d.,]+)/i);
+                if (fallbackInjetada) {
+                    const idxOf = cleanText.indexOf(fallbackInjetada[0]);
+                    const context = cleanText.substring(idxOf, idxOf + 150);
+                    const allNumbers = context.match(/[\d.,]+/g);
+                    if (allNumbers && allNumbers.length >= 4) {
+                        parsedEnergiaInjetada = parseConsumption(allNumbers[3]);
+                    } else if (allNumbers && allNumbers.length > 0) {
+                        parsedEnergiaInjetada = parseConsumption(allNumbers[allNumbers.length - 1]);
+                    }
+                }
+            }
+
             const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
             const parsedCompensado = totalCompensado;
 
@@ -206,6 +237,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null) || 0,
                 consumoKwh: parseInt(parsedConsumo) || 0,
                 consumoCompensado: parseInt(parsedCompensado) || 0,
+                energiaInjetada: parsedEnergiaInjetada || 0,
                 cipValor: parseValue(cipMatch ? cipMatch[1] : 0) || 0,
                 outrosLancamentos: somaOutros,
                 linhaDigitavel: linhaDigitavelText,
@@ -340,6 +372,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 tarifa_minima: Math.max(0, ((extractedData.consumoKwh || 0) - (extractedData.consumoCompensado || 0)) * valorTarifa),
                 consumo_kwh: extractedData.consumoKwh || 0,
                 consumo_compensado: extractedData.consumoCompensado || 0,
+                energia_injetada: extractedData.energiaInjetada || 0,
                 iluminacao_publica: extractedData.cipValor || 0,
                 outros_lancamentos: extractedData.outrosLancamentos || 0,
                 consumo_reais: (extractedData.consumoKwh || kwhMinimo) * valorTarifa,
@@ -498,6 +531,11 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                                 <div>
                                     <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Consumo (kWh)</label>
                                     <div style={{ fontWeight: 600, color: '#334155' }}>{extractedData.consumoKwh} kWh</div>
+                                </div>
+
+                                <div>
+                                    <label style={{ fontSize: '0.8rem', color: '#0284c7', display: 'block', marginBottom: '0.2rem' }}>Energia Injetada</label>
+                                    <div style={{ fontWeight: 600, color: '#0284c7' }}>{extractedData.energiaInjetada || 0} kWh</div>
                                 </div>
 
                                 <div>
