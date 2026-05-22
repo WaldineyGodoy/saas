@@ -2,6 +2,14 @@
 
 ---
 
+## [22/05/2026] - Novo Status "Vinculado a Usina" e Ajuste de Regra de Transição
+- **Novo Status de UC**: Implementação do status "Vinculado a Usina" (`'vinculado'`) posicionado no Kanban entre "Em Ativação" e "Transf. de Titularidade". Identificado visualmente pela cor Indigo (`#4f46e5`).
+- **Nova Regra de Transição (Trigger)**: Atualização na regra de vinculação de UC a usina. Quando uma UC é vinculada a uma usina (`usina_id` preenchido) e a usina associada estiver com o status `'em_conexao'`, o status da UC mudará automaticamente para `'vinculado'` (anteriormente passava para `'aguardando_conexao'`).
+- **Integração no Frontend**: O novo status foi mapeado nos seletores e badges de visualização de status do `ConsumerUnitModal.jsx`, `PowerPlantModal.jsx`, `SubscriberModal.jsx` e `MessageTriggerModal.jsx`.
+- **Gatilhos de Comunicação**: O novo status foi adicionado como condição configurável no modal de disparos automáticos de WhatsApp.
+
+---
+
 ## [19/05/2026] - Registro de Diretrizes de Auditoria de Energia Compensada
 - **Regras de Negócio de Auditoria**: Registro formal das especificações e critérios de auditoria para faturas de energia no Playbook CRM.
 - **Tratamento de Alertas**: Definição do gatilho de alerta para faturas onde a energia compensada for zero ou menor que o consumo total.
