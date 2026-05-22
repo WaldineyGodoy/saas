@@ -14,6 +14,7 @@ import UCInvoicesModal from './UCInvoicesModal';
 import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 import { sendWhatsapp } from '../lib/api';
+import SubscriberModal from './SubscriberModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     const { showAlert, showConfirm } = useUI();
@@ -37,6 +38,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
     const [showZeroInvoiceModal, setShowZeroInvoiceModal] = useState(false);
     const [zeroInvoiceMonth, setZeroInvoiceMonth] = useState(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
+    const [subscriberSearchTerm, setSubscriberSearchTerm] = useState('');
+    const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
+    const [activeSubscriberForModal, setActiveSubscriberForModal] = useState(null);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -315,7 +319,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.tarifa_concessionaria, formData.tipo_ligacao]);
 
     const fetchSubscribers = async () => {
-        const { data } = await supabase.from('subscribers').select('id, name, cpf_cnpj, portal_credentials, phone').order('name');
+        const { data } = await supabase.from('subscribers').select('*').order('name');
         setSubscribers(data || []);
     };
 
@@ -338,7 +342,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     }, [formData.titular_fatura_id, subscribers]);
 
     const handleSubscriberChange = async (subscriberId) => {
-        setFormData(prev => ({ ...prev, subscriber_id: subscriberId }));
+        setFormData(prev => {
+            const sub = subscribers.find(s => s.id === subscriberId);
+            return {
+                ...prev,
+                subscriber_id: subscriberId,
+                cpf_cnpj_fatura: prev.cpf_cnpj_fatura || (sub ? sub.cpf_cnpj : '')
+            };
+        });
         if (subscriberId) {
             try {
                 const { data, error } = await supabase
@@ -359,6 +370,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         }
     };
 
+    const handleSubscriberSaved = (savedSub) => {
+        setSubscribers(prev => prev.map(s => s.id === savedSub.id ? { ...s, ...savedSub } : s));
+    };
+
     const handleCepChange = (e) => {
         const masked = maskCEP(e.target.value);
         setFormData(prev => ({ ...prev, cep: masked }));
@@ -370,13 +385,33 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             setSearchingCep(true);
             try {
                 const addr = await fetchAddressByCep(rawCep);
+                
+                // Mapear concessionária padrão por UF
+                const defaultConcessionarias = {
+                    'RN': 'Neoenergia Cosern',
+                    'BA': 'Neoenergia Coelba',
+                    'PE': 'Neoenergia Pernambuco',
+                    'CE': 'Enel Ceará',
+                    'RJ': 'Enel Rio',
+                    'SP': 'Enel São Paulo',
+                    'MG': 'Cemig',
+                    'PR': 'Copel',
+                    'SC': 'Celesc',
+                    'MA': 'Equatorial Maranhão',
+                    'PA': 'Equatorial Pará',
+                    'PI': 'Equatorial Piauí',
+                    'AL': 'Equatorial Alagoas'
+                };
+                const ufUpper = addr.uf ? addr.uf.toUpperCase() : '';
+                const fallbackConcessionaria = defaultConcessionarias[ufUpper] || '';
+
                 setFormData(prev => ({
                     ...prev,
                     rua: addr.rua || '',
                     bairro: addr.bairro || '',
                     cidade: addr.cidade || '',
                     uf: addr.uf || '',
-                    concessionaria: prev.concessionaria || ''
+                    concessionaria: fallbackConcessionaria || prev.concessionaria || ''
                 }));
 
                 // Fetch Offers based on IBGE
@@ -396,7 +431,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             bairro: addr.bairro || '',
                             cidade: addr.cidade || '',
                             uf: addr.uf || '',
-                            concessionaria: offer.Concessionaria || prev.concessionaria,
+                            concessionaria: offer.Concessionaria || fallbackConcessionaria || prev.concessionaria,
                             tarifa_concessionaria: offer['Tarifa Concessionaria'] ? formatCurrency(offer['Tarifa Concessionaria']) : prev.tarifa_concessionaria,
                             te: offer['TE'] ? formatCurrency(offer['TE']) : prev.te,
                             tusd: offer['TUSD'] ? formatCurrency(offer['TUSD']) : prev.tusd,
@@ -710,32 +745,215 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 <User size={18} color="var(--color-blue)" /> Titularidade e Contato
                                             </h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                <div>
+                                                <div style={{ position: 'relative' }}>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante Vinculado</label>
-                                                    <select
-                                                        value={formData.subscriber_id}
-                                                        onChange={e => handleSubscriberChange(e.target.value)}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                                    >
-                                                        <option value="">Selecione o assinante...</option>
-                                                        {subscribers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ Fatura</label>
-                                                        <input
-                                                            value={formData.cpf_cnpj_fatura}
-                                                            onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Telefone (Assinante)</label>
-                                                        <div style={{ padding: '0.7rem', background: '#f1f5f9', borderRadius: '8px', color: '#475569', fontSize: '0.85rem' }}>
-                                                            {subscribers.find(s => s.id === formData.subscriber_id)?.phone || 'N/A'}
+                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                        <div style={{ position: 'relative', flex: 1 }}>
+                                                            <input
+                                                                type="text"
+                                                                value={subscriberSearchTerm}
+                                                                onFocus={() => setShowSubscriberDropdown(true)}
+                                                                onBlur={() => setTimeout(() => setShowSubscriberDropdown(false), 250)}
+                                                                onChange={e => {
+                                                                    setSubscriberSearchTerm(e.target.value);
+                                                                    setShowSubscriberDropdown(true);
+                                                                }}
+                                                                placeholder={
+                                                                    formData.subscriber_id 
+                                                                        ? subscribers.find(s => s.id === formData.subscriber_id)?.name || "Buscar para trocar assinante..." 
+                                                                        : "Buscar assinante por nome, CPF/CNPJ..."
+                                                                }
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '0.7rem 2.5rem 0.7rem 0.7rem', 
+                                                                    border: '1px solid #e2e8f0', 
+                                                                    borderRadius: '8px', 
+                                                                    outline: 'none',
+                                                                    fontSize: '0.9rem',
+                                                                    transition: 'border-color 0.2s',
+                                                                    borderColor: showSubscriberDropdown ? 'var(--color-blue)' : '#e2e8f0'
+                                                                }}
+                                                            />
+                                                            <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                                <FileSearch size={18} />
+                                                            </div>
                                                         </div>
+                                                        {formData.subscriber_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({ ...prev, subscriber_id: '' }));
+                                                                    setSubscriberSearchTerm('');
+                                                                }}
+                                                                style={{
+                                                                    padding: '0.7rem 1rem',
+                                                                    background: '#ef4444',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '8px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '0.85rem',
+                                                                    fontWeight: 500,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.25rem',
+                                                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                }}
+                                                            >
+                                                                Desvincular
+                                                            </button>
+                                                        )}
                                                     </div>
+
+                                                    {/* Dropdown de Resultados da Busca */}
+                                                    {showSubscriberDropdown && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '100%',
+                                                            left: 0,
+                                                            right: 0,
+                                                            background: 'white',
+                                                            border: '1px solid #e2e8f0',
+                                                            borderRadius: '8px',
+                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                                            maxHeight: '200px',
+                                                            overflowY: 'auto',
+                                                            zIndex: 100,
+                                                            marginTop: '4px'
+                                                        }}>
+                                                            {subscribers
+                                                                .filter(s => {
+                                                                    const term = subscriberSearchTerm.toLowerCase().trim();
+                                                                    if (!term) return true;
+                                                                    return (
+                                                                        s.name?.toLowerCase().includes(term) ||
+                                                                        s.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                        s.email?.toLowerCase().includes(term) ||
+                                                                        s.phone?.toLowerCase().includes(term)
+                                                                    );
+                                                                })
+                                                                .map(s => (
+                                                                    <div
+                                                                        key={s.id}
+                                                                        onMouseDown={() => {
+                                                                            handleSubscriberChange(s.id);
+                                                                            setSubscriberSearchTerm('');
+                                                                            setShowSubscriberDropdown(false);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '0.75rem 1rem',
+                                                                            cursor: 'pointer',
+                                                                            borderBottom: '1px solid #f1f5f9',
+                                                                            transition: 'background 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                                    >
+                                                                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{s.name}</div>
+                                                                        <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                                            <span>CPF/CNPJ: {s.cpf_cnpj}</span>
+                                                                            {s.email && <span>E-mail: {s.email}</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            }
+                                                            {subscribers.filter(s => {
+                                                                const term = subscriberSearchTerm.toLowerCase().trim();
+                                                                if (!term) return true;
+                                                                return (
+                                                                    s.name?.toLowerCase().includes(term) ||
+                                                                    s.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                    s.email?.toLowerCase().includes(term) ||
+                                                                    s.phone?.toLowerCase().includes(term)
+                                                                );
+                                                            }).length === 0 && (
+                                                                <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                                                                    Nenhum assinante encontrado.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Card do Assinante Vinculado */}
+                                                {(() => {
+                                                    const sub = subscribers.find(s => s.id === formData.subscriber_id);
+                                                    if (!sub) return null;
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setActiveSubscriberForModal(sub)}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+                                                                border: '1.5px solid #bfdbfe',
+                                                                borderRadius: '12px',
+                                                                padding: '1rem',
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.75rem',
+                                                                position: 'relative',
+                                                                overflow: 'hidden'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                e.currentTarget.style.borderColor = 'var(--color-blue)';
+                                                                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(37, 99, 235, 0.1), 0 4px 6px -4px rgba(37, 99, 235, 0.1)';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.borderColor = '#bfdbfe';
+                                                                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
+                                                            }}
+                                                        >
+                                                            {/* Background accent line */}
+                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--color-blue)' }}></div>
+                                                            
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <User size={18} color="var(--color-blue)" style={{ minWidth: '18px' }} />
+                                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{sub.name}</h5>
+                                                                </div>
+                                                                <span style={{
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: 600,
+                                                                    background: '#dbeafe',
+                                                                    color: 'var(--color-blue)',
+                                                                    padding: '0.2rem 0.6rem',
+                                                                    borderRadius: '20px',
+                                                                    textTransform: 'uppercase',
+                                                                    letterSpacing: '0.05em'
+                                                                }}>
+                                                                    Ver Cadastro
+                                                                </span>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ fontWeight: 500 }}>{sub.cpf_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span>{sub.phone || 'Sem Telefone'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', gridColumn: 'span 2' }}>
+                                                                    <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{sub.email || 'Sem E-mail'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ Fatura</label>
+                                                    <input
+                                                        value={formData.cpf_cnpj_fatura}
+                                                        onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
@@ -745,7 +963,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <MapPin size={18} color="var(--color-blue)" /> Localização
                                         </h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 120px', gap: '1rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '150px 2fr 1fr 1.5fr', gap: '1rem' }}>
                                             <div>
                                                 <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CEP</label>
                                                 <input
@@ -769,6 +987,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 <input
                                                     value={formData.numero}
                                                     onChange={e => setFormData({ ...formData, numero: e.target.value })}
+                                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Complemento</label>
+                                                <input
+                                                    value={formData.complemento}
+                                                    onChange={e => setFormData({ ...formData, complemento: e.target.value })}
+                                                    placeholder="Ex: Apto 101"
                                                     style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                 />
                                             </div>
@@ -1358,6 +1585,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </div>
                     </div>
                 </div>
+            )}
+
+            {activeSubscriberForModal && (
+                <SubscriberModal
+                    key={activeSubscriberForModal.id}
+                    subscriber={activeSubscriberForModal}
+                    onClose={() => setActiveSubscriberForModal(null)}
+                    onSave={handleSubscriberSaved}
+                />
             )}
         </div>
     );
