@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw } from 'lucide-react';
+import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
@@ -512,6 +513,23 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                         </div>
                     </div>
+
+                    {!isEditing && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <CollapsibleSection title="Histórico e Observações" icon={Clock} defaultOpen={false} noGrid={true}>
+                                <div style={{ width: '100%' }}>
+                                    <HistoryTimeline
+                                        entityType="invoice"
+                                        entityId={invoice.id}
+                                        entityName={`Fatura ${invoice.mes_referencia} - UC ${consumerUnit?.numero_uc}`}
+                                        isInline={true}
+                                        compact={true}
+                                        hideHeader={true}
+                                    />
+                                </div>
+                            </CollapsibleSection>
+                        </div>
+                    )}
 
                     {/* Ações */}
                     <div style={{ display: 'flex', gap: '1rem' }}>
