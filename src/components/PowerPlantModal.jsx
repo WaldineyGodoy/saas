@@ -8,7 +8,7 @@ import {
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
-    Paperclip, Send, Loader2, Info, History, Clock
+    Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +19,7 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
+    useSensors as useDndSensors, // just standard imports
 } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -32,6 +33,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import UCInvoicesModal from './UCInvoicesModal';
 import ConsumerUnitModal from './ConsumerUnitModal';
+import SupplierModal from './SupplierModal';
 
 // Global styles for the modal
 const modalStyles = `
@@ -256,6 +258,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [inverterBrands, setInverterBrands] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
+    const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
+    const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+    const [activeSupplierForModal, setActiveSupplierForModal] = useState(null);
 
     // Options Lists
     const statusOptions = [
@@ -919,7 +924,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const fetchSuppliers = async () => {
-        const { data } = await supabase.from('suppliers').select('id, name, phone').order('name');
+        const { data } = await supabase.from('suppliers').select('id, name, phone, cnpj, email').order('name');
         setSuppliers(data || []);
     };
 
@@ -1633,20 +1638,137 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     />
                                 </div>
 
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fornecedor / Proprietário</label>
-                                    <select
-                                        required
-                                        value={formData.supplier_id}
-                                        onChange={e => setFormData({ ...formData, supplier_id: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {suppliers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <div style={{ position: 'relative' }}>
+                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fornecedor / Proprietário</label>
+                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                         <div style={{ position: 'relative', flex: 1 }}>
+                                             <input
+                                                 type="text"
+                                                 required={!formData.supplier_id}
+                                                 value={supplierSearchTerm}
+                                                 onFocus={() => setShowSupplierDropdown(true)}
+                                                 onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 250)}
+                                                 onChange={e => {
+                                                     setSupplierSearchTerm(e.target.value);
+                                                     setShowSupplierDropdown(true);
+                                                 }}
+                                                 placeholder={
+                                                     formData.supplier_id 
+                                                         ? suppliers.find(s => s.id === formData.supplier_id)?.name || "Buscar para trocar fornecedor..." 
+                                                         : "Buscar fornecedor por nome, CNPJ..."
+                                                 }
+                                                 style={{ 
+                                                     width: '100%', 
+                                                     padding: '0.8rem 2.5rem 0.8rem 1rem', 
+                                                     border: '1px solid #e2e8f0', 
+                                                     borderRadius: '10px', 
+                                                     outline: 'none',
+                                                     fontSize: '1rem',
+                                                     transition: 'border-color 0.2s',
+                                                     borderColor: showSupplierDropdown ? 'var(--color-blue)' : '#e2e8f0',
+                                                     background: 'white'
+                                                 }}
+                                             />
+                                             <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                 <Search size={18} />
+                                             </div>
+                                         </div>
+                                         {formData.supplier_id && (
+                                             <button
+                                                 type="button"
+                                                 onClick={() => {
+                                                     setFormData(prev => ({ ...prev, supplier_id: '' }));
+                                                     setSupplierSearchTerm('');
+                                                 }}
+                                                 style={{
+                                                     padding: '0.8rem 1rem',
+                                                     background: '#ef4444',
+                                                     color: 'white',
+                                                     border: 'none',
+                                                     borderRadius: '10px',
+                                                     cursor: 'pointer',
+                                                     fontSize: '0.9rem',
+                                                     fontWeight: 500,
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: '0.25rem',
+                                                     boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                 }}
+                                             >
+                                                 Desvincular
+                                             </button>
+                                         )}
+                                     </div>
+
+                                     {/* Dropdown de Resultados da Busca */}
+                                     {showSupplierDropdown && (
+                                         <div className="custom-scrollbar" style={{
+                                             position: 'absolute',
+                                             top: '100%',
+                                             left: 0,
+                                             right: 0,
+                                             background: 'white',
+                                             border: '1px solid #e2e8f0',
+                                             borderRadius: '10px',
+                                             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                             maxHeight: '200px',
+                                             overflowY: 'auto',
+                                             zIndex: 100,
+                                             marginTop: '4px'
+                                         }}>
+                                             {suppliers
+                                                 .filter(s => {
+                                                     const term = supplierSearchTerm.toLowerCase().trim();
+                                                     if (!term) return true;
+                                                     return (
+                                                         s.name?.toLowerCase().includes(term) ||
+                                                         s.cnpj?.toLowerCase().includes(term) ||
+                                                         s.email?.toLowerCase().includes(term) ||
+                                                         s.phone?.toLowerCase().includes(term)
+                                                     );
+                                                 })
+                                                 .map(s => (
+                                                     <div
+                                                         key={s.id}
+                                                         onMouseDown={() => {
+                                                             setFormData(prev => ({ ...prev, supplier_id: s.id }));
+                                                             setSupplierSearchTerm('');
+                                                             setShowSupplierDropdown(false);
+                                                         }}
+                                                         style={{
+                                                             padding: '0.75rem 1rem',
+                                                             cursor: 'pointer',
+                                                             borderBottom: '1px solid #f1f5f9',
+                                                             transition: 'background 0.15s'
+                                                         }}
+                                                         onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                     >
+                                                         <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{s.name}</div>
+                                                         <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                             {s.cnpj && <span>CNPJ: {s.cnpj}</span>}
+                                                             {s.email && <span>E-mail: {s.email}</span>}
+                                                         </div>
+                                                     </div>
+                                                 ))
+                                             }
+                                             {suppliers.filter(s => {
+                                                 const term = supplierSearchTerm.toLowerCase().trim();
+                                                 if (!term) return true;
+                                                 return (
+                                                     s.name?.toLowerCase().includes(term) ||
+                                                     s.cnpj?.toLowerCase().includes(term) ||
+                                                     s.email?.toLowerCase().includes(term) ||
+                                                     s.phone?.toLowerCase().includes(term)
+                                                 );
+                                             }).length === 0 && (
+                                                 <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                                                     Nenhum fornecedor encontrado.
+                                                 </div>
+                                             )}
+                                         </div>
+                                     )}
+                                 </div>
 
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>CNPJ / CPF da Usina</label>
@@ -1674,79 +1796,152 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             const allUCs = [...availableUCs, ...selectedUCs];
                                             const uniqueUCs = Array.from(new Map(allUCs.map(uc => [uc.id, uc])).values());
                                             const geradoras = uniqueUCs.filter(uc => uc.tipo_unidade === 'geradora');
-                                            if (geradoras.length === 0) return (
-                                                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem' }}>
-                                                    <AlertCircle size={32} color="#94a3b8" style={{ marginBottom: '0.5rem' }} />
-                                                    <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>
-                                                </div>
+                                            const selectedSupplier = suppliers.find(s => s.id === formData.supplier_id);
+
+                                            return (
+                                                <>
+                                                    {selectedSupplier && (
+                                                        <div
+                                                            onClick={() => setActiveSupplierForModal(selectedSupplier)}
+                                                            style={{
+                                                                padding: '1.25rem',
+                                                                background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+                                                                border: '1.5px solid #bfdbfe',
+                                                                borderRadius: '12px',
+                                                                cursor: 'pointer',
+                                                                position: 'relative',
+                                                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.75rem',
+                                                                overflow: 'hidden'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                e.currentTarget.style.transform = 'scale(1.02) translateY(-2px)';
+                                                                e.currentTarget.style.borderColor = 'var(--color-blue)';
+                                                                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(37, 99, 235, 0.1)';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                e.currentTarget.style.transform = 'none';
+                                                                e.currentTarget.style.borderColor = '#bfdbfe';
+                                                                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
+                                                            }}
+                                                        >
+                                                            {/* Background accent line */}
+                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--color-blue)' }}></div>
+                                                            
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <User size={18} color="var(--color-blue)" style={{ minWidth: '18px' }} />
+                                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{selectedSupplier.name}</h5>
+                                                                </div>
+                                                                <span style={{
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: 600,
+                                                                    background: '#dbeafe',
+                                                                    color: 'var(--color-blue)',
+                                                                    padding: '0.2rem 0.6rem',
+                                                                    borderRadius: '20px',
+                                                                    textTransform: 'uppercase',
+                                                                    letterSpacing: '0.05em'
+                                                                }}>
+                                                                    Ver Cadastro
+                                                                </span>
+                                                            </div>
+
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ fontWeight: 500 }}>CNPJ: {selectedSupplier.cnpj || 'Sem CNPJ'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span>Tel: {selectedSupplier.phone || 'Sem Telefone'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{selectedSupplier.email || 'Sem E-mail'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {geradoras.length === 0 ? (
+                                                        <div style={{ gridColumn: selectedSupplier ? 'auto' : '1 / -1', textAlign: 'center', padding: '2rem' }}>
+                                                            <AlertCircle size={32} color="#94a3b8" style={{ marginBottom: '0.5rem' }} />
+                                                            <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Nenhuma UC do tipo "Geradora" encontrada.</p>
+                                                        </div>
+                                                    ) : (
+                                                        geradoras.map(uc => {
+                                                            const isSelected = formData.unidade_geradora === uc.numero_uc;
+                                                            const subscriber = subscribers.find(s => s.id === uc.titular_fatura_id);
+
+                                                            return (
+                                                                <div
+                                                                    key={uc.id}
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
+                                                                        } else {
+                                                                            setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
+                                                                            setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '1.25rem',
+                                                                        background: 'white',
+                                                                        border: isSelected ? '2.5px solid #3b82f6' : '1px solid #e2e8f0',
+                                                                        borderRadius: '12px',
+                                                                        cursor: 'pointer',
+                                                                        position: 'relative',
+                                                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                        boxShadow: isSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
+                                                                        transform: isSelected ? 'scale(1.02)' : 'none'
+                                                                    }}
+                                                                >
+                                                                    <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setEditingUC(uc);
+                                                                            }}
+                                                                            style={{
+                                                                                background: '#f8fafc', 
+                                                                                border: '1px solid #e2e8f0', 
+                                                                                borderRadius: '8px', 
+                                                                                padding: '0.4rem', 
+                                                                                color: '#64748b', 
+                                                                                cursor: 'pointer',
+                                                                                transition: 'all 0.2s',
+                                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                                            }}
+                                                                            onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#3b82f6'; }}
+                                                                            onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+                                                                            title="Visualizar Detalhes"
+                                                                        >
+                                                                            <Eye size={16} />
+                                                                        </button>
+                                                                        <div style={{
+                                                                            width: '20px', height: '20px', borderRadius: '50%',
+                                                                            border: isSelected ? '6px solid #3b82f6' : '2px solid #cbd5e1',
+                                                                            background: 'white', transition: '0.2s'
+                                                                        }} />
+                                                                    </div>
+                                                                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{uc.numero_uc}</div>
+                                                                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>{uc.titular_conta}</div>
+                                                                    {subscriber && <div style={{ fontSize: '0.85rem', color: '#3b82f6', fontWeight: 600, marginTop: '0.5rem' }}>{subscriber.name}</div>}
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f8fafc', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{uc.concessionaria}</span>
+                                                                        <span style={{ fontSize: '0.9rem', color: '#059669', fontWeight: 700 }}>{uc.franquia} kWh</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </>
                                             );
-
-                                            return geradoras.map(uc => {
-                                                const isSelected = formData.unidade_geradora === uc.numero_uc;
-                                                const subscriber = subscribers.find(s => s.id === uc.titular_fatura_id);
-
-                                                return (
-                                                    <div
-                                                        key={uc.id}
-                                                        onClick={() => {
-                                                            if (isSelected) {
-                                                                setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
-                                                            } else {
-                                                                setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
-                                                                setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
-                                                            }
-                                                        }}
-                                                        style={{
-                                                            padding: '1.25rem',
-                                                            background: 'white',
-                                                            border: isSelected ? '2.5px solid #3b82f6' : '1px solid #e2e8f0',
-                                                            borderRadius: '12px',
-                                                            cursor: 'pointer',
-                                                            position: 'relative',
-                                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                            boxShadow: isSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
-                                                            transform: isSelected ? 'scale(1.02)' : 'none'
-                                                        }}
-                                                    >
-                                                        <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEditingUC(uc);
-                                                                }}
-                                                                style={{
-                                                                    background: '#f8fafc', 
-                                                                    border: '1px solid #e2e8f0', 
-                                                                    borderRadius: '8px', 
-                                                                    padding: '0.4rem', 
-                                                                    color: '#64748b', 
-                                                                    cursor: 'pointer',
-                                                                    transition: 'all 0.2s',
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                                }}
-                                                                onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#3b82f6'; }}
-                                                                onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
-                                                                title="Visualizar Detalhes"
-                                                            >
-                                                                <Eye size={16} />
-                                                            </button>
-                                                            <div style={{
-                                                                width: '20px', height: '20px', borderRadius: '50%',
-                                                                border: isSelected ? '6px solid #3b82f6' : '2px solid #cbd5e1',
-                                                                background: 'white', transition: '0.2s'
-                                                            }} />
-                                                        </div>
-                                                        <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>{uc.numero_uc}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>{uc.titular_conta}</div>
-                                                        {subscriber && <div style={{ fontSize: '0.85rem', color: '#3b82f6', fontWeight: 600, marginTop: '0.5rem' }}>{subscriber.name}</div>}
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                                                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f8fafc', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{uc.concessionaria}</span>
-                                                            <span style={{ fontSize: '0.9rem', color: '#059669', fontWeight: 700 }}>{uc.franquia} kWh</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            });
                                         })()}
                                     </div>
                                 </div>
@@ -3053,6 +3248,22 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         fetchLinkedUCs(usina.id);
                         fetchAvailableUCs();
                         setEditingUC(null);
+                    }}
+                />
+            )}
+
+            {activeSupplierForModal && (
+                <SupplierModal
+                    supplier={activeSupplierForModal}
+                    onClose={() => setActiveSupplierForModal(null)}
+                    onSave={(updatedSupplier) => {
+                        fetchSuppliers();
+                        setActiveSupplierForModal(null);
+                    }}
+                    onDelete={(deletedId) => {
+                        fetchSuppliers();
+                        setFormData(prev => ({ ...prev, supplier_id: '' }));
+                        setActiveSupplierForModal(null);
                     }}
                 />
             )}
