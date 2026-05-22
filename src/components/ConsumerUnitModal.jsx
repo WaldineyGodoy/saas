@@ -715,6 +715,139 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         })}
                     </div>
 
+                    {/* Quick Status Selector Block */}
+                    <div style={{
+                        padding: '1rem 2rem',
+                        background: '#f8fafc',
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Alterar Status da UC
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {statusOptions.map(opt => {
+                                const isSelected = formData.status === opt.value;
+                                
+                                // Color system mapping
+                                let bg = '#f1f5f9';
+                                let color = '#475569';
+                                let border = '#cbd5e1';
+                                
+                                if (opt.value === 'ativo') {
+                                    bg = isSelected ? '#10b981' : '#ecfdf5';
+                                    color = isSelected ? '#ffffff' : '#059669';
+                                    border = isSelected ? '#10b981' : '#a7f3d0';
+                                } else if (opt.value === 'em_ativacao') {
+                                    bg = isSelected ? '#3b82f6' : '#eff6ff';
+                                    color = isSelected ? '#ffffff' : '#2563eb';
+                                    border = isSelected ? '#3b82f6' : '#bfdbfe';
+                                } else if (opt.value === 'em_atraso' || opt.value === 'cancelado' || opt.value === 'cancelado_inadimplente') {
+                                    bg = isSelected ? '#ef4444' : '#fff1f2';
+                                    color = isSelected ? '#ffffff' : '#e11d48';
+                                    border = isSelected ? '#ef4444' : '#fecaca';
+                                } else if (opt.value === 'aguardando_conexao' || opt.value === 'em_transf_titularidade') {
+                                    bg = isSelected ? '#f59e0b' : '#fffbeb';
+                                    color = isSelected ? '#ffffff' : '#d97706';
+                                    border = isSelected ? '#f59e0b' : '#fde68a';
+                                } else {
+                                    bg = isSelected ? '#64748b' : '#f8fafc';
+                                    color = isSelected ? '#ffffff' : '#475569';
+                                    border = isSelected ? '#64748b' : '#cbd5e1';
+                                }
+
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={async () => {
+                                            const newStatus = opt.value;
+                                            
+                                            // 1. Update form data locally
+                                            let activationDate = formData.data_ativacao;
+                                            if (newStatus === 'ativo' && !formData.data_ativacao) {
+                                                activationDate = new Date().toISOString().split('T')[0];
+                                            }
+                                            
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                status: newStatus,
+                                                data_ativacao: activationDate
+                                            }));
+
+                                            // 2. If it's an existing consumer unit, update the database immediately
+                                            if (consumerUnit?.id) {
+                                                try {
+                                                    const { error } = await supabase
+                                                        .from('consumer_units')
+                                                        .update({
+                                                            status: newStatus,
+                                                            data_ativacao: activationDate || null
+                                                        })
+                                                        .eq('id', consumerUnit.id);
+                                                    
+                                                    if (error) throw error;
+                                                    
+                                                    // Add to chronological CRM history log
+                                                    const statusLabel = opt.label;
+                                                    await addHistory(
+                                                        'uc',
+                                                        consumerUnit.id,
+                                                        `Status alterado diretamente no modal para: ${statusLabel}`,
+                                                        { 
+                                                            status: newStatus,
+                                                            data_ativacao: activationDate || null
+                                                        }
+                                                    );
+                                                    
+                                                    showAlert(`Status da UC alterado para "${statusLabel}" com sucesso!`, 'success');
+                                                } catch (err) {
+                                                    console.error('Error updating status immediately:', err);
+                                                    showAlert('Erro ao atualizar status: ' + err.message, 'error');
+                                                }
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '20px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            border: `1.5px solid ${border}`,
+                                            background: bg,
+                                            color: color,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            boxShadow: isSelected ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
+                                            transform: isSelected ? 'scale(1.05)' : 'none'
+                                        }}
+                                        onMouseEnter={e => {
+                                            if (!isSelected) {
+                                                e.currentTarget.style.borderColor = color;
+                                                e.currentTarget.style.background = isSelected ? bg : '#e2e8f0';
+                                            }
+                                        }}
+                                        onMouseLeave={e => {
+                                            if (!isSelected) {
+                                                e.currentTarget.style.borderColor = border;
+                                                e.currentTarget.style.background = bg;
+                                            }
+                                        }}
+                                    >
+                                        {isSelected && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'white', display: 'inline-block' }}></span>}
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     <div style={{ padding: '2rem', flex: 1 }}>
                         <form onSubmit={handleSubmit}>
                             {/* Tab Content: Geral */}
