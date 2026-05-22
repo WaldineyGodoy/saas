@@ -102,6 +102,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
             'ativo': { color: '#059669', bg: '#ecfdf5', label: 'Ativo' },
             'desconectado': { color: '#e11d48', bg: '#fff1f2', label: 'Desconectado' },
             'em_ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Em Ativação' },
+            'vinculado': { color: '#4f46e5', bg: '#e0e7ff', label: 'Vinculado a Usina' },
             'ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Ativação' },
             'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },
@@ -491,9 +492,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         ativosKwh: selectedUCs
             .filter(u => u.status === 'ativo')
             .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0),
-        pendentes: selectedUCs.filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status)).length,
+        pendentes: selectedUCs.filter(u => ['em_ativacao', 'vinculado', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status)).length,
         pendentesKwh: selectedUCs
-            .filter(u => ['em_ativacao', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status))
+            .filter(u => ['em_ativacao', 'vinculado', 'aguardando_conexao', 'ativacao', 'em_transf_titularidade'].includes(u.status))
             .reduce((acc, uc) => acc + (Number(uc.consumo_medio_kwh) || Number(uc.franquia) || 0), 0)
     };
 
@@ -3222,6 +3223,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         'ativo': { color: '#059669', bg: '#ecfdf5', label: 'Ativo' },
                                         'desconectado': { color: '#e11d48', bg: '#fff1f2', label: 'Desconectado' },
                                         'em_ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Em Ativação' },
+                                        'vinculado': { color: '#4f46e5', bg: '#e0e7ff', label: 'Vinculado a Usina' },
                                         'ativacao': { color: '#2563eb', bg: '#eff6ff', label: 'Ativação' },
                                         'em_atraso': { color: '#d97706', bg: '#fffbeb', label: 'Em Atraso' },
                                         'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado' },

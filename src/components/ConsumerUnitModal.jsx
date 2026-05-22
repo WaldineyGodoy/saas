@@ -72,6 +72,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // Status Options
     const statusOptions = [
         { value: 'em_ativacao', label: 'Em Ativação' },
+        { value: 'vinculado', label: 'Vinculado a Usina' },
         { value: 'em_transf_titularidade', label: 'Em Transf. de Titularidade' },
         { value: 'aguardando_conexao', label: 'Aguardando Conexão' },
         { value: 'ativo', label: 'Ativo' },
@@ -666,13 +667,16 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 marginRight: '1rem',
                                 background: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#ecfdf5' : 
                                            statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#eff6ff' :
+                                           statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#e0e7ff' :
                                            statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#fff1f2' : '#f1f5f9',
                                 color: statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#059669' : 
                                        statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#2563eb' :
+                                       statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#4f46e5' :
                                        statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#e11d48' : '#475569',
                                 border: `1px solid ${
                                     statusOptions.find(o => o.value === formData.status)?.value === 'ativo' ? '#d1fae5' : 
                                     statusOptions.find(o => o.value === formData.status)?.value === 'em_ativacao' ? '#dbeafe' :
+                                    statusOptions.find(o => o.value === formData.status)?.value === 'vinculado' ? '#c7d2fe' :
                                     statusOptions.find(o => o.value === formData.status)?.value === 'em_atraso' ? '#ffe4e6' : '#e2e8f0'
                                 }`
                             }}>
@@ -746,6 +750,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                     bg = isSelected ? '#3b82f6' : '#eff6ff';
                                     color = isSelected ? '#ffffff' : '#2563eb';
                                     border = isSelected ? '#3b82f6' : '#bfdbfe';
+                                } else if (opt.value === 'vinculado') {
+                                    bg = isSelected ? '#4f46e5' : '#e0e7ff';
+                                    color = isSelected ? '#ffffff' : '#4338ca';
+                                    border = isSelected ? '#4f46e5' : '#c7d2fe';
                                 } else if (opt.value === 'em_atraso' || opt.value === 'cancelado' || opt.value === 'cancelado_inadimplente') {
                                     bg = isSelected ? '#ef4444' : '#fff1f2';
                                     color = isSelected ? '#ffffff' : '#e11d48';

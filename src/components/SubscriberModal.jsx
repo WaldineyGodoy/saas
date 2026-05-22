@@ -2125,6 +2125,7 @@ Associado`;
                                                     'em_atraso': '#ef4444',
                                                     'ativacao': '#f59e0b',
                                                     'em_ativacao': '#f59e0b',
+                                                    'vinculado': '#4f46e5',
                                                     'cancelado': '#94a3b8',
                                                     'cancelado_inadimplente': '#7f1d1d'
                                                 };

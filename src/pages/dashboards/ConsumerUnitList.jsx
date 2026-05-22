@@ -29,6 +29,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 const KANBAN_STATUSES = [
     { status: 'em_ativacao', label: 'Em Ativação', color: '#3b82f6' },
+    { status: 'vinculado', label: 'Vinculado a Usina', color: '#4f46e5' },
     { status: 'em_transf_titularidade', label: 'Em Transf. de Titularidade', color: '#db2777' },
     { status: 'aguardando_conexao', label: 'Aguardando Conexão', color: '#eab308' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
@@ -358,6 +359,8 @@ const getStatusBadgeStyle = (status) => {
             return { bg: '#dcfce7', text: '#15803d', label: 'Ativo' };
         case 'em_ativacao':
             return { bg: '#eff6ff', text: '#1d4ed8', label: 'Em Ativação' };
+        case 'vinculado':
+            return { bg: '#e0e7ff', text: '#4338ca', label: 'Vinculado a Usina' };
         case 'em_transf_titularidade':
             return { bg: '#fce7f3', text: '#be185d', label: 'Em Transf. Titularidade' };
         case 'aguardando_conexao':
