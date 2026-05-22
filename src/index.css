@@ -519,7 +519,7 @@ textarea {
   padding-bottom: 0.5rem;
   flex: 1;
   min-height: 0;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .kanban-column {
@@ -531,6 +531,7 @@ textarea {
   background: #f8fafc;
   border-radius: 14px;
   border: 1px solid #f1f5f9;
+  height: 100%;
   max-height: 100%;
   overflow: hidden;
 }
@@ -556,6 +557,23 @@ textarea {
   overflow-y: auto;
   flex: 1;
   scrollbar-width: thin;
+}
+
+.kanban-column-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kanban-column-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-column-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.kanban-column-content::-webkit-scrollbar-thumb:hover {
+  background: var(--color-blue);
 }
 
 .kanban-card {
