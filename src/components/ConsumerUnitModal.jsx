@@ -41,6 +41,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [subscriberSearchTerm, setSubscriberSearchTerm] = useState('');
     const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
     const [activeSubscriberForModal, setActiveSubscriberForModal] = useState(null);
+    const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -184,15 +185,17 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         };
     }, [consumerUnit?.id]); // Run once on mount
 
-    const addHistory = async (type, id, event, metadata = {}) => {
+    const addHistory = async (type, id, content, metadata = {}) => {
         try {
-            await supabase.from('crm_history').insert({
+            const { error } = await supabase.from('crm_history').insert({
                 entity_type: type,
                 entity_id: id,
-                event_type: event,
+                content,
                 metadata,
                 created_by: profile?.id
             });
+            if (error) throw error;
+            setHistoryRefreshTrigger(prev => prev + 1);
         } catch (err) {
             console.warn('History log error:', err);
         }
@@ -237,11 +240,17 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
             if (result.success) {
                 showAlert('Comunicado enviado com sucesso!', 'success');
-                await addHistory('uc', consumerUnit.id, 'whatsapp_manual', { 
-                    message: manualMessage,
-                    attached_file: manualFile ? manualFile.name : null,
-                    recipient: subscriber.name
-                });
+                await addHistory(
+                    'uc', 
+                    consumerUnit.id, 
+                    `WhatsApp: ${manualMessage}`, 
+                    { 
+                        message: manualMessage,
+                        attached_file: manualFile ? manualFile.name : null,
+                        recipient: subscriber.name,
+                        status: 'sent'
+                    }
+                );
                 setManualMessage('');
                 setManualFile(null);
             } else {
@@ -1287,6 +1296,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     isInline={true}
                                                     compact={true}
                                                     hideHeader={true}
+                                                    refreshTrigger={historyRefreshTrigger}
                                                 />
                                             ) : (
                                                 <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
@@ -1354,6 +1364,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     entityName={`UC: ${formData.numero_uc} - ${subscriberName}`}
                     onClose={() => setShowHistory(false)}
                     isInline={false}
+                    refreshTrigger={historyRefreshTrigger}
                 />
             )}
 
