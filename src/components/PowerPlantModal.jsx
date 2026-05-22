@@ -8,7 +8,8 @@ import {
     ChevronDown, ChevronUp, MapPin, Zap, Settings, DollarSign, Users, BarChart, Trash2, Save, X, 
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
-    Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard
+    Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard,
+    Percent, SlidersHorizontal, ArrowUpDown, Check
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,7 +20,8 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
-    useSensors as useDndSensors, // just standard imports
+    useSensors as useDndSensors,
+    useDroppable,
 } from '@dnd-kit/core';
 import {
     arrayMove,
@@ -69,12 +71,31 @@ const modalStyles = `
     }
 `;
 
+// Droppable Column Component for Drag and Drop between columns
+const DroppableColumn = ({ id, children, style, className }) => {
+    const { setNodeRef, isOver } = useDroppable({ id });
+    return (
+        <div 
+            ref={setNodeRef} 
+            style={{
+                ...style,
+                backgroundColor: isOver ? '#f1f5f9' : style.backgroundColor,
+                borderColor: isOver ? '#cbd5e1' : style.borderColor,
+                transition: 'all 0.2s ease'
+            }}
+            className={className}
+        >
+            {children}
+        </div>
+    );
+};
+
 // Sortable UC Item Component
-const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed }) => {
+const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subscribers, isFixed, isAvailable = false }) => {
     const { branding } = useBranding();
     const isDisconnected = uc.status === 'desconectado' || uc.status === 'cancelado';
     const percentage = (geracaoEstimada > 0 && !isDisconnected) ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : (isDisconnected ? '0.00' : null);
-    const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id);
+    const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id || s.id === uc.subscriber_id);
     
     const getStatusStyle = (status) => {
         const map = {
@@ -151,21 +172,39 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                 <div style={{ width: '20px' }} />
             )}
 
-            <div style={{ 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '10px', 
-                background: isGeradora ? '#fef3c7' : (branding?.primary_color || '#3b82f6') + '15', 
-                color: isGeradora ? '#92400e' : (branding?.primary_color || '#3b82f6'), 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                fontSize: '0.85rem', 
-                fontWeight: '800',
-                border: `1px solid ${isGeradora ? '#fcd34d' : (branding?.primary_color || '#3b82f6') + '30'}`
-            }}>
-                {index + 1}
-            </div>
+            {!isAvailable ? (
+                <div style={{ 
+                    width: '32px', 
+                    height: '32px', 
+                    borderRadius: '10px', 
+                    background: isGeradora ? '#fef3c7' : (branding?.primary_color || '#3b82f6') + '15', 
+                    color: isGeradora ? '#92400e' : (branding?.primary_color || '#3b82f6'), 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '0.85rem', 
+                    fontWeight: '800',
+                    border: `1px solid ${isGeradora ? '#fcd34d' : (branding?.primary_color || '#3b82f6') + '30'}`
+                }}>
+                    {index + 1}
+                </div>
+            ) : (
+                <div style={{ 
+                    width: '32px', 
+                    height: '32px', 
+                    borderRadius: '10px', 
+                    background: '#f1f5f9', 
+                    color: '#64748b', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    fontSize: '0.85rem', 
+                    fontWeight: '800',
+                    border: '1px solid #cbd5e1'
+                }}>
+                    <Zap size={16} />
+                </div>
+            )}
 
             <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
@@ -240,7 +279,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                     </button>
                     <input
                         type="checkbox"
-                        checked={true}
+                        checked={!isAvailable}
                         onChange={e => onToggle(e.target.checked)}
                         style={{ transform: 'scale(1.1)', accentColor: branding?.primary_color || '#3b82f6', cursor: 'pointer' }}
                     />
@@ -329,7 +368,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [availableUCs, setAvailableUCs] = useState([]);
     const [selectedUCs, setSelectedUCs] = useState([]); // Store full objects
     const [subscribers, setSubscribers] = useState([]);
-    const [ucFilter, setUcFilter] = useState('linked'); // 'linked' or 'unlinked'
     const [previewUC, setPreviewUC] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'endereco' | 'tecnico' | 'financeiro' | 'ucs' | 'portal' | 'comunicacao'
@@ -1015,26 +1053,113 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     };
 
-    const handleDragEnd = (event) => {
+    const handleDragEnd = async (event) => {
         const { active, over } = event;
-        if (active.id !== over.id) {
-            setSelectedUCs((items) => {
-                const oldIndex = items.findIndex(i => i.id === active.id);
-                const newIndex = items.findIndex(i => i.id === over.id);
+        if (!over) return;
 
-                // If the item at index 0 is the Unidade Geradora, prevent others from moving to 0
-                // and prevent it from moving elsewhere
-                const isGeradoraAt0 = items[0]?.numero_uc === formData.unidade_geradora;
-                if (isGeradoraAt0 && (oldIndex === 0 || newIndex === 0)) {
-                    return items;
+        const activeId = active.id;
+        const overId = over.id;
+
+        // 1. Find if active item is linked or available
+        const activeItemLinked = selectedUCs.find(uc => uc.id === activeId);
+        
+        // Filter out canceled statuses for Available UCs
+        const filteredAvailable = availableUCs.filter(uc => 
+            !selectedUCs.some(s => s.id === uc.id) &&
+            uc.status !== 'cancelado' &&
+            uc.status !== 'cancelado_inadimplente'
+        );
+        const activeItemAvailable = filteredAvailable.find(uc => uc.id === activeId);
+        
+        const isActiveLinked = !!activeItemLinked;
+        const isActiveAvailable = !!activeItemAvailable;
+
+        // 2. Find if over target belongs to linked or available column
+        const isOverLinked = selectedUCs.some(uc => uc.id === overId) || overId === 'linked-column';
+        const isOverAvailable = filteredAvailable.some(uc => uc.id === overId) || overId === 'available-column';
+
+        // 3. Prevent dragging the Unidade Geradora principal if it's currently selected
+        if (isActiveLinked && activeItemLinked?.numero_uc === formData.unidade_geradora) {
+            // Unidade geradora must be at index 0 of Linked column and cannot be removed
+            if (isOverAvailable) {
+                showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Geral.', 'warning');
+                return;
+            }
+            // If sorting within linked, prevent it from moving from index 0
+            const oldIndex = selectedUCs.findIndex(uc => uc.id === activeId);
+            const newIndex = selectedUCs.findIndex(uc => uc.id === overId);
+            if (oldIndex === 0 || newIndex === 0) {
+                return;
+            }
+        }
+
+        // Case A: Sorting within Linked column
+        if (isActiveLinked && isOverLinked) {
+            if (activeId !== overId) {
+                setSelectedUCs((items) => {
+                    const oldIndex = items.findIndex(i => i.id === activeId);
+                    const newIndex = items.findIndex(i => i.id === overId);
+
+                    // Re-enforce Unidade Geradora principal constraint at index 0
+                    const isGeradoraAt0 = items[0]?.numero_uc === formData.unidade_geradora;
+                    if (isGeradoraAt0 && (oldIndex === 0 || newIndex === 0)) {
+                        return items;
+                    }
+
+                    const newItems = [...items];
+                    const [movedItem] = newItems.splice(oldIndex, 1);
+                    newItems.splice(newIndex, 0, movedItem);
+
+                    return newItems;
+                });
+            }
+            return;
+        }
+
+        // Case B: Moving from Available to Linked (Vincular)
+        if (isActiveAvailable && isOverLinked) {
+            const activeUc = activeItemAvailable;
+            if (activeUc) {
+                // Safety Pop-up
+                const confirm = await showConfirm(
+                    'Confirmar Vínculo',
+                    `Deseja realmente vincular a UC ${activeUc.numero_uc} a esta usina?`,
+                    'Sim, Vincular',
+                    'Cancelar'
+                );
+                if (confirm) {
+                    setSelectedUCs(prev => {
+                        // Insert at specific dropped position if possible, otherwise append
+                        const index = prev.findIndex(u => u.id === overId);
+                        const newSelected = [...prev];
+                        if (index !== -1) {
+                            newSelected.splice(index, 0, activeUc);
+                        } else {
+                            newSelected.push(activeUc);
+                        }
+                        return newSelected;
+                    });
                 }
+            }
+            return;
+        }
 
-                const newItems = [...items];
-                const [movedItem] = newItems.splice(oldIndex, 1);
-                newItems.splice(newIndex, 0, movedItem);
-
-                return newItems;
-            });
+        // Case C: Moving from Linked to Available (Remover Vínculo)
+        if (isActiveLinked && isOverAvailable) {
+            const activeUc = activeItemLinked;
+            if (activeUc) {
+                // Safety Pop-up
+                const confirm = await showConfirm(
+                    'Remover Vínculo',
+                    `Deseja realmente remover a UC ${activeUc.numero_uc} desta usina?`,
+                    'Sim, Remover',
+                    'Cancelar'
+                );
+                if (confirm) {
+                    setSelectedUCs(prev => prev.filter(u => u.id !== activeId));
+                }
+            }
+            return;
         }
     };
 
@@ -1220,144 +1345,155 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const renderUCList = () => {
-        const listToRender = ucFilter === 'linked'
-            ? selectedUCs
-            : availableUCs.filter(uc => !selectedUCs.some(s => s.id === uc.id));
-
-        if (listToRender.length === 0) {
-            return (
-                <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>
-                    Nenhuma UC {ucFilter === 'linked' ? 'vinculada' : 'disponível'}.
-                </p>
-            );
-        }
-
-        if (ucFilter === 'linked') {
-            return (
-                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                    <SortableContext items={listToRender.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            {listToRender.map((uc, index) => (
-                                <SortableUCItem
-                                    key={uc.id}
-                                    uc={uc}
-                                    index={index}
-                                    isSelected={true}
-                                    geracaoEstimada={formData.geracao_estimada_kwh}
-                                    subscribers={subscribers}
-                                    isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
-                                    onPreview={async () => {
-                                        const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
-                                        setPreviewUC(data || uc);
-                                        setShowPreviewModal(true);
-                                    }}
-                                    onToggle={async (checked) => {
-                                        if (index === 0 && uc.numero_uc === formData.unidade_geradora) {
-                                            showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Identificação.', 'warning');
-                                            return;
-                                        }
-                                        if (!checked) {
-                                            const confirm = await showConfirm(
-                                                'Remover Vínculo?',
-                                                `Deseja realmente remover a UC ${uc.numero_uc} desta usina?`
-                                            );
-                                            if (confirm) {
-                                                setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
-                                            }
-                                        }
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    </SortableContext>
-                </DndContext>
-            );
-        }
+        // Filter out selected UCs AND cancelled statuses for Available UCs
+        const filteredAvailable = availableUCs.filter(uc => 
+            !selectedUCs.some(s => s.id === uc.id) &&
+            uc.status !== 'cancelado' &&
+            uc.status !== 'cancelado_inadimplente'
+        );
 
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
-                {listToRender.map(uc => {
-                    const isSelected = selectedUCs.some(u => u.id === uc.id);
-                    return (
-                        <div key={uc.id} style={{
-                            display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.85rem',
-                            padding: '0.8rem', border: isSelected ? `1px solid ${branding?.primary_color || '#3b82f6'}` : '1px solid #ddd',
-                            borderRadius: '6px', background: isSelected ? 'white' : 'rgba(255,255,255,0.6)',
-                            transition: '0.2s', boxShadow: isSelected ? `0 2px 4px ${(branding?.primary_color || '#3b82f6')}1A` : 'none',
-                            opacity: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 0.6 : 1,
-                            borderStyle: (uc.status === 'desconectado' || uc.status === 'cancelado') ? 'dashed' : 'solid'
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={async (e) => {
-                                    const checked = e.target.checked;
-                                    const action = checked ? 'vincular' : 'remover o vínculo da';
-                                    const confirm = await showConfirm(
-                                        `${checked ? 'Vincular' : 'Remover'} UC?`,
-                                        `Deseja realmente ${action} UC ${uc.numero_uc}?`
-                                    );
-                                    if (confirm) {
-                                        if (checked) setSelectedUCs([...selectedUCs, uc]);
-                                        else setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
-                                    }
-                                }}
-                                style={{ transform: 'scale(1.1)', accentColor: branding?.primary_color || '#3b82f6', cursor: 'pointer' }}
-                            />
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{uc.numero_uc}</div>
-                                    <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: uc.tipo_unidade === 'geradora' ? '#fef3c7' : '#e0f2fe', color: uc.tipo_unidade === 'geradora' ? '#92400e' : '#075985', fontWeight: 600, textTransform: 'capitalize' }}>
-                                        {uc.tipo_unidade || 'Beneficiária'}
-                                    </span>
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                    {uc.titular_conta}
-                                </div>
-                                {(() => {
-                                    const sub = subscribers.find(s => s.id === uc.titular_fatura_id);
-                                    return (
-                                        <>
-                                            {sub && (
-                                                <div style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600, marginTop: '0.2rem' }}>
-                                                    Titular: {sub.name}
-                                                </div>
-                                            )}
-                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                                                CPF/CNPJ: {uc.cpf_cnpj_fatura || sub?.cpf_cnpj || 'Não inf.'}
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                                <div>
-                                    <span style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8' }}>{uc.concessionaria}</span>
-                                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                                        {uc.franquia ? `${Math.round(uc.franquia)} kWh` : '0 kWh'}
-                                    </div>
-                                    {isSelected && formData.geracao_estimada_kwh > 0 && (
-                                        <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 'bold' }}>
-                                            {(uc.status === 'desconectado' || uc.status === 'cancelado') ? '0.00' : ((uc.franquia / formData.geracao_estimada_kwh) * 100).toFixed(2)}%
-                                        </div>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
-                                        setPreviewUC(data || uc);
-                                        setShowPreviewModal(true);
-                                    }}
-                                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '4px', padding: '0.4rem', color: '#64748b', cursor: 'pointer' }}
-                                >
-                                    <Eye size={16} />
-                                </button>
-                            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '0.5rem' }}>
+                    
+                    {/* Column 1: Vinculadas (Linked) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', padding: '0 0.5rem' }}>
+                            <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>Vinculadas</h5>
+                            <span style={{ fontSize: '0.75rem', color: '#0f766e', fontWeight: 800, padding: '0.2rem 0.6rem', background: '#ccfbf1', borderRadius: '6px', border: '1px solid #99f6e4' }}>
+                                {selectedUCs.length} UCs
+                            </span>
                         </div>
-                    );
-                })}
-            </div>
+                        
+                        <DroppableColumn 
+                            id="linked-column" 
+                            style={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '0.5rem', 
+                                padding: '1rem', 
+                                background: '#f8fafc', 
+                                borderRadius: '16px', 
+                                border: '1px dashed #cbd5e1',
+                                minHeight: '300px',
+                                maxHeight: '600px',
+                                overflowY: 'auto'
+                            }}
+                            className="custom-scrollbar"
+                        >
+                            <SortableContext items={selectedUCs.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                {selectedUCs.length === 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, height: '100%', minHeight: '260px', color: '#94a3b8', textAlign: 'center', padding: '1.5rem' }}>
+                                        <Link size={24} style={{ marginBottom: '0.5rem', opacity: 0.6 }} />
+                                        <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600 }}>Nenhuma UC vinculada.</p>
+                                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.72rem', opacity: 0.8 }}>Arraste UCs aqui para vinculá-las.</p>
+                                    </div>
+                                ) : (
+                                    selectedUCs.map((uc, index) => (
+                                        <SortableUCItem
+                                            key={uc.id}
+                                            uc={uc}
+                                            index={index}
+                                            isAvailable={false}
+                                            geracaoEstimada={formData.geracao_estimada_kwh}
+                                            subscribers={subscribers}
+                                            isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
+                                            onPreview={async () => {
+                                                const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                                setPreviewUC(data || uc);
+                                                setShowPreviewModal(true);
+                                            }}
+                                            onToggle={async (checked) => {
+                                                if (index === 0 && uc.numero_uc === formData.unidade_geradora) {
+                                                    showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Geral.', 'warning');
+                                                    return;
+                                                }
+                                                // unchecked -> remove link
+                                                const confirm = await showConfirm(
+                                                    'Remover Vínculo?',
+                                                    `Deseja realmente remover a UC ${uc.numero_uc} desta usina?`,
+                                                    'Sim, Remover',
+                                                    'Cancelar'
+                                                );
+                                                if (confirm) {
+                                                    setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                                }
+                                            }}
+                                        />
+                                    ))
+                                )}
+                            </SortableContext>
+                        </DroppableColumn>
+                    </div>
+
+                    {/* Column 2: Disponíveis (Available) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', padding: '0 0.5rem' }}>
+                            <h5 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 800 }}>Disponíveis</h5>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 800, padding: '0.2rem 0.6rem', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                {filteredAvailable.length} UCs
+                            </span>
+                        </div>
+
+                        <DroppableColumn 
+                            id="available-column" 
+                            style={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '0.5rem', 
+                                padding: '1rem', 
+                                background: '#f8fafc', 
+                                borderRadius: '16px', 
+                                border: '1px dashed #cbd5e1',
+                                minHeight: '300px',
+                                maxHeight: '600px',
+                                overflowY: 'auto'
+                            }}
+                            className="custom-scrollbar"
+                        >
+                            <SortableContext items={filteredAvailable.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                {filteredAvailable.length === 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, height: '100%', minHeight: '260px', color: '#94a3b8', textAlign: 'center', padding: '1.5rem' }}>
+                                        <Zap size={24} style={{ marginBottom: '0.5rem', opacity: 0.6 }} />
+                                        <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600 }}>Nenhuma UC disponível.</p>
+                                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.72rem', opacity: 0.8 }}>Todas as UCs elegíveis já estão vinculadas.</p>
+                                    </div>
+                                ) : (
+                                    filteredAvailable.map((uc, index) => (
+                                        <SortableUCItem
+                                            key={uc.id}
+                                            uc={uc}
+                                            index={index}
+                                            isAvailable={true}
+                                            geracaoEstimada={formData.geracao_estimada_kwh}
+                                            subscribers={subscribers}
+                                            isFixed={false}
+                                            onPreview={async () => {
+                                                const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                                setPreviewUC(data || uc);
+                                                setShowPreviewModal(true);
+                                            }}
+                                            onToggle={async (checked) => {
+                                                // checked -> bind link
+                                                const confirm = await showConfirm(
+                                                    'Confirmar Vínculo',
+                                                    `Deseja realmente vincular a UC ${uc.numero_uc} a esta usina?`,
+                                                    'Sim, Vincular',
+                                                    'Cancelar'
+                                                );
+                                                if (confirm) {
+                                                    setSelectedUCs([...selectedUCs, uc]);
+                                                }
+                                            }}
+                                        />
+                                    ))
+                                )}
+                            </SortableContext>
+                        </DroppableColumn>
+                    </div>
+
+                </div>
+            </DndContext>
         );
     };
 
@@ -2666,73 +2802,145 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         </div>
                                     </div>
                                     
-                                    {/* Sub-Filters embedded with modern design */}
+                                    {/* Regra de Rateio Premium Selector */}
                                     <div style={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: '1fr 1fr', 
-                                        gap: '1.5rem', 
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '1rem', 
                                         marginBottom: '2rem', 
                                         padding: '1.5rem', 
                                         background: '#f8fafc', 
-                                        borderRadius: '20px', 
-                                        border: '1px solid #f1f5f9' 
+                                        borderRadius: '24px', 
+                                        border: '1px solid #e2e8f0',
+                                        boxShadow: '0 4px 18px -4px rgba(0,0,0,0.03)'
                                     }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Visualizar Unidades</label>
-                                            <div style={{ display: 'flex', background: 'white', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setUcFilter('linked')} 
-                                                    style={{ 
-                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: ucFilter === 'linked' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
-                                                        color: ucFilter === 'linked' ? 'white' : '#64748b', 
-                                                        cursor: 'pointer', transition: 'all 0.2s' 
-                                                    }}
-                                                >
-                                                    Vinculadas
-                                                </button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setUcFilter('unlinked')} 
-                                                    style={{ 
-                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: ucFilter === 'unlinked' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
-                                                        color: ucFilter === 'unlinked' ? 'white' : '#64748b', 
-                                                        cursor: 'pointer', transition: 'all 0.2s' 
-                                                    }}
-                                                >
-                                                    Disponíveis
-                                                </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <SlidersHorizontal size={18} color={branding?.primary_color || '#3b82f6'} />
+                                                <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Regra de Distribuição de Rateio</span>
                                             </div>
+                                            <span style={{ fontSize: '0.72rem', color: branding?.primary_color || '#3b82f6', fontWeight: 700, background: `${branding?.primary_color || '#3b82f6'}15`, padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
+                                                {formData.rateio_type === 'prioridade' ? 'Modo Prioridade' : 'Modo Porcentagem'}
+                                            </span>
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Regra de Rateio</label>
-                                            <div style={{ display: 'flex', background: 'white', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setFormData({...formData, rateio_type: 'prioridade'})} 
-                                                    style={{ 
-                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: formData.rateio_type === 'prioridade' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
-                                                        color: formData.rateio_type === 'prioridade' ? 'white' : '#64748b', 
-                                                        cursor: 'pointer', transition: 'all 0.2s' 
-                                                    }}
-                                                >
-                                                    Prioridade
-                                                </button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})} 
-                                                    style={{ 
-                                                        flex: 1, padding: '0.6rem', border: 'none', borderRadius: '9px', fontSize: '0.85rem', fontWeight: 700, 
-                                                        background: formData.rateio_type === 'porcentagem' ? (branding?.primary_color || '#3b82f6') : 'transparent', 
-                                                        color: formData.rateio_type === 'porcentagem' ? 'white' : '#64748b', 
-                                                        cursor: 'pointer', transition: 'all 0.2s' 
-                                                    }}
-                                                >
-                                                    Porcentagem
-                                                </button>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
+                                            {/* Option 1: Prioridade */}
+                                            <div 
+                                                onClick={() => setFormData({...formData, rateio_type: 'prioridade'})}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    padding: '1.25rem',
+                                                    borderRadius: '16px',
+                                                    border: `2px solid ${formData.rateio_type === 'prioridade' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
+                                                    background: formData.rateio_type === 'prioridade' ? 'white' : 'transparent',
+                                                    boxShadow: formData.rateio_type === 'prioridade' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {formData.rateio_type === 'prioridade' && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        right: 0,
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        background: branding?.primary_color || '#3b82f6',
+                                                        borderBottomLeftRadius: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white'
+                                                    }}>
+                                                        <Check size={12} strokeWidth={3} />
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{
+                                                        width: '36px',
+                                                        height: '36px',
+                                                        borderRadius: '10px',
+                                                        background: formData.rateio_type === 'prioridade' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
+                                                        color: formData.rateio_type === 'prioridade' ? (branding?.primary_color || '#3b82f6') : '#64748b',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}>
+                                                        <ArrowUpDown size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.rateio_type === 'prioridade' ? '#0f172a' : '#475569', fontWeight: 800 }}>Prioridade</h5>
+                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Sequencial Ordenado</span>
+                                                    </div>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4', fontWeight: 500 }}>
+                                                    Os créditos abastecem as UCs na ordem da lista. A próxima UC só recebe créditos se sobrar saldo da anterior.
+                                                </p>
+                                            </div>
+
+                                            {/* Option 2: Porcentagem */}
+                                            <div 
+                                                onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    padding: '1.25rem',
+                                                    borderRadius: '16px',
+                                                    border: `2px solid ${formData.rateio_type === 'porcentagem' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
+                                                    background: formData.rateio_type === 'porcentagem' ? 'white' : 'transparent',
+                                                    boxShadow: formData.rateio_type === 'porcentagem' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {formData.rateio_type === 'porcentagem' && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        right: 0,
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        background: branding?.primary_color || '#3b82f6',
+                                                        borderBottomLeftRadius: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white'
+                                                    }}>
+                                                        <Check size={12} strokeWidth={3} />
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{
+                                                        width: '36px',
+                                                        height: '36px',
+                                                        borderRadius: '10px',
+                                                        background: formData.rateio_type === 'porcentagem' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
+                                                        color: formData.rateio_type === 'porcentagem' ? (branding?.primary_color || '#3b82f6') : '#64748b',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}>
+                                                        <Percent size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.rateio_type === 'porcentagem' ? '#0f172a' : '#475569', fontWeight: 800 }}>Porcentagem</h5>
+                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Proporcional Fixo</span>
+                                                    </div>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4', fontWeight: 500 }}>
+                                                    Cada UC recebe uma fatia fixa da geração (ex: 20%). Ideal para sócios ou parceiros com participações fixas definidas.
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -3125,34 +3333,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         </div>
 
                         <div style={{ padding: '1.5rem', background: '#fdfcfe', borderBottom: '1px solid #ede9fe', display: 'flex', gap: '2rem', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Filtro de Exibição</label>
-                                <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setUcFilter('linked')}
-                                        style={{
-                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                            background: ucFilter === 'linked' ? 'white' : 'transparent',
-                                            color: ucFilter === 'linked' ? (branding?.primary_color || '#3b82f6') : '#64748b',
-                                            boxShadow: ucFilter === 'linked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-                                            cursor: 'pointer'
-                                        }}
-                                    >Vinculadas</button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setUcFilter('unlinked')}
-                                        style={{
-                                            padding: '0.4rem 1rem', border: 'none', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600,
-                                            background: ucFilter === 'unlinked' ? 'white' : 'transparent',
-                                            color: ucFilter === 'unlinked' ? (branding?.primary_color || '#3b82f6') : '#64748b',
-                                            boxShadow: ucFilter === 'unlinked' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-                                            cursor: 'pointer'
-                                        }}
-                                    >Não Vinculadas</button>
-                                </div>
-                            </div>
-
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                                 <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Tipo de Rateio</label>
                                 <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px' }}>
