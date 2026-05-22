@@ -487,7 +487,7 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: var(--color-blue) #f1f5f9;
   position: relative;
-  max-height: calc(100vh - 260px);
+  height: calc(100vh - 260px);
   display: flex;
   flex-direction: column;
 }
