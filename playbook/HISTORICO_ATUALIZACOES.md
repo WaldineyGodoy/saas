@@ -2,6 +2,13 @@
 
 ---
 
+## [23/05/2026] - Fix: Suporte à Modalidade Geração Compartilhada em Contas de Energia e Auditoria
+- **Expansão de Modalidades**: Corrigido o filtro restrito que limitava a exibição de concessionárias na aba de **Contas de Energia Concessionária** apenas para a modalidade `'auto_consumo_remoto'`. Agora, as UCs sob a modalidade `'geracao_compartilhada'` (como a UC `7030004021`) também têm suas contas de energia corretamente listadas nas visualizações de Lista, Kanban e Calendário de Energia.
+- **Rastreabilidade Contábil**: Habilitadas ações operacionais como a visualização da linha digitável, registro e auditorias automáticas de consistência para faturas de ambas as modalidades, mantendo 100% de paridade de fluxo.
+- **Auditoria de Energia**: Atualizado o motor do scanner de inconsistências (`AuditGraphViewInvoiceSummary.jsx`) para analisar desvios de compensação e ausência de créditos em faturas de Geração Compartilhada não associadas a usinas no CRM.
+
+---
+
 ## [23/05/2026] - Toggle de Critério de Filtro por Mês e Relocalização de Totais
 - **Nova Opção de Filtragem**: Adicionado um seletor premium de duas opções ("Mês Ref." e "Vencimento") diretamente à direita do seletor de mês. Isso permite que o operador defina se a filtragem mensal cruzará as datas pela coluna de **Mês de Referência** (`mes_referencia`) ou **Data de Vencimento** (`vencimento`), evitando confusões de critérios.
 - **Integração Reativa**: Atualizada a query de busca no banco de dados (`fetchInvoices`) e os hooks de efeito em `InvoiceListManager.jsx` para recalcular dinamicamente os resultados ao alternar o critério.
