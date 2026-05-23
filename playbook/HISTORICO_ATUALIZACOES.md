@@ -2,6 +2,13 @@
 
 ---
 
+## [23/05/2026] - Redirecionamento do Clique no Calendário de Leituras para o Modal da UC
+- **Resolução de Comportamento**: Corrigido o comportamento do clique nos cards do **Calendário de Leituras** na seção de Contas de Energia. A alteração anterior estava abrindo o modal de faturamento/resumo de fatura contábil (`InvoiceSummaryModal`), o que desviava a funcionalidade original.
+- **Fluxo de Trabalho Restaurado**: O clique agora abre diretamente o **Modal da Unidade Consumidora** (`ConsumerUnitModal`), permitindo que o faturista ou operador visualize os detalhes operacionais e clique diretamente em **"Upload Conta"** para fazer o upload e processamento do PDF da leitura da concessionária, gerando subsequentemente a fatura de forma limpa.
+- **Implementação Segura**: Importado o `ConsumerUnitModal` dentro de `InvoiceListManager.jsx` com novos estados de controle (`selectedUcForModal`, `isUcModalOpen`) e callbacks de atualização de dados (`fetchUcs`, `fetchInvoices`) em tempo real.
+
+---
+
 ## [23/05/2026] - Otimização Financeira: Desativação de Mensageria Automática do Asaas (Redução de Custos)
 - **Redução de Custos Recorrentes**: Identificado que o CRM estava explicitamente ativando ou omitindo o parâmetro de desativação de notificações nativas do Asaas ao criar/atualizar clientes (`notificationDisabled: false`), gerando cobranças indesejadas de R$ 0,99 por disparo de boleto/vencimento/pagamento.
 - **Implementação Técnica Definitiva**:
