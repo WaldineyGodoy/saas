@@ -2174,28 +2174,31 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
   <InvoiceFormModal
     invoice={selectedInvoice}
     ucs={ucs.filter(u => u.status === 'ativo')}
-    extraActions={(inv) => (
-      <button
-        onClick={() => handlePayBill(inv)}
-        disabled={payingId === inv.id}
-        style={{
-          background: '#10b981',
-          color: 'white',
-          padding: '0.4rem 0.8rem',
-          borderRadius: '6px',
-          border: 'none',
-          cursor: payingId === inv.id ? 'not-allowed' : 'pointer',
-          opacity: payingId === inv.id ? 0.6 : 1,
-          transition: 'background 0.2s, transform 0.1s',
-        }}
-        onMouseOver={e => (e.currentTarget.style.background = '#059669')}
-        onMouseOut={e => (e.currentTarget.style.background = '#10b981')}
-        onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.98)')}
-        onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
-      >
-        Pagar conta energia
-      </button>
-    )}
+    extraActions={(inv) => {
+      if (!inv) return null;
+      return (
+        <button
+          onClick={() => handlePayBill(inv)}
+          disabled={payingId === inv.id}
+          style={{
+            background: '#10b981',
+            color: 'white',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: payingId === inv.id ? 'not-allowed' : 'pointer',
+            opacity: payingId === inv.id ? 0.6 : 1,
+            transition: 'background 0.2s, transform 0.1s',
+          }}
+          onMouseOver={e => (e.currentTarget.style.background = '#059669')}
+          onMouseOut={e => (e.currentTarget.style.background = '#10b981')}
+          onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.98)')}
+          onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          Pagar conta energia
+        </button>
+      );
+    }}
     onClose={() => setIsModalOpen(false)}
     onSave={handleSave}
   />
