@@ -237,8 +237,7 @@ export default function TriggerMessageDashboard() {
                         {filteredColumns.map(col => (
                             <div key={col.id} className="kanban-column" style={{ 
                                 height: '100%', 
-                                maxHeight: 'none', 
-                                minHeight: '400px',
+                                maxHeight: '100%', 
                                 display: 'flex',
                                 flexDirection: 'column'
                             }}>
