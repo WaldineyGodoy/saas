@@ -15,7 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
+export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraActions }) {
     const { profile } = useAuth();
     const { branding } = useBranding();
     const canManageStatus = ['super_admin', 'admin', 'manager'].includes(profile?.role);
@@ -982,6 +982,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave }) {
                         <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Após processamento da Conta de Energia Concessionária</p>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+{extraActions && extraActions(invoice)}
                 </div>
 
                 {/* Status Selection - Premium Pipeline Style */}
