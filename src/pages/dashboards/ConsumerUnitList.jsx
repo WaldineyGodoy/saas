@@ -136,223 +136,6 @@ function KanbanColumn({ status, label, color, units, onCardClick }) {
     );
 }
 
-function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusFilter, onCardClick }) {
-    const today = new Date();
-    const currentYearNum = today.getFullYear();
-    const currentMonthNum = today.getMonth() + 1;
-    const currentDayNum = today.getDate();
-
-    const [filterYear, filterMonth] = (monthFilter || '').split('-').map(Number);
-    const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
-
-    const firstDay = new Date(filterYear, filterMonth - 1, 1).getDay();
-    const startOffset = (firstDay + 6) % 7; // Segunda = 0
-    const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
-    const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-    // 1. Filtrar Ativas e Desconectadas (que ainda podem ter leituras/faturas) para o Calendário
-    const calendarUnits = units.filter(u => u.status === 'ativo' || u.status === 'desconectado');
-
-    // 2. Agrupar e Calcular Status
-    const groupedUnits = calendarUnits.reduce((acc, unit) => {
-        const unitDate = new Date(unit.created_at);
-        const unitYear = unitDate.getFullYear();
-        const unitMonth = unitDate.getMonth() + 1;
-        
-        if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
-            return acc;
-        }
-
-        const day = unit.dia_leitura || 0;
-        const monthRef = `${monthFilter}-01`;
-        const hasInvoice = invoices.some(inv => 
-            inv.uc_id === unit.id && 
-            inv.mes_referencia === monthRef && 
-            inv.status?.trim().toLowerCase() !== 'cancelado'
-        );
-
-        let status = 'pending';
-        if (hasInvoice) {
-            status = 'success';
-        } else if (unit.last_scraping_status === 'processing') {
-            status = 'processing';
-        } else {
-            const isFuture = (filterYear > currentYearNum) || 
-                           (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
-                           (isCurrentMonth && day > currentDayNum);
-
-            if (isFuture) {
-                status = 'not_available';
-            } else if (unit.last_scraping_status === 'success') {
-                status = 'success';
-            } else if (unit.last_scraping_status === 'error') {
-                status = 'error';
-            } else {
-                status = 'pending';
-            }
-        }
-
-        if (readingStatusFilter && status !== readingStatusFilter) return acc;
-
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            const matchesSearch = 
-                unit.numero_uc?.toLowerCase().includes(lower) ||
-                unit.subscriber?.name?.toLowerCase().includes(lower) ||
-                unit.titular_fatura?.name?.toLowerCase().includes(lower) ||
-                unit.concessionaria?.toLowerCase().includes(lower);
-            if (!matchesSearch) return acc;
-        }
-
-        if (!acc[day]) acc[day] = [];
-        acc[day].push({ ...unit, displayStatus: status });
-        return acc;
-    }, {});
-
-    return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-            gap: '1rem',
-            padding: '1rem',
-            maxWidth: '1600px',
-            margin: '0 auto'
-        }}>
-            <div style={{
-                gridColumn: '1 / -1',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: '1rem',
-                position: 'sticky',
-                top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
-                zIndex: 10,
-                background: '#f8fafc',
-                padding: '0.5rem 0',
-                margin: '-0.5rem 0 0.5rem 0'
-            }}>
-                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
-                    <div key={d} style={{ 
-                        fontWeight: '800', 
-                        textAlign: 'center', 
-                        padding: '0.5rem', 
-                        color: '#64748b', 
-                        fontSize: '0.75rem', 
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                    }}>
-                        {d}
-                    </div>
-                ))}
-            </div>
-            {Array.from({ length: startOffset }).map((_, i) => (
-                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0', minHeight: '180px' }} />
-            ))}
-            {calendarDays.map(day => {
-                const dayUnits = groupedUnits[day] || [];
-                return (
-                    <div key={day} style={{
-                        background: 'white',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--color-border)',
-                        minHeight: '180px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: 'var(--shadow-sm)',
-                        transition: 'transform 0.2s',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '0.6rem 1rem',
-                            borderBottom: '1px solid var(--color-border)',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            borderTopLeftRadius: 'var(--radius-md)',
-                            borderTopRightRadius: 'var(--radius-md)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Leit. {day}</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                                {[
-                                    { key: 'success', bg: '#dcfce7', color: '#166534' },
-                                    { key: 'pending', bg: '#fff7ed', color: '#c2410c' },
-                                    { key: 'error', bg: '#fee2e2', color: '#991b1b' },
-                                    { key: 'processing', bg: '#eff6ff', color: '#1d4ed8' },
-                                    { key: 'not_available', bg: '#f1f5f9', color: '#475569' }
-                                ].map(status => {
-                                    const count = dayUnits.filter(u => u.displayStatus === status.key).length;
-                                    if (count === 0) return null;
-                                    return (
-                                        <span key={status.key} style={{ 
-                                            fontSize: '0.7rem', color: status.color, background: status.bg, 
-                                            padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
-                                            minWidth: '1.2rem', textAlign: 'center', border: `1px solid ${status.color}20`
-                                        }}>
-                                            {count}
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
-                            {dayUnits.length === 0 ? (
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
-                            ) : (
-                                dayUnits.map(uc => (
-                                    <div key={uc.id} onClick={() => onCardClick(uc)} style={{
-                                        padding: '0.6rem', borderRadius: '8px',
-                                        background: uc.status === 'desconectado' ? '#f5f3ff' :
-                                                    uc.displayStatus === 'success' ? '#f0fdf4' : 
-                                                    uc.displayStatus === 'processing' ? '#eff6ff' :
-                                                    uc.displayStatus === 'pending' ? '#fff7ed' :
-                                                    uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
-                                        borderLeft: `5px solid ${
-                                            uc.status === 'desconectado' ? '#8b5cf6' :
-                                            uc.displayStatus === 'success' ? '#22c55e' : 
-                                            uc.displayStatus === 'processing' ? '#3b82f6' :
-                                            uc.displayStatus === 'pending' ? '#f97316' :
-                                            uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
-                                        }`,
-                                        opacity: uc.status === 'desconectado' ? 0.7 : 1,
-                                        cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                    }}>
-                                        <div style={{ 
-                                            fontWeight: 'bold', 
-                                            color: '#0f172a', 
-                                            whiteSpace: 'nowrap', 
-                                            overflow: 'hidden', 
-                                            textOverflow: 'ellipsis' 
-                                        }}>
-                                            {uc.subscriber?.name || 'S/ Assinante'}
-                                        </div>
-                                        <div style={{ 
-                                            fontSize: '0.7rem', 
-                                            color: '#64748b', 
-                                            marginTop: '0.2rem',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                        }}>
-                                            UC: {uc.numero_uc}
-                                            {uc.titular_fatura?.name && (
-                                                <div style={{ marginTop: '0.1rem', fontStyle: 'italic', opacity: 0.9 }}>
-                                                    {uc.titular_fatura.name}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
 const getStatusBadgeStyle = (status) => {
     switch (status) {
         case 'ativo':
@@ -386,20 +169,12 @@ export default function ConsumerUnitList() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const [viewMode, setViewMode] = useState('calendar');
+    const [viewMode, setViewMode] = useState('list');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUnit, setEditingUnit] = useState(null);
     const [activeId, setActiveId] = useState(null);
     const [showTooltip, setShowTooltip] = useState(false);
     const [isScraperModalOpen, setIsScraperModalOpen] = useState(false);
-    
-    // Filtros do Calendário e Extrações
-    const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
-    const [showMonthPicker, setShowMonthPicker] = useState(false);
-    const [readingStatusFilter, setReadingStatusFilter] = useState('');
-    const [invoicesForMonth, setInvoicesForMonth] = useState([]);
-
-
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -431,15 +206,12 @@ export default function ConsumerUnitList() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'consumer_units' }, () => {
                 fetchUnits();
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
-                fetchUnits();
-            })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [monthFilter]);
+    }, []);
 
     const fetchUnits = async () => {
         setLoading(true);
@@ -456,20 +228,6 @@ export default function ConsumerUnitList() {
 
             if (unitsError) throw unitsError;
             setUnits(unitsData || []);
-
-            // 2. Buscar Faturas do Ano Selecionado
-            const [year] = monthFilter.split('-');
-            const yearStart = `${year}-01-01`;
-            const yearEnd = `${year}-12-31`;
-            
-            const { data: invData, error: invError } = await supabase
-                .from('invoices')
-                .select('uc_id, status, mes_referencia')
-                .gte('mes_referencia', yearStart)
-                .lte('mes_referencia', yearEnd);
-            
-            if (invError) throw invError;
-            setInvoicesForMonth(invData || []);
 
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -557,105 +315,6 @@ export default function ConsumerUnitList() {
         }
     };
 
-    const getStats = () => {
-        const today = new Date();
-        const currentYearNum = today.getFullYear();
-        const currentMonthNum = today.getMonth() + 1;
-        const currentDayNum = today.getDate();
-
-        const [filterYear, filterMonth] = monthFilter.split('-').map(Number);
-        const isCurrentMonthSelected = filterYear === currentYearNum && filterMonth === currentMonthNum;
-        
-        const stats = {
-            month: { success: 0, error: 0, not_available: 0, processing: 0, pending: 0, desconectado: 0 },
-            year: { success: 0, error: 0, not_available: 0, pending: 0 }
-        };
-
-        const activeUnits = units.filter(u => u.status === 'ativo' || u.status === 'desconectado');
-
-        activeUnits.forEach(unit => {
-            const unitDate = new Date(unit.created_at);
-            const unitYear = unitDate.getFullYear();
-            const unitMonth = unitDate.getMonth() + 1;
-            
-            const day = unit.dia_leitura || 0;
-            
-            // Cálculo do Mês Selecionado
-            const monthRef = `${monthFilter}-01`;
-            const hasMonthInvoice = invoicesForMonth.some(inv => 
-                inv.uc_id === unit.id && 
-                inv.mes_referencia === monthRef && 
-                inv.status?.trim().toLowerCase() !== 'cancelado'
-            );
-            
-            let monthStatus = 'pending';
-            
-            // Ignorar se a UC não existia no mês selecionado
-            if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
-                return;
-            }
-
-            if (hasMonthInvoice) monthStatus = 'success';
-            else if (unit.last_scraping_status === 'processing' && isCurrentMonthSelected) monthStatus = 'processing';
-            else {
-                const isFuture = (filterYear > currentYearNum) || 
-                               (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
-                               (isCurrentMonthSelected && day > currentDayNum);
-
-                if (isFuture) {
-                    monthStatus = 'not_available';
-                } else if (unit.last_scraping_status === 'success') {
-                    monthStatus = 'success';
-                } else if (unit.last_scraping_status === 'error') {
-                    monthStatus = 'error';
-                } else {
-                    monthStatus = 'pending';
-                }
-            }
-            if (unit.status === 'desconectado') {
-                stats.month.desconectado++;
-            } else if (stats.month[monthStatus] !== undefined) {
-                stats.month[monthStatus]++;
-            }
-
-            // Cálculo do Ano Accumulado (até o mês selecionado)
-            for (let m = 1; m <= filterMonth; m++) {
-                const mStr = String(m).padStart(2, '0');
-                const mRef = `${filterYear}-${mStr}-01`;
-                
-                // Ignorar meses anteriores à criação da UC
-                if (unitYear > filterYear || (unitYear === filterYear && unitMonth > m)) {
-                    continue;
-                }
-
-                const hasInv = invoicesForMonth.some(inv => 
-                    inv.uc_id === unit.id && 
-                    inv.mes_referencia === mRef && 
-                    inv.status?.trim().toLowerCase() !== 'cancelado'
-                );
-                
-                if (hasInv) {
-                    stats.year.success++;
-                } else {
-                    const isMCurrent = filterYear === currentYearNum && m === currentMonthNum;
-                    const isMFuture = (filterYear > currentYearNum) || (filterYear === currentYearNum && m > currentMonthNum);
-                    const isFutureReading = isMFuture || (isMCurrent && day > currentDayNum);
-                    
-                    if (isFutureReading) {
-                        stats.year.not_available++;
-                    } else if (unit.last_scraping_status === 'error') {
-                        stats.year.error++; 
-                    } else {
-                        stats.year.pending++;
-                    }
-                }
-            }
-        });
-        
-        return stats;
-    };
-
-    const stats = getStats();
 
     return (
         <div style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
@@ -699,69 +358,6 @@ export default function ConsumerUnitList() {
                                 }}
                             />
                         </div>
-
-                        {viewMode === 'calendar' && (
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                <div style={{ position: 'relative' }}>
-                                    <button 
-                                        onClick={() => setShowMonthPicker(!showMonthPicker)} 
-                                        style={{ 
-                                            padding: '0.6rem 1rem', 
-                                            border: '1px solid #e2e8f0', 
-                                            borderRadius: '10px', 
-                                            cursor: 'pointer', 
-                                            background: 'white', 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            gap: '0.5rem', 
-                                            fontSize: '0.85rem',
-                                            fontWeight: '600',
-                                            color: '#334155'
-                                        }}
-                                    >
-                                        <CalendarIcon size={14} style={{ color: 'var(--color-blue)' }} />
-                                        <span>{new Date(`${monthFilter}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                                    </button>
-                                    {showMonthPicker && (
-                                        <div style={{ position: 'absolute', top: '110%', left: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, padding: '1rem', width: '280px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                                <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) - 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&lt;</button>
-                                                <span style={{ fontWeight: 'bold' }}>{monthFilter.split('-')[0]}</span>
-                                                <button onClick={() => { const [y, m] = monthFilter.split('-'); setMonthFilter(`${Number(y) + 1}-${m}`); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}>&gt;</button>
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                                                {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, idx) => {
-                                                    const mVal = String(idx + 1).padStart(2, '0');
-                                                    const currentYear = monthFilter.split('-')[0];
-                                                    const isSelected = monthFilter === `${currentYear}-${mVal}`;
-                                                    return <button key={m} onClick={() => { setMonthFilter(`${currentYear}-${mVal}`); setShowMonthPicker(false); }} style={{ padding: '0.5rem', border: 'none', borderRadius: '6px', background: isSelected ? 'var(--color-blue)' : '#f8fafc', color: isSelected ? 'white' : '#475569', cursor: 'pointer', fontSize: '0.85rem' }}>{m}</button>;
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <select 
-                                    value={readingStatusFilter} 
-                                    onChange={e => setReadingStatusFilter(e.target.value)}
-                                    style={{ 
-                                        padding: '0.6rem 1rem', 
-                                        border: '1px solid #e2e8f0', 
-                                        borderRadius: '10px',
-                                        fontSize: '0.85rem',
-                                        fontWeight: '600',
-                                        color: '#334155',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <option value="">Status</option>
-                                    <option value="success">Sucesso</option>
-                                    <option value="pending">Pendente</option>
-                                    <option value="error">Erro</option>
-                                </select>
-                            </div>
-                        )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -772,22 +368,9 @@ export default function ConsumerUnitList() {
                             <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'kanban' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
                                 <Layout size={16} /> Kanban
                             </button>
-                            <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem', boxShadow: viewMode === 'calendar' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}>
-                                <CalendarIcon size={16} /> Calendário de Leituras
-                            </button>
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {viewMode === 'calendar' && (
-                                <button
-                                    onClick={() => setIsScraperModalOpen(true)}
-                                    style={{ padding: '0.6rem 1.2rem', background: '#f59e0b', color: 'white', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', border: 'none', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s' }}
-                                    onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                                    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-                                >
-                                    <Download size={16} /> Extrair
-                                </button>
-                            )}
                             <button
                                 onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
                                 style={{ padding: '0.6rem 1.2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', border: 'none', fontSize: '0.85rem', transition: 'all 0.2s' }}
@@ -799,41 +382,6 @@ export default function ConsumerUnitList() {
                         </div>
                     </div>
                 </div>
-
-                {/* Legenda integrada no Sticky Header */}
-                {viewMode === 'calendar' && (
-                    <div style={{
-                        padding: '0.75rem 1rem',
-                        background: 'rgba(255, 255, 255, 0.4)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(226, 232, 240, 0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '2rem'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Sucesso: {stats.month.success}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f97316' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Pendente: {stats.month.pending}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Erro: {stats.month.error}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Processando: {stats.month.processing}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#8b5cf6' }}></div>
-                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '700' }}>Desconectado: {stats.month.desconectado}</span>
-                        </div>
-                    </div>
-                )}
             </div>
 
 
@@ -986,7 +534,7 @@ export default function ConsumerUnitList() {
                                 )}
                             </div>
                         </div>
-                    ) : viewMode === 'kanban' ? (
+                    ) : (
                         <DndContext
                             sensors={sensors}
                             collisionDetection={(args) => {
@@ -1025,17 +573,6 @@ export default function ConsumerUnitList() {
                                 ) : null}
                             </DragOverlay>
                         </DndContext>
-                    ) : (
-                        <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
-                            <CalendarView
-                                units={units}
-                                invoices={invoicesForMonth}
-                                monthFilter={monthFilter}
-                                searchTerm={searchTerm}
-                                readingStatusFilter={readingStatusFilter}
-                                onCardClick={(uc) => { setEditingUnit(uc); setIsModalOpen(true); }}
-                            />
-                        </div>
                     )}
                 </div>
             )}
@@ -1047,12 +584,6 @@ export default function ConsumerUnitList() {
                     onSave={handleSave}
                     onDelete={handleDelete}
                 />
-            )}
-            {isScraperModalOpen && (
-                <ScraperTriggerModal onClose={() => {
-                    setIsScraperModalOpen(false);
-                    fetchUnits(); // Refresh to catch processing status
-                }} />
             )}
         </div>
     );

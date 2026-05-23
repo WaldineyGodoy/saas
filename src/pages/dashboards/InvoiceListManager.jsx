@@ -42,6 +42,21 @@ export default function InvoiceListManager() {
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
+    // Estado do Calendário de Leituras das UCs
+    const [readingStatusFilter, setReadingStatusFilter] = useState('');
+
+    const handleCalendarCardClick = (uc) => {
+        const monthRef = `${monthFilter}-01`;
+        const inv = invoices.find(i => i.uc_id === uc.id && (i.mes_referencia?.startsWith(monthFilter) || i.vencimento?.startsWith(monthFilter)));
+        if (inv) {
+            setSelectedInvoiceForSummary(inv);
+            setIsSummaryModalOpen(true);
+        } else {
+            const formattedMonth = monthFilter === 'all' ? 'qualquer mês' : new Date(`${monthFilter}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            showAlert(`Nenhuma conta/fatura encontrada para a UC ${uc.numero_uc} em ${formattedMonth}.`, 'info');
+        }
+    };
+
     const handleTabChange = (tab) => {
         setActiveTab(tab);
         setStatusFilter('');
@@ -49,6 +64,7 @@ export default function InvoiceListManager() {
             if (viewMode === 'energy_list') setViewMode('list');
             else if (viewMode === 'energy_kanban') setViewMode('kanban');
             else if (viewMode === 'energy_calendar') setViewMode('calendar');
+            else if (viewMode === 'energy_reading_calendar') setViewMode('calendar');
             else if (viewMode === 'graph_node') setViewMode('graph_node');
             else setViewMode('kanban');
         } else if (tab === 'contas_energia') {
@@ -352,10 +368,11 @@ export default function InvoiceListManager() {
             .select(`
                 id, numero_uc, concessionaria, titular_conta, 
                 tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
-                subscribers!consumer_units_subscriber_id_fkey(name),
-                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                status, dia_leitura, created_at, last_scraping_status,
+                subscribers!consumer_units_subscriber_id_fkey(name, cpf_cnpj, portal_credentials),
+                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, portal_credentials)
             `)
-            .eq('status', 'ativo')
+            .in('status', ['ativo', 'desconectado'])
             .order('titular_conta');
         if (!error) setUcs(data || []);
     };
@@ -1253,7 +1270,19 @@ export default function InvoiceListManager() {
                             )}
                         </div>
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
-                        {activeTab === 'faturas' ? (
+                        {viewMode === 'energy_reading_calendar' ? (
+                            <select 
+                                value={readingStatusFilter} 
+                                onChange={e => setReadingStatusFilter(e.target.value)} 
+                                style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem', fontWeight: '600', color: '#334155', background: 'white', cursor: 'pointer' }}
+                            >
+                                <option value="">Status Leit.</option>
+                                <option value="success">Sucesso</option>
+                                <option value="pending">Pendente</option>
+                                <option value="error">Erro</option>
+                                <option value="processing">Processando</option>
+                            </select>
+                        ) : activeTab === 'faturas' ? (
                             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
                                 <option value="">Todos os Status</option>
                                 <option value="ag_emissao_boleto">Sem Faturamento</option>
@@ -1478,6 +1507,9 @@ export default function InvoiceListManager() {
                                     </button>
                                     <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
                                         <CalendarIcon size={16} /> Venc. Conta de Energia
+                                    </button>
+                                    <button onClick={() => setViewMode('energy_reading_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_reading_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_reading_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_reading_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
+                                        Calendario de Leituras
                                     </button>
                                     {showAuditorTab && (
                                         <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
@@ -2045,6 +2077,17 @@ export default function InvoiceListManager() {
                         <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                             <InvoiceCalendarView invoices={filteredInvoices} onEdit={handleEdit} />
                         </div>
+                    ) : viewMode === 'energy_reading_calendar' ? (
+                        <div style={{ background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', minHeight: '600px' }}>
+                            <CalendarView
+                                units={ucs}
+                                invoices={invoices}
+                                monthFilter={monthFilter}
+                                searchTerm={searchTerm}
+                                readingStatusFilter={readingStatusFilter}
+                                onCardClick={handleCalendarCardClick}
+                            />
+                        </div>
                     ) : (
                         <div style={{ background: '#fff1f2', borderRadius: '16px', border: '1px solid #fecaca' }}>
                             <EnergyCalendarView 
@@ -2062,7 +2105,7 @@ export default function InvoiceListManager() {
             {isModalOpen && (
   <InvoiceFormModal
     invoice={selectedInvoice}
-    ucs={ucs}
+    ucs={ucs.filter(u => u.status === 'ativo')}
     extraActions={(inv) => (
       <button
         onClick={() => handlePayBill(inv)}
@@ -2107,6 +2150,222 @@ export default function InvoiceListManager() {
                 />
             )}
 
+        </div>
+    );
+}
+
+function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusFilter, onCardClick }) {
+    const today = new Date();
+    const currentYearNum = today.getFullYear();
+    const currentMonthNum = today.getMonth() + 1;
+    const currentDayNum = today.getDate();
+
+    const [filterYear, filterMonth] = (monthFilter === 'all' ? [today.getFullYear(), today.getMonth() + 1] : (monthFilter || '').split('-').map(Number));
+    const isCurrentMonth = filterYear === currentYearNum && filterMonth === currentMonthNum;
+
+    const firstDay = new Date(filterYear, filterMonth - 1, 1).getDay();
+    const startOffset = (firstDay + 6) % 7; // Segunda = 0
+    const daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+    const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    // 1. Filtrar Ativas e Desconectadas (que ainda podem ter leituras/faturas) para o Calendário
+    const calendarUnits = units.filter(u => u.status === 'ativo' || u.status === 'desconectado');
+
+    // 2. Agrupar e Calcular Status
+    const groupedUnits = calendarUnits.reduce((acc, unit) => {
+        const unitDate = new Date(unit.created_at);
+        const unitYear = unitDate.getFullYear();
+        const unitMonth = unitDate.getMonth() + 1;
+        
+        if (unitYear > filterYear || (unitYear === filterYear && unitMonth > filterMonth)) {
+            return acc;
+        }
+
+        const day = unit.dia_leitura || 0;
+        const hasInvoice = invoices.some(inv => 
+            inv.uc_id === unit.id && 
+            (inv.mes_referencia?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter) || inv.vencimento?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter)) && 
+            inv.status?.trim().toLowerCase() !== 'cancelado'
+        );
+
+        let status = 'pending';
+        if (hasInvoice) {
+            status = 'success';
+        } else if (unit.last_scraping_status === 'processing') {
+            status = 'processing';
+        } else {
+            const isFuture = (filterYear > currentYearNum) || 
+                           (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
+                           (isCurrentMonth && day > currentDayNum);
+
+            if (isFuture) {
+                status = 'not_available';
+            } else if (unit.last_scraping_status === 'success') {
+                status = 'success';
+            } else if (unit.last_scraping_status === 'error') {
+                status = 'error';
+            } else {
+                status = 'pending';
+            }
+        }
+
+        if (readingStatusFilter && status !== readingStatusFilter) return acc;
+
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                unit.numero_uc?.toLowerCase().includes(lower) ||
+                unit.subscribers?.name?.toLowerCase().includes(lower) ||
+                unit.titular_fatura?.name?.toLowerCase().includes(lower) ||
+                unit.concessionaria?.toLowerCase().includes(lower);
+            if (!matchesSearch) return acc;
+        }
+
+        if (!acc[day]) acc[day] = [];
+        acc[day].push({ ...unit, displayStatus: status });
+        return acc;
+    }, {});
+
+    return (
+        <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            gap: '1rem',
+            padding: '1rem',
+            maxWidth: '1600px',
+            margin: '0 auto'
+        }}>
+            <div style={{
+                gridColumn: '1 / -1',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '1rem',
+                position: 'sticky',
+                top: 'calc(var(--sticky-header-height, 120px) + 1.5rem)',
+                zIndex: 10,
+                background: '#f8fafc',
+                padding: '0.5rem 0',
+                margin: '-0.5rem 0 0.5rem 0'
+            }}>
+                {['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'].map(d => (
+                    <div key={d} style={{ 
+                        fontWeight: '800', 
+                        textAlign: 'center', 
+                        padding: '0.5rem', 
+                        color: '#64748b', 
+                        fontSize: '0.75rem', 
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                    }}>
+                        {d}
+                    </div>
+                ))}
+            </div>
+            {Array.from({ length: startOffset }).map((_, i) => (
+                <div key={`pad-${i}`} style={{ background: '#f8fafc50', borderRadius: 'var(--radius-md)', border: '1px dashed #e2e8f0', minHeight: '180px' }} />
+            ))}
+            {calendarDays.map(day => {
+                const dayUnits = groupedUnits[day] || [];
+                return (
+                    <div key={day} style={{
+                        background: 'white',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)',
+                        minHeight: '180px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: 'var(--shadow-sm)',
+                        transition: 'transform 0.2s',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '0.6rem 1rem',
+                            borderBottom: '1px solid var(--color-border)',
+                            background: '#f8fafc',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderTopLeftRadius: 'var(--radius-md)',
+                            borderTopRightRadius: 'var(--radius-md)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Leit. {day}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                {[
+                                    { key: 'success', bg: '#dcfce7', color: '#166534' },
+                                    { key: 'pending', bg: '#fff7ed', color: '#c2410c' },
+                                    { key: 'error', bg: '#fee2e2', color: '#991b1b' },
+                                    { key: 'processing', bg: '#eff6ff', color: '#1d4ed8' },
+                                    { key: 'not_available', bg: '#f1f5f9', color: '#475569' }
+                                ].map(status => {
+                                    const count = dayUnits.filter(u => u.displayStatus === status.key).length;
+                                    if (count === 0) return null;
+                                    return (
+                                        <span key={status.key} style={{ 
+                                            fontSize: '0.7rem', color: status.color, background: status.bg, 
+                                            padding: '0.15rem 0.4rem', borderRadius: '6px', fontWeight: '800',
+                                            minWidth: '1.2rem', textAlign: 'center', border: `1px solid ${status.color}20`
+                                        }}>
+                                            {count}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div style={{ padding: '0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem', overflowY: 'auto', maxHeight: '250px' }}>
+                            {dayUnits.length === 0 ? (
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
+                            ) : (
+                                dayUnits.map(uc => (
+                                    <div key={uc.id} onClick={() => onCardClick(uc)} style={{
+                                        padding: '0.6rem', borderRadius: '8px',
+                                        background: uc.status === 'desconectado' ? '#f5f3ff' :
+                                                    uc.displayStatus === 'success' ? '#f0fdf4' : 
+                                                    uc.displayStatus === 'processing' ? '#eff6ff' :
+                                                    uc.displayStatus === 'pending' ? '#fff7ed' :
+                                                    uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
+                                        borderLeft: `5px solid ${
+                                            uc.status === 'desconectado' ? '#8b5cf6' :
+                                            uc.displayStatus === 'success' ? '#22c55e' : 
+                                            uc.displayStatus === 'processing' ? '#3b82f6' :
+                                            uc.displayStatus === 'pending' ? '#f97316' :
+                                            uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
+                                        }`,
+                                        opacity: uc.status === 'desconectado' ? 0.7 : 1,
+                                        cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                    }}>
+                                        <div style={{ 
+                                            fontWeight: 'bold', 
+                                            color: '#0f172a', 
+                                            whiteSpace: 'nowrap', 
+                                            overflow: 'hidden', 
+                                            textOverflow: 'ellipsis' 
+                                        }}>
+                                            {uc.subscribers?.name || 'S/ Assinante'}
+                                        </div>
+                                        <div style={{ 
+                                            fontSize: '0.7rem', 
+                                            color: '#64748b', 
+                                            marginTop: '0.2rem',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                        }}>
+                                            UC: {uc.numero_uc}
+                                            {uc.titular_fatura?.name && (
+                                                <div style={{ marginTop: '0.1rem', fontStyle: 'italic', opacity: 0.9 }}>
+                                                    {uc.titular_fatura.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
