@@ -1663,7 +1663,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             ) : loading ? <p>Carregando...</p> : (filteredInvoices.length === 0 && viewMode !== 'energy_reading_calendar') ? (
                 <div style={{ padding: '3rem', textAlign: 'center', background: 'white', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '1rem' }}><FileText size={48} /></div>
-                    <h3 style={{ color: '#475569', fontWeight: 'bold' }}>{monthFilter === 'all' ? 'Nenhuma Fatura encontrada' : 'Nenhuma Fatura emitida para o Mês selecionado'}</h3>
+                    <h3 style={{ color: '#475569', fontWeight: 'bold' }}>
+                        {activeTab === 'contas_energia'
+                            ? (monthFilter === 'all' ? 'Nenhuma conta de energia encontrada' : 'Nenhuma conta de energia para o Mês selecionado')
+                            : (monthFilter === 'all' ? 'Nenhuma Fatura encontrada' : 'Nenhuma Fatura emitida para o Mês selecionado')
+                        }
+                    </h3>
                 </div>
             ) : (
                 <>
