@@ -3,6 +3,7 @@
 ---
 
 ## [23/05/2026] - Trava de Status Progressivo contra Retrocessos por Triggers
+- **Ajuste de Credenciais no GitHub Actions**: Corrigido erro de autenticação (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`) na etapa de Checkout dos workflows `deploy.yml` e `scraper.yml` através da especificação explícita do `token: ${{ secrets.GITHUB_TOKEN }}` na ação `actions/checkout@v4`.
 - **Fluxo de Status Progressivo**: Formalização da hierarquia progressiva dos status de UCs no banco de dados (1 a 10):
   1. `em_ativacao` (Em Ativação)
   2. `vinculado` (Vinculado a Usina)
