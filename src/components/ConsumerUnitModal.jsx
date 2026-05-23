@@ -5,7 +5,8 @@ import {
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
     Loader2, Trash2, Smartphone as PhoneIcon, MessageCircle, FileText, Smartphone as MobileIcon,
-    History as HistoryIcon, DollarSign, Globe, MapPin, Building2, CreditCard
+    History as HistoryIcon, DollarSign, Globe, MapPin, Building2, CreditCard,
+    Filter, Clock, Ban, AlertCircle, CheckCircle, Info
 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,6 +43,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
     const [activeSubscriberForModal, setActiveSubscriberForModal] = useState(null);
     const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+    const [invoices, setInvoices] = useState([]);
+    const [invoicesLoading, setInvoicesLoading] = useState(false);
+    const [yearFilter, setYearFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -185,6 +190,47 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             supabase.removeChannel(channel);
         };
     }, [consumerUnit?.id]); // Run once on mount
+
+    const fetchUCInvoices = async () => {
+        if (!consumerUnit?.id) return;
+        setInvoicesLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('uc_id', consumerUnit.id)
+                .neq('status', 'cancelado')
+                .order('mes_referencia', { ascending: false });
+
+            if (error) throw error;
+            setInvoices(data || []);
+        } catch (error) {
+            console.error('Error fetching UC invoices:', error);
+        } finally {
+            setInvoicesLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!consumerUnit?.id) return;
+        fetchUCInvoices();
+
+        const channel = supabase
+            .channel(`uc-invoices-list-${consumerUnit.id}`)
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'invoices',
+                filter: `uc_id=eq.${consumerUnit.id}`
+            }, () => {
+                fetchUCInvoices();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [consumerUnit?.id]);
 
     const addHistory = async (type, id, content, metadata = {}) => {
         try {
@@ -602,6 +648,115 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         }
     };
 
+    // Helper to format month name capitalized
+    const formatMonth = (dateStr) => {
+        if (!dateStr) return '-';
+        const [year, month] = dateStr.split('-');
+        if (!year || !month) return dateStr;
+        const date = new Date(year, parseInt(month) - 1, 1);
+        const formatted = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    };
+
+    // Helper for commercial status badge
+    const getStatusBadge = (status) => {
+        const map = {
+            'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
+            'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
+            'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
+            'em_transf_titularidade': { color: '#5b21b6', bg: '#f5f3ff', label: 'Em Transf. de Titularidade', icon: Clock },
+            'desconectado': { color: '#be123c', bg: '#fff1f2', label: 'Desconectado', icon: X },
+            'ag_emissao_boleto': { color: '#1e40af', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
+            'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado', icon: X },
+        };
+        const s = map[status] || map['a_vencer'];
+        const Icon = s.icon;
+        return (
+            <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.2rem 0.6rem',
+                background: s.bg,
+                color: s.color,
+                borderRadius: '99px',
+                fontSize: '0.75rem',
+                fontWeight: 600
+            }}>
+                <Icon size={12} /> {s.label}
+            </span>
+        );
+    };
+
+    // Helper for concessionaire status badge
+    const getEnergyStatusBadge = (status, isPastDue) => {
+        const statusMap = {
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
+            'pendente': isPastDue 
+                ? { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle }
+                : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
+            'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro', icon: AlertCircle },
+            'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
+            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
+        };
+        const s = statusMap[status] || statusMap['pendente'];
+        const Icon = s.icon;
+        return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', background: s.bg, color: s.color, borderRadius: '99px', fontSize: '0.75rem', width: 'fit-content', fontWeight: 600 }}>
+                <Icon size={12} /> {s.label}
+            </span>
+        );
+    };
+
+    const getEnergyStatus = (inv) => {
+        const ebStatus = inv.energy_bill_status || 'pendente';
+        if (ebStatus === 'pago') return 'pago';
+        if (ebStatus === 'erro') return 'erro';
+        if (ebStatus === 'parcelada') return 'parcelada';
+        if (ebStatus === 'contestada') return 'contestada';
+        const today = new Date().toISOString().split('T')[0];
+        const isPastDue = inv.vencimento && inv.vencimento < today;
+        return isPastDue ? 'atrasado' : 'a_vencer';
+    };
+
+    // Filtered lists for the new parallel view
+    const filteredInvoicesCommercial = invoices.filter(inv => {
+        // 1. Year Filter
+        if (yearFilter !== 'all' && inv.mes_referencia) {
+            const year = inv.mes_referencia.split('-')[0];
+            if (year !== yearFilter) return false;
+        }
+        // 2. Status Filter
+        if (statusFilter !== 'all') {
+            const normalizedStatus = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
+            if (normalizedStatus !== statusFilter) return false;
+        }
+        return true;
+    });
+
+    const filteredInvoicesConcessionaire = invoices.filter(inv => {
+        // 1. Year Filter
+        if (yearFilter !== 'all' && inv.mes_referencia) {
+            const year = inv.mes_referencia.split('-')[0];
+            if (year !== yearFilter) return false;
+        }
+        // 2. Status Filter
+        if (statusFilter !== 'all') {
+            const energyStatus = getEnergyStatus(inv);
+            if (energyStatus !== statusFilter) return false;
+        }
+        return true;
+    });
+
+    // Extract dynamic years represented in invoices + current years
+    const dynamicYears = Array.from(new Set([
+        new Date().getFullYear().toString(),
+        (new Date().getFullYear() - 1).toString(),
+        (new Date().getFullYear() - 2).toString(),
+        ...invoices.map(inv => inv.mes_referencia ? inv.mes_referencia.split('-')[0] : null).filter(Boolean)
+    ])).sort((a, b) => Number(b) - Number(a));
+
     // Find subscriber name for header
     const subscriberName = subscribers.find(s => s.id === formData.subscriber_id)?.name || '';
 
@@ -686,6 +841,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         {[
                             { id: 'geral', label: 'Geral', icon: User },
                             { id: 'tecnico', label: 'Técnico', icon: Zap },
+                            { id: 'faturas_contas', label: 'Faturas e Contas de Energia', icon: FileText },
                             { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
                             { id: 'comunicados', label: 'Comunicados', icon: MessageSquare }
                         ].map(tab => {
@@ -1350,24 +1506,237 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Tab Content: Faturas e Contas de Energia */}
+                            {activeTab === 'faturas_contas' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    {/* Moved Gestão de Faturas Block */}
                                     {consumerUnit?.id && (
-                                        <div style={{ background: '#f1f5f9', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <FileText size={18} color="var(--color-blue)" /> Gestão de Faturas
+                                        <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <FileText size={18} color="var(--color-blue)" /> Gestão de Faturas e Contas
                                             </h4>
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                                                <button type="button" onClick={() => setShowInvoicesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
-                                                    <FileSearch size={18} /> Ver Faturas
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setShowIssueInvoiceModal(true)} 
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)' }}
+                                                    onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                                    onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                                                >
+                                                    <PlusCircle size={18} /> Nova Fatura
                                                 </button>
-                                                <button type="button" onClick={() => setShowManualUploadModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setShowManualUploadModal(true)} 
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(34, 197, 94, 0.3)' }}
+                                                    onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                                    onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                                                >
                                                     <Upload size={18} /> Upload Conta
                                                 </button>
-                                                <button type="button" onClick={handleIssueZeroInvoice} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.7rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                    <PlusCircle size={18} /> Sem Faturamento
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleIssueZeroInvoice} 
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: '#64748b', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(100, 116, 139, 0.3)' }}
+                                                    onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                                    onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                                                >
+                                                    <Ban size={18} /> Sem Faturamento
                                                 </button>
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Unified Synchronized Filter Header */}
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'space-between', 
+                                        background: '#f8fafc', 
+                                        padding: '0.85rem 1.25rem', 
+                                        borderRadius: '12px', 
+                                        border: '1px solid #e2e8f0',
+                                        gap: '1rem',
+                                        flexWrap: 'wrap'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontWeight: 700, fontSize: '0.9rem' }}>
+                                            <Filter size={18} color="var(--color-blue)" /> Filtros Sincronizados
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Ano Referência:</span>
+                                                <select
+                                                    value={yearFilter}
+                                                    onChange={e => setYearFilter(e.target.value)}
+                                                    style={{ padding: '0.4rem 0.8rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', background: 'white', minWidth: '110px', color: '#334155', fontWeight: 500 }}
+                                                >
+                                                    <option value="all">Todos</option>
+                                                    {dynamicYears.map(y => (
+                                                        <option key={y} value={y}>{y}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Status:</span>
+                                                <select
+                                                    value={statusFilter}
+                                                    onChange={e => setStatusFilter(e.target.value)}
+                                                    style={{ padding: '0.4rem 0.8rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', background: 'white', minWidth: '150px', color: '#334155', fontWeight: 500 }}
+                                                >
+                                                    <option value="all">Todos</option>
+                                                    <option value="pago">Pago</option>
+                                                    <option value="a_vencer">A Vencer</option>
+                                                    <option value="atrasado">Atrasado</option>
+                                                    <option value="sem_faturamento">Sem Faturamento</option>
+                                                    <option value="parcelada">Parcelado</option>
+                                                    <option value="contestada">Contestado</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Parallel Lists Grid */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        
+                                        {/* Column 1: Faturas da UC (Commercial) */}
+                                        <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '0.85rem' }}>
+                                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <FileText size={18} color="var(--color-blue)" /> Faturas da UC
+                                                </h4>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--color-blue)', background: '#eff6ff', border: '1px solid #dbeafe', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
+                                                    {filteredInvoicesCommercial.length} fatura(s)
+                                                </span>
+                                            </div>
+
+                                            {invoicesLoading ? (
+                                                <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: '#64748b' }}>
+                                                    <Loader2 className="animate-spin" size={24} />
+                                                </div>
+                                            ) : filteredInvoicesCommercial.length === 0 ? (
+                                                <div style={{ textAlign: 'center', padding: '4rem 1rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Info size={36} color="#cbd5e1" />
+                                                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Nenhuma fatura comercial encontrada.</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                                        <thead>
+                                                            <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left', position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {filteredInvoicesCommercial.map(inv => (
+                                                                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569' }}>
+                                                                        {formatMonth(inv.mes_referencia)}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a' }}>
+                                                                        {Number(inv.valor_a_pagar) === 0 && inv.status === 'sem_faturamento' ? 'R$ 0,00' : formatCurrency(inv.valor_a_pagar)}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.85rem 0.5rem' }}>
+                                                                        {getStatusBadge(inv.status)}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', textAlign: 'right' }}>
+                                                                        <button 
+                                                                            type="button" 
+                                                                            onClick={() => {
+                                                                                setInvoiceToEdit(inv);
+                                                                                setShowInvoiceForm(true);
+                                                                            }}
+                                                                            style={{ padding: '0.4rem 0.8rem', border: '1.5px solid #cbd5e1', background: 'white', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#475569', transition: 'all 0.2s' }}
+                                                                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-blue)'; e.currentTarget.style.color = 'var(--color-blue)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.1)'; }}
+                                                                            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                                        >
+                                                                            Editar
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Column 2: Contas de Concessionária */}
+                                        <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '0.85rem' }}>
+                                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <Zap size={18} color="#eab308" /> Contas de Energia
+                                                </h4>
+                                                <span style={{ fontSize: '0.75rem', color: '#ca8a04', background: '#fef9c3', border: '1px solid #fef08a', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
+                                                    {filteredInvoicesConcessionaire.length} conta(s)
+                                                </span>
+                                            </div>
+
+                                            {invoicesLoading ? (
+                                                <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: '#64748b' }}>
+                                                    <Loader2 className="animate-spin" size={24} />
+                                                </div>
+                                            ) : filteredInvoicesConcessionaire.length === 0 ? (
+                                                <div style={{ textAlign: 'center', padding: '4rem 1rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Info size={36} color="#cbd5e1" />
+                                                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Nenhuma conta de concessionária encontrada.</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                                        <thead>
+                                                            <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left', position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {filteredInvoicesConcessionaire.map(inv => {
+                                                                const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
+                                                                const today = new Date().toISOString().split('T')[0];
+                                                                const isPastDue = inv.vencimento && inv.vencimento < today && inv.energy_bill_status !== 'pago';
+                                                                return (
+                                                                    <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569' }}>
+                                                                            {formatMonth(inv.mes_referencia)}
+                                                                        </td>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a' }}>
+                                                                            {formatCurrency(energyBillValue)}
+                                                                        </td>
+                                                                        <td style={{ padding: '0.85rem 0.5rem' }}>
+                                                                            {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
+                                                                        </td>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', textAlign: 'right' }}>
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={() => {
+                                                                                    setInvoiceToEdit(inv);
+                                                                                    setShowInvoiceForm(true);
+                                                                                }}
+                                                                                style={{ padding: '0.4rem 0.8rem', border: '1.5px solid #cbd5e1', background: 'white', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#475569', transition: 'all 0.2s' }}
+                                                                                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-blue)'; e.currentTarget.style.color = 'var(--color-blue)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.1)'; }}
+                                                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                                            >
+                                                                                Editar
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                    </div>
                                 </div>
                             )}
 
