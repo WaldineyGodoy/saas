@@ -2,6 +2,13 @@
 
 ---
 
+## [23/05/2026] - Toggle de Critério de Filtro por Mês e Relocalização de Totais
+- **Nova Opção de Filtragem**: Adicionado um seletor premium de duas opções ("Mês Ref." e "Vencimento") diretamente à direita do seletor de mês. Isso permite que o operador defina se a filtragem mensal cruzará as datas pela coluna de **Mês de Referência** (`mes_referencia`) ou **Data de Vencimento** (`vencimento`), evitando confusões de critérios.
+- **Integração Reativa**: Atualizada a query de busca no banco de dados (`fetchInvoices`) e os hooks de efeito em `InvoiceListManager.jsx` para recalcular dinamicamente os resultados ao alternar o critério.
+- **Relocalização de Totais (Melhoria de UI/UX)**: Movido o bloco de legenda de status e quantitativos ("Totais"), antes posicionado de forma compactada e apertada na linha superior, para uma barra horizontal dedicada e limpa logo abaixo do submenu de visualizações. Isso otimizou o espaço no cabeçalho principal e harmonizou a visualização em resoluções menores.
+
+---
+
 ## [23/05/2026] - Fix: Correção de Filtro de Busca no Calendário de Leituras
 - **Resolução do Bug de Busca**: Corrigida a falha no campo de busca do **Calendário de Leituras** de Contas de Energia. Quando um operador digitava um número parcial (ex: "53"), o calendário exibia as UCs correspondentes, mas ao digitar um termo específico que não possuísse faturas vinculadas de mesmo valor (ex: "5380"), a tela era bloqueada pelo estado vazio ("Nenhuma Fatura emitida para o Mês selecionado") mesmo que a UC existisse no banco de dados.
 - **Bypass de Validação**: Ajustada a condição de renderização na raiz do `InvoiceListManager.jsx` (linha 1607) para ignorar a verificação de `filteredInvoices.length === 0` quando a visualização atual for o `energy_reading_calendar`. Isso garante que a busca por UCs programadas sempre mostre o calendário de leituras com a UC correta, permitindo que a busca interna do calendário filtre diretamente as UCs em vez das faturas.
