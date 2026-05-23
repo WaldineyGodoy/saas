@@ -47,6 +47,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [readingStatusFilter, setReadingStatusFilter] = useState('');
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
+    const [filterCriterion, setFilterCriterion] = useState('vencimento'); // 'mes_referencia' | 'vencimento'
 
     const handleCalendarCardClick = (uc) => {
         setSelectedUcForModal(uc);
@@ -301,7 +302,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     useEffect(() => {
         fetchInvoices();
         fetchUcs();
-    }, [monthFilter]);
+    }, [monthFilter, filterCriterion]);
 
     const fetchInvoices = async () => {
         setLoading(true);
@@ -328,7 +329,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 const startDate = `${year}-${month}-01`;
                 const lastDay = new Date(year, month, 0).getDate();
                 const endDate = `${year}-${month}-${lastDay}`;
-                query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+                if (filterCriterion === 'mes_referencia') {
+                    query = query.gte('mes_referencia', startDate).lte('mes_referencia', endDate);
+                } else {
+                    query = query.gte('vencimento', startDate).lte('vencimento', endDate);
+                }
             }
 
             const { data, error } = await query.order('vencimento', { ascending: true });
@@ -1271,6 +1276,44 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 </div>
                             )}
                         </div>
+                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginLeft: '0.25rem' }}>
+                            <button
+                                onClick={() => setFilterCriterion('mes_referencia')}
+                                style={{
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '0.35rem 0.6rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    background: filterCriterion === 'mes_referencia' ? 'var(--color-blue)' : 'transparent',
+                                    color: filterCriterion === 'mes_referencia' ? 'white' : '#64748b',
+                                    transition: 'all 0.2s',
+                                    outline: 'none',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Mês Ref.
+                            </button>
+                            <button
+                                onClick={() => setFilterCriterion('vencimento')}
+                                style={{
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '0.35rem 0.6rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    background: filterCriterion === 'vencimento' ? 'var(--color-blue)' : 'transparent',
+                                    color: filterCriterion === 'vencimento' ? 'white' : '#64748b',
+                                    transition: 'all 0.2s',
+                                    outline: 'none',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Vencimento
+                            </button>
+                        </div>
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
                         {viewMode === 'energy_reading_calendar' ? (
                             <select 
@@ -1329,214 +1372,169 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                             <Search size={16} color="#64748b" />
                             <input placeholder="Buscar UC..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '120px' }} />
                         </div>
-                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#64748b' }}>Totais:</span>
-                            {activeTab === 'faturas' ? (
-                                <>
-                                    {/* Botão Todos/Total */}
-                                    <button
-                                        onClick={() => setStatusFilter('')}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.3rem',
-                                            padding: '0.25rem 0.5rem',
-                                            borderRadius: '6px',
-                                            border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                            background: statusFilter === '' ? '#f1f5f9' : 'transparent',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            outline: 'none'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.background = '#f1f5f9';
-                                            e.currentTarget.style.borderColor = '#64748b';
-                                        }}
-                                        onMouseOut={e => {
-                                            if (statusFilter !== '') {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.borderColor = 'transparent';
-                                            }
-                                        }}
-                                        title="Mostrar todos os registros"
-                                    >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
-                                    </button>
-
-                                    {faturasStatuses.map(status => {
-                                        const count = faturasCounts[status.key] || 0;
-                                        const isActive = statusFilter === status.key;
-                                        return (
-                                            <button
-                                                key={status.key}
-                                                onClick={() => setStatusFilter(isActive ? '' : status.key)}
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.3rem',
-                                                    padding: '0.25rem 0.5rem',
-                                                    borderRadius: '6px',
-                                                    border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                                    background: isActive ? status.bg : 'transparent',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    outline: 'none'
-                                                }}
-                                                onMouseOver={e => {
-                                                    e.currentTarget.style.background = status.bg;
-                                                    e.currentTarget.style.borderColor = status.color;
-                                                }}
-                                                onMouseOut={e => {
-                                                    if (!isActive) {
-                                                        e.currentTarget.style.background = 'transparent';
-                                                        e.currentTarget.style.borderColor = 'transparent';
-                                                    }
-                                                }}
-                                                title={`Filtrar por ${status.label}`}
-                                            >
-                                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
-                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
-                                            </button>
-                                        );
-                                    })}
-                                </>
-                            ) : (
-                                <>
-                                    {/* Botão Todos/Total */}
-                                    <button
-                                        onClick={() => setStatusFilter('')}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.3rem',
-                                            padding: '0.25rem 0.5rem',
-                                            borderRadius: '6px',
-                                            border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                            background: statusFilter === '' ? '#f1f5f9' : 'transparent',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            outline: 'none'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.background = '#f1f5f9';
-                                            e.currentTarget.style.borderColor = '#64748b';
-                                        }}
-                                        onMouseOut={e => {
-                                            if (statusFilter !== '') {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.borderColor = 'transparent';
-                                            }
-                                        }}
-                                        title="Mostrar todas as contas"
-                                    >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
-                                    </button>
-
-                                    {contasStatuses.map(status => {
-                                        const count = contasCounts[status.key] || 0;
-                                        const isActive = statusFilter === status.key || (status.key === 'atrasada' && statusFilter === 'atrasada') || (status.key === 'a_vencer' && statusFilter === 'a_vencer');
-                                        return (
-                                            <button
-                                                key={status.key}
-                                                onClick={() => setStatusFilter(isActive ? '' : status.key)}
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '0.3rem',
-                                                    padding: '0.25rem 0.5rem',
-                                                    borderRadius: '6px',
-                                                    border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                                    background: isActive ? status.bg : 'transparent',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    outline: 'none'
-                                                }}
-                                                onMouseOver={e => {
-                                                    e.currentTarget.style.background = status.bg;
-                                                    e.currentTarget.style.borderColor = status.color;
-                                                }}
-                                                onMouseOut={e => {
-                                                    if (!isActive) {
-                                                        e.currentTarget.style.background = 'transparent';
-                                                        e.currentTarget.style.borderColor = 'transparent';
-                                                    }
-                                                }}
-                                                title={`Filtrar por ${status.label}`}
-                                            >
-                                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
-                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
-                                            </button>
-                                        );
-                                    })}
-                                </>
-                            )}
-                        </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <div className="btn-group" style={{ display: 'flex', background: '#f1f5f9', padding: '0.2rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                            {activeTab === 'faturas' ? (
-                                <>
-                                    <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <List size={16} /> Lista
-                                    </button>
-                                    <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <Layout size={16} /> Kanban
-                                    </button>
-                                    <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <CalendarIcon size={16} /> Venc. Faturas
-                                    </button>
-                                    {showAuditorTab && (
-                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
-                                            <Zap size={16} /> Graph Node View
-                                        </button>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <button onClick={() => setViewMode('energy_list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_list' ? 'white' : 'transparent', color: viewMode === 'energy_list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_list' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <List size={16} /> Lista
-                                    </button>
-                                    <button onClick={() => setViewMode('energy_kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_kanban' ? 'white' : 'transparent', color: viewMode === 'energy_kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_kanban' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <Layout size={16} /> Kanban
-                                    </button>
-                                    <button onClick={() => setViewMode('energy_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        <CalendarIcon size={16} /> Venc. Conta de Energia
-                                    </button>
-                                    <button onClick={() => setViewMode('energy_reading_calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'energy_reading_calendar' ? 'white' : 'transparent', color: viewMode === 'energy_reading_calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'energy_reading_calendar' ? '700' : '500', fontSize: '0.85rem' }}>
-                                        Calendario de Leituras
-                                    </button>
-                                    {showAuditorTab && (
-                                        <button onClick={() => setViewMode('graph_node')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'graph_node' ? 'white' : 'transparent', color: viewMode === 'graph_node' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'graph_node' ? '700' : '500', fontSize: '0.85rem' }}>
-                                            <Zap size={16} /> Graph Node View
-                                        </button>
-                                    )}
-                                </>
-                            )}
-                        </div>
+                </div>
 
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <History size={16} /> Histórico
+                {/* Legenda de Status e Quantitativo (Totais) Abaixo do submenu de forma totalmente horizontal */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.6rem 1rem',
+                    background: 'white',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                    flexWrap: 'wrap',
+                    marginTop: '0.5rem'
+                }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
+                    {activeTab === 'faturas' ? (
+                        <>
+                            {/* Botão Todos/Total */}
+                            <button
+                                onClick={() => setStatusFilter('')}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    padding: '0.25rem 0.5rem',
+                                    borderRadius: '6px',
+                                    border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                    background: statusFilter === '' ? '#f1f5f9' : 'transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    outline: 'none'
+                                }}
+                                onMouseOver={e => {
+                                    e.currentTarget.style.background = '#f1f5f9';
+                                    e.currentTarget.style.borderColor = '#64748b';
+                                }}
+                                onMouseOut={e => {
+                                    if (statusFilter !== '') {
+                                        e.currentTarget.style.background = 'transparent';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                    }
+                                }}
+                                title="Mostrar todos os registros"
+                            >
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
                             </button>
-                            {activeTab === 'faturas' ? (
-                                <button onClick={handleCreate} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <Plus size={16} /> Nova Fatura
-                                </button>
-                            ) : (
-                                <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <Plus size={16} /> Nova Conta
-                                </button>
-                            )}
-                        </div>
-                    </div>
+
+                            {faturasStatuses.map(status => {
+                                const count = faturasCounts[status.key] || 0;
+                                const isActive = statusFilter === status.key;
+                                return (
+                                    <button
+                                        key={status.key}
+                                        onClick={() => setStatusFilter(isActive ? '' : status.key)}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.3rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px',
+                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                            background: isActive ? status.bg : 'transparent',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            outline: 'none'
+                                        }}
+                                        onMouseOver={e => {
+                                            e.currentTarget.style.background = status.bg;
+                                            e.currentTarget.style.borderColor = status.color;
+                                        }}
+                                        onMouseOut={e => {
+                                            if (!isActive) {
+                                                e.currentTarget.style.background = 'transparent';
+                                                e.currentTarget.style.borderColor = 'transparent';
+                                            }
+                                        }}
+                                        title={`Filtrar por ${status.label}`}
+                                    >
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                    </button>
+                                );
+                            })}
+                        </>
+                    ) : (
+                        <>
+                            {/* Botão Todos/Total */}
+                            <button
+                                onClick={() => setStatusFilter('')}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    padding: '0.25rem 0.5rem',
+                                    borderRadius: '6px',
+                                    border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                    background: statusFilter === '' ? '#f1f5f9' : 'transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    outline: 'none'
+                                }}
+                                onMouseOver={e => {
+                                    e.currentTarget.style.background = '#f1f5f9';
+                                    e.currentTarget.style.borderColor = '#64748b';
+                                }}
+                                onMouseOut={e => {
+                                    if (statusFilter !== '') {
+                                        e.currentTarget.style.background = 'transparent';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                    }
+                                }}
+                                title="Mostrar todas as contas"
+                            >
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
+                            </button>
+
+                            {contasStatuses.map(status => {
+                                const count = contasCounts[status.key] || 0;
+                                const isActive = statusFilter === status.key || (status.key === 'atrasada' && statusFilter === 'atrasada') || (status.key === 'a_vencer' && statusFilter === 'a_vencer');
+                                return (
+                                    <button
+                                        key={status.key}
+                                        onClick={() => setStatusFilter(isActive ? '' : status.key)}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.3rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px',
+                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                            background: isActive ? status.bg : 'transparent',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            outline: 'none'
+                                        }}
+                                        onMouseOver={e => {
+                                            e.currentTarget.style.background = status.bg;
+                                            e.currentTarget.style.borderColor = status.color;
+                                        }}
+                                        onMouseOut={e => {
+                                            if (!isActive) {
+                                                e.currentTarget.style.background = 'transparent';
+                                                e.currentTarget.style.borderColor = 'transparent';
+                                            }
+                                        }}
+                                        title={`Filtrar por ${status.label}`}
+                                    >
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                    </button>
+                                );
+                            })}
+                        </>
+                    )}
                 </div>
 
                 {/* Legenda de Status (Energia) integrada se necessário */}
