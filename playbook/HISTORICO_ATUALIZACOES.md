@@ -2,6 +2,13 @@
 
 ---
 
+## [23/05/2026] - Botão de Pagamento no Resumo da Fatura de Energia
+- **Resolução de Omissão**: Disponibilizado o botão **"Pagar Conta Energia"** no modal de resumo da fatura (`InvoiceSummaryModal.jsx`). Anteriormente, quando uma fatura estava no status `'sem_faturamento'`, o botão para pagar a concessionária ficava inacessível por conta de uma verificação condicional mutuamente exclusiva que priorizava apenas a opção de "Gerar Faturamento (Cobrança)".
+- **Visual Premium Harmonizado**: O botão foi implementado com design premium seguindo o padrão do sistema (estilo HSL tailoring com transições e cor verde esmeralda `#10b981` com hover `#059669`), alinhando-se com a estética do restante da plataforma.
+- **Rastreabilidade Contábil via Edge Function**: Refatorada a ação de pagamento do modal para chamar a Edge Function de produção `pay-asaas-bill` via `supabase.functions.invoke` e registrar automaticamente a liquidação no Livro Razão através da RPC `liquidate_concessionaria_payment`, garantindo 100% de paridade com as ações realizadas na listagem principal (`InvoiceListManager`).
+
+---
+
 ## [23/05/2026] - Trava de Status Progressivo contra Retrocessos por Triggers
 - **Ajuste de Credenciais no GitHub Actions**: Corrigido erro de autenticação (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`) na etapa de Checkout dos workflows `deploy.yml` e `scraper.yml` através da especificação explícita do `token: ${{ secrets.GITHUB_TOKEN }}` na ação `actions/checkout@v4`.
 - **Fluxo de Status Progressivo**: Formalização da hierarquia progressiva dos status de UCs no banco de dados (1 a 10):
