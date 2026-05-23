@@ -113,7 +113,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             if (statusFilter && inv.status !== statusFilter) return false;
         } else {
             // Contas de energia (Concessionária)
-            if (inv.consumer_units?.modalidade !== 'auto_consumo_remoto') return false;
+            if (!['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) return false;
             // Contas 'sem_faturamento' (apenas operacionais) devem aparecer aqui, pois são contas da concessionária.
             // if (inv.status === 'sem_faturamento') return false;
 
@@ -271,7 +271,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const valConcessionaria = Number(inv.valor_concessionaria) || 0;
             if (valPagar <= 0 && valConcessionaria <= 0) return false;
         } else {
-            if (inv.consumer_units?.modalidade !== 'auto_consumo_remoto') return false;
+            if (!['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) return false;
         }
 
         if (searchTerm) {
@@ -769,9 +769,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         const daysInMonth = new Date(year, month, 0).getDate();
         const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
         
-        // Filtra faturas: apenas modalidade Auto Consumo Remoto
+        // Filtra faturas: apenas modalidade Auto Consumo Remoto ou Geração Compartilhada
         const filteredEnergyInvoices = invoices.filter(inv => 
-            inv.consumer_units?.modalidade === 'auto_consumo_remoto' &&
+            ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) &&
             inv.status !== 'sem_faturamento' &&
             (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
         );
@@ -1598,7 +1598,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 {/* Legenda de Status (Energia) integrada se necessário */}
                 {viewMode === 'energy_calendar' && (() => {
                     const energyStats = filteredInvoices.filter(inv => 
-                        inv.consumer_units?.modalidade === 'auto_consumo_remoto'
+                        ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)
                     ).reduce((acc, inv) => {
                         const today = new Date();
                         today.setHours(0,0,0,0);
@@ -1820,7 +1820,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                             fontWeight: '800',
                                                                             border: '1px solid #e9d5ff'
                                                                         }}>CONTESTADA</span>
-                                                                    ) : (inv.linha_digitavel && inv.consumer_units?.modalidade === 'auto_consumo_remoto') ? (
+                                                                    ) : (inv.linha_digitavel && ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) ? (
                                                                         <button 
                                                                             onClick={() => handlePayBill(inv)}
                                                                             disabled={payingId === inv.id}

@@ -856,7 +856,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       const uc = allUcs.find(u => compareIds(u.id, inv.uc_id));
       if (!uc) return;
 
-      if (uc.modalidade === 'auto_consumo_remoto') {
+      if (['auto_consumo_remoto', 'geracao_compartilhada'].includes(uc.modalidade)) {
         const consumoKwh = Number(inv.consumo_kwh) || 0;
         const compensado = Number(inv.consumo_compensado) || 0;
         const ucNum = uc.numero_uc || 'UC';
