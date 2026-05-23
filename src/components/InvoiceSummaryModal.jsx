@@ -775,91 +775,23 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     )}
 
                     {/* Ações */}
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        {isEditing ? (
-                            <>
-                                <button 
-                                    onClick={handleToggleEdit}
-                                    style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    onClick={handleSaveEdit}
-                                    disabled={loading}
-                                    style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: 'none', background: branding?.primary_color || '#003366', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                                >
-                                    {loading ? 'Salvando...' : <><Save size={18} /> Salvar Alterações</>}
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button 
-                                    onClick={handleViewPdf}
-                                    style={{
-                                        flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0',
-                                        background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseOver={e => e.currentTarget.style.borderColor = branding?.primary_color || '#003366'}
-                                    onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-                                >
-                                    <ExternalLink size={18} /> Visualizar Conta
-                                </button>
-                                
-                                {invoice.status === 'sem_faturamento' && (
-                                    <button 
-                                        onClick={handleGenerateBilling}
-                                        disabled={loading}
-                                        style={{
-                                            flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
-                                            background: '#0284c7',
-                                            color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                            opacity: loading ? 0.7 : 1,
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                        onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
-                                    >
-                                        {loading ? (
-                                            <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                        ) : (
-                                            <><FileText size={18} /> Gerar Faturamento (Cobrança)</>
-                                        )}
-                                    </button>
-                                )}
-
-                                {energyStatus !== 'pago' && invoice.linha_digitavel && (
-                                    <button 
-                                        onClick={handlePay}
-                                        disabled={loading || paymentStatus === 'success'}
-                                        style={{
-                                            flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
-                                            background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
-                                            color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                            opacity: loading ? 0.7 : 1,
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseOver={e => !loading && (e.currentTarget.style.background = '#059669')}
-                                        onMouseOut={e => !loading && (e.currentTarget.style.background = '#10b981')}
-                                    >
-                                        {loading ? (
-                                            <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                        ) : paymentStatus === 'success' ? (
-                                            <><CheckCircle2 size={18} /> Pago com Sucesso</>
-                                        ) : (
-                                            <><CreditCard size={18} /> Pagar Conta Energia</>
-                                        )}
-                                    </button>
-                                )}
-                            </>
-                        )}
-                    </div>
+                    {isEditing && (
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                            <button 
+                                onClick={handleToggleEdit}
+                                style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: '2px solid #e2e8f0', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSaveEdit}
+                                disabled={loading}
+                                style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: 'none', background: branding?.primary_color || '#003366', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                            >
+                                {loading ? 'Salvando...' : <><Save size={18} /> Salvar Alterações</>}
+                            </button>
+                        </div>
+                    )}
 
                     {paymentStatus === 'success' && (
                         <div style={{ 

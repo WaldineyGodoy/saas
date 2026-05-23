@@ -2,6 +2,16 @@
 
 ---
 
+## [23/05/2026] - Otimização Financeira: Desativação de Mensageria Automática do Asaas (Redução de Custos)
+- **Redução de Custos Recorrentes**: Identificado que o CRM estava explicitamente ativando ou omitindo o parâmetro de desativação de notificações nativas do Asaas ao criar/atualizar clientes (`notificationDisabled: false`), gerando cobranças indesejadas de R$ 0,99 por disparo de boleto/vencimento/pagamento.
+- **Implementação Técnica Definitiva**:
+  - Atualizada a Edge Function `manage-asaas-customer` para enviar `"notificationDisabled": true` por padrão ao criar ou atualizar dados dos clientes.
+  - Atualizada a Edge Function `create-asaas-charge` para incluir `"notificationDisabled": true` quando cria clientes de forma dinâmica no fluxo de geração de cobranças.
+- **Rastreabilidade de Mensageria**: Como o CRM possui sua própria infraestrutura de disparos automáticos via WhatsApp e E-mail (Evolution API e Resend), a desativação no Asaas elimina redundâncias de mensagens para os clientes e zera taxas adicionais de disparo cobradas pela intermediadora financeira.
+- **Deploy e Sincronização**: Alterações devidamente aplicadas e implantadas nas Edge Functions de produção no Supabase e sincronizadas via Git Push no repositório SaaS.
+
+---
+
 ## [23/05/2026] - Botão de Pagamento no Resumo da Fatura de Energia
 - **Resolução de Omissão**: Disponibilizado o botão **"Pagar Conta Energia"** no modal de resumo da fatura (`InvoiceSummaryModal.jsx`). Anteriormente, quando uma fatura estava no status `'sem_faturamento'`, o botão para pagar a concessionária ficava inacessível por conta de uma verificação condicional mutuamente exclusiva que priorizava apenas a opção de "Gerar Faturamento (Cobrança)".
 - **Visual Premium Harmonizado**: O botão foi implementado com design premium seguindo o padrão do sistema (estilo HSL tailoring com transições e cor verde esmeralda `#10b981` com hover `#059669`), alinhando-se com a estética do restante da plataforma.
