@@ -60,6 +60,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
     const [activeTab, setActiveTab] = useState('geral');
     const [ucSearch, setUcSearch] = useState('');
     const [ucDropdownOpen, setUcDropdownOpen] = useState(false);
+    const [pendingBills, setPendingBills] = useState([]);
+    const [showPendingDropdown, setShowPendingDropdown] = useState(false);
     const hiddenRef = useRef(null);
     const isSubmitting = useRef(false);
 
@@ -132,6 +134,50 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             }
         }
     }, [formData.uc_id, ucs]);
+
+    // Fetch contas de energia sem faturamento para a UC selecionada
+    useEffect(() => {
+        const fetchPendingBills = async () => {
+            if (!formData.uc_id || invoice || localInvoiceId) {
+                setPendingBills([]);
+                return;
+            }
+            try {
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .select('id, mes_referencia, vencimento, consumo_kwh, consumo_compensado, energia_injetada, iluminacao_publica, outros_lancamentos, tarifa_minima_excedentes, valor_concessionaria, data_leitura, linha_digitavel, pix_string, desconto_aplicado')
+                    .eq('uc_id', formData.uc_id)
+                    .in('status', ['sem_faturamento', 'ag_emissao_boleto'])
+                    .order('mes_referencia', { ascending: false });
+                if (!error) setPendingBills(data || []);
+            } catch (err) {
+                console.error('Erro ao buscar contas pendentes:', err);
+            }
+        };
+        fetchPendingBills();
+    }, [formData.uc_id, invoice, localInvoiceId]);
+
+    // Aplica os dados de uma conta de energia processada ao formulário
+    const applyPendingBill = (bill) => {
+        setFormData(prev => ({
+            ...prev,
+            mes_referencia: bill.mes_referencia || prev.mes_referencia,
+            vencimento: bill.vencimento || prev.vencimento,
+            consumo_kwh: bill.consumo_kwh ?? prev.consumo_kwh,
+            consumo_compensado: bill.consumo_compensado ?? prev.consumo_compensado,
+            energia_injetada: bill.energia_injetada ?? prev.energia_injetada,
+            iluminacao_publica: bill.iluminacao_publica ? formatCurrency(bill.iluminacao_publica) : prev.iluminacao_publica,
+            outros_lancamentos: bill.outros_lancamentos ? formatCurrency(bill.outros_lancamentos) : prev.outros_lancamentos,
+            tarifa_minima_excedentes: bill.tarifa_minima_excedentes ? formatCurrency(bill.tarifa_minima_excedentes) : prev.tarifa_minima_excedentes,
+            valor_concessionaria: bill.valor_concessionaria ?? prev.valor_concessionaria,
+            data_leitura: bill.data_leitura || prev.data_leitura,
+            linha_digitavel: bill.linha_digitavel || prev.linha_digitavel,
+            pix_string: bill.pix_string || prev.pix_string,
+            desconto_aplicado: bill.desconto_aplicado ?? prev.desconto_aplicado,
+        }));
+        setShowPendingDropdown(false);
+        showAlert('Dados da conta de energia carregados com sucesso!', 'success');
+    };
 
     const fetchSubscriberBillingMode = async (subscriberId) => {
         try {
@@ -1276,25 +1322,115 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                         <p style={{ color: '#3b82f6', fontSize: '0.85rem' }}>Importe a fatura em PDF para preenchimento instantâneo.</p>
                                     </div>
                                     {!invoice && !localInvoiceId && (
-                                        <div>
-                                            <label htmlFor="pdf-upload" style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '0.5rem',
-                                                padding: '0.85rem 1.5rem',
-                                                background: isParsing ? '#f1f5f9' : '#2563eb',
-                                                color: 'white',
-                                                borderRadius: '10px',
-                                                cursor: isParsing ? 'not-allowed' : 'pointer',
-                                                fontSize: '0.95rem',
-                                                fontWeight: 'bold',
-                                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
-                                                transition: 'all 0.2s'
-                                            }}>
-                                                {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                                                {isParsing ? 'Processando...' : 'Fazer Upload do PDF'}
-                                            </label>
-                                            <input id="pdf-upload" type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={isParsing} style={{ display: 'none' }} />
+                                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {/* Recuperar Conta Processada */}
+                                            {pendingBills.length > 0 && (
+                                                <div style={{ position: 'relative' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPendingDropdown(v => !v)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem',
+                                                            padding: '0.85rem 1.25rem',
+                                                            background: '#f0fdf4',
+                                                            color: '#166534',
+                                                            border: '2px solid #86efac',
+                                                            borderRadius: '10px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.9rem',
+                                                            fontWeight: 'bold',
+                                                            transition: 'all 0.2s',
+                                                        }}
+                                                        onMouseOver={e => e.currentTarget.style.background = '#dcfce7'}
+                                                        onMouseOut={e => e.currentTarget.style.background = '#f0fdf4'}
+                                                    >
+                                                        <FileText size={16} />
+                                                        Recuperar Conta Processada
+                                                        <span style={{ background: '#166534', color: 'white', borderRadius: '99px', padding: '0.1rem 0.45rem', fontSize: '0.75rem', fontWeight: '800' }}>{pendingBills.length}</span>
+                                                        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{showPendingDropdown ? '▲' : '▼'}</span>
+                                                    </button>
+                                                    {showPendingDropdown && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            bottom: '110%',
+                                                            right: 0,
+                                                            background: 'white',
+                                                            border: '1px solid #e2e8f0',
+                                                            borderRadius: '12px',
+                                                            boxShadow: '0 -10px 30px rgba(0,0,0,0.12)',
+                                                            zIndex: 300,
+                                                            minWidth: '280px',
+                                                            maxHeight: '260px',
+                                                            overflowY: 'auto',
+                                                            marginBottom: '6px',
+                                                        }}>
+                                                            <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                                Contas sem faturamento para esta UC
+                                                            </div>
+                                                            {pendingBills.map(bill => (
+                                                                <div
+                                                                    key={bill.id}
+                                                                    onClick={() => applyPendingBill(bill)}
+                                                                    style={{
+                                                                        padding: '0.85rem 1rem',
+                                                                        cursor: 'pointer',
+                                                                        borderBottom: '1px solid #f8fafc',
+                                                                        transition: 'background 0.15s',
+                                                                    }}
+                                                                    onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'}
+                                                                    onMouseOut={e => e.currentTarget.style.background = 'white'}
+                                                                >
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.9rem' }}>
+                                                                                Ref. {bill.mes_referencia ? new Date(`${bill.mes_referencia}-01T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }) : '—'}
+                                                                            </div>
+                                                                            {bill.vencimento && (
+                                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                                                    Venc. {new Date(bill.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div style={{ textAlign: 'right' }}>
+                                                                            {bill.consumo_kwh !== null && bill.consumo_kwh !== undefined && (
+                                                                                <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: '600' }}>{bill.consumo_kwh} kWh</div>
+                                                                            )}
+                                                                            {bill.valor_concessionaria > 0 && (
+                                                                                <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>
+                                                                                    {Number(bill.valor_concessionaria).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* Upload PDF */}
+                                            <div>
+                                                <label htmlFor="pdf-upload" style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    padding: '0.85rem 1.5rem',
+                                                    background: isParsing ? '#f1f5f9' : '#2563eb',
+                                                    color: 'white',
+                                                    borderRadius: '10px',
+                                                    cursor: isParsing ? 'not-allowed' : 'pointer',
+                                                    fontSize: '0.95rem',
+                                                    fontWeight: 'bold',
+                                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
+                                                    transition: 'all 0.2s'
+                                                }}>
+                                                    {isParsing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                                                    {isParsing ? 'Processando...' : 'Fazer Upload do PDF'}
+                                                </label>
+                                                <input id="pdf-upload" type="file" accept="application/pdf" onChange={handlePdfUpload} disabled={isParsing} style={{ display: 'none' }} />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
