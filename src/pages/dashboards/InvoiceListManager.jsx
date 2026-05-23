@@ -4,6 +4,7 @@ import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
+import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
@@ -44,17 +45,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     // Estado do Calendário de Leituras das UCs
     const [readingStatusFilter, setReadingStatusFilter] = useState('');
+    const [selectedUcForModal, setSelectedUcForModal] = useState(null);
+    const [isUcModalOpen, setIsUcModalOpen] = useState(false);
 
     const handleCalendarCardClick = (uc) => {
-        const monthRef = `${monthFilter}-01`;
-        const inv = invoices.find(i => i.uc_id === uc.id && (i.mes_referencia?.startsWith(monthFilter) || i.vencimento?.startsWith(monthFilter)));
-        if (inv) {
-            setSelectedInvoiceForSummary(inv);
-            setIsSummaryModalOpen(true);
-        } else {
-            const formattedMonth = monthFilter === 'all' ? 'qualquer mês' : new Date(`${monthFilter}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-            showAlert(`Nenhuma conta/fatura encontrada para a UC ${uc.numero_uc} em ${formattedMonth}.`, 'info');
-        }
+        setSelectedUcForModal(uc);
+        setIsUcModalOpen(true);
     };
 
     const handleTabChange = (tab) => {
@@ -2153,6 +2149,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     ucs={ucs} 
                     onClose={() => setIsAnalysisModalOpen(false)} 
                     onSave={fetchInvoices} 
+                />
+            )}
+            {isUcModalOpen && (
+                <ConsumerUnitModal
+                    consumerUnit={selectedUcForModal}
+                    onClose={() => setIsUcModalOpen(false)}
+                    onSave={() => {
+                        fetchInvoices();
+                        fetchUcs();
+                    }}
+                    onDelete={() => {
+                        fetchInvoices();
+                        fetchUcs();
+                    }}
                 />
             )}
 
