@@ -2,6 +2,28 @@
 
 ---
 
+## [23/05/2026] - Trava de Status Progressivo contra Retrocessos por Triggers
+- **Fluxo de Status Progressivo**: Formalização da hierarquia progressiva dos status de UCs no banco de dados (1 a 10):
+  1. `em_ativacao` (Em Ativação)
+  2. `vinculado` (Vinculado a Usina)
+  3. `em_transf_titularidade` (Em Transf. de Titularidade)
+  4. `aguardando_conexao` (Aguardando Conexão)
+  5. `ativo` (Ativo)
+  6. `sem_geracao` (Sem Geração)
+  7. `em_atraso` (Em Atraso)
+  8. `desconectado` (Desconectado)
+  9. `cancelado` (Cancelado)
+  10. `cancelado_inadimplente` (Cancelado Inadimplente)
+- **Função de Ranqueamento Contábil**: Criação da função de banco de dados `fn_get_uc_status_rank(status_val)` para avaliar a prioridade/estágio atual de cada UC.
+- **Trava de Não-Retrocesso (Anti-regressão)**: Configurada proteção para que triggers automáticos **nunca** possam retroagir o status de uma UC a uma etapa anterior (ex: impedir que salvamento de usina retorne UC em *Transf. de Titularidade* para *Vinculado*).
+- **Retrocesso Exclusivamente Manual**: Restabelecimento de status anterior passa a ser uma ação estritamente manual realizada na interface pelo operador/administrador do sistema.
+- **Triggers Atualizados com a Regra Progressiva**:
+  - `handle_uc_usina_link`: Bloqueada a atualização automática para status inferiores ao status atual da UC.
+  - `handle_usina_status_change`: Inserida validação progressiva no comando `UPDATE` das UCs vinculadas à usina alterada.
+  - `handle_invoice_status_change`: Ajustadas as ações automáticas de atraso, liquidação e reativação para respeitar rigorosamente o ranque do status atual da UC.
+
+---
+
 ## [23/05/2026] - Trava de Segurança nos Triggers de Unidades Consumidoras
 - **Salvaguarda de Status Inativos**: Implementada uma trava no banco de dados (Supabase) para impedir que UCs com status inativos (`desconectado`, `cancelado` ou `cancelado_inadimplente`) tenham seu status alterado de volta para ativo (`ativo`, `vinculado`, `sem_geracao`, `em_ativacao`, etc.) de forma automatizada por triggers.
 - **Triggers Afetados e Atualizados**:
