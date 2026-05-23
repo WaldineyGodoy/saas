@@ -2,6 +2,12 @@
 
 ---
 
+## [23/05/2026] - Fix: Correção de Filtro de Busca no Calendário de Leituras
+- **Resolução do Bug de Busca**: Corrigida a falha no campo de busca do **Calendário de Leituras** de Contas de Energia. Quando um operador digitava um número parcial (ex: "53"), o calendário exibia as UCs correspondentes, mas ao digitar um termo específico que não possuísse faturas vinculadas de mesmo valor (ex: "5380"), a tela era bloqueada pelo estado vazio ("Nenhuma Fatura emitida para o Mês selecionado") mesmo que a UC existisse no banco de dados.
+- **Bypass de Validação**: Ajustada a condição de renderização na raiz do `InvoiceListManager.jsx` (linha 1607) para ignorar a verificação de `filteredInvoices.length === 0` quando a visualização atual for o `energy_reading_calendar`. Isso garante que a busca por UCs programadas sempre mostre o calendário de leituras com a UC correta, permitindo que a busca interna do calendário filtre diretamente as UCs em vez das faturas.
+
+---
+
 ## [23/05/2026] - Redirecionamento do Clique no Calendário de Leituras para o Modal da UC
 - **Resolução de Comportamento**: Corrigido o comportamento do clique nos cards do **Calendário de Leituras** na seção de Contas de Energia. A alteração anterior estava abrindo o modal de faturamento/resumo de fatura contábil (`InvoiceSummaryModal`), o que desviava a funcionalidade original.
 - **Fluxo de Trabalho Restaurado**: O clique agora abre diretamente o **Modal da Unidade Consumidora** (`ConsumerUnitModal`), permitindo que o faturista ou operador visualize os detalhes operacionais e clique diretamente em **"Upload Conta"** para fazer o upload e processamento do PDF da leitura da concessionária, gerando subsequentemente a fatura de forma limpa.
