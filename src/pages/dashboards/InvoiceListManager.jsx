@@ -1041,7 +1041,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+        <div style={{ padding: '0 2rem 2rem 2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
             {activeInfoTab && (
                 <div style={{ 
                     background: 'rgba(15, 23, 42, 0.95)', 
@@ -1117,19 +1117,19 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             {/* Cabeçalho Fixo (Filtros + Modos + Ações) */}
             <div style={{
                 position: 'sticky',
-                top: 0,
+                top: '-2rem',
                 zIndex: 100,
-                background: 'rgba(255, 255, 255, 0.8)',
+                background: 'rgba(255, 255, 255, 0.85)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
-                padding: '1rem 0',
-                margin: '0 -2rem 2rem -2rem',
+                padding: '0.75rem 0',
+                margin: '-2rem -2rem 1rem -2rem',
                 paddingLeft: '2rem',
                 paddingRight: '2rem',
                 borderBottom: '1px solid rgba(226, 232, 240, 0.5)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '1rem'
+                gap: '0.75rem'
             }}>
                 {!hideTabs ? (
                     <div style={{ display: 'flex', gap: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
@@ -1238,8 +1238,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.8rem' }}>
-                        <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em', margin: 0, textTransform: 'uppercase' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.4rem' }}>
+                        <h2 style={{ color: '#1e293b', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em', margin: 0, textTransform: 'uppercase' }}>
                             {activeTab === 'faturas' ? 'Gestão de Faturas' : 'Contas de Energia Concessionária'}
                         </h2>
                     </div>
