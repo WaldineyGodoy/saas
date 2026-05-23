@@ -1581,7 +1581,7 @@ export default function InvoiceListManager() {
                         (() => {
                             const totalFactValue = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
                             const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0))), 0);
-                            const totalBalance = totalFactValue - totalEnergyBillValue;
+                                            const totalBalance = totalFactValue - totalEnergyBillValue;
 
                             return (
                                 <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', overflowX: 'auto' }}>
@@ -1594,7 +1594,6 @@ export default function InvoiceListManager() {
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vencimento</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conta de Energia</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1604,38 +1603,49 @@ export default function InvoiceListManager() {
 
                                                 return (
                                                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                        {/* 1. Unidade Consumidora clicável azul com borda */}
+                                                        {/* 1. Unidade Consumidora clicável azul com borda + Assinante como sublinha */}
                                                         <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
-                                                            <span 
-                                                                onClick={() => {
-                                                                    setSelectedInvoiceForSummary(inv);
-                                                                    setIsSummaryModalOpen(true);
-                                                                }}
-                                                                style={{
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    padding: '0.2rem 0.6rem',
-                                                                    background: '#eff6ff', 
-                                                                    color: '#2563eb', 
-                                                                    border: '1px solid #bfdbfe',
-                                                                    borderRadius: '99px',
-                                                                    fontSize: '0.8rem',
-                                                                    fontWeight: 'bold',
-                                                                    cursor: 'pointer',
-                                                                    transition: 'all 0.2s',
-                                                                    boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)'
-                                                                }}
-                                                                onMouseOver={(e) => {
-                                                                    e.currentTarget.style.background = '#dbeafe';
-                                                                    e.currentTarget.style.borderColor = '#93c5fd';
-                                                                }}
-                                                                onMouseOut={(e) => {
-                                                                    e.currentTarget.style.background = '#eff6ff';
-                                                                    e.currentTarget.style.borderColor = '#bfdbfe';
-                                                                }}
-                                                            >
-                                                                {inv.consumer_units?.numero_uc || '-'}
-                                                            </span>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                                <span 
+                                                                    onClick={() => {
+                                                                        setSelectedInvoiceForSummary(inv);
+                                                                        setIsSummaryModalOpen(true);
+                                                                    }}
+                                                                    style={{
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        padding: '0.2rem 0.6rem',
+                                                                        background: '#eff6ff', 
+                                                                        color: '#2563eb', 
+                                                                        border: '1px solid #bfdbfe',
+                                                                        borderRadius: '99px',
+                                                                        fontSize: '0.8rem',
+                                                                        fontWeight: 'bold',
+                                                                        cursor: 'pointer',
+                                                                        transition: 'all 0.2s',
+                                                                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
+                                                                        width: 'fit-content'
+                                                                    }}
+                                                                    onMouseOver={(e) => {
+                                                                        e.currentTarget.style.background = '#dbeafe';
+                                                                        e.currentTarget.style.borderColor = '#93c5fd';
+                                                                    }}
+                                                                    onMouseOut={(e) => {
+                                                                        e.currentTarget.style.background = '#eff6ff';
+                                                                        e.currentTarget.style.borderColor = '#bfdbfe';
+                                                                    }}
+                                                                >
+                                                                    {inv.consumer_units?.numero_uc || '-'}
+                                                                </span>
+                                                                <div style={{ color: '#334155', fontSize: '0.8rem', fontWeight: '700', paddingLeft: '0.2rem' }}>
+                                                                    {inv.consumer_units?.subscribers?.name || '-'}
+                                                                </div>
+                                                                {inv.consumer_units?.titular_conta && (
+                                                                    <div style={{ color: '#64748b', fontSize: '0.7rem', paddingLeft: '0.2rem' }}>
+                                                                        {inv.consumer_units?.titular_conta}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </td>
 
                                                         {/* 2. Mês de ref. */}
@@ -1742,16 +1752,6 @@ export default function InvoiceListManager() {
 
                                                         {/* 6. Status */}
                                                         <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
-
-                                                        {/* 7. Assinante + sublinha titular */}
-                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
-                                                            <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.85rem' }}>
-                                                                {inv.consumer_units?.subscribers?.name || '-'}
-                                                            </div>
-                                                            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.1rem' }}>
-                                                                {inv.consumer_units?.titular_conta || '-'}
-                                                            </div>
-                                                        </td>
                                                     </tr>
                                                 );
                                             })}
@@ -1773,7 +1773,6 @@ export default function InvoiceListManager() {
                                                         {formatCurrency(totalEnergyBillValue)}
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '1rem' }}></td>
                                                 <td style={{ padding: '1rem' }}></td>
                                             </tr>
                                         </tfoot>
@@ -1797,7 +1796,6 @@ export default function InvoiceListManager() {
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Injetada</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status da Fatura</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1810,38 +1808,49 @@ export default function InvoiceListManager() {
 
                                         return (
                                             <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                {/* Código do Cliente clicável azul */}
+                                                {/* Código do Cliente clicável azul + Assinante como sublinha */}
                                                 <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
-                                                    <span 
-                                                        onClick={() => {
-                                                            setSelectedInvoiceForSummary(inv);
-                                                            setIsSummaryModalOpen(true);
-                                                        }}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            padding: '0.2rem 0.6rem',
-                                                            background: '#eff6ff', 
-                                                            color: '#2563eb', 
-                                                            border: '1px solid #bfdbfe',
-                                                            borderRadius: '99px',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 'bold',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)'
-                                                        }}
-                                                        onMouseOver={(e) => {
-                                                            e.currentTarget.style.background = '#dbeafe';
-                                                            e.currentTarget.style.borderColor = '#93c5fd';
-                                                        }}
-                                                        onMouseOut={(e) => {
-                                                            e.currentTarget.style.background = '#eff6ff';
-                                                            e.currentTarget.style.borderColor = '#bfdbfe';
-                                                        }}
-                                                    >
-                                                        {inv.consumer_units?.numero_uc || '-'}
-                                                    </span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                        <span 
+                                                            onClick={() => {
+                                                                setSelectedInvoiceForSummary(inv);
+                                                                setIsSummaryModalOpen(true);
+                                                            }}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                padding: '0.2rem 0.6rem',
+                                                                background: '#eff6ff', 
+                                                                color: '#2563eb', 
+                                                                border: '1px solid #bfdbfe',
+                                                                borderRadius: '99px',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
+                                                                width: 'fit-content'
+                                                            }}
+                                                            onMouseOver={(e) => {
+                                                                e.currentTarget.style.background = '#dbeafe';
+                                                                e.currentTarget.style.borderColor = '#93c5fd';
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                e.currentTarget.style.background = '#eff6ff';
+                                                                e.currentTarget.style.borderColor = '#bfdbfe';
+                                                            }}
+                                                        >
+                                                            {inv.consumer_units?.numero_uc || '-'}
+                                                        </span>
+                                                        <div style={{ color: '#334155', fontSize: '0.8rem', fontWeight: '700', paddingLeft: '0.2rem' }}>
+                                                            {inv.consumer_units?.subscribers?.name || '-'}
+                                                        </div>
+                                                        {inv.consumer_units?.titular_conta && (
+                                                            <div style={{ color: '#64748b', fontSize: '0.7rem', paddingLeft: '0.2rem' }}>
+                                                                {inv.consumer_units?.titular_conta}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
                                                     {inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}
@@ -1872,10 +1881,6 @@ export default function InvoiceListManager() {
                                                 </td>
                                                 <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
                                                     {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
-                                                </td>
-                                                {/* Assinante com abreviação inteligente */}
-                                                <td style={{ padding: '1rem', color: '#475569', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                                                    {abbreviateName(inv.consumer_units?.subscribers?.name)}
                                                 </td>
                                             </tr>
                                         );
