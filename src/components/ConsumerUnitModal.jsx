@@ -16,6 +16,7 @@ import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 import { sendWhatsapp } from '../lib/api';
 import SubscriberModal from './SubscriberModal';
+import InvoiceSummaryModal from './InvoiceSummaryModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     const { showAlert, showConfirm } = useUI();
@@ -47,13 +48,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [invoicesLoading, setInvoicesLoading] = useState(false);
     const [yearFilter, setYearFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
         if (!val && val !== 0) return '';
         const number = Number(val);
         if (isNaN(number)) return '';
-        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 });
+        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const parseCurrency = (str) => {
@@ -1518,33 +1521,33 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <FileText size={18} color="var(--color-blue)" /> Gestão de Faturas e Contas
                                             </h4>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
                                                 <button 
                                                     type="button" 
                                                     onClick={() => setShowIssueInvoiceModal(true)} 
-                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)' }}
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', background: 'var(--color-blue)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px -1px rgba(59, 130, 246, 0.2)' }}
                                                     onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
                                                     onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                                                 >
-                                                    <PlusCircle size={18} /> Nova Fatura
+                                                    <PlusCircle size={15} /> Nova Fatura
                                                 </button>
                                                 <button 
                                                     type="button" 
                                                     onClick={() => setShowManualUploadModal(true)} 
-                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(34, 197, 94, 0.3)' }}
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px -1px rgba(34, 197, 94, 0.2)' }}
                                                     onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
                                                     onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                                                 >
-                                                    <Upload size={18} /> Upload Conta
+                                                    <Upload size={15} /> Upload Conta
                                                 </button>
                                                 <button 
                                                     type="button" 
                                                     onClick={handleIssueZeroInvoice} 
-                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', background: '#64748b', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(100, 116, 139, 0.3)' }}
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', background: '#64748b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px -1px rgba(100, 116, 139, 0.2)' }}
                                                     onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
                                                     onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                                                 >
-                                                    <Ban size={18} /> Sem Faturamento
+                                                    <Ban size={15} /> Sem Faturamento
                                                 </button>
                                             </div>
                                         </div>
@@ -1623,25 +1626,25 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 </div>
                                             ) : (
                                                 <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', tableLayout: 'fixed' }}>
                                                         <thead>
                                                             <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left', position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
+                                                                <th style={{ width: '28%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
+                                                                <th style={{ width: '25%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
+                                                                <th style={{ width: '27%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                                                <th style={{ width: '20%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {filteredInvoicesCommercial.map(inv => (
                                                                 <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569' }}>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                         {formatMonth(inv.mes_referencia)}
                                                                     </td>
-                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a' }}>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                         {Number(inv.valor_a_pagar) === 0 && inv.status === 'sem_faturamento' ? 'R$ 0,00' : formatCurrency(inv.valor_a_pagar)}
                                                                     </td>
-                                                                    <td style={{ padding: '0.85rem 0.5rem' }}>
+                                                                    <td style={{ padding: '0.85rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                         {getStatusBadge(inv.status)}
                                                                     </td>
                                                                     <td style={{ padding: '0.85rem 0.5rem', textAlign: 'right' }}>
@@ -1688,13 +1691,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 </div>
                                             ) : (
                                                 <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', tableLayout: 'fixed' }}>
                                                         <thead>
                                                             <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', textAlign: 'left', position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                                                <th style={{ padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
+                                                                <th style={{ width: '28%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mês Ref.</th>
+                                                                <th style={{ width: '25%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Valor</th>
+                                                                <th style={{ width: '27%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                                                <th style={{ width: '20%', padding: '0.75rem 0.5rem', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Ações</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -1704,27 +1707,27 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                 const isPastDue = inv.vencimento && inv.vencimento < today && inv.energy_bill_status !== 'pago';
                                                                 return (
                                                                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569' }}>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                             {formatMonth(inv.mes_referencia)}
                                                                         </td>
-                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a' }}>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                             {formatCurrency(energyBillValue)}
                                                                         </td>
-                                                                        <td style={{ padding: '0.85rem 0.5rem' }}>
+                                                                        <td style={{ padding: '0.85rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                             {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
                                                                         </td>
                                                                         <td style={{ padding: '0.85rem 0.5rem', textAlign: 'right' }}>
                                                                             <button 
                                                                                 type="button" 
                                                                                 onClick={() => {
-                                                                                    setInvoiceToEdit(inv);
-                                                                                    setShowInvoiceForm(true);
+                                                                                    setSelectedInvoiceForSummary(inv);
+                                                                                    setShowSummaryModal(true);
                                                                                 }}
-                                                                                style={{ padding: '0.4rem 0.8rem', border: '1.5px solid #cbd5e1', background: 'white', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#475569', transition: 'all 0.2s' }}
+                                                                                style={{ padding: '0.4rem 0.6rem', border: '1.5px solid #cbd5e1', background: 'white', borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: '#475569', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                                                                                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-blue)'; e.currentTarget.style.color = 'var(--color-blue)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.1)'; }}
                                                                                 onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; e.currentTarget.style.boxShadow = 'none'; }}
                                                                             >
-                                                                                Editar
+                                                                                <Eye size={14} /> Visualizar
                                                                             </button>
                                                                         </td>
                                                                     </tr>
@@ -2114,6 +2117,18 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     subscriber={activeSubscriberForModal}
                     onClose={() => setActiveSubscriberForModal(null)}
                     onSave={handleSubscriberSaved}
+                />
+            )}
+
+            {showSummaryModal && selectedInvoiceForSummary && (
+                <InvoiceSummaryModal
+                    invoice={selectedInvoiceForSummary}
+                    consumerUnit={consumerUnit}
+                    onClose={() => {
+                        setShowSummaryModal(false);
+                        setSelectedInvoiceForSummary(null);
+                    }}
+                    onPaymentSuccess={fetchUCInvoices}
                 />
             )}
         </div>
