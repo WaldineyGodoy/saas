@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { createAsaasCharge } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 
 import { useBranding } from '../contexts/BrandingContext';
@@ -108,6 +109,44 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             showAlert('Erro ao atualizar status: ' + error.message, 'error');
         } finally {
             setUpdatingStatus(false);
+        }
+    };
+
+    const handleGenerateBilling = async () => {
+        const confirmed = await showConfirm(`Deseja gerar faturamento e emitir cobrança (Asaas) para esta conta no valor de ${formatCurrency(invoice.valor_a_pagar)}?`, 'Gerar Faturamento');
+        if (!confirmed) return;
+
+        setLoading(true);
+        try {
+            const result = await createAsaasCharge(invoice.id, 'invoice');
+
+            if (!result.success && !result.url) {
+                throw new Error('Falha ao gerar cobrança no Asaas.');
+            }
+
+            const { error: updateError } = await supabase
+                .from('invoices')
+                .update({ 
+                    status: 'a_vencer',
+                    asaas_boleto_url: result.url || null,
+                    asaas_status: 'PENDING'
+                })
+                .eq('id', invoice.id);
+
+            if (updateError) throw updateError;
+
+            showAlert('Faturamento gerado e boleto emitido com sucesso!', 'success');
+            if (result.url) {
+                window.open(result.url, '_blank');
+            }
+            if (onPaymentSuccess) onPaymentSuccess();
+            onClose();
+
+        } catch (error) {
+            console.error('Erro ao gerar faturamento:', error);
+            showAlert(`Falha ao gerar faturamento: ${error.message}`, 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -580,13 +619,13 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <ExternalLink size={18} /> Visualizar Conta
                                 </button>
                                 
-                                {invoice.status !== 'pago' && consumerUnit?.modalidade === 'auto_consumo_remoto' && (
+                                {invoice.status === 'sem_faturamento' ? (
                                     <button 
-                                        onClick={handlePay}
-                                        disabled={loading || paymentStatus === 'success'}
+                                        onClick={handleGenerateBilling}
+                                        disabled={loading}
                                         style={{
                                             flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
-                                            background: paymentStatus === 'success' ? '#22c55e' : (branding?.secondary_color || '#FF6600'),
+                                            background: '#0284c7',
                                             color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                                             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
@@ -598,12 +637,36 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     >
                                         {loading ? (
                                             <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                        ) : paymentStatus === 'success' ? (
-                                            <><CheckCircle2 size={18} /> Pago com Sucesso</>
                                         ) : (
-                                            <><CreditCard size={18} /> Pagar Agora</>
+                                            <><FileText size={18} /> Gerar Faturamento (Cobrança)</>
                                         )}
                                     </button>
+                                ) : (
+                                    invoice.status !== 'pago' && consumerUnit?.modalidade === 'auto_consumo_remoto' && (
+                                        <button 
+                                            onClick={handlePay}
+                                            disabled={loading || paymentStatus === 'success'}
+                                            style={{
+                                                flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
+                                                background: paymentStatus === 'success' ? '#22c55e' : (branding?.secondary_color || '#FF6600'),
+                                                color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                                                opacity: loading ? 0.7 : 1,
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
+                                            onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
+                                        >
+                                            {loading ? (
+                                                <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                            ) : paymentStatus === 'success' ? (
+                                                <><CheckCircle2 size={18} /> Pago com Sucesso</>
+                                            ) : (
+                                                <><CreditCard size={18} /> Pagar Agora</>
+                                            )}
+                                        </button>
+                                    )
                                 )}
                             </>
                         )}
