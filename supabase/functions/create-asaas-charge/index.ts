@@ -77,7 +77,8 @@ serve(async (req) => {
                 name: subscriber.name,
                 cpfCnpj: subscriber.cpf_cnpj?.replace(/\D/g, ''),
                 email: subscriber.email,
-                phone: subscriber.phone?.replace(/\D/g, '')
+                phone: subscriber.phone?.replace(/\D/g, ''),
+                notificationDisabled: true
             };
             const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, { headers: { access_token: asaasKey } });
             const searchData = await searchRes.json();

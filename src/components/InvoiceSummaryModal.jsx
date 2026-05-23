@@ -514,15 +514,104 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                             
                             <div style={{ 
-                                marginTop: '1rem', padding: '1rem', borderRadius: '12px', 
-                                background: (branding?.secondary_color || '#FF6600') + '05',
-                                border: `1px solid ${branding?.secondary_color || '#FF6600'}20`,
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                marginTop: '1rem', 
+                                padding: '1.25rem', 
+                                borderRadius: '16px', 
+                                background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '0.75rem'
                             }}>
-                                <span style={{ fontSize: '1rem', fontWeight: 800, color: branding?.primary_color || '#003366' }}>TOTAL CONCESSIONÁRIA</span>
-                                <span style={{ fontSize: '1.5rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                    {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))))}
-                                </span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    {/* Left Side: Label and View Pdf Button */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em' }}>
+                                            TOTAL CONCESSIONÁRIA
+                                        </span>
+                                        
+                                        {!isEditing && (
+                                            <button 
+                                                type="button"
+                                                onClick={handleViewPdf}
+                                                style={{
+                                                    alignSelf: 'flex-start',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    padding: '0.35rem 0.7rem',
+                                                    borderRadius: '6px',
+                                                    border: '1.5px solid #cbd5e1',
+                                                    background: 'white',
+                                                    color: '#475569',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = branding?.primary_color || '#003366'; e.currentTarget.style.color = branding?.primary_color || '#003366'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
+                                            >
+                                                <ExternalLink size={13} /> Visualizar Conta
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Right Side: Value and Pay Button */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                                        <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
+                                            {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))))}
+                                        </span>
+
+                                        {!isEditing && (
+                                            (() => {
+                                                if (energyStatus === 'pago') {
+                                                    return (
+                                                        <span style={{ 
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                                            padding: '0.3rem 0.6rem', borderRadius: '6px',
+                                                            background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
+                                                            fontSize: '0.72rem', fontWeight: 700
+                                                        }}>
+                                                            <CheckCircle2 size={13} /> Pago
+                                                        </span>
+                                                    );
+                                                }
+                                                if (invoice.linha_digitavel) {
+                                                    return (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={handlePay}
+                                                            disabled={loading || paymentStatus === 'success'}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.35rem',
+                                                                padding: '0.35rem 0.75rem',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
+                                                                color: 'white',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 700,
+                                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                                            }}
+                                                            onMouseEnter={e => { if(!loading) e.currentTarget.style.background = '#059669'; }}
+                                                            onMouseLeave={e => { if(!loading) e.currentTarget.style.background = '#10b981'; }}
+                                                        >
+                                                            {loading ? 'Carregando...' : <><CreditCard size={13} /> Pagar Conta</>}
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            })()
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                             
                             {/* Desconto Snapshot Display */}
@@ -532,29 +621,123 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
                             <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#475569' }}>VALOR DO ASSINANTE (BOLETO)</span>
-                                {isEditing ? (
-                                    <input 
-                                        type="number" 
-                                        step="0.01" 
-                                        value={editData.valor_a_pagar} 
-                                        onChange={e => handleEditChange('valor_a_pagar', e.target.value)} 
-                                        style={{ 
-                                            width: '120px', 
-                                            border: '2px solid var(--color-blue)', 
-                                            borderRadius: '8px', 
-                                            textAlign: 'right', 
-                                            padding: '0.4rem',
-                                            fontSize: '1.1rem',
-                                            fontWeight: 'bold'
-                                        }} 
-                                    />
-                                ) : (
-                                    <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--color-blue)' }}>
-                                        {formatCurrency(invoice.valor_a_pagar)}
-                                    </span>
-                                )}
+                            <div style={{ 
+                                padding: '1.25rem', 
+                                borderRadius: '16px', 
+                                background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '0.75rem'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    {/* Left Side: Label and descriptor/Open Boleto button */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#475569', letterSpacing: '0.05em' }}>
+                                            VALOR DO ASSINANTE (BOLETO)
+                                        </span>
+                                        
+                                        {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'pago' && (
+                                            <a 
+                                                href={invoice.asaas_boleto_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    alignSelf: 'flex-start',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    padding: '0.35rem 0.7rem',
+                                                    borderRadius: '6px',
+                                                    border: '1.5px solid #bbf7d0',
+                                                    background: '#dcfce7',
+                                                    color: '#15803d',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    textDecoration: 'none',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = '#bbf7d0'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#dcfce7'; }}
+                                            >
+                                                <ExternalLink size={13} /> Abrir Boleto
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {/* Right Side: Value and Gerar Faturamento button */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                                        {isEditing ? (
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                value={editData.valor_a_pagar} 
+                                                onChange={e => handleEditChange('valor_a_pagar', e.target.value)} 
+                                                style={{ 
+                                                    width: '120px', 
+                                                    border: '2px solid var(--color-blue)', 
+                                                    borderRadius: '8px', 
+                                                    textAlign: 'right', 
+                                                    padding: '0.4rem',
+                                                    fontSize: '1.1rem',
+                                                    fontWeight: 'bold'
+                                                }} 
+                                            />
+                                        ) : (
+                                            <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--color-blue)' }}>
+                                                {formatCurrency(invoice.valor_a_pagar)}
+                                            </span>
+                                        )}
+
+                                        {!isEditing && (
+                                            (() => {
+                                                if (invoice.status === 'sem_faturamento') {
+                                                    return (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={handleGenerateBilling}
+                                                            disabled={loading}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.35rem',
+                                                                padding: '0.35rem 0.75rem',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: '#0284c7',
+                                                                color: 'white',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 700,
+                                                                cursor: loading ? 'not-allowed' : 'pointer',
+                                                                transition: 'all 0.2s',
+                                                                boxShadow: '0 2px 4px rgba(2, 132, 199, 0.2)'
+                                                            }}
+                                                            onMouseEnter={e => { if(!loading) e.currentTarget.style.background = '#0369a1'; }}
+                                                            onMouseLeave={e => { if(!loading) e.currentTarget.style.background = '#0284c7'; }}
+                                                        >
+                                                            {loading ? 'Gerando...' : <><FileText size={13} /> Gerar Fatura</>}
+                                                        </button>
+                                                    );
+                                                }
+                                                if (invoice.status === 'pago') {
+                                                    return (
+                                                        <span style={{ 
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                                            padding: '0.3rem 0.6rem', borderRadius: '6px',
+                                                            background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
+                                                            fontSize: '0.72rem', fontWeight: 700
+                                                        }}>
+                                                            <CheckCircle2 size={13} /> Fatura Paga
+                                                        </span>
+                                                    );
+                                                }
+                                                return null;
+                                            })()
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Saldo Display */}

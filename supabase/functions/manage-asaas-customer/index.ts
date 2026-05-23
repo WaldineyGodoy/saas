@@ -82,7 +82,7 @@ serve(async (req) => {
             addressNumber,
             province, // Bairro
             postalCode: cleanPostalCode,
-            notificationDisabled: false
+            notificationDisabled: true
         };
 
         if (searchData.data && searchData.data.length > 0) {
