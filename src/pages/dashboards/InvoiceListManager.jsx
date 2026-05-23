@@ -1589,24 +1589,22 @@ export default function InvoiceListManager() {
                                         <thead style={{ background: '#f8fafc' }}>
                                             <tr>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Unidade Consumidora</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Mês de ref.</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vr. da Fatura</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vencimento</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vr. Conta de Energia</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Saldo</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Ações</th>
+                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conta de Energia</th>
+                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {sortedInvoices.map(inv => {
                                                 const factValue = Number(inv.valor_a_pagar) || 0;
                                                 const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
-                                                const balance = factValue - energyBillValue;
 
                                                 return (
                                                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                        {/* Unidade Consumidora clicável azul com borda */}
+                                                        {/* 1. Unidade Consumidora clicável azul com borda */}
                                                         <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
                                                             <span 
                                                                 onClick={() => {
@@ -1640,19 +1638,15 @@ export default function InvoiceListManager() {
                                                             </span>
                                                         </td>
 
-                                                        {/* Assinante + sublinha titular */}
-                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
-                                                            <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.85rem' }}>
-                                                                {inv.consumer_units?.subscribers?.name || '-'}
-                                                            </div>
-                                                            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.1rem' }}>
-                                                                {inv.consumer_units?.titular_conta || '-'}
-                                                            </div>
+                                                        {/* 2. Mês de ref. */}
+                                                        <td style={{ padding: '1rem', color: '#475569', fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: '600' }}>
+                                                            {inv.mes_referencia ? (() => {
+                                                                const [year, month] = inv.mes_referencia.split('-');
+                                                                return `${month}/${year}`;
+                                                            })() : '-'}
                                                         </td>
 
-                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
-                                                        
-                                                        {/* Vr. da Fatura + Boleto */}
+                                                        {/* 3. Vr. da Fatura + Boleto */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                                 <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
@@ -1678,10 +1672,10 @@ export default function InvoiceListManager() {
                                                             </div>
                                                         </td>
 
-                                                        {/* Vencimento Corrigido */}
+                                                        {/* 4. Vencimento Corrigido */}
                                                         <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap' }}>{getInvoiceDueDate(inv)}</td>
                                                         
-                                                        {/* Vr. Conta de Energia + Pagar */}
+                                                        {/* 5. Conta de Energia + Pagar */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                                 <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
@@ -1746,34 +1740,17 @@ export default function InvoiceListManager() {
                                                             </div>
                                                         </td>
 
-                                                        {/* Saldo */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                            <div style={{ 
-                                                                fontWeight: 'bold', 
-                                                                fontSize: '1rem',
-                                                                color: balance >= -0.01 ? '#166534' : '#dc2626'
-                                                            }}>
-                                                                {formatCurrency(balance)}
-                                                            </div>
-                                                        </td>
+                                                        {/* 6. Status */}
+                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
 
-                                                        {/* Ação Editar */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                            <button 
-                                                                onClick={() => handleEdit(inv)} 
-                                                                style={{ 
-                                                                    background: 'white', 
-                                                                    border: '1px solid #e2e8f0', 
-                                                                    padding: '0.4rem 0.8rem', 
-                                                                    borderRadius: '4px', 
-                                                                    cursor: 'pointer', 
-                                                                    fontSize: '0.75rem', 
-                                                                    color: '#475569', 
-                                                                    fontWeight: 'bold' 
-                                                                }}
-                                                            >
-                                                                EDITAR
-                                                            </button>
+                                                        {/* 7. Assinante + sublinha titular */}
+                                                        <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '0.85rem' }}>
+                                                                {inv.consumer_units?.subscribers?.name || '-'}
+                                                            </div>
+                                                            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.1rem' }}>
+                                                                {inv.consumer_units?.titular_conta || '-'}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -1785,7 +1762,6 @@ export default function InvoiceListManager() {
                                                     <span>Total de Registros: </span>
                                                     <span style={{ fontWeight: '800', color: 'var(--color-blue)' }}>{sortedInvoices.length} {sortedInvoices.length === 1 ? 'fatura' : 'faturas'}</span>
                                                 </td>
-                                                <td style={{ padding: '1rem' }}></td>
                                                 <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ color: '#0f172a', fontSize: '0.95rem', fontWeight: '900' }}>
                                                         {formatCurrency(totalFactValue)}
@@ -1797,15 +1773,7 @@ export default function InvoiceListManager() {
                                                         {formatCurrency(totalEnergyBillValue)}
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ 
-                                                        fontSize: '0.95rem', 
-                                                        fontWeight: '900', 
-                                                        color: totalBalance >= -0.01 ? '#166534' : '#dc2626'
-                                                    }}>
-                                                        {formatCurrency(totalBalance)}
-                                                    </div>
-                                                </td>
+                                                <td style={{ padding: '1rem' }}></td>
                                                 <td style={{ padding: '1rem' }}></td>
                                             </tr>
                                         </tfoot>
@@ -1827,6 +1795,7 @@ export default function InvoiceListManager() {
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Consumo</th>
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Compensado</th>
                                         <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Injetada</th>
+                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status da Fatura</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
                                         <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Assinante</th>
                                     </tr>
@@ -1897,6 +1866,9 @@ export default function InvoiceListManager() {
                                                 </td>
                                                 <td style={{ padding: '1rem', textAlign: 'center', color: '#0284c7', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                                     {inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-'}
+                                                </td>
+                                                <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
+                                                    {getStatusBadge(inv.status)}
                                                 </td>
                                                 <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>
                                                     {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}

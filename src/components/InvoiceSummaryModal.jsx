@@ -511,6 +511,21 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     </span>
                                 )}
                             </div>
+
+                            {/* Saldo Display */}
+                            {!isEditing && (
+                                <div style={{ 
+                                    marginTop: '1rem', padding: '1rem', borderRadius: '12px', 
+                                    background: (invoice.valor_a_pagar - (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))) >= -0.01 ? '#f0fdf4' : '#fef2f2',
+                                    border: `1px solid ${(invoice.valor_a_pagar - (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))) >= -0.01 ? '#bbf7d0' : '#fecaca'}`,
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: (invoice.valor_a_pagar - (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))) >= -0.01 ? '#166534' : '#dc2626' }}>SALDO (MARGEM)</span>
+                                    <span style={{ fontSize: '1.5rem', fontWeight: 900, color: (invoice.valor_a_pagar - (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0)))) >= -0.01 ? '#166534' : '#dc2626' }}>
+                                        {formatCurrency(invoice.valor_a_pagar - (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))))}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
