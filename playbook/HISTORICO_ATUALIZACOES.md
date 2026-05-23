@@ -2,6 +2,15 @@
 
 ---
 
+## [23/05/2026] - Trava de Segurança nos Triggers de Unidades Consumidoras
+- **Salvaguarda de Status Inativos**: Implementada uma trava no banco de dados (Supabase) para impedir que UCs com status inativos (`desconectado`, `cancelado` ou `cancelado_inadimplente`) tenham seu status alterado de volta para ativo (`ativo`, `vinculado`, `sem_geracao`, `em_ativacao`, etc.) de forma automatizada por triggers.
+- **Triggers Afetados e Atualizados**:
+  - `handle_uc_usina_link`: Bloqueada a atualização automática de status na vinculação/desvinculação de usina caso o status atual da UC já seja um dos inativos mencionados, exceto se o status estiver sendo explicitamente alterado de forma manual (UPDATE).
+  - `handle_usina_status_change`: Adicionado filtro de exclusão no `UPDATE` para que mudanças de estado da usina não forcem alterações de status em UCs inativas/canceladas.
+  - `handle_invoice_status_change`: Bloqueada a reativação automática da UC após a liquidação/pagamento de faturas atrasadas caso a UC esteja previamente em status inativo/cancelado.
+
+---
+
 ## [22/05/2026] - Novo Status "Vinculado a Usina" e Ajuste de Regra de Transição
 - **Novo Status de UC**: Implementação do status "Vinculado a Usina" (`'vinculado'`) posicionado no Kanban entre "Em Ativação" e "Transf. de Titularidade". Identificado visualmente pela cor Indigo (`#4f46e5`).
 - **Nova Regra de Transição (Trigger)**: Atualização na regra de vinculação de UC a usina. Quando uma UC é vinculada a uma usina (`usina_id` preenchido) e a usina associada estiver com o status `'em_conexao'`, o status da UC mudará automaticamente para `'vinculado'` (anteriormente passava para `'aguardando_conexao'`).
