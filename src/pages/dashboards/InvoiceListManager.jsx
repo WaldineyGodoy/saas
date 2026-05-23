@@ -577,7 +577,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     const getStatusBadge = (status) => {
         const map = {
-            'sem_faturamento': { color: '#475569', bg: '#f1f5f9', label: 'Sem Faturamento', icon: FileText },
+            'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
             'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
