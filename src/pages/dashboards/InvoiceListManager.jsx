@@ -11,14 +11,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
 
 
-export default function InvoiceListManager() {
+export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
     const showAuditorTab = ['admin', 'super_admin', 'manager'].includes(profile?.role);
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('kanban');
+    const [viewMode, setViewMode] = useState(initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban');
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -32,7 +32,7 @@ export default function InvoiceListManager() {
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
 
     // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
-    const [activeTab, setActiveTab] = useState('faturas');
+    const [activeTab, setActiveTab] = useState(initialTab);
     // Estado de Ordenação
     const [sortBy, setSortBy] = useState('ref_desc');
     // Estado de exibição do detalhe informativo da aba (! Info)
@@ -1130,113 +1130,119 @@ export default function InvoiceListManager() {
                 flexDirection: 'column',
                 gap: '1rem'
             }}>
-                {/* Menu Superior Horizontal Principal */}
-                <div style={{ display: 'flex', gap: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
-                    
-                    {/* Aba Faturas */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <button
-                            onClick={() => handleTabChange('faturas')}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: '0.5rem 0.2rem',
-                                fontSize: '1rem',
-                                fontWeight: '800',
-                                color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
-                                borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                marginBottom: '-4px',
-                                outline: 'none',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
-                            }}
-                        >
-                            Faturas
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveInfoTab(activeInfoTab === 'faturas' ? null : 'faturas');
-                            }}
-                            style={{
-                                background: activeInfoTab === 'faturas' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
-                                color: activeInfoTab === 'faturas' ? 'white' : 'var(--color-blue)',
-                                border: '1px solid rgba(37, 99, 235, 0.25)',
-                                borderRadius: '50%',
-                                width: '18px',
-                                height: '18px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: '900',
-                                fontSize: '0.7rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                outline: 'none',
-                                boxShadow: activeInfoTab === 'faturas' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
-                                transform: 'translateY(-2px)'
-                            }}
-                            title="Exibir informações da página de Faturas"
-                        >
-                            !
-                        </button>
+                {!hideTabs ? (
+                    <div style={{ display: 'flex', gap: '2rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.2rem', marginBottom: '0.2rem', alignItems: 'center' }}>
+                        
+                        {/* Aba Faturas */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                                onClick={() => handleTabChange('faturas')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '0.5rem 0.2rem',
+                                    fontSize: '1rem',
+                                    fontWeight: '800',
+                                    color: activeTab === 'faturas' ? 'var(--color-blue)' : '#64748b',
+                                    borderBottom: activeTab === 'faturas' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    marginBottom: '-4px',
+                                    outline: 'none',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em'
+                                }}
+                            >
+                                Faturas
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveInfoTab(activeInfoTab === 'faturas' ? null : 'faturas');
+                                }}
+                                style={{
+                                    background: activeInfoTab === 'faturas' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                    color: activeInfoTab === 'faturas' ? 'white' : 'var(--color-blue)',
+                                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                                    borderRadius: '50%',
+                                    width: '18px',
+                                    height: '18px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '900',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none',
+                                    boxShadow: activeInfoTab === 'faturas' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
+                                    transform: 'translateY(-2px)'
+                                }}
+                                title="Exibir informações da página de Faturas"
+                            >
+                                !
+                            </button>
+                        </div>
+
+                        {/* Aba Contas de Energia */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                                onClick={() => handleTabChange('contas_energia')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '0.5rem 0.2rem',
+                                    fontSize: '1rem',
+                                    fontWeight: '800',
+                                    color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
+                                    borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    marginBottom: '-4px',
+                                    outline: 'none',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em'
+                                }}
+                            >
+                                Contas de Energia
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveInfoTab(activeInfoTab === 'contas_energia' ? null : 'contas_energia');
+                                }}
+                                style={{
+                                    background: activeInfoTab === 'contas_energia' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
+                                    color: activeInfoTab === 'contas_energia' ? 'white' : 'var(--color-blue)',
+                                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                                    borderRadius: '50%',
+                                    width: '18px',
+                                    height: '18px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '900',
+                                    fontSize: '0.7rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    outline: 'none',
+                                    boxShadow: activeInfoTab === 'contas_energia' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
+                                    transform: 'translateY(-2px)'
+                                }}
+                                title="Exibir informações da página de Contas de Energia"
+                            >
+                                !
+                            </button>
+                        </div>
+
                     </div>
-
-                    {/* Aba Contas de Energia */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <button
-                            onClick={() => handleTabChange('contas_energia')}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: '0.5rem 0.2rem',
-                                fontSize: '1rem',
-                                fontWeight: '800',
-                                color: activeTab === 'contas_energia' ? 'var(--color-blue)' : '#64748b',
-                                borderBottom: activeTab === 'contas_energia' ? '3px solid var(--color-blue)' : '3px solid transparent',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                marginBottom: '-4px',
-                                outline: 'none',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
-                            }}
-                        >
-                            Contas de Energia
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveInfoTab(activeInfoTab === 'contas_energia' ? null : 'contas_energia');
-                            }}
-                            style={{
-                                background: activeInfoTab === 'contas_energia' ? 'var(--color-blue)' : 'rgba(37, 99, 235, 0.08)',
-                                color: activeInfoTab === 'contas_energia' ? 'white' : 'var(--color-blue)',
-                                border: '1px solid rgba(37, 99, 235, 0.25)',
-                                borderRadius: '50%',
-                                width: '18px',
-                                height: '18px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: '900',
-                                fontSize: '0.7rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                outline: 'none',
-                                boxShadow: activeInfoTab === 'contas_energia' ? '0 0 8px rgba(37, 99, 235, 0.4)' : 'none',
-                                transform: 'translateY(-2px)'
-                            }}
-                            title="Exibir informações da página de Contas de Energia"
-                        >
-                            !
-                        </button>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.8rem' }}>
+                        <h2 style={{ color: '#1e293b', fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.025em', margin: 0, textTransform: 'uppercase' }}>
+                            {activeTab === 'faturas' ? 'Gestão de Faturas' : 'Contas de Energia Concessionária'}
+                        </h2>
                     </div>
-
-
-                </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div style={{ background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', gap: '1rem', alignItems: 'center' }}>

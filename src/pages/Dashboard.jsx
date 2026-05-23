@@ -97,8 +97,11 @@ export default function Dashboard() {
             items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: 'bi-house' });
         }
 
-        // 5. Faturas
-        items.push({ id: 'invoices', label: 'Faturas e Contas de Energia', icon: 'bi-file-earmark-text' });
+        // 5. Contas de Energia
+        items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text' });
+
+        // 6. Faturas
+        items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt' });
 
         // 6. Fornecedores
         const suppliersAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
@@ -147,7 +150,8 @@ export default function Dashboard() {
             case 'suppliers_list': return <SupplierList />;
             case 'power_plants': return <PowerPlantList />;
             case 'consumer_units': return <ConsumerUnitList />;
-            case 'invoices': return <InvoiceListManager />;
+            case 'energy_bills': return <InvoiceListManager key="energy_bills" initialTab="contas_energia" hideTabs={true} />;
+            case 'invoices': return <InvoiceListManager key="invoices" initialTab="faturas" hideTabs={true} />;
             case 'billing': return <BillingList />;
             case 'settings': return <SettingsLayout />;
             case 'grid_map': return <GridMap />;
