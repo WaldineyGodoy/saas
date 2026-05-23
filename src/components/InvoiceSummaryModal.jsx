@@ -33,54 +33,60 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     };
 
     const handlePay = async () => {
-        const confirmed = await showConfirm(`Deseja processar o pagamento desta conta no valor de ${formatCurrency(invoice.valor_a_pagar)}?`, 'Confirmar Pagamento');
+        const utilityValue = Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0));
+
+        const confirmed = await showConfirm(`Deseja pagar a conta de energia da concessionária no valor de ${formatCurrency(utilityValue)}?`, 'Confirmar Pagamento');
         if (!confirmed) return;
 
         setLoading(true);
         setPaymentStatus(null);
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            // Calling the edge function pay_asaas_bill
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pay_asaas_bill`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
-                },
-                body: JSON.stringify({
+            const { data, error } = await supabase.functions.invoke('pay-asaas-bill', {
+                body: {
                     identification: invoice.linha_digitavel,
-                    description: `Pagamento Fatura ${invoice.mes_referencia} - UC ${consumerUnit?.numero_uc}`,
-                    value: Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))
-                })
+                    value: utilityValue,
+                    description: `Pagamento Conta Energia - ${consumerUnit?.titular_conta || 'UC'}`,
+                    scheduleDate: null
+                }
             });
 
-            const result = await response.json();
+            if (error) throw error;
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Erro ao processar pagamento.');
+            if (data?.data?.id || data?.success) {
+                // Update local status - IMPORTANT: Also update energy_bill_status to 'pago'
+                const { error: updateError } = await supabase
+                    .from('invoices')
+                    .update({ 
+                        status: 'pago', 
+                        asaas_status: 'PAID',
+                        energy_bill_status: 'pago' 
+                    })
+                    .eq('id', invoice.id);
+
+                if (updateError) throw updateError;
+
+                // Registrar liquidação no Ledger (Livro Razão)
+                const { error: ledgerError } = await supabase.rpc('liquidate_concessionaria_payment', {
+                    p_invoice_id: invoice.id,
+                    p_amount: utilityValue
+                });
+
+                if (ledgerError) {
+                    console.error('Erro ao registrar no ledger:', ledgerError);
+                    showAlert('Pagamento concluído, mas houve um erro ao registrar no Livro Razão.', 'warning');
+                }
+
+                setEnergyStatus('pago');
+                setPaymentStatus('success');
+                if (onPaymentSuccess) onPaymentSuccess();
+                
+                setTimeout(() => {
+                    onClose();
+                }, 3000);
+            } else {
+                throw new Error(data?.message || 'Falha ao processar pagamento');
             }
-
-            // Update local status - IMPORTANT: Also update energy_bill_status to 'pago'
-            const { error: updateError } = await supabase
-                .from('invoices')
-                .update({ 
-                    status: 'pago', 
-                    asaas_status: 'PAID',
-                    energy_bill_status: 'pago' 
-                })
-                .eq('id', invoice.id);
-
-            if (updateError) console.error('Erro ao atualizar status local:', updateError);
-
-            setEnergyStatus('pago');
-            setPaymentStatus('success');
-            if (onPaymentSuccess) onPaymentSuccess();
-            
-            setTimeout(() => {
-                onClose();
-            }, 3000);
 
         } catch (error) {
             console.error('Erro no pagamento:', error);
@@ -619,7 +625,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <ExternalLink size={18} /> Visualizar Conta
                                 </button>
                                 
-                                {invoice.status === 'sem_faturamento' ? (
+                                {invoice.status === 'sem_faturamento' && (
                                     <button 
                                         onClick={handleGenerateBilling}
                                         disabled={loading}
@@ -641,32 +647,32 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <><FileText size={18} /> Gerar Faturamento (Cobrança)</>
                                         )}
                                     </button>
-                                ) : (
-                                    invoice.status !== 'pago' && consumerUnit?.modalidade === 'auto_consumo_remoto' && (
-                                        <button 
-                                            onClick={handlePay}
-                                            disabled={loading || paymentStatus === 'success'}
-                                            style={{
-                                                flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
-                                                background: paymentStatus === 'success' ? '#22c55e' : (branding?.secondary_color || '#FF6600'),
-                                                color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                                opacity: loading ? 0.7 : 1,
-                                                transition: 'all 0.2s'
-                                            }}
-                                            onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                            onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
-                                        >
-                                            {loading ? (
-                                                <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                            ) : paymentStatus === 'success' ? (
-                                                <><CheckCircle2 size={18} /> Pago com Sucesso</>
-                                            ) : (
-                                                <><CreditCard size={18} /> Pagar Agora</>
-                                            )}
-                                        </button>
-                                    )
+                                )}
+
+                                {energyStatus !== 'pago' && invoice.linha_digitavel && (
+                                    <button 
+                                        onClick={handlePay}
+                                        disabled={loading || paymentStatus === 'success'}
+                                        style={{
+                                            flex: 1, padding: '1rem', borderRadius: '12px', border: 'none',
+                                            background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
+                                            color: 'white', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                                            opacity: loading ? 0.7 : 1,
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseOver={e => !loading && (e.currentTarget.style.background = '#059669')}
+                                        onMouseOut={e => !loading && (e.currentTarget.style.background = '#10b981')}
+                                    >
+                                        {loading ? (
+                                            <div style={{ width: '20px', height: '20px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                        ) : paymentStatus === 'success' ? (
+                                            <><CheckCircle2 size={18} /> Pago com Sucesso</>
+                                        ) : (
+                                            <><CreditCard size={18} /> Pagar Conta Energia</>
+                                        )}
+                                    </button>
                                 )}
                             </>
                         )}
