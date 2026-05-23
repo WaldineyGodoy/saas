@@ -58,6 +58,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     const [subscriber, setSubscriber] = useState(null);
     const [activeTab, setActiveTab] = useState('geral');
+    const [ucSearch, setUcSearch] = useState('');
+    const [ucDropdownOpen, setUcDropdownOpen] = useState(false);
     const hiddenRef = useRef(null);
     const isSubmitting = useRef(false);
 
@@ -1108,21 +1110,135 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                         {activeTab === 'geral' && (
                             <div style={{ animation: 'fadeIn 0.3s ease' }}>
                                 <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-                                {/* UC Selection */}
-                                <div style={{ marginBottom: '2rem' }}>
+                                {/* UC Search Field */}
+                                <div style={{ marginBottom: '2rem', position: 'relative' }}>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.6rem', color: '#475569', fontWeight: 600 }}>Unidade Consumidora</label>
-                                    <select
-                                        required
-                                        value={formData.uc_id}
-                                        onChange={e => setFormData({ ...formData, uc_id: e.target.value })}
-                                        disabled={!!(invoice || localInvoiceId)}
-                                        style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-                                    >
-                                        <option value="">Selecione a UC...</option>
-                                        {ucs && ucs.map(uc => (
-                                            <option key={uc.id} value={uc.id}>{uc.numero_uc} - {uc.titular_conta}</option>
-                                        ))}
-                                    </select>
+                                    {(invoice || localInvoiceId) ? (
+                                        // Read-only when editing an existing invoice
+                                        <div style={{ width: '100%', padding: '0.85rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', background: '#f8fafc', color: '#475569', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{selectedUc?.numero_uc} &mdash; {selectedUc?.titular_conta || selectedUc?.identification}</span>
+                                            {selectedUc?.subscribers?.name && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{selectedUc.subscribers.name}</span>}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Pesquisar por UC, assinante ou identificação..."
+                                                    value={ucSearch || (selectedUc ? `${selectedUc.numero_uc} — ${selectedUc.titular_conta || selectedUc.identification || ''}` : '')}
+                                                    onChange={e => {
+                                                        setUcSearch(e.target.value);
+                                                        setUcDropdownOpen(true);
+                                                        if (!e.target.value) {
+                                                            setSelectedUc(null);
+                                                            setFormData(prev => ({ ...prev, uc_id: '' }));
+                                                        }
+                                                    }}
+                                                    onFocus={() => { setUcSearch(''); setUcDropdownOpen(true); }}
+                                                    onBlur={() => setTimeout(() => setUcDropdownOpen(false), 180)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.85rem 2.75rem 0.85rem 1rem',
+                                                        border: `1px solid ${ucDropdownOpen ? '#2563eb' : '#cbd5e1'}`,
+                                                        borderRadius: '10px',
+                                                        fontSize: '1rem',
+                                                        background: 'white',
+                                                        boxShadow: ucDropdownOpen ? '0 0 0 3px rgba(37,99,235,0.1)' : '0 1px 2px rgba(0,0,0,0.05)',
+                                                        outline: 'none',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                />
+                                                <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: ucDropdownOpen ? '#2563eb' : '#94a3b8', pointerEvents: 'none', fontSize: '1rem' }}>
+                                                    {ucDropdownOpen ? '▲' : '▼'}
+                                                </span>
+                                            </div>
+                                            {ucDropdownOpen && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '100%',
+                                                    left: 0,
+                                                    right: 0,
+                                                    background: 'white',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '10px',
+                                                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                                                    zIndex: 200,
+                                                    maxHeight: '260px',
+                                                    overflowY: 'auto',
+                                                    marginTop: '4px'
+                                                }}>
+                                                    {(ucs || []).filter(uc => {
+                                                        const term = ucSearch.toLowerCase();
+                                                        if (!term) return true;
+                                                        return (
+                                                            uc.numero_uc?.toLowerCase().includes(term) ||
+                                                            uc.titular_conta?.toLowerCase().includes(term) ||
+                                                            uc.identification?.toLowerCase().includes(term) ||
+                                                            uc.subscribers?.name?.toLowerCase().includes(term)
+                                                        );
+                                                    }).length === 0 ? (
+                                                        <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>Nenhuma UC encontrada</div>
+                                                    ) : (
+                                                        (ucs || []).filter(uc => {
+                                                            const term = ucSearch.toLowerCase();
+                                                            if (!term) return true;
+                                                            return (
+                                                                uc.numero_uc?.toLowerCase().includes(term) ||
+                                                                uc.titular_conta?.toLowerCase().includes(term) ||
+                                                                uc.identification?.toLowerCase().includes(term) ||
+                                                                uc.subscribers?.name?.toLowerCase().includes(term)
+                                                            );
+                                                        }).map(uc => (
+                                                            <div
+                                                                key={uc.id}
+                                                                onMouseDown={() => {
+                                                                    setSelectedUc(uc);
+                                                                    setFormData(prev => ({ ...prev, uc_id: uc.id }));
+                                                                    setUcSearch('');
+                                                                    setUcDropdownOpen(false);
+                                                                }}
+                                                                style={{
+                                                                    padding: '0.75rem 1rem',
+                                                                    cursor: 'pointer',
+                                                                    borderBottom: '1px solid #f1f5f9',
+                                                                    background: formData.uc_id === uc.id ? '#eff6ff' : 'white',
+                                                                    transition: 'background 0.15s'
+                                                                }}
+                                                                onMouseOver={e => e.currentTarget.style.background = '#f0f9ff'}
+                                                                onMouseOut={e => e.currentTarget.style.background = formData.uc_id === uc.id ? '#eff6ff' : 'white'}
+                                                            >
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                    <span style={{ background: '#eff6ff', color: '#2563eb', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                                        {uc.numero_uc}
+                                                                    </span>
+                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                        <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {uc.titular_conta || uc.identification || '—'}
+                                                                        </div>
+                                                                        {uc.subscribers?.name && (
+                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                                {uc.subscribers.name}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    {formData.uc_id === uc.id && (
+                                                                        <span style={{ color: '#2563eb', fontSize: '1rem' }}>&#10003;</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
+                                            {selectedUc && (
+                                                <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.9rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{ background: '#2563eb', color: 'white', borderRadius: '4px', padding: '0.15rem 0.4rem', fontSize: '0.75rem', fontWeight: 700 }}>{selectedUc.numero_uc}</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{selectedUc.titular_conta || selectedUc.identification}</span>
+                                                    {selectedUc.subscribers?.name && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>&mdash; {selectedUc.subscribers.name}</span>}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
