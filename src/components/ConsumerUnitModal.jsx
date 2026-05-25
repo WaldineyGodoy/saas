@@ -59,6 +59,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
+    const formatCurrency4 = (val) => {
+        if (!val && val !== 0) return '';
+        const number = Number(val);
+        if (isNaN(number)) return '';
+        return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    };
+
     const parseCurrency = (str) => {
         if (!str || typeof str !== 'string') return 0;
         const digits = str.replace(/\D/g, '');
@@ -330,10 +337,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 concessionaria: consumerUnit.concessionaria || '',
                 tipo_ligacao: consumerUnit.tipo_ligacao || 'trifasico',
                 franquia: consumerUnit.franquia || '',
-                tarifa_concessionaria: formatCurrency(consumerUnit.tarifa_concessionaria),
-                te: formatCurrency(consumerUnit.te),
-                tusd: formatCurrency(consumerUnit.tusd),
-                fio_b: formatCurrency(consumerUnit.fio_b),
+                tarifa_concessionaria: formatCurrency4(consumerUnit.tarifa_concessionaria),
+                te: formatCurrency4(consumerUnit.te),
+                tusd: formatCurrency4(consumerUnit.tusd),
+                fio_b: formatCurrency4(consumerUnit.fio_b),
                 tarifa_minima: '', // Recalculated on render
                 desconto_assinante: (() => {
                     const val = consumerUnit.desconto_assinante;
@@ -491,10 +498,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             cidade: addr.cidade || '',
                             uf: addr.uf || '',
                             concessionaria: offer.Concessionaria || fallbackConcessionaria || prev.concessionaria,
-                            tarifa_concessionaria: offer['Tarifa Concessionaria'] ? formatCurrency(offer['Tarifa Concessionaria']) : prev.tarifa_concessionaria,
-                            te: offer['TE'] ? formatCurrency(offer['TE']) : prev.te,
-                            tusd: offer['TUSD'] ? formatCurrency(offer['TUSD']) : prev.tusd,
-                            fio_b: offer['Fio B'] ? formatCurrency(offer['Fio B']) : prev.fio_b,
+                            tarifa_concessionaria: offer['Tarifa Concessionaria'] ? formatCurrency4(offer['Tarifa Concessionaria']) : prev.tarifa_concessionaria,
+                            te: offer['TE'] ? formatCurrency4(offer['TE']) : prev.te,
+                            tusd: offer['TUSD'] ? formatCurrency4(offer['TUSD']) : prev.tusd,
+                            fio_b: offer['Fio B'] ? formatCurrency4(offer['Fio B']) : prev.fio_b,
                             desconto_assinante: discountVal.toFixed(2)
                         }));
                     }
