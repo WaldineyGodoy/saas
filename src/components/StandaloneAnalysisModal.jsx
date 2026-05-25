@@ -1000,13 +1000,26 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
         const totalFaturaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || 0);
 
-        const calculatedConcessionariaSum = consumoReaisVal + ip + outros;
-        const diffSum = Math.abs(calculatedConcessionariaSum - totalFaturaVal);
-
-        const diffTariff = selectedUc ? Math.abs(simulation.tarifaEfetiva - Number(selectedUc.tarifa_concessionaria)) : 0;
-
         const consumo = Number(formData.consumo_kwh) || 0;
         const compensado = Number(formData.consumo_compensado) || 0;
+        const tarifaUC = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+
+        // Se houver compensação de energia (GD), estimamos o custo líquido esperado cobrado
+        // pela concessionária (Fio B não compensado + IP + consumo não compensado)
+        let calculatedConcessionariaSum = consumoReaisVal + ip + outros;
+        if (compensado > 0 && selectedUc) {
+            const consumoNaoCompensado = Math.max(0, consumo - compensado);
+            const custoNaoCompensado = consumoNaoCompensado * tarifaUC;
+            
+            // Fio B retido (TUSD não compensado) é tipicamente em torno de 21% a 23% da tarifa cheia da UC
+            const estimatedFioB = compensado * (tarifaUC * 0.215);
+            calculatedConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros;
+        }
+
+        const diffSum = Math.abs(calculatedConcessionariaSum - totalFaturaVal);
+        const diffSumLimit = compensado > 0 ? 5.00 : 0.50; // Limiar maior para GD devido a variações de Fio B por distribuidora
+
+        const diffTariff = selectedUc ? Math.abs(simulation.tarifaEfetiva - Number(selectedUc.tarifa_concessionaria)) : 0;
 
         const alerts = [];
 
@@ -1029,10 +1042,10 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             });
         }
 
-        if (totalFaturaVal > 0 && diffSum > 0.50) {
+        if (totalFaturaVal > 0 && diffSum > diffSumLimit) {
             alerts.push({
                 type: 'sum',
-                message: `Divergência de Totais: O valor total informado na fatura (${formatCurrency(totalFaturaVal)}) diverge da soma dos lançamentos (Consumo + IP + Outros = ${formatCurrency(calculatedConcessionariaSum)}).`
+                message: `Divergência de Totais: O valor total informado na fatura (${formatCurrency(totalFaturaVal)}) diverge da soma dos lançamentos (Consumo Estimado Líquido + IP + Outros = ${formatCurrency(calculatedConcessionariaSum)}).`
             });
         }
 
