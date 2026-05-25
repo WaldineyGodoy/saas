@@ -1707,10 +1707,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                                                 <span 
                                                                     onClick={() => {
-                                                                        const fullUc = ucs.find(u => u.id === inv.consumer_units?.id) || inv.consumer_units;
-                                                                        setSelectedUcForModal(fullUc);
-                                                                        setUcModalSection('financeiro');
-                                                                        setIsUcModalOpen(true);
+                                                                        handleEdit(inv);
                                                                     }}
                                                                     style={{
                                                                         display: 'inline-flex',
