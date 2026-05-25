@@ -91,8 +91,30 @@ serve(async (req) => {
         if (!subscriber) throw new Error("Assinante não encontrado.");
 
 
+        console.log(`[Asaas Charge] isSandbox: ${isSandbox}, asaasUrl: ${asaasUrl}`);
+        console.log(`[Asaas Charge] subscriber: ${subscriber.name} (${subscriber.cpf_cnpj}), existing customer ID: ${subscriber.asaas_customer_id}`);
+
         // Garantir Cliente no Asaas
         let asaasCustomerId = subscriber.asaas_customer_id;
+
+        // Se asaasCustomerId existir no banco, validar se existe no Asaas
+        if (asaasCustomerId) {
+            try {
+                console.log(`[Asaas Charge] Validando ID de cliente existente: ${asaasCustomerId}`);
+                const checkRes = await fetch(`${asaasUrl}/customers/${asaasCustomerId}`, {
+                    headers: { access_token: asaasKey }
+                });
+                console.log(`[Asaas Charge] Resposta de validação: Status ${checkRes.status}`);
+                if (!checkRes.ok) {
+                    console.log(`[Asaas Charge] Cliente ${asaasCustomerId} não é válido no Asaas (Status ${checkRes.status}). Limpando ID e buscando/criando de novo.`);
+                    asaasCustomerId = null;
+                }
+            } catch (err) {
+                console.error(`[Asaas Charge] Erro ao validar cliente no Asaas:`, err.message);
+                // No caso de erro de rede ou similar, mantemos o ID para evitar re-criações errôneas
+            }
+        }
+
         if (!asaasCustomerId) {
             const customerData = {
                 name: subscriber.name,
@@ -101,39 +123,71 @@ serve(async (req) => {
                 phone: subscriber.phone?.replace(/\D/g, ''),
                 notificationDisabled: true
             };
-            const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, { headers: { access_token: asaasKey } });
-            const searchData = await searchRes.json();
-            if (searchData.data && searchData.data.length > 0) {
-                asaasCustomerId = searchData.data[0].id;
-            } else {
+            console.log(`[Asaas Charge] Buscando/Criando cliente com cpfCnpj: ${customerData.cpfCnpj}`);
+            
+            let foundInAsaas = false;
+            if (customerData.cpfCnpj) {
+                const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, { headers: { access_token: asaasKey } });
+                const searchData = await searchRes.json();
+                console.log(`[Asaas Charge] Busca por CPF/CNPJ retornou ${searchData.data?.length || 0} resultados`);
+                if (searchData.data && searchData.data.length > 0) {
+                    asaasCustomerId = searchData.data[0].id;
+                    foundInAsaas = true;
+                    console.log(`[Asaas Charge] Encontrado ID existente no Asaas: ${asaasCustomerId}`);
+                }
+            }
+
+            if (!foundInAsaas) {
+                console.log(`[Asaas Charge] Criando novo cliente no Asaas...`);
                 const createRes = await fetch(`${asaasUrl}/customers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', access_token: asaasKey },
                     body: JSON.stringify(customerData)
                 });
                 const createData = await createRes.json();
-                if (createData.errors) throw new Error(`Erro Asaas Customer: ${createData.errors[0].description}`);
+                if (createData.errors) {
+                    console.error(`[Asaas Charge] Erro na criação de cliente:`, JSON.stringify(createData.errors));
+                    throw new Error(`Erro Asaas Customer: ${createData.errors[0].description}`);
+                }
                 asaasCustomerId = createData.id;
+                console.log(`[Asaas Charge] Novo cliente criado com ID: ${asaasCustomerId}`);
             }
-            await supabase.from('subscribers').update({ asaas_customer_id: asaasCustomerId }).eq('id', subscriber.id);
+            
+            if (asaasCustomerId) {
+                console.log(`[Asaas Charge] Atualizando ID do cliente no banco de dados: ${asaasCustomerId}`);
+                await supabase.from('subscribers').update({ asaas_customer_id: asaasCustomerId }).eq('id', subscriber.id);
+            }
+        }
+
+        if (!asaasCustomerId) {
+            throw new Error("Erro Asaas: Não foi possível obter ou criar o ID do cliente.");
         }
 
         const totalValue = invoicesToCharge.reduce((acc, inv) => acc + Number(inv.valor_a_pagar || 0), 0);
         const dueDate = customDueDate || invoicesToCharge[0].vencimento || new Date().toISOString().split('T')[0];
 
+        // Garantir valor com no máximo duas casas decimais
+        const roundedValue = Number(totalValue.toFixed(2));
+
+        const paymentPayload = {
+            customer: asaasCustomerId,
+            billingType: 'BOLETO',
+            value: roundedValue,
+            dueDate: dueDate,
+            description: isConsolidated ? `Fatura Consolidada - ${invoicesToCharge.length} UCs` : `Fatura de Energia - Ref: ${invoicesToCharge[0].mes_referencia}`,
+        };
+
+        console.log(`[Asaas Charge] Criando cobrança com payload:`, JSON.stringify(paymentPayload));
+
         const chargeRes = await fetch(`${asaasUrl}/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', access_token: asaasKey },
-            body: JSON.stringify({
-                customer: asaasCustomerId,
-                billingType: 'BOLETO',
-                value: totalValue,
-                dueDate: dueDate,
-                description: isConsolidated ? `Fatura Consolidada - ${invoicesToCharge.length} UCs` : `Fatura de Energia - Ref: ${invoicesToCharge[0].mes_referencia}`,
-            })
+            body: JSON.stringify(paymentPayload)
         });
 
         const chargeData = await chargeRes.json();
+        console.log(`[Asaas Charge] Resposta de cobrança: Status ${chargeRes.status}`, JSON.stringify(chargeData));
+
         if (chargeData.errors) throw new Error(`Erro Asaas Payment: ${chargeData.errors[0].description}`);
 
         const boletoUrl = chargeData.bankSlipUrl || chargeData.invoiceUrl;
