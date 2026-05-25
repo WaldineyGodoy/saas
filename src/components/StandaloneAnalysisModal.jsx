@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download } from 'lucide-react';
+import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { parseInvoice, createAsaasCharge } from '../lib/api';
+import { parseInvoice, createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -25,6 +27,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     const [pdfFile, setPdfFile] = useState(null);
     const [applyStamp, setApplyStamp] = useState(true);
     const [stampCoords, setStampCoords] = useState(null);
+    const hiddenRef = useRef(null);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [invoiceToDownload, setInvoiceToDownload] = useState(null);
     
     // UCs completas (com todos os status) e estados de pesquisa
     const [allUcs, setAllUcs] = useState([]);
@@ -583,8 +588,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         if (saveStatus === 'a_vencer' && upsertData) {
                             showAlert('Fatura ativa atualizada! Gerando boleto de faturamento...', 'info');
                             try {
-                                await createAsaasCharge(upsertData.id, 'invoice');
+                                const result = await createAsaasCharge(upsertData.id, 'invoice');
                                 showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
+                                await triggerActiveInvoiceNotification(upsertData, result.url);
                             } catch (asaasErr) {
                                 console.error('Erro na emissão automática do Asaas:', asaasErr);
                                 showAlert('Fatura atualizada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
@@ -606,8 +612,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             if (saveStatus === 'a_vencer' && data) {
                 showAlert('Fatura ativa criada localmente! Gerando boleto de faturamento...', 'info');
                 try {
-                    await createAsaasCharge(data.id, 'invoice');
+                    const result = await createAsaasCharge(data.id, 'invoice');
                     showAlert('Fatura cadastrada e boleto gerado no Asaas com sucesso!', 'success');
+                    await triggerActiveInvoiceNotification(data, result.url);
                 } catch (asaasErr) {
                     console.error('Erro na emissão automática do Asaas:', asaasErr);
                     showAlert('Fatura cadastrada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
@@ -624,6 +631,300 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const triggerActiveInvoiceNotification = async (invoiceData, boletoUrl) => {
+        try {
+            const subId = selectedUc?.subscriber_id;
+            if (!subId) {
+                console.warn("No subscriber ID found for UC:", selectedUc);
+                return;
+            }
+
+            const { data: subData, error: subFetchErr } = await supabase
+                .from('subscribers')
+                .select('*')
+                .eq('id', subId)
+                .single();
+            
+            if (subFetchErr) throw subFetchErr;
+
+            if (subData) {
+                showAlert('Gerando PDF para notificações...', 'info');
+                const pdfBlob = await handleDownloadCombined(invoiceData, boletoUrl);
+                
+                if (pdfBlob) {
+                    showAlert('Enviando notificações (E-mail/WhatsApp)...', 'info');
+                    const monthYearStr = invoiceData.mes_referencia ? invoiceData.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+                    const cleanSubName = (subData.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+                    const ucNum = selectedUc?.numero_uc || '';
+                    const descriptiveFileName = `Fatura_${cleanSubName}_${ucNum}_${monthYearStr}.pdf`;
+
+                    await sendCombinedNotification({
+                        recipientEmail: subData.email,
+                        recipientPhone: subData.phone,
+                        subscriberName: subData.name,
+                        dueDate: invoiceData.vencimento ? new Date(invoiceData.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '',
+                        value: formatCurrency(invoiceData.valor_a_pagar),
+                        pdfBlob,
+                        fileName: descriptiveFileName,
+                        subscriberId: subData.id,
+                        ucId: selectedUc.id,
+                        profileId: profile?.id
+                    });
+                    showAlert('Notificações enviadas com sucesso!', 'success');
+                }
+            }
+        } catch (notifyErr) {
+            console.error('Erro no envio das notificações:', notifyErr);
+            showAlert('Fatura ativa criada e boleto gerado, mas falhou ao enviar notificações: ' + notifyErr.message, 'warning');
+        }
+    };
+
+    const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null) => {
+        const inv = invToUse;
+        const currentBoletoUrl = forcedBoletoUrl;
+        
+        if (!inv || !currentBoletoUrl) {
+            showAlert('Boleto não disponível para esta fatura.', 'warning');
+            return;
+        }
+
+        setIsGeneratingPdf(true);
+        setInvoiceToDownload(inv);
+        console.log('Generating Combined PDF for invoice:', inv.id, 'Energy Bill URL:', inv.concessionaria_pdf_url);
+
+        try {
+            const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (selectedUc?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const ucNumber = selectedUc?.numero_uc || '';
+            const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
+
+            const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
+                              inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
+                              inv.asaas_pdf_storage_url?.includes('asaas.com');
+            
+            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
+                console.log("Obtendo URL assinada para PDF individual...");
+                const { data: signedData, error: signedError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .createSignedUrl(`${inv.id}.pdf`, 60);
+
+                if (!signedError && signedData?.signedUrl) {
+                    const { data: fileBlob } = await supabase.storage.from('invoices_pdfs').download(`${inv.id}.pdf`);
+                    return fileBlob;
+                }
+                console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            const element = hiddenRef.current;
+            if (!element) {
+                console.error("Ref hiddenRef ainda é null após 2s no Modal de Fatura Individual.");
+                throw new Error("Elemento de captura não encontrado no DOM.");
+            }
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: "#f8fafc"
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfSummary = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdfSummary.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+            const summaryBase64 = pdfSummary.output('datauristring');
+            const asaasUrl = currentBoletoUrl; 
+            if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
+
+            try {
+                const storagePath = `${inv.id}.pdf`;
+                console.log(`Subindo PDF individual para o Storage: ${storagePath}`);
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, mergedBlob, {
+                        upsert: true,
+                        contentType: 'application/pdf'
+                    });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('invoices_pdfs')
+                        .getPublicUrl(storagePath);
+                    
+                    const authenticatedUrl = publicUrl.replace('/public/', '/authenticated/');
+
+                    await supabase
+                        .from('invoices')
+                        .update({ asaas_pdf_storage_url: authenticatedUrl })
+                        .eq('id', inv.id);
+                        
+                    console.log("Storage e Banco de Dados atualizados para PDF Individual (Modal Fatura).");
+                } else {
+                    console.warn("Falha ao subir PDF para o Storage:", uploadError);
+                }
+            } catch (storageErr) {
+                console.warn("Erro ao processar persistência no Storage:", storageErr);
+            }
+
+            console.log('PDF Merged successfully. Blob size:', mergedBlob.size);
+            return mergedBlob;
+        } catch (error) {
+            console.error('Erro ao gerar PDF combinado:', error);
+            showAlert('Erro ao gerar PDF combinado.', 'error');
+            return null;
+        } finally {
+            setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
+        }
+    };
+
+    const renderHiddenInvoiceDetail = (inv) => {
+        if (!inv) return null;
+        const uc = selectedUc;
+        const statusLabel = inv.status?.toUpperCase() || 'N/A';
+        const statusColor = inv.status === 'pago' ? '#27ae60' : (inv.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+
+        return (
+            <div className="pdf-capture-wrapper">
+                <div className="detail-card">
+                    <div className="branded-header">
+                        {branding?.logo_url ? (
+                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                        ) : (
+                            <div className="company-info-fallback">
+                                <FileText size={24} color="#FF6600" />
+                                <span>{branding?.company_name || 'B2W Energia'}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                        <div className="header-info">
+                            <Info size={20} color="#ffffff" />
+                            <h3>Detalhamento da Fatura</h3>
+                        </div>
+                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                            {statusLabel}
+                        </span>
+                    </div>
+
+                    <div className="detail-grid">
+                        <div className="detail-section dark">
+                            <div className="detail-item">
+                                <label>ASSINANTE</label>
+                                <span style={{ textTransform: 'uppercase' }}>{selectedUc?.subscribers?.name || selectedUc?.titular_conta || 'Assinante'}</span>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>NÚMERO DA UC</label>
+                                    <span>{selectedUc?.numero_uc || 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span>{selectedUc?.identification || selectedUc?.titular_conta || 'Unidade Consumidora'}</span>
+                                </div>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>MÊS REFERÊNCIA</label>
+                                    <span>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>VENCIMENTO</label>
+                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                                        {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="detail-item">
+                                <label>TIPO DE LIGAÇÃO</label>
+                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                                    {selectedUc?.tipo_ligacao || 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="detail-section metrics">
+                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
+
+                            <div className="metric-line">
+                                <span>+ Custo da Energia Compensada (Líquida):</span>
+                                <span>
+                                    {(() => {
+                                        const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                        const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
+                                        return formatCurrency(energiaCompensadaReais);
+                                    })()}
+                                </span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Iluminação Pública:</span>
+                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Tarifa Mínima e Excedentes:</span>
+                                <span>{formatCurrency(inv.tarifa_minima)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Outros Lançamentos:</span>
+                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
+                            </div>
+
+                            <div className="economy-box">
+                                <div className="metric-line economy">
+                                    <span>Economia Gerada:</span>
+                                    <span>
+                                        - {(() => {
+                                            const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                            const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                            const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
+                                            return formatCurrency(economiaReais);
+                                        })()}
+                                    </span>
+                                </div>
+                                <div className="metric-line discount">
+                                    <span>Desconto Aplicado:</span>
+                                    <span>{inv.desconto_aplicado !== undefined ? inv.desconto_aplicado : (uc?.desconto_assinante || 0)}%</span>
+                                </div>
+                            </div>
+
+                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
+                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
+                                <div className="total-value">
+                                    {(() => {
+                                        const rawConsumo = Number(inv.consumo_kwh) || 0;
+                                        const rawCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                        
+                                        const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
+                                        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+                                        const ip = Number(inv.iluminacao_publica) || 0;
+                                        const outros = Number(inv.outros_lancamentos) || 0;
+                                        
+                                        const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+                                        return formatCurrency(totalCalculado);
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // Validador inteligente de Alertas
@@ -1483,6 +1784,36 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                     </>
                 )}
             </div>
+
+            {/* Hidden wrapper for PDF capture */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
+                <div ref={hiddenRef}>
+                    {invoiceToDownload && renderHiddenInvoiceDetail(invoiceToDownload)}
+                </div>
+            </div>
+
+            {isGeneratingPdf && (
+                <div className="generation-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1200,
+                    backdropFilter: 'blur(8px)',
+                    color: 'white'
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                        <Loader2 size={48} className="spin-animation" style={{ color: branding?.secondary_color || '#ff6600', animation: 'spin 1s linear infinite' }} />
+                        <p style={{ marginTop: '1rem', fontWeight: 600, fontSize: '1.1rem', margin: 0 }}>Gerando PDF combinado...</p>
+                        <p style={{ fontSize: '0.875rem', opacity: 0.8, margin: 0 }}>Mesclando Detalhamento com Boleto Asaas.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
