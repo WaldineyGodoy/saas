@@ -1170,7 +1170,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             <div style={{ position: 'relative' }}>
                                                 <input
                                                     type="text"
-                                                    placeholder="Pesquisar por UC, assinante ou identificação..."
+                                                    placeholder="Pesquisar por UC, assinante ou Identificação da fatura..."
                                                     value={ucSearch || (selectedUc ? `${selectedUc.numero_uc} — ${selectedUc.titular_conta || selectedUc.identification || ''}` : '')}
                                                     onChange={e => {
                                                         setUcSearch(e.target.value);
@@ -1220,7 +1220,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                             uc.numero_uc?.toLowerCase().includes(term) ||
                                                             uc.titular_conta?.toLowerCase().includes(term) ||
                                                             uc.identification?.toLowerCase().includes(term) ||
-                                                            uc.subscribers?.name?.toLowerCase().includes(term)
+                                                            uc.subscribers?.name?.toLowerCase().includes(term) ||
+                                                            uc.titular_fatura?.name?.toLowerCase().includes(term)
                                                         );
                                                     }).length === 0 ? (
                                                         <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>Nenhuma UC encontrada</div>
@@ -1232,7 +1233,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                                                 uc.numero_uc?.toLowerCase().includes(term) ||
                                                                 uc.titular_conta?.toLowerCase().includes(term) ||
                                                                 uc.identification?.toLowerCase().includes(term) ||
-                                                                uc.subscribers?.name?.toLowerCase().includes(term)
+                                                                uc.subscribers?.name?.toLowerCase().includes(term) ||
+                                                                uc.titular_fatura?.name?.toLowerCase().includes(term)
                                                             );
                                                         }).map(uc => (
                                                             <div

@@ -679,7 +679,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 ) : (
                                     dayInvoices.map(inv => {
                                         const statusData = {
-                                            'sem_faturamento': { color: '#475569', label: 'Sem Faturamento', bg: '#f1f5f9' },
+                                            'sem_faturamento': { color: '#2563eb', label: 'Sem Faturamento', bg: '#eff6ff' },
                                             'pago': { color: '#166534', label: 'Pago', bg: '#dcfce7' },
                                             'atrasado': { color: '#dc2626', label: 'Atrasado', bg: '#fee2e2' },
                                             'a_vencer': { color: '#854d0e', label: 'A Vencer', bg: '#fef9c3' }
@@ -1367,12 +1367,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 <option value="assinante_desc">Assinante: Ordem alfabética (Z-A)</option>
                             </select>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <button onClick={() => setViewMode('list')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'list' ? 'white' : 'transparent', color: viewMode === 'list' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'list' ? '700' : '500', fontSize: '0.85rem' }}>Lista</button>
-                            <button onClick={() => setViewMode('kanban')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'kanban' ? 'white' : 'transparent', color: viewMode === 'kanban' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'kanban' ? '700' : '500', fontSize: '0.85rem' }}>Kanban</button>
-                            <button onClick={() => setViewMode('calendar')} style={{ borderRadius: '8px', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem', background: viewMode === 'calendar' ? 'white' : 'transparent', color: viewMode === 'calendar' ? 'var(--color-blue)' : '#64748b', fontWeight: viewMode === 'calendar' ? '700' : '500', fontSize: '0.85rem' }}>Calendário</button>
-                        </div>
-                        <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <Search size={16} color="#64748b" />
                             <input placeholder="Buscar UC..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '120px' }} />
