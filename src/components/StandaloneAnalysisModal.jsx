@@ -1118,6 +1118,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                 <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Clique ou arraste o arquivo PDF aqui para iniciar a extração automatizada</p>
                                             </div>
                                         )}
+                                    </div>
                                 </div>
 
                                 {pdfFile && (
