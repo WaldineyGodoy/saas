@@ -313,20 +313,57 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         if (isSubmitting.current) return;
 
         const confirmed = await showConfirm(
-            'Você realmente deseja cancelar essa fatura? Se houver um boleto emitido no Asaas, ele também será cancelado. Esta ação é irreversível.',
+            'Você realmente deseja cancelar essa fatura? Se houver um boleto emitido no Asaas, ele também será cancelado.',
             'Confirmar Cancelamento',
-            'Sim, Cancelar',
-            'Voltar'
+            'Sim, Continuar',
+            'Cancelar'
         );
 
         if (!confirmed) return;
 
+        const deleteConcessionaria = await showConfirm(
+            'Deseja excluir também a conta de energia da concessionária vinculada? (Se escolher NÃO, a conta será mantida com status "Sem Faturamento" e você poderá refaturá-la).', 
+            'Excluir Conta de Energia?', 
+            'Sim, Excluir Tudo', 
+            'Não, Apenas Refaturar'
+        );
+
         isSubmitting.current = true;
         setLoading(true);
         try {
-            await cancelAsaasCharge(invoice.id);
-            showAlert('Fatura e cobrança canceladas com sucesso!', 'success');
-            onSave();
+            // Cancel in Asaas if payment exists
+            if (invoice?.asaas_payment_id) {
+                console.log('Cancelando cobrança no Asaas:', invoice.asaas_payment_id);
+                await cancelAsaasCharge(invoice.id);
+            }
+
+            if (deleteConcessionaria) {
+                // Delete completely from database
+                const { error } = await supabase
+                    .from('invoices')
+                    .delete()
+                    .eq('id', invoice.id);
+                if (error) throw error;
+                showAlert('Fatura e conta de energia excluídas com sucesso!', 'success');
+            } else {
+                // Reset status to sem_faturamento and clear asaas fields in database
+                const { error } = await supabase
+                    .from('invoices')
+                    .update({
+                        status: 'sem_faturamento',
+                        asaas_status: null,
+                        asaas_payment_id: null,
+                        asaas_boleto_url: null,
+                        asaas_pdf_storage_url: null,
+                        linha_digitavel: null,
+                        pix_string: null
+                    })
+                    .eq('id', invoice.id);
+                if (error) throw error;
+                showAlert('Cobrança cancelada. A conta de energia foi preservada para refaturamento!', 'success');
+            }
+
+            if (onSave) onSave();
             onClose();
         } catch (error) {
             console.error('Error canceling invoice:', error);
