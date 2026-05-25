@@ -491,7 +491,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                             </div>
                         ) : (() => {
-                            const rawTarifa = Number(consumerUnit?.tarifa_concessionaria) || 0;
+                            const rawTarifa = Number(consumerUnit?.tarifa_concessionaria) || 0.986;
                             const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
                             const consumoTotalVal = (Number(invoice.consumo_kwh) || 0) * rawTarifa;
                             const consumoCompensadoVal = Number(invoice.consumo_compensado) || Number(invoice.consumo_kwh) || 0;
@@ -504,33 +504,40 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem' }}>
                                         <thead>
                                             <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
-                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase' }}>Descrição do lançamento</th>
-                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', textAlign: 'center' }}>Quantitativo</th>
-                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', textAlign: 'right' }}>Valores</th>
+                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', verticalAlign: 'middle' }}>Descrição do lançamento</th>
+                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', textAlign: 'center', verticalAlign: 'middle' }}>Quantitativo</th>
+                                                <th style={{ padding: '0.5rem 0', color: '#475569', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', textAlign: 'right', verticalAlign: 'middle' }}>Valores</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>Consumo total</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center' }}>{invoice.consumo_kwh} kwh</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right' }}>
-                                                    {formatCurrency(consumoTotalVal)}* <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>({invoice.consumo_kwh} x {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })})</span>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>
+                                                    <div>
+                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal', marginTop: '0.15rem' }}>
+                                                            ({invoice.consumo_kwh} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })})
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{invoice.consumo_kwh} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>
+                                                    {formatCurrency(consumoTotalVal)}*
                                                 </td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>Energia Compensada Desc. {discount}% -</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'center' }}>- {consumoCompensadoVal} kwh</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'right' }}>{formatCurrency(valorCompensada)}</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Energia Compensada Desc. {discount}% -</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>- {consumoCompensadoVal} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(valorCompensada)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>Iluminação Pública</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center' }}>—</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right' }}>{formatCurrency(ip)}</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Iluminação Pública</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(ip)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>Tarifa Mínima / Outros</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center' }}>—</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right' }}>{formatCurrency(outros)}</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Outros</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(outros)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -660,13 +667,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                             </div>
                         </div>
-
-                        {/* Desconto Snapshot Display */}
-                        <div style={{ marginTop: '0.5rem', marginBottom: '1rem', textAlign: 'right', fontSize: '0.8rem', color: '#64748b' }}>
-                            Desconto aplicado nesta fatura: <strong>{invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0)}%</strong>
-                        </div>
-
-                        <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
 
                         {/* TOTAL CONCESSIONÁRIA */}
                         <div style={{ 
