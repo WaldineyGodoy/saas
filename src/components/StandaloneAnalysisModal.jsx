@@ -47,7 +47,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                     .from('consumer_units')
                     .select(`
                         id, numero_uc, concessionaria, titular_conta, status,
-                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
                         subscribers!consumer_units_subscriber_id_fkey(name),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     `)
@@ -400,7 +400,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 .from('consumer_units')
                                 .select(`
                                     id, numero_uc, concessionaria, titular_conta, status,
-                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
                                     subscribers!consumer_units_subscriber_id_fkey(name),
                                     titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                                 `)
@@ -419,7 +419,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                     .from('consumer_units')
                                     .select(`
                                         id, numero_uc, concessionaria, titular_conta, status,
-                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
                                         subscribers!consumer_units_subscriber_id_fkey(name),
                                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                                     `)
@@ -701,9 +701,29 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
     const triggerActiveInvoiceNotification = async (invoiceData, boletoUrl) => {
         try {
-            const subId = selectedUc?.subscriber_id;
+            let currentUc = selectedUc;
+            if (!currentUc && invoiceData.uc_id) {
+                const { data: ucData } = await supabase
+                    .from('consumer_units')
+                    .select(`
+                        id, numero_uc, concessionaria, titular_conta, status,
+                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                        subscribers!consumer_units_subscriber_id_fkey(name),
+                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                    `)
+                    .eq('id', invoiceData.uc_id)
+                    .single();
+                if (ucData) {
+                    currentUc = ucData;
+                    setSelectedUc(ucData);
+                    setSelectedUcId(ucData.id);
+                }
+            }
+
+            const subId = currentUc?.subscriber_id;
             if (!subId) {
-                console.warn("No subscriber ID found for UC:", selectedUc);
+                console.warn("No subscriber ID found for UC");
+                showAlert('Assinante não encontrado para esta unidade. Não foi possível enviar notificações.', 'warning');
                 return;
             }
 
@@ -723,7 +743,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                     showAlert('Enviando notificações (E-mail/WhatsApp)...', 'info');
                     const monthYearStr = invoiceData.mes_referencia ? invoiceData.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
                     const cleanSubName = (subData.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
-                    const ucNum = selectedUc?.numero_uc || '';
+                    const ucNum = currentUc?.numero_uc || '';
                     const descriptiveFileName = `Fatura_${cleanSubName}_${ucNum}_${monthYearStr}.pdf`;
 
                     await sendCombinedNotification({
@@ -735,7 +755,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         pdfBlob,
                         fileName: descriptiveFileName,
                         subscriberId: subData.id,
-                        ucId: selectedUc.id,
+                        ucId: currentUc?.id || invoiceData.uc_id,
                         profileId: profile?.id
                     });
                     showAlert('Notificações enviadas com sucesso!', 'success');
