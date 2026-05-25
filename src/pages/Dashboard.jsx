@@ -117,9 +117,10 @@ export default function Dashboard() {
         // 7. Usinas
         if (suppliersAllowed.includes(role)) {
             items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
-            items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
             items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check' });
+            items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
         }
+
 
         // 8. Billing
         const billingAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
