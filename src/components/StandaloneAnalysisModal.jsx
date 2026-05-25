@@ -266,8 +266,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     };
 
     const triggerUpload = async () => {
-        if (!pdfFile || !selectedUcId) {
-            showAlert('Por favor, selecione uma UC e faça o upload do PDF.', 'warning');
+        if (!pdfFile) {
+            showAlert('Por favor, faça o upload do PDF.', 'warning');
             return;
         }
 
@@ -285,6 +285,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                     let extractedCompensado = parsedData.consumo_compensado;
                     let extractedInjetada = parsedData.energia_injetada;
                     let extractedSaldo = parsedData.saldo_kwh;
+                    let cleanText = "";
 
                     // Fallback local redundante/completo para extração e robustez
                     try {
@@ -308,7 +309,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         if (localStampCoords) {
                             setStampCoords(localStampCoords);
                         }
-                        const cleanText = fullText.replace(/\s+/g, ' ');
+                        cleanText = fullText.replace(/\s+/g, ' ');
                         const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
                         const parseConsumption = (raw) => {
                             if (!raw) return 0;
@@ -374,6 +375,71 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         }
                     } catch (fallbackErr) {
                         console.warn('Erro ao rodar o fallback local:', fallbackErr);
+                    }
+
+                    // Auto-vinculação da UC se não selecionada anteriormente no dropdown
+                    let currentUcId = selectedUcId;
+                    if (!currentUcId) {
+                        setLoaderMessage('Buscando correspondência de UC via OCR...');
+                        let extractedUcNumber = parsedData.numero_uc || parsedData.codigo_cliente || parsedData.conta_contrato;
+                        
+                        if (!extractedUcNumber && cleanText) {
+                            const regexMatch = cleanText.match(/(?:Conta Contrato|C[óo]digo do Cliente|Instala[çc][ãa]o)[:\s]*(\d{9,11})/i) ||
+                                               cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
+                                               cleanText.match(/(\d{10})/);
+                            if (regexMatch) {
+                                extractedUcNumber = regexMatch[1] || regexMatch[0];
+                            }
+                        }
+
+                        if (extractedUcNumber) {
+                            const cleanUcNum = String(extractedUcNumber).trim();
+                            console.log('Tentando vincular UC automaticamente com o número:', cleanUcNum);
+                            
+                            const { data: matchedUc, error: ucFindError } = await supabase
+                                .from('consumer_units')
+                                .select(`
+                                    id, numero_uc, concessionaria, titular_conta, status,
+                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                                    subscribers!consumer_units_subscriber_id_fkey(name),
+                                    titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                                `)
+                                .eq('numero_uc', cleanUcNum)
+                                .maybeSingle();
+
+                            if (matchedUc) {
+                                currentUcId = matchedUc.id;
+                                setSelectedUcId(matchedUc.id);
+                                setSelectedUc(matchedUc);
+                                setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
+                                showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
+                            } else {
+                                // Tentar busca parcial caso haja zeros à esquerda ou outros formatos
+                                const { data: matchedUcPartial } = await supabase
+                                    .from('consumer_units')
+                                    .select(`
+                                        id, numero_uc, concessionaria, titular_conta, status,
+                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
+                                        subscribers!consumer_units_subscriber_id_fkey(name),
+                                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                                    `)
+                                    .ilike('numero_uc', `%${cleanUcNum}%`)
+                                    .limit(1);
+
+                                if (matchedUcPartial && matchedUcPartial.length > 0) {
+                                    const matched = matchedUcPartial[0];
+                                    currentUcId = matched.id;
+                                    setSelectedUcId(matched.id);
+                                    setSelectedUc(matched);
+                                    setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
+                                    showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
+                                } else {
+                                    throw new Error(`Nenhuma Unidade Consumidora encontrada para o número extraído: ${cleanUcNum}. Selecione a UC manualmente.`);
+                                }
+                            }
+                        } else {
+                            throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
+                        }
                     }
 
                     // Preenche os dados extraídos no Passo B
@@ -1248,7 +1314,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                             <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div style={{ position: 'relative' }} ref={dropdownRef}>
                                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                                        Unidade Consumidora (UC) *
+                                        Unidade Consumidora (UC) (Opcional - Vinculação automática via OCR)
                                     </label>
                                     <div style={{ position: 'relative' }}>
                                         <input
@@ -1451,7 +1517,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                     </button>
                                     <button 
                                         onClick={triggerUpload}
-                                        disabled={!pdfFile || !selectedUcId}
+                                        disabled={!pdfFile}
                                         className="sandbox-btn sandbox-btn-primary"
                                     >
                                         <Calculator size={16} /> Analisar Conta de Energia
