@@ -7,6 +7,7 @@ import { parseInvoice, createAsaasCharge } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -22,6 +23,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
     const [selectedUcId, setSelectedUcId] = useState('');
     const [selectedUc, setSelectedUc] = useState(null);
     const [pdfFile, setPdfFile] = useState(null);
+    const [applyStamp, setApplyStamp] = useState(true);
+    const [stampCoords, setStampCoords] = useState(null);
     
     // UCs completas (com todos os status) e estados de pesquisa
     const [allUcs, setAllUcs] = useState([]);
@@ -280,13 +283,25 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
                     // Fallback local redundante/completo para extração e robustez
                     try {
-                        setLoaderMessage('Executando validação de redundância...');
                         const pdf = await pdfjsLib.getDocument({ data: atob(base64.split(',')[1] || base64) }).promise;
                         let fullText = "";
+                        let localStampCoords = null;
                         for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
                             const page = await pdf.getPage(i);
                             const textContent = await page.getTextContent();
+                            if (i === 1) {
+                                const targetItem = textContent.items.find(item => 
+                                    item.str.toUpperCase().includes('INFORMAÇÕES IMPORTANTES') || 
+                                    item.str.toUpperCase().includes('AVISOS')
+                                );
+                                if (targetItem) {
+                                    localStampCoords = { x: targetItem.transform[4], y: targetItem.transform[5] };
+                                }
+                            }
                             fullText += textContent.items.map(s => s.str).join(" ") + "\n";
+                        }
+                        if (localStampCoords) {
+                            setStampCoords(localStampCoords);
                         }
                         const cleanText = fullText.replace(/\s+/g, ' ');
                         const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
@@ -404,6 +419,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
     function handleReset() {
         setPdfFile(null);
+        setApplyStamp(true);
+        setStampCoords(null);
         setSelectedUcId('');
         setSearchTerm('');
         setIsDropdownOpen(false);
@@ -434,13 +451,75 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         let publicUrl = null;
         if (pdfFile && selectedUc) {
             try {
+                let fileToUpload = pdfFile;
+
+                if (applyStamp) {
+                    try {
+                        const arrayBuffer = await pdfFile.arrayBuffer();
+                        const pdfDoc = await PDFDocument.load(arrayBuffer);
+                        const pages = pdfDoc.getPages();
+                        
+                        // Discard secondary pages
+                        const initialCount = pages.length;
+                        if (initialCount > 1) {
+                            for (let i = initialCount - 1; i > 0; i--) {
+                                pdfDoc.removePage(i);
+                            }
+                        }
+
+                        const firstPage = pdfDoc.getPages()[0];
+                        const { width, height } = firstPage.getSize();
+                        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+                        
+                        const stampText = "NÃO PAGUE ESSA CONTA - VIA DE CONFERÊNCIA";
+                        const fontSize = 11;
+                        const textWidth = font.widthOfTextAtSize(stampText, fontSize);
+
+                        let stampX = 40;
+                        let stampY = 50;
+
+                        if (stampCoords) {
+                            stampX = stampCoords.x;
+                            stampY = Math.max(20, stampCoords.y - 15); // Just below the title
+                        } else {
+                            // Safe fallback area
+                            stampY = 80; 
+                        }
+
+                        // Draw a highlight background
+                        firstPage.drawRectangle({
+                            x: stampX - 2,
+                            y: stampY - 3,
+                            width: textWidth + 10,
+                            height: fontSize + 6,
+                            color: rgb(1, 0.9, 0.9),
+                            opacity: 0.9
+                        });
+
+                        // Draw the text
+                        firstPage.drawText(stampText, {
+                            x: stampX + 3,
+                            y: stampY,
+                            size: fontSize,
+                            font: font,
+                            color: rgb(0.8, 0, 0),
+                        });
+
+                        const pdfBytes = await pdfDoc.save();
+                        fileToUpload = new File([pdfBytes], pdfFile.name, { type: 'application/pdf' });
+                        console.log("PDF trimmed and stamped successfully in StandaloneAnalysisModal.");
+                    } catch (pdfErr) {
+                        console.warn("Failed to apply stamp/trim in StandaloneAnalysisModal, using original file:", pdfErr);
+                    }
+                }
+
                 const fileName = `manual_${Date.now()}.pdf`;
                 const storagePath = `invoices/${selectedUc.numero_uc}/${fileName}`;
                 
                 // Upload to Supabase Storage
                 const { error: uploadError } = await supabase.storage
                     .from('energy-bills')
-                    .upload(storagePath, pdfFile, {
+                    .upload(storagePath, fileToUpload, {
                         contentType: 'application/pdf',
                         upsert: true
                     });
@@ -1039,8 +1118,27 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                 <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Clique ou arraste o arquivo PDF aqui para iniciar a extração automatizada</p>
                                             </div>
                                         )}
-                                    </div>
                                 </div>
+
+                                {pdfFile && (
+                                    <div style={{ marginTop: '1.25rem', padding: '1rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                id="applyStamp"
+                                                checked={applyStamp}
+                                                onChange={(e) => setApplyStamp(e.target.checked)}
+                                                style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px' }}
+                                            />
+                                            <label htmlFor="applyStamp" style={{ fontSize: '0.85rem', fontWeight: '600', color: '#9a3412', cursor: 'pointer', flex: 1 }}>
+                                                Aviso para Não Pagar 
+                                                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'normal', color: '#c2410c', marginTop: '2px' }}>
+                                                    (Quando ativo: descarta 2ª página e aplica carimbo de segurança no PDF)
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="sandbox-footer sandbox-footer-end">
                                     <button 
