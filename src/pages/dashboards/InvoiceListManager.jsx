@@ -47,10 +47,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [readingStatusFilter, setReadingStatusFilter] = useState('');
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
+    const [ucModalSection, setUcModalSection] = useState('geral');
     const [filterCriterion, setFilterCriterion] = useState('vencimento'); // 'mes_referencia' | 'vencimento'
 
     const handleCalendarCardClick = (uc) => {
         setSelectedUcForModal(uc);
+        setUcModalSection('geral');
         setIsUcModalOpen(true);
     };
 
@@ -1705,8 +1707,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                                                 <span 
                                                                     onClick={() => {
-                                                                        setSelectedInvoiceForSummary(inv);
-                                                                        setIsSummaryModalOpen(true);
+                                                                        const fullUc = ucs.find(u => u.id === inv.consumer_units?.id) || inv.consumer_units;
+                                                                        setSelectedUcForModal(fullUc);
+                                                                        setUcModalSection('financeiro');
+                                                                        setIsUcModalOpen(true);
                                                                     }}
                                                                     style={{
                                                                         display: 'inline-flex',
@@ -1750,7 +1754,24 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         </td>
 
                                                         {/* 2. Mês de ref. */}
-                                                        <td style={{ padding: '1rem', color: '#475569', fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: '600', minWidth: '80px' }}>
+                                                        <td 
+                                                            onClick={() => {
+                                                                setSelectedInvoiceForSummary(inv);
+                                                                setIsSummaryModalOpen(true);
+                                                            }}
+                                                            style={{ 
+                                                                padding: '1rem', 
+                                                                color: '#475569', 
+                                                                fontSize: '0.85rem', 
+                                                                whiteSpace: 'nowrap', 
+                                                                fontWeight: '600', 
+                                                                minWidth: '80px',
+                                                                cursor: 'pointer',
+                                                                transition: 'color 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.textDecoration = 'underline'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.textDecoration = 'none'; }}
+                                                        >
                                                             {inv.mes_referencia ? (() => {
                                                                 const [year, month] = inv.mes_referencia.split('-');
                                                                 return `${month}/${year}`;
@@ -2220,6 +2241,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             {isUcModalOpen && (
                 <ConsumerUnitModal
                     consumerUnit={selectedUcForModal}
+                    defaultSection={ucModalSection}
                     onClose={() => setIsUcModalOpen(false)}
                     onSave={() => {
                         fetchInvoices();

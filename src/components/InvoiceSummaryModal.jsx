@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
+import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -416,23 +416,60 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     };
 
     const handleDelete = async () => {
-        if (!await showConfirm('Tem certeza que deseja excluir permanentemente esta fatura? Esta ação não pode ser desfeita.', 'Excluir Fatura', 'Excluir', 'Cancelar')) return;
+        const confirmCancel = await showConfirm(
+            'Tem certeza que deseja cancelar esta fatura?', 
+            'Cancelar Fatura', 
+            'Sim, Continuar', 
+            'Cancelar'
+        );
+        if (!confirmCancel) return;
+        
+        const deleteConcessionaria = await showConfirm(
+            'Deseja excluir também a conta de energia da concessionária vinculada? (Se escolher NÃO, a conta será mantida com status "Sem Faturamento" e você poderá refaturá-la).', 
+            'Excluir Conta de Energia?', 
+            'Sim, Excluir Tudo', 
+            'Não, Apenas Refaturar'
+        );
         
         setLoading(true);
         try {
-            const { error } = await supabase
-                .from('invoices')
-                .delete()
-                .eq('id', invoice.id);
-
-            if (error) throw error;
+            // Cancel in Asaas if payment exists
+            if (invoice.asaas_payment_id) {
+                console.log('Cancelando cobrança no Asaas:', invoice.asaas_payment_id);
+                await cancelAsaasCharge(invoice.id);
+            }
+            
+            if (deleteConcessionaria) {
+                // Delete completely from database
+                const { error } = await supabase
+                    .from('invoices')
+                    .delete()
+                    .eq('id', invoice.id);
+                if (error) throw error;
+                showAlert('Fatura e conta de energia excluídas com sucesso!', 'success');
+            } else {
+                // Reset status to sem_faturamento and clear asaas fields in database
+                const { error } = await supabase
+                    .from('invoices')
+                    .update({
+                        status: 'sem_faturamento',
+                        asaas_status: null,
+                        asaas_payment_id: null,
+                        asaas_boleto_url: null,
+                        asaas_pdf_storage_url: null,
+                        linha_digitavel: null,
+                        pix_string: null
+                    })
+                    .eq('id', invoice.id);
+                if (error) throw error;
+                showAlert('Cobrança cancelada. A conta de energia foi preservada para refaturamento!', 'success');
+            }
             
             if (onPaymentSuccess) onPaymentSuccess();
             onClose();
-            showAlert('Fatura excluída com sucesso!', 'success');
         } catch (error) {
-            console.error('Erro ao excluir fatura:', error);
-            showAlert('Erro ao excluir: ' + error.message, 'error');
+            console.error('Erro ao processar cancelamento/exclusão da fatura:', error);
+            showAlert('Erro ao processar ação: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
