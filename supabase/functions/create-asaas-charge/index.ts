@@ -39,12 +39,22 @@ serve(async (req) => {
         if (invoice_id) {
             const { data: inv, error: invErr } = await supabase
                 .from('invoices')
-                .select('*, consumer_units (subscriber:subscribers!subscriber_id (*))')
+                .select('*, consumer_units (subscriber_id, subscriber:subscribers!subscriber_id (*))')
                 .eq('id', invoice_id)
                 .single();
             if (invErr) throw invErr;
             invoicesToCharge = [inv];
             subscriber = inv.consumer_units?.subscriber;
+
+            // Fallback: busca direta caso o join não tenha retornado o subscriber
+            if (!subscriber && inv.consumer_units?.subscriber_id) {
+                const { data: subDirect } = await supabase
+                    .from('subscribers')
+                    .select('*')
+                    .eq('id', inv.consumer_units.subscriber_id)
+                    .single();
+                subscriber = subDirect;
+            }
         } else if (subscriber_id) {
             isConsolidated = true;
             let query = supabase
@@ -65,10 +75,21 @@ serve(async (req) => {
                 throw new Error("Nenhuma fatura pendente/ativa e sem cobrança prévia encontrada para este assinante.");
 
             invoicesToCharge = invs;
-            subscriber = invs[0].consumer_units.subscriber;
+            subscriber = invs[0].consumer_units?.subscriber;
+
+            // Fallback: busca direta caso o join não tenha retornado o subscriber
+            if (!subscriber) {
+                const { data: subDirect } = await supabase
+                    .from('subscribers')
+                    .select('*')
+                    .eq('id', subscriber_id)
+                    .single();
+                subscriber = subDirect;
+            }
         }
 
         if (!subscriber) throw new Error("Assinante não encontrado.");
+
 
         // Garantir Cliente no Asaas
         let asaasCustomerId = subscriber.asaas_customer_id;
