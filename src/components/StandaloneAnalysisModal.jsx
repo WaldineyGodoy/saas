@@ -431,6 +431,34 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         if (isSubmitting) return;
         setIsSubmitting(true);
 
+        let publicUrl = null;
+        if (pdfFile && selectedUc) {
+            try {
+                const fileName = `manual_${Date.now()}.pdf`;
+                const storagePath = `invoices/${selectedUc.numero_uc}/${fileName}`;
+                
+                // Upload to Supabase Storage
+                const { error: uploadError } = await supabase.storage
+                    .from('energy-bills')
+                    .upload(storagePath, pdfFile, {
+                        contentType: 'application/pdf',
+                        upsert: true
+                    });
+
+                if (uploadError) throw uploadError;
+
+                // Get Public URL
+                const { data: { publicUrl: url } } = supabase.storage
+                    .from('energy-bills')
+                    .getPublicUrl(storagePath);
+                
+                publicUrl = url;
+            } catch (uploadErr) {
+                console.error("Erro ao fazer upload do PDF:", uploadErr);
+                showAlert("Erro ao salvar arquivo PDF na nuvem, mas tentando salvar dados: " + uploadErr.message, "warning");
+            }
+        }
+
         const ip = typeof formData.iluminacao_publica === 'string' ? parseCurrency(formData.iluminacao_publica) : (Number(formData.iluminacao_publica) || 0);
         const outros = typeof formData.outros_lancamentos === 'string' ? parseCurrency(formData.outros_lancamentos) : (Number(formData.outros_lancamentos) || 0);
         const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
@@ -456,7 +484,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             pix_string: formData.pix_string || null,
             desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.desconto_assinante || 0),
             energy_bill_status: formData.energy_bill_status || 'pendente',
-            status: saveStatus
+            status: saveStatus,
+            concessionaria_pdf_url: publicUrl
         };
 
         try {
