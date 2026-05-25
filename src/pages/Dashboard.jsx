@@ -21,6 +21,7 @@ import BillingList from './dashboards/BillingList';
 import SettingsLayout from './dashboards/SettingsLayout';
 import GridMap from './dashboards/GridMap';
 import GraphNodeView from './dashboards/GraphNodeView';
+import RateioList from './dashboards/RateioList';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
@@ -117,6 +118,7 @@ export default function Dashboard() {
         if (suppliersAllowed.includes(role)) {
             items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
             items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
+            items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check' });
         }
 
         // 8. Billing
@@ -155,6 +157,8 @@ export default function Dashboard() {
             case 'billing': return <BillingList />;
             case 'settings': return <SettingsLayout />;
             case 'grid_map': return <GridMap />;
+            case 'rateio_list': return <RateioList />;
+
             default:
                 return <div style={{ padding: '2rem' }}><h2>Bem-vindo, {profile?.name}</h2><p>Selecione uma opção no menu.</p></div>;
         }

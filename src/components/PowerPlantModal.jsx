@@ -1326,6 +1326,112 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         showAlert('Arquivo CSV e PDF gerados com sucesso!', 'success');
     };
 
+    const handleCreateRateioCard = async () => {
+        if (!usina?.id) {
+            showAlert('Salve a usina antes de criar uma Lista de Rateio.', 'warning');
+            return;
+        }
+        if (selectedUCs.length === 0) {
+            showAlert('Não há UCs vinculadas para criar a lista de rateio.', 'warning');
+            return;
+        }
+
+        const confirmed = await showConfirm(
+            'Criar Lista de Rateio',
+            `Criar um card de Lista de Rateio para a usina "${formData.name}" com ${selectedUCs.length} UC(s) vinculada(s)?`,
+            'Sim, Criar',
+            'Cancelar'
+        );
+        if (!confirmed) return;
+
+        // Build the same processedUCs logic as handleGenerateList
+        const geradora = selectedUCs.find(u => u.tipo_unidade === 'geradora');
+        const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
+        const sortedUCs = geradora ? [geradora, ...beneficiarias] : beneficiarias;
+        const isPorcentagem = formData.rateio_type === 'porcentagem';
+        let processedUCs = [];
+
+        if (isPorcentagem) {
+            let currentTotalPrc = 0;
+            let saldoRemanescenteIndex = -1;
+            const totalCapacity = Number(formData.geracao_estimada_kwh) || 1;
+
+            sortedUCs.forEach((uc, idx) => {
+                if (uc.saldo_remanescente) saldoRemanescenteIndex = idx;
+            });
+            if (saldoRemanescenteIndex === -1) {
+                const geradoraIdx = sortedUCs.findIndex(uc => uc.tipo_unidade === 'geradora');
+                saldoRemanescenteIndex = geradoraIdx !== -1 ? geradoraIdx : 0;
+            }
+
+            for (let i = 0; i < sortedUCs.length; i++) {
+                const uc = { ...sortedUCs[i] };
+                const kWhVal = Number(uc.franquia) || 0;
+                const prcVal = (kWhVal / totalCapacity) * 100;
+                if (currentTotalPrc + prcVal <= 100) {
+                    currentTotalPrc += prcVal;
+                    uc.calculatedPercentage = prcVal;
+                    processedUCs.push(uc);
+                } else if (currentTotalPrc < 100) {
+                    uc.calculatedPercentage = 100 - currentTotalPrc;
+                    currentTotalPrc = 100;
+                    processedUCs.push(uc);
+                    break;
+                } else break;
+            }
+            if (currentTotalPrc < 100 && processedUCs.length > 0) {
+                const targetId = sortedUCs[saldoRemanescenteIndex]?.id;
+                const targetInProcessed = processedUCs.findIndex(u => u.id === targetId);
+                if (targetInProcessed !== -1) {
+                    processedUCs[targetInProcessed].calculatedPercentage = (processedUCs[targetInProcessed].calculatedPercentage || 0) + (100 - currentTotalPrc);
+                } else {
+                    processedUCs[0].calculatedPercentage = (processedUCs[0].calculatedPercentage || 0) + (100 - currentTotalPrc);
+                }
+            }
+        } else {
+            processedUCs = sortedUCs.map((uc, idx) => ({ ...uc, prioridade: idx + 1 }));
+        }
+
+        // Build snapshot with relevant fields only
+        const ucsSnapshot = processedUCs.map(uc => {
+            const sub = subscribers.find(s => s.id === uc.subscriber_id);
+            return {
+                id: uc.id,
+                numero_uc: uc.numero_uc,
+                tipo_unidade: uc.tipo_unidade,
+                status: uc.status,
+                franquia: uc.franquia,
+                consumo_medio_kwh: uc.consumo_medio_kwh,
+                cpf_cnpj: uc.cpf_cnpj_fatura || sub?.cpf_cnpj || '',
+                saldo_remanescente: uc.saldo_remanescente,
+                prioridade: uc.prioridade,
+                calculatedPercentage: uc.calculatedPercentage
+            };
+        });
+
+        try {
+            const now = new Date().toISOString();
+            const { error } = await supabase.from('rateio_lists').insert({
+                usina_id: usina.id,
+                usina_name: formData.name,
+                concessionaria: formData.concessionaria,
+                unidade_geradora: formData.unidade_geradora,
+                qtd_ucs: processedUCs.length,
+                ucs_snapshot: ucsSnapshot,
+                rateio_type: formData.rateio_type,
+                status: 'criada',
+                status_dates: { criada_at: now }
+            });
+
+            if (error) throw error;
+            showAlert(`Lista de Rateio criada com ${processedUCs.length} UC(s)! Acesse o menu "Lista de Rateio" para acompanhar.`, 'success');
+        } catch (err) {
+            console.error('Error creating rateio card:', err);
+            showAlert('Erro ao criar Lista de Rateio: ' + err.message, 'error');
+        }
+    };
+
+
     const getCommitmentStyle = (percentage) => {
         if (percentage < 30) return { 
             gradient: 'linear-gradient(90deg, #22c55e, #10b981)', 
@@ -2730,13 +2836,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={handleGenerateList}
+                                                onClick={handleCreateRateioCard}
                                                 style={{ 
                                                     padding: '0.6rem 1.25rem', background: branding?.primary_color || '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', 
                                                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700
                                                 }}
                                             >
-                                                <Download size={16} /> Anexo IV
+                                                <FileText size={16} /> Criar Lista de Rateio
                                             </button>
                                         </div>
                                     </div>
