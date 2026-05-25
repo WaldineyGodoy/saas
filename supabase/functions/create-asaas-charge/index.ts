@@ -39,7 +39,7 @@ serve(async (req) => {
         if (invoice_id) {
             const { data: inv, error: invErr } = await supabase
                 .from('invoices')
-                .select('*, consumer_units (subscriber_id, subscriber:subscribers!subscriber_id (*))')
+                .select('*, consumer_units (*, subscriber:subscribers!subscriber_id (*))')
                 .eq('id', invoice_id)
                 .single();
             if (invErr) throw invErr;
@@ -164,7 +164,33 @@ serve(async (req) => {
         }
 
         const totalValue = invoicesToCharge.reduce((acc, inv) => acc + Number(inv.valor_a_pagar || 0), 0);
-        const dueDate = customDueDate || invoicesToCharge[0].vencimento || new Date().toISOString().split('T')[0];
+        
+        let dueDate = customDueDate;
+        if (!dueDate && invoicesToCharge[0]) {
+            const refMonth = invoicesToCharge[0].mes_referencia;
+            const dueDay = invoicesToCharge[0].consumer_units?.dia_vencimento;
+            if (refMonth && dueDay) {
+                const [yStr, mStr] = refMonth.split('-');
+                let year = parseInt(yStr, 10);
+                let month = parseInt(mStr, 10);
+                
+                let nextMonth = month + 1;
+                let nextYear = year;
+                if (nextMonth > 12) {
+                    nextMonth = 1;
+                    nextYear = year + 1;
+                }
+                
+                const formattedDay = String(dueDay).padStart(2, '0');
+                const formattedMonth = String(nextMonth).padStart(2, '0');
+                dueDate = `${nextYear}-${formattedMonth}-${formattedDay}`;
+            } else {
+                dueDate = invoicesToCharge[0].vencimento;
+            }
+        }
+        if (!dueDate) {
+            dueDate = new Date().toISOString().split('T')[0];
+        }
 
         // Garantir valor com no máximo duas casas decimais
         const roundedValue = Number(totalValue.toFixed(2));

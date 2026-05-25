@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
-import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock } from 'lucide-react';
+import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { createAsaasCharge } from '../lib/api';
+import { createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import './InvoicesModal.css';
 
 import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess }) {
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
@@ -17,6 +22,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const [paymentStatus, setPaymentStatus] = useState(null); // 'success' | 'error'
     const [isEditing, setIsEditing] = useState(false);
     const [editData, setEditData] = useState(null);
+
+    const hiddenRef = React.useRef(null);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [invoiceToDownload, setInvoiceToDownload] = useState(null);
 
     if (!invoice) return null;
 
@@ -118,13 +127,148 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
     };
 
+    const getBoletoDueDate = () => {
+        const refMonth = invoice.mes_referencia; // e.g. "2026-04-01"
+        const dueDay = consumerUnit?.dia_vencimento; // e.g. 5
+        
+        if (!refMonth || !dueDay) {
+            return invoice.vencimento || new Date().toISOString().split('T')[0];
+        }
+        
+        const [yStr, mStr] = refMonth.split('-');
+        let year = parseInt(yStr, 10);
+        let month = parseInt(mStr, 10);
+        
+        let nextMonth = month + 1;
+        let nextYear = year;
+        if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear = year + 1;
+        }
+        
+        const formattedDay = String(dueDay).padStart(2, '0');
+        const formattedMonth = String(nextMonth).padStart(2, '0');
+        
+        return `${nextYear}-${formattedMonth}-${formattedDay}`; // YYYY-MM-DD
+    };
+
+    const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null) => {
+        const inv = invToUse || invoice;
+        const currentBoletoUrl = forcedBoletoUrl || invoice.asaas_boleto_url; 
+        
+        if (!inv || !currentBoletoUrl) {
+            showAlert('Boleto não disponível para esta fatura.', 'warning');
+            return null;
+        }
+
+        setIsGeneratingPdf(true);
+        setInvoiceToDownload(inv);
+        console.log('Generating Combined PDF for invoice:', inv.id);
+
+        try {
+            const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (consumerUnit?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const ucNumber = consumerUnit?.numero_uc || '';
+            const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
+
+            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir
+            const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
+                              inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
+                              inv.asaas_pdf_storage_url?.includes('asaas.com');
+            
+            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
+                console.log("Obtendo URL assinada para PDF individual...");
+                const { data: signedData, error: signedError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .createSignedUrl(`${inv.id}.pdf`, 60);
+
+                if (!signedError && signedData?.signedUrl) {
+                    // Se estivermos gerando para notificação, precisamos do blob
+                    const { data: fileBlob } = await supabase.storage.from('invoices_pdfs').download(`${inv.id}.pdf`);
+                    return fileBlob;
+                }
+            }
+
+            // Fallback: Gerar novo
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            const element = hiddenRef.current;
+            if (!element) {
+                console.error("Ref hiddenRef ainda é null após 2s no Modal de Fatura Individual.");
+                throw new Error("Elemento de captura não encontrado no DOM.");
+            }
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: "#f8fafc"
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfSummary = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdfSummary.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdfSummary.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+            const summaryBase64 = pdfSummary.output('datauristring');
+            const asaasUrl = currentBoletoUrl; 
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
+
+            // OTIMIZAÇÃO: Fazer upload para o Storage para os próximos downloads serem instantâneos
+            try {
+                const storagePath = `${inv.id}.pdf`;
+                console.log(`Subindo PDF individual para o Storage: ${storagePath}`);
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('invoices_pdfs')
+                    .upload(storagePath, mergedBlob, {
+                        upsert: true,
+                        contentType: 'application/pdf'
+                    });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('invoices_pdfs')
+                        .getPublicUrl(storagePath);
+                    
+                    const authenticatedUrl = publicUrl.replace('/public/', '/authenticated/');
+
+                    await supabase
+                        .from('invoices')
+                        .update({ asaas_pdf_storage_url: authenticatedUrl })
+                        .eq('id', inv.id);
+                        
+                    console.log("Storage e Banco de Dados atualizados para PDF Individual (Modal Fatura).");
+                }
+            } catch (storageErr) {
+                console.warn("Erro ao processar persistência no Storage:", storageErr);
+            }
+
+            return mergedBlob;
+        } catch (error) {
+            console.error('Erro ao gerar PDF combinado:', error);
+            return null;
+        } finally {
+            setIsGeneratingPdf(false);
+            setInvoiceToDownload(null);
+        }
+    };
+
     const handleGenerateBilling = async () => {
-        const confirmed = await showConfirm(`Deseja gerar faturamento e emitir cobrança (Asaas) para esta conta no valor de ${formatCurrency(invoice.valor_a_pagar)}?`, 'Gerar Faturamento');
+        const boletoDueDate = getBoletoDueDate();
+        const formattedBoletoDueDate = new Date(boletoDueDate + 'T12:00:00').toLocaleDateString('pt-BR');
+
+        const confirmed = await showConfirm(
+            `Deseja gerar faturamento e emitir cobrança (Asaas) para esta conta no valor de ${formatCurrency(invoice.valor_a_pagar)} com vencimento do boleto em ${formattedBoletoDueDate}?`, 
+            'Gerar Faturamento'
+        );
         if (!confirmed) return;
 
         setLoading(true);
         try {
-            const result = await createAsaasCharge(invoice.id, 'invoice');
+            const result = await createAsaasCharge(invoice.id, 'invoice', { dueDate: boletoDueDate });
 
             if (!result.success && !result.url) {
                 throw new Error('Falha ao gerar cobrança no Asaas.');
@@ -141,7 +285,32 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
             if (updateError) throw updateError;
 
-            showAlert('Faturamento gerado e boleto emitido com sucesso!', 'success');
+            // 2. Chamar o merger de PDF e as notificações automáticas
+            const monthYear = invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+            const cleanName = (consumerUnit?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const ucNumber = consumerUnit?.numero_uc || '';
+            const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
+
+            const pdfBlob = await handleDownloadCombined(invoice, result.url);
+            
+            if (pdfBlob) {
+                await sendCombinedNotification({
+                    recipientEmail: consumerUnit?.subscribers?.email,
+                    recipientPhone: consumerUnit?.subscribers?.phone,
+                    subscriberName: consumerUnit?.subscribers?.name,
+                    dueDate: formattedBoletoDueDate,
+                    value: Number(invoice.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    pdfBlob: pdfBlob,
+                    fileName: fileName,
+                    subscriberId: consumerUnit?.subscribers?.id,
+                    ucId: invoice.uc_id,
+                    profileId: profile?.id
+                });
+                showAlert('Faturamento gerado, PDF combinado mesclado e notificações enviadas com sucesso!', 'success');
+            } else {
+                showAlert('Faturamento gerado com sucesso, mas houve um problema ao gerar o PDF combinado para envio.', 'warning');
+            }
+
             if (result.url) {
                 window.open(result.url, '_blank');
             }
@@ -249,6 +418,147 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         } finally {
             setLoading(false);
         }
+    };
+
+    const renderHiddenInvoiceDetail = (inv) => {
+        if (!inv) return null;
+        const uc = consumerUnit;
+        const statusLabel = inv.status?.toUpperCase() || 'N/A';
+        const statusColor = inv.status === 'pago' ? '#27ae60' : (inv.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+        const subscriber = consumerUnit?.subscribers;
+
+        return (
+            <div className="pdf-capture-wrapper">
+                <div className="detail-card">
+                    <div className="branded-header">
+                        {branding?.logo_url ? (
+                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                        ) : (
+                            <div className="company-info-fallback">
+                                <FileText size={24} color="#FF6600" />
+                                <span>{branding?.company_name || 'B2W Energia'}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                        <div className="header-info">
+                            <Info size={20} color="#ffffff" />
+                            <h3>Detalhamento da Fatura</h3>
+                        </div>
+                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                            {statusLabel}
+                        </span>
+                    </div>
+
+                    <div className="detail-grid">
+                        <div className="detail-section dark">
+                            <div className="detail-item">
+                                <label>ASSINANTE</label>
+                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>NÚMERO DA UC</label>
+                                    <span>{uc?.numero_uc || 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
+                                </div>
+                            </div>
+                            <div className="detail-row">
+                                <div className="detail-item">
+                                    <label>MÊS REFERÊNCIA</label>
+                                    <span>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <label>VENCIMENTO</label>
+                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                                        {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="detail-item">
+                                <label>TIPO DE LIGAÇÃO</label>
+                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
+                                    {uc?.tipo_ligacao || 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="detail-section metrics">
+                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
+
+                            <div className="metric-line">
+                                <span>+ Custo da Energia Compensada (Líquida):</span>
+                                <span>
+                                    {(() => {
+                                        const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                        const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
+                                        return formatCurrency(energiaCompensadaReais);
+                                    })()}
+                                </span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Iluminação Pública:</span>
+                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Tarifa Mínima e Excedentes:</span>
+                                <span>{formatCurrency(inv.tarifa_minima)}</span>
+                            </div>
+                            <div className="metric-line">
+                                <span>+ Outros Lançamentos:</span>
+                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
+                            </div>
+
+                            <div className="economy-box">
+                                <div className="metric-line economy">
+                                    <span>Economia Gerada:</span>
+                                    <span>
+                                        - {(() => {
+                                            const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
+                                            const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                            const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
+                                            return formatCurrency(economiaReais);
+                                        })()}
+                                    </span>
+                                </div>
+                                <div className="metric-line discount">
+                                    <span>Desconto Aplicado:</span>
+                                    <span>{inv.desconto_aplicado !== undefined ? inv.desconto_aplicado : (uc?.desconto_assinante || 0)}%</span>
+                                </div>
+                            </div>
+
+                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
+                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
+                                <div className="total-value">
+                                    {(() => {
+                                        const rawConsumo = Number(inv.consumo_kwh) || 0;
+                                        const rawCompensado = Number(inv.consumo_compensado) || 0;
+                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+                                        
+                                        const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
+                                        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+                                        const ip = Number(inv.iluminacao_publica) || 0;
+                                        const outros = Number(inv.outros_lancamentos) || 0;
+                                        
+                                        const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
+                                        return formatCurrency(totalCalculado);
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const statusColors = {
@@ -843,11 +1153,30 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             <span style={{ fontWeight: 600 }}>Pagamento processado e status atualizado com sucesso!</span>
                         </div>
                     )}
-                </div>
 
-                <style>{`
-                    @keyframes spin { to { transform: rotate(360deg); } }
-                `}</style>
+                    {/* Hidden wrapper for PDF capture */}
+                    <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
+                        <div ref={hiddenRef}>
+                            {invoiceToDownload && renderHiddenInvoiceDetail(invoiceToDownload)}
+                        </div>
+                    </div>
+
+                    {isGeneratingPdf && (
+                        <div className="generation-overlay" style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', zIndex: 1050, color: 'white', flexDirection: 'column'
+                        }}>
+                            <Loader2 size={48} className="spin-animation" style={{ color: branding?.secondary_color || '#ff6600', animation: 'spin 1s linear infinite' }} />
+                            <p style={{ marginTop: '1rem', fontWeight: 600, fontSize: '1.1rem' }}>Gerando PDF combinado...</p>
+                            <p style={{ fontSize: '0.875rem', opacity: 0.8 }}>Mesclando Detalhamento com Boleto Asaas.</p>
+                        </div>
+                    )}
+
+                    <style>{`
+                        @keyframes spin { to { transform: rotate(360deg); } }
+                    `}</style>
+                </div>
             </div>
         </div>
     );
