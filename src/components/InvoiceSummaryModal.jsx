@@ -147,9 +147,27 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
         
         const formattedDay = String(dueDay).padStart(2, '0');
-        const formattedMonth = String(nextMonth).padStart(2, '0');
+        let formattedMonth = String(nextMonth).padStart(2, '0');
         
-        return `${nextYear}-${formattedMonth}-${formattedDay}`; // YYYY-MM-DD
+        let calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`; // YYYY-MM-DD
+        
+        // Evitar retroatividade: Se a data calculada for menor que hoje, avança para o próximo mês
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const calculatedDate = new Date(calculatedDateStr + 'T12:00:00');
+        
+        if (calculatedDate < today) {
+            nextMonth += 1;
+            if (nextMonth > 12) {
+                nextMonth = 1;
+                nextYear += 1;
+            }
+            formattedMonth = String(nextMonth).padStart(2, '0');
+            calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`;
+        }
+        
+        return calculatedDateStr; // YYYY-MM-DD
     };
 
     const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null) => {

@@ -182,8 +182,28 @@ serve(async (req) => {
                 }
                 
                 const formattedDay = String(dueDay).padStart(2, '0');
-                const formattedMonth = String(nextMonth).padStart(2, '0');
-                dueDate = `${nextYear}-${formattedMonth}-${formattedDay}`;
+                let formattedMonth = String(nextMonth).padStart(2, '0');
+                
+                let calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`;
+                
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const [curY, curM, curD] = today.toISOString().split('T')[0].split('-');
+                const todayObj = new Date(Number(curY), Number(curM) - 1, Number(curD));
+                
+                const calcDateObj = new Date(nextYear, nextMonth - 1, dueDay);
+                
+                if (calcDateObj < todayObj) {
+                    nextMonth += 1;
+                    if (nextMonth > 12) {
+                        nextMonth = 1;
+                        nextYear += 1;
+                    }
+                    formattedMonth = String(nextMonth).padStart(2, '0');
+                    calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`;
+                }
+                
+                dueDate = calculatedDateStr;
             } else {
                 dueDate = invoicesToCharge[0].vencimento;
             }
