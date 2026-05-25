@@ -133,7 +133,22 @@ serve(async (req) => {
       if (!url) continue;
       try {
         console.log(`Merge [${i+1}/${totalUrls}]: Buscando conta de energia em ${url}`);
-        const energyRes = await fetch(url);
+        
+        let energyRes;
+        const isSupabaseUrl = url.includes('storage/v1/object') || url.includes('.supabase.co');
+        
+        if (isSupabaseUrl) {
+          console.log(`Merge: Detectada URL interna do Supabase. Utilizando cabeçalhos de autenticação.`);
+          energyRes = await fetch(url, {
+            headers: { 
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            }
+          });
+        } else {
+          energyRes = await fetch(url);
+        }
+
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer();
           const energyBillDoc = await PDFDocument.load(energyBytes);
