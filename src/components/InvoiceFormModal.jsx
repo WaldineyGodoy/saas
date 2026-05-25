@@ -824,13 +824,29 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                     // Fetch subscriber data ON-DEMAND to ensure we have the most up-to-date values
                     const { data: currentInv, error: invFetchErr } = await supabase
                         .from('invoices')
-                        .select('*, consumer_units(subscriber_id)')
+                        .select('*')
                         .eq('id', targetId)
                         .single();
                     
                     if (invFetchErr) throw invFetchErr;
 
-                    const subId = currentInv?.consumer_units?.subscriber_id || selectedUc?.subscriber_id;
+                    let currentUc = selectedUc;
+                    if (currentInv?.uc_id) {
+                        const { data: ucData } = await supabase
+                            .from('consumer_units')
+                            .select(`
+                                id, numero_uc, concessionaria, titular_conta, status,
+                                tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id
+                            `)
+                            .eq('id', currentInv.uc_id)
+                            .single();
+                        if (ucData) {
+                            currentUc = ucData;
+                            setSelectedUc(ucData);
+                        }
+                    }
+
+                    const subId = currentUc?.subscriber_id;
                     
                     if (subId) {
                         const { data: subData, error: subFetchErr } = await supabase
@@ -851,7 +867,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                 showAlert('Enviando notificações (E-mail/WhatsApp)...', 'info');
                                 const monthYearStr = currentInv.mes_referencia ? currentInv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
                                 const cleanSubName = (subData.name || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
-                                const ucNum = selectedUc?.numero_uc || '';
+                                const ucNum = currentUc?.numero_uc || '';
                                 const descriptiveFileName = `Fatura_${cleanSubName}_${ucNum}_${monthYearStr}.pdf`;
 
                                 await sendCombinedNotification({
