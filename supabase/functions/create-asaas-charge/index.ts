@@ -274,7 +274,7 @@ serve(async (req) => {
             const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh} kWh` : '0 kWh';
             const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado} kWh` : '0 kWh';
             
-            description = `Identificação da Fatura: ${titularConta}\nUC: ${ucNum}\nEndereço: ${addressStr}\nMês Ref: ${formattedRef}\nEnergia Consumida: ${cons}\nEnergia Compensada: ${comp}`;
+            description = `Identificação: ${titularConta} | UC: ${ucNum} | Ref: ${formattedRef}\nEndereço: ${addressStr}\nConsumo: ${cons} | Compensado: ${comp}`;
         }
 
         // Limitar a descrição a 500 caracteres (limite máximo do Asaas para evitar erros)
