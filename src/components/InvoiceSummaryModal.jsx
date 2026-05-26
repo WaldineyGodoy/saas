@@ -207,12 +207,16 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 }
             }
 
-            // Fallback: Gerar novo
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const element = hiddenRef.current;
-            if (!element) {
-                console.error("Ref hiddenRef ainda é null após 2s no Modal de Fatura Individual.");
+            // Fallback: Gerar novo - Wait for DOM with retry
+            let element = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                element = hiddenRef.current;
+                if (element && element.querySelector && element.innerHTML.length > 100) break;
+                console.log(`Aguardando hiddenRef render (tentativa ${attempt + 1}/10)...`);
+            }
+            if (!element || element.innerHTML.length < 100) {
+                console.error("Ref hiddenRef ainda é null após tentativas no Modal de Fatura Individual.");
                 throw new Error("Elemento de captura não encontrado no DOM.");
             }
 
@@ -1092,11 +1096,25 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             </a>
                                         )}
 
-                                        {!isEditing && invoice.asaas_pdf_storage_url && (
-                                            <a 
-                                                href={invoice.asaas_pdf_storage_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                        {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'sem_faturamento' && (
+                                            <button 
+                                                type="button"
+                                                onClick={async () => {
+                                                    const blob = await handleDownloadCombined(invoice, invoice.asaas_boleto_url);
+                                                    if (blob) {
+                                                        const url = URL.createObjectURL(blob);
+                                                        const a = document.createElement('a');
+                                                        a.href = url;
+                                                        const monthYear = invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
+                                                        const cleanName = (consumerUnit?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_').replace(/[^\w]/g, '');
+                                                        a.download = `Fatura_${cleanName}_${consumerUnit?.numero_uc || ''}_${monthYear}.pdf`;
+                                                        document.body.appendChild(a);
+                                                        a.click();
+                                                        document.body.removeChild(a);
+                                                        URL.revokeObjectURL(url);
+                                                    }
+                                                }}
+                                                disabled={isGeneratingPdf}
                                                 style={{
                                                     alignSelf: 'flex-start',
                                                     display: 'inline-flex',
@@ -1109,15 +1127,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     color: '#0369a1',
                                                     fontSize: '0.75rem',
                                                     fontWeight: 700,
-                                                    textDecoration: 'none',
+                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
                                                     transition: 'all 0.2s',
                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                 }}
-                                                onMouseEnter={e => { e.currentTarget.style.background = '#bae6fd'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = '#e0f2fe'; }}
+                                                onMouseEnter={e => { if(!isGeneratingPdf) e.currentTarget.style.background = '#bae6fd'; }}
+                                                onMouseLeave={e => { if(!isGeneratingPdf) e.currentTarget.style.background = '#e0f2fe'; }}
                                             >
-                                                <FileText size={13} /> Visualizar Fatura (PDF)
-                                            </a>
+                                                <FileText size={13} /> {isGeneratingPdf ? 'Gerando...' : 'Visualizar Fatura (PDF)'}
+                                            </button>
                                         )}
                                     </div>
                                 </div>

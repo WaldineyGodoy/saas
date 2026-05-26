@@ -673,13 +673,16 @@ Associado`;
             // 2. Set data for hidden render (This triggers the component to appear in the DOM)
             setConsolidatedToDownload({ ...consolidated, items: invs });
 
-            // 3. Wait for React to render the component and attach the ref
-            // We use two frames or a slightly longer timeout to be safe
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const element = hiddenConsolidatedRef.current;
-            if (!element) {
-                console.error("Ref hiddenConsolidatedRef ainda é null após 2s. Verifique se o componente está sendo renderizado no JSX.");
+            // 3. Wait for React to render the component and attach the ref - with retry
+            let element = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                element = hiddenConsolidatedRef.current;
+                if (element && element.querySelector && element.innerHTML.length > 100) break;
+                console.log(`Aguardando hiddenConsolidatedRef render (tentativa ${attempt + 1}/10)...`);
+            }
+            if (!element || element.innerHTML.length < 100) {
+                console.error("Ref hiddenConsolidatedRef ainda é null após tentativas.");
                 throw new Error("Elemento de captura consolidado não encontrado no DOM.");
             }
 
@@ -822,14 +825,16 @@ Associado`;
                 console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
 
-            // Fallback: Gerar novo
-            // Pequeno delay para garantir que o renderHiddenInvoiceDetail aconteça
-            // Aumentado timeout para garantir que o React monte o componente e o CSS/Imagens carreguem
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const element = hiddenRef.current;
-            if (!element) {
-                console.error("Ref hiddenRef ainda é null após 2s em handleDownloadCombined.");
+            // Fallback: Gerar novo - Wait for DOM with retry
+            let element = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                element = hiddenRef.current;
+                if (element && element.querySelector && element.innerHTML.length > 100) break;
+                console.log(`Aguardando hiddenRef render (tentativa ${attempt + 1}/10)...`);
+            }
+            if (!element || element.innerHTML.length < 100) {
+                console.error("Ref hiddenRef ainda é null após tentativas em handleDownloadCombined.");
                 throw new Error("Elemento de captura individual não encontrado no DOM.");
             }
 
@@ -1461,7 +1466,6 @@ Associado`;
                 </div>
             </div>
         );
-    };
     };
 
     const handleCepBlur = async () => {

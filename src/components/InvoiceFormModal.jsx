@@ -130,15 +130,33 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
     // Update Selected UC when changed
     useEffect(() => {
-        if (formData.uc_id && ucs) {
-            const uc = ucs.find(u => u.id === formData.uc_id);
-            setSelectedUc(uc);
+        const fetchUcDataAndAddress = async () => {
+            if (formData.uc_id && ucs) {
+                let uc = ucs.find(u => u.id === formData.uc_id);
+                
+                // Fetch full UC details with address on-demand to guarantee we have it
+                try {
+                    const { data: fullUc } = await supabase
+                        .from('consumer_units')
+                        .select('*, subscribers(name)')
+                        .eq('id', formData.uc_id)
+                        .single();
+                    if (fullUc) {
+                        uc = fullUc;
+                    }
+                } catch (e) {
+                    console.warn("Could not fetch full UC on-demand, falling back to props:", e);
+                }
 
-            // Buscar o billing_mode do assinante
-            if (uc?.subscriber_id) {
-                fetchSubscriberBillingMode(uc.subscriber_id);
+                setSelectedUc(uc);
+
+                // Buscar o billing_mode do assinante
+                if (uc?.subscriber_id) {
+                    fetchSubscriberBillingMode(uc.subscriber_id);
+                }
             }
-        }
+        };
+        fetchUcDataAndAddress();
     }, [formData.uc_id, ucs]);
 
     // Fetch contas de energia sem faturamento para a UC selecionada
@@ -478,12 +496,16 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
 
-            // Fallback: Gerar novo (Aumentado timeout para capturar elementos carregados)
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const element = hiddenRef.current;
-            if (!element) {
-                console.error("Ref hiddenRef ainda é null após 2s no Modal de Fatura Individual.");
+            // Fallback: Gerar novo - Wait for DOM with retry
+            let element = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                element = hiddenRef.current;
+                if (element && element.querySelector && element.innerHTML.length > 100) break;
+                console.log(`Aguardando hiddenRef render (tentativa ${attempt + 1}/10)...`);
+            }
+            if (!element || element.innerHTML.length < 100) {
+                console.error("Ref hiddenRef ainda é null após tentativas no Modal de Fatura.");
                 throw new Error("Elemento de captura não encontrado no DOM.");
             }
 
@@ -565,139 +587,228 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
     const renderHiddenInvoiceDetail = (inv) => {
         if (!inv) return null;
         const uc = selectedUc;
-        const statusLabel = inv.status?.toUpperCase() || 'N/A';
-        const statusColor = inv.status === 'pago' ? '#27ae60' : (inv.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+        const statusColorsPdf = {
+            pago: { color: '#27ae60', label: 'PAGO' },
+            a_vencer: { color: '#2563eb', label: 'A VENCER' },
+            sem_faturamento: { color: '#2563eb', label: 'A VENCER' },
+            atrasado: { color: '#dc2626', label: 'ATRASADO' },
+            cancelado: { color: '#64748b', label: 'CANCELADO' }
+        };
+        const currentPdfStatus = statusColorsPdf[inv.status] || statusColorsPdf.a_vencer;
+        const statusLabel = currentPdfStatus.label;
+        const statusColor = currentPdfStatus.color;
 
-        // Reuse form math/data
+        const rawConsumo = Number(inv.consumo_kwh) || 0;
+        const rawCompensado = Number(inv.consumo_compensado) || 0;
+        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+        
+        // Calculations
+        const consumoTotalReais = rawConsumo * rawTarifa;
+        const energiaCompensadaReais = rawCompensado * rawTarifa * (1 - multiplier);
+        const ip = Number(inv.iluminacao_publica) || 0;
+        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+        const outros = Number(inv.outros_lancamentos) || 0;
+        const outrosTotal = tarifaMinimaExcedentes + outros;
+        const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
+
+        const formatCurrency = (val) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+        };
+
         return (
-            <div className="pdf-capture-wrapper">
-                <div className="detail-card">
-                    <div className="branded-header">
+            <div style={{
+                width: '800px',
+                minWidth: '800px',
+                padding: '40px',
+                background: '#f8fafc',
+                boxSizing: 'border-box',
+                fontFamily: "'Inter', 'Montserrat', 'Helvetica', 'Arial', sans-serif"
+            }}>
+                <div style={{
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    width: '100%'
+                }}>
+                    <div style={{
+                        padding: '16px 24px',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        alignItems: 'center',
+                        background: '#ffffff'
+                    }}>
                         {branding?.logo_url ? (
-                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                            <img src={branding.logo_url} alt={branding.company_name} style={{ maxHeight: '48px', maxWidth: '180px', objectFit: 'contain' }} />
                         ) : (
-                            <div className="company-info-fallback">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '700', color: '#003366', fontSize: '1.1rem' }}>
                                 <FileText size={24} color="#FF6600" />
                                 <span>{branding?.company_name || 'B2W Energia'}</span>
                             </div>
                         )}
                     </div>
-                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                        <div className="header-info">
+                    <div style={{
+                        backgroundColor: branding?.primary_color || '#003366',
+                        padding: '20px 24px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <Info size={20} color="#ffffff" />
-                            <h3>Detalhamento da Fatura</h3>
+                            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem', fontWeight: 600 }}>Detalhamento da Fatura</h3>
                         </div>
-                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                        <span style={{
+                            padding: '6px 16px',
+                            borderRadius: '30px',
+                            color: '#ffffff',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            backgroundColor: statusColor
+                        }}>
                             {statusLabel}
                         </span>
                     </div>
-
-                    <div className="detail-grid">
-                        <div className="detail-section dark">
-                            <div className="detail-item">
-                                <label>ASSINANTE</label>
-                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || selectedUc?.subscribers?.name || selectedUc?.titular_conta || 'Assinante'}</span>
+ 
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.2fr',
+                        padding: '24px',
+                        gap: '24px',
+                        boxSizing: 'border-box',
+                        width: '100%',
+                        background: '#ffffff'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '24px',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '20px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ASSINANTE</label>
+                                <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{subscriber?.name || selectedUc?.subscribers?.name || selectedUc?.titular_conta || 'Assinante'}</span>
                             </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>NÚMERO DA UC</label>
-                                    <span>{selectedUc?.numero_uc || 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>NÚMERO DA UC</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{selectedUc?.numero_uc || 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
-                                    <span>{selectedUc?.identification || selectedUc?.titular_conta || 'Unidade Consumidora'}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{selectedUc?.identification || selectedUc?.titular_conta || 'Unidade Consumidora'}</span>
                                 </div>
                             </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>MÊS REFERÊNCIA</label>
-                                    <span>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>MÊS REFERÊNCIA</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>VENCIMENTO</label>
-                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>VENCIMENTO</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#dc2626' }}>
                                         {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
                                     </span>
                                 </div>
                             </div>
-                            <div className="detail-item">
-                                <label>TIPO DE LIGAÇÃO</label>
-                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                                    {selectedUc?.tipo_ligacao || 'N/A'}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ENDEREÇO DA UC</label>
+                                <span style={{ fontSize: '0.8rem', color: '#1e293b', wordBreak: 'break-word', fontWeight: '500', lineHeight: '1.25' }}>
+                                    {(() => {
+                                        const addr = uc?.address;
+                                        if (!addr) return 'Endereço não cadastrado';
+                                        if (typeof addr === 'string') return addr;
+                                        return [
+                                            addr.rua,
+                                            addr.numero ? `Nº ${addr.numero}` : '',
+                                            addr.complemento,
+                                            addr.bairro,
+                                            addr.cidade ? `${addr.cidade}-${addr.uf}` : ''
+                                        ].filter(Boolean).join(', ') || 'Endereço não cadastrado';
+                                    })()}
                                 </span>
                             </div>
                         </div>
-                        <div className="detail-section metrics">
-                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
-
-                            <div className="metric-line">
-                                <span>+ Custo da Energia Compensada (Líquida):</span>
-                                <span>
-                                    {(() => {
-                                        const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
-                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        // Use snapshot from invoice if available
-                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                        const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
-                                        return formatCurrency(energiaCompensadaReais);
-                                    })()}
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <div style={{ width: '100%' }}>
+                                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', marginTop: 0, marginBottom: '8px', borderBottom: '2px solid #cbd5e1', paddingBottom: '4px' }}>
+                                    Composição da Fatura
+                                </h4>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b', fontWeight: 700 }}>
+                                            <th style={{ padding: '6px 0', fontSize: '0.72rem', textTransform: 'uppercase' }}>Descrição do Lançamento</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'center', fontSize: '0.72rem', textTransform: 'uppercase' }}>Quantitativo</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'right', fontSize: '0.72rem', textTransform: 'uppercase' }}>Valores</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Energia Compensada Desc. {discountSnapshot}% -</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#166534', fontWeight: '600' }}>- {rawCompensado} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>{formatCurrency(energiaCompensadaReais)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Iluminação Pública</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Outros</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '6px', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
+                                    * Valor calculado com base na tarifa cheia da concessionária.
+                                </div>
+                            </div>
+ 
+                            <div style={{
+                                marginTop: '8px',
+                                padding: '12px 16px',
+                                borderRadius: '12px',
+                                background: '#eff6ff',
+                                border: '1.5px solid #bfdbfe',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                boxSizing: 'border-box'
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e3a8a', letterSpacing: '0.05em' }}>
+                                    VALOR DO ASSINANTE (BOLETO)
                                 </span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Iluminação Pública:</span>
-                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Tarifa Mínima e Excedentes:</span>
-                                <span>{formatCurrency(inv.tarifa_minima)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Outros Lançamentos:</span>
-                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
-                            </div>
-
-                            <div className="economy-box">
-                                <div className="metric-line economy">
-                                    <span>Economia Gerada:</span>
-                                    <span>
-                                        - {(() => {
-                                            const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
-                                            const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                            // Use snapshot from invoice if available
-                                            const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
-                                            return formatCurrency(economiaReais);
-                                        })()}
-                                    </span>
-                                </div>
-                                <div className="metric-line discount">
-                                    <span>Desconto Aplicado:</span>
-                                    <span>{inv.desconto_aplicado !== undefined ? inv.desconto_aplicado : (uc?.desconto_assinante || 0)}%</span>
-                                </div>
-                            </div>
-
-                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
-                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
-                                <div className="total-value">
-                                    {(() => {
-                                        const rawConsumo = Number(inv.consumo_kwh) || 0;
-                                        const rawCompensado = Number(inv.consumo_compensado) || 0;
-                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        // Use snapshot from invoice if available
-                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                        
-                                        const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
-                                        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
-                                        const ip = Number(inv.iluminacao_publica) || 0;
-                                        const outros = Number(inv.outros_lancamentos) || 0;
-                                        
-                                        const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
-                                        return formatCurrency(totalCalculado);
-                                    })()}
-                                </div>
+                                <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1e3a8a' }}>
+                                    {formatCurrency(totalCalculado)}
+                                </span>
                             </div>
                         </div>
                     </div>
