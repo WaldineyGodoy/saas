@@ -1,14 +1,15 @@
 # Histórico de Atualizações - CRM B2W Energia
 
-## [26/05/2026] - Customização de Instruções do Boleto Asaas com Dados da UC e Energia
-- **Enriquecimento de Informações**: Implementada a formatação dinâmica do campo de instruções (*description*) do boleto do Asaas para incluir metadados detalhados de faturamento que auxiliam o cliente final na identificação do documento.
-- **Campos Adicionados**:
-  - **Identificação da fatura**: ID curto único da fatura (`Fatura ID`).
+## [26/05/2026] - Customização de Instruções do Boleto Asaas com Identificação e Endereço da UC
+- **Enriquecimento e Rastreabilidade de Informações**: Atualizada a formatação dinâmica do campo de instruções (*description*) do boleto do Asaas para incorporar dados de identificação e localização da UC, tornando a cobrança 100% clara para o cliente final.
+- **Campos Disponibilizados no Boleto**:
+  - **Identificação da Fatura**: Substituído o antigo ID técnico da fatura pela identificação personalizada cadastrada no modal da UC (`titular_conta`), como "Nome como aparece na conta".
   - **Número da UC**: Identificador correspondente da Unidade Consumidora (`UC`).
-  - **Mês de Referência**: Exibido de forma padronizada em formato brasileiro (`MM/AAAA`).
+  - **Endereço da UC**: Renderização do endereço completo da UC estruturado no formato `Rua, Número - Bairro - Cidade/UF` a partir do campo JSONB `address`.
+  - **Mês de Referência**: Exibido de forma legível em formato brasileiro (`MM/AAAA`).
   - **Energia Consumida**: Exibição da quantidade total consumida em kWh.
   - **Energia Compensada**: Detalhamento dos créditos de energia compensados em kWh.
-- **Suporte a Faturas Consolidadas**: Caso o faturamento seja do tipo agrupado (múltiplas UCs), o boleto agora exibe o mês de referência e detalha individualmente a quantidade de UCs associadas juntamente com o consumo e compensação de cada unidade em formato de lista compacta, respeitando o limite máximo de 500 caracteres da API do Asaas.
+- **Suporte a Faturas Consolidadas**: Para cobranças consolidadas (múltiplas UCs), o boleto renderiza o mês de referência e lista de forma compacta cada UC envolvida com seu respectivo número, identificação do titular, endereço abreviado e dados de consumo/compensação, mantendo as diretrizes de limite de 500 caracteres da API do Asaas.
 - **Deploy e Git**: Alterações integradas e implantadas na Edge Function de produção `create-asaas-charge` no Supabase e sincronizadas via push no repositório SaaS.
 
 ---
