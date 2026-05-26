@@ -59,7 +59,7 @@ serve(async (req) => {
             isConsolidated = true;
             let query = supabase
                 .from('invoices')
-                .select('*, consumer_units!inner (subscriber_id, subscriber:subscribers!subscriber_id (*))')
+                .select('*, consumer_units!inner (*, subscriber:subscribers!subscriber_id (*))')
                 .eq('consumer_units.subscriber_id', subscriber_id)
                 .neq('status', 'pago')
                 .neq('status', 'cancelado') // CRITICAL: Excluir canceladas
@@ -215,12 +215,52 @@ serve(async (req) => {
         // Garantir valor com no máximo duas casas decimais
         const roundedValue = Number(totalValue.toFixed(2));
 
+        // Formatar descrição / instruções para o boleto com os dados solicitados pelo usuário
+        let description = '';
+        if (isConsolidated) {
+            let formattedRef = 'N/A';
+            if (invoicesToCharge[0]?.mes_referencia) {
+                const parts = invoicesToCharge[0].mes_referencia.split('-');
+                formattedRef = `${parts[1]}/${parts[0]}`;
+            }
+            description = `Fatura Consolidada - ${invoicesToCharge.length} UCs\nRef: ${formattedRef}\n`;
+            
+            const ucLines = invoicesToCharge.map(inv => {
+                const ucNum = inv.consumer_units?.numero_uc || 'N/A';
+                const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh}kWh` : '0kWh';
+                const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado}kWh` : '0kWh';
+                return `- UC ${ucNum} (${cons} | Comp: ${comp})`;
+            }).join('\n');
+            
+            description += ucLines;
+        } else {
+            const inv = invoicesToCharge[0];
+            const invoiceIdShort = inv.id.substring(0, 8).toUpperCase();
+            const ucNum = inv.consumer_units?.numero_uc || 'N/A';
+            
+            let formattedRef = 'N/A';
+            if (inv.mes_referencia) {
+                const parts = inv.mes_referencia.split('-');
+                formattedRef = `${parts[1]}/${parts[0]}`;
+            }
+            
+            const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh} kWh` : '0 kWh';
+            const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado} kWh` : '0 kWh';
+            
+            description = `Fatura ID: ${invoiceIdShort}\nUC: ${ucNum}\nMês Ref: ${formattedRef}\nEnergia Consumida: ${cons}\nEnergia Compensada: ${comp}`;
+        }
+
+        // Limitar a descrição a 500 caracteres (limite máximo do Asaas para evitar erros)
+        if (description.length > 500) {
+            description = description.substring(0, 497) + '...';
+        }
+
         const paymentPayload = {
             customer: asaasCustomerId,
             billingType: 'BOLETO',
             value: roundedValue,
             dueDate: dueDate,
-            description: isConsolidated ? `Fatura Consolidada - ${invoicesToCharge.length} UCs` : `Fatura de Energia - Ref: ${invoicesToCharge[0].mes_referencia}`,
+            description: description,
         };
 
         console.log(`[Asaas Charge] Criando cobrança com payload:`, JSON.stringify(paymentPayload));
