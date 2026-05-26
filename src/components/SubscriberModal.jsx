@@ -1257,6 +1257,7 @@ Associado`;
 
         // Calculations
         const consumoTotalReais = rawConsumo * rawTarifa;
+        const economiaReais = rawCompensado * rawTarifa * multiplier;
         const energiaCompensadaReais = rawCompensado * rawTarifa * (1 - multiplier);
         const ip = parseFloat(invoice.iluminacao_publica) || 0;
         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
@@ -1414,6 +1415,13 @@ Associado`;
                                             </td>
                                             <td style={{ padding: '8px 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
                                             <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#166534' }}>Desconto ({discountSnapshot}%)</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#166534' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>-{formatCurrency(economiaReais)}</td>
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '8px 0' }}>
