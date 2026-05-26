@@ -349,6 +349,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const { data, error } = await query.order('vencimento', { ascending: true });
             if (error) throw error;
             const processedData = (data || []).map(inv => {
+                if (inv.status === 'sem_faturamento') {
+                    inv.status = 'ag_emissao_boleto';
+                }
                 if (inv.status === 'a_vencer') {
                     if (inv.vencimento) {
                         const [y, m, d] = inv.vencimento.split('-');
@@ -501,7 +504,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, status: newStatus } : i));
 
         try {
-            const { error } = await supabase.from('invoices').update({ status: newStatus }).eq('id', invoiceId);
+            const dbStatus = newStatus === 'ag_emissao_boleto' ? 'sem_faturamento' : newStatus;
+            const { error } = await supabase.from('invoices').update({ status: dbStatus }).eq('id', invoiceId);
             if (error) throw error;
             showAlert('Status atualizado com sucesso!', 'success');
         } catch (error) {
@@ -1471,8 +1475,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.3rem',
-                                    padding: '0.25rem 0.5rem',
+                                    gap: '0.4rem',
+                                    padding: '0.25rem 0.6rem',
                                     borderRadius: '6px',
                                     border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
                                     background: statusFilter === '' ? '#f1f5f9' : 'transparent',
@@ -1492,9 +1496,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 }}
                                 title="Mostrar todos os registros"
                             >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                </div>
                             </button>
 
                             {faturasStatuses.map(status => {
@@ -1507,8 +1513,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '0.3rem',
-                                            padding: '0.25rem 0.5rem',
+                                            gap: '0.4rem',
+                                            padding: '0.25rem 0.6rem',
                                             borderRadius: '6px',
                                             border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
                                             background: isActive ? status.bg : 'transparent',
@@ -1528,9 +1534,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         }}
                                         title={`Filtrar por ${status.label}`}
                                     >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                        </div>
                                     </button>
                                 );
                             })}
@@ -1543,8 +1551,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.3rem',
-                                    padding: '0.25rem 0.5rem',
+                                    gap: '0.4rem',
+                                    padding: '0.25rem 0.6rem',
                                     borderRadius: '6px',
                                     border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
                                     background: statusFilter === '' ? '#f1f5f9' : 'transparent',
@@ -1564,9 +1572,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 }}
                                 title="Mostrar todas as contas"
                             >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                </div>
                             </button>
 
                             {contasStatuses.map(status => {
@@ -1579,8 +1589,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '0.3rem',
-                                            padding: '0.25rem 0.5rem',
+                                            gap: '0.4rem',
+                                            padding: '0.25rem 0.6rem',
                                             borderRadius: '6px',
                                             border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
                                             background: isActive ? status.bg : 'transparent',
@@ -1600,9 +1610,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         }}
                                         title={`Filtrar por ${status.label}`}
                                     >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                        </div>
                                     </button>
                                 );
                             })}
@@ -1616,8 +1628,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.3rem',
-                                    padding: '0.25rem 0.5rem',
+                                    gap: '0.4rem',
+                                    padding: '0.25rem 0.6rem',
                                     borderRadius: '6px',
                                     border: statusFaturaFilter === '' ? '1px solid #64748b' : '1px solid transparent',
                                     background: statusFaturaFilter === '' ? '#f1f5f9' : 'transparent',
@@ -1637,9 +1649,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 }}
                                 title="Mostrar todas as faturas"
                             >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
-                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
+                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                </div>
                             </button>
 
                             {faturasStatuses.map(status => {
@@ -1652,8 +1666,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '0.3rem',
-                                            padding: '0.25rem 0.5rem',
+                                            gap: '0.4rem',
+                                            padding: '0.25rem 0.6rem',
                                             borderRadius: '6px',
                                             border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
                                             background: isActive ? status.bg : 'transparent',
@@ -1673,9 +1687,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         }}
                                         title={`Filtrar Fatura por ${status.label}`}
                                     >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
-                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                        </div>
                                     </button>
                                 );
                             })}
