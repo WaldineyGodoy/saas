@@ -1,5 +1,16 @@
 # Histórico de Atualizações - CRM B2W Energia
 
+## [26/05/2026] - Customização de Instruções do Boleto Asaas com Dados da UC e Energia
+- **Enriquecimento de Informações**: Implementada a formatação dinâmica do campo de instruções (*description*) do boleto do Asaas para incluir metadados detalhados de faturamento que auxiliam o cliente final na identificação do documento.
+- **Campos Adicionados**:
+  - **Identificação da fatura**: ID curto único da fatura (`Fatura ID`).
+  - **Número da UC**: Identificador correspondente da Unidade Consumidora (`UC`).
+  - **Mês de Referência**: Exibido de forma padronizada em formato brasileiro (`MM/AAAA`).
+  - **Energia Consumida**: Exibição da quantidade total consumida em kWh.
+  - **Energia Compensada**: Detalhamento dos créditos de energia compensados em kWh.
+- **Suporte a Faturas Consolidadas**: Caso o faturamento seja do tipo agrupado (múltiplas UCs), o boleto agora exibe o mês de referência e detalha individualmente a quantidade de UCs associadas juntamente com o consumo e compensação de cada unidade em formato de lista compacta, respeitando o limite máximo de 500 caracteres da API do Asaas.
+- **Deploy e Git**: Alterações integradas e implantadas na Edge Function de produção `create-asaas-charge` no Supabase e sincronizadas via push no repositório SaaS.
+
 ---
 
 ## [23/05/2026] - Fix: Suporte à Modalidade Geração Compartilhada em Contas de Energia e Auditoria
