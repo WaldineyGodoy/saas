@@ -931,33 +931,63 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                         VALOR DO ASSINANTE (BOLETO)
                                     </span>
                                     
-                                    {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'pago' && (
-                                        <a 
-                                            href={invoice.asaas_boleto_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{
-                                                alignSelf: 'flex-start',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '0.35rem',
-                                                padding: '0.35rem 0.7rem',
-                                                borderRadius: '6px',
-                                                border: '1.5px solid #bbf7d0',
-                                                background: '#dcfce7',
-                                                color: '#15803d',
-                                                fontSize: '0.75rem',
-                                                fontWeight: 700,
-                                                textDecoration: 'none',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.background = '#bbf7d0'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = '#dcfce7'; }}
-                                        >
-                                            <ExternalLink size={13} /> Abrir Boleto
-                                        </a>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'pago' && (
+                                            <a 
+                                                href={invoice.asaas_boleto_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    alignSelf: 'flex-start',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    padding: '0.35rem 0.7rem',
+                                                    borderRadius: '6px',
+                                                    border: '1.5px solid #bbf7d0',
+                                                    background: '#dcfce7',
+                                                    color: '#15803d',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    textDecoration: 'none',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = '#bbf7d0'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#dcfce7'; }}
+                                            >
+                                                <ExternalLink size={13} /> Abrir Boleto
+                                            </a>
+                                        )}
+
+                                        {!isEditing && invoice.asaas_pdf_storage_url && (
+                                            <a 
+                                                href={invoice.asaas_pdf_storage_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    alignSelf: 'flex-start',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.35rem',
+                                                    padding: '0.35rem 0.7rem',
+                                                    borderRadius: '6px',
+                                                    border: '1.5px solid #bae6fd',
+                                                    background: '#e0f2fe',
+                                                    color: '#0369a1',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    textDecoration: 'none',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = '#bae6fd'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#e0f2fe'; }}
+                                            >
+                                                <FileText size={13} /> Visualizar Fatura (PDF)
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Right Side: Value and Gerar Faturamento button */}
