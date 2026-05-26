@@ -252,7 +252,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const faturasStatuses = [
-        { key: 'ag_emissao_boleto', label: 'Sem Faturamento', color: '#2563eb', bg: '#eff6ff' },
+        { key: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb', bg: '#eff6ff' },
         { key: 'a_vencer', label: 'A Vencer', color: '#ca8a04', bg: '#fef9c3' },
         { key: 'atrasado', label: 'Atrasado', color: '#dc2626', bg: '#fee2e2' },
         { key: 'confirmado', label: 'Confirmado', color: '#0891b2', bg: '#ecfeff' },
@@ -349,9 +349,6 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const { data, error } = await query.order('vencimento', { ascending: true });
             if (error) throw error;
             const processedData = (data || []).map(inv => {
-                if (inv.status === 'sem_faturamento') {
-                    inv.status = 'ag_emissao_boleto';
-                }
                 if (inv.status === 'a_vencer') {
                     if (inv.vencimento) {
                         const [y, m, d] = inv.vencimento.split('-');
@@ -592,11 +589,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const getStatusBadge = (status) => {
         const map = {
             'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
-            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
-            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
-            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
+            'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelada', icon: Ban },
         };
         const s = map[status] || map['a_vencer'];
@@ -1789,6 +1785,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             <tr>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Unidade Consumidora</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '80px' }}>Mês de ref.</th>
+                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Energia Compensada</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vr. da Fatura</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vencimento</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Conta de Energia</th>
@@ -1873,6 +1870,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                 const [year, month] = inv.mes_referencia.split('-');
                                                                 return `${month}/${year}`;
                                                             })() : '-'}
+                                                        </td>
+
+                                                        {/* 2.5. Energia Compensada */}
+                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                            {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
                                                         </td>
 
                                                         {/* 3. Vr. da Fatura + Boleto */}
@@ -2105,12 +2107,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     ) : viewMode === 'kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['ag_emissao_boleto', 'a_vencer', 'atrasado', 'confirmado', 'pago']
+                                {['sem_faturamento', 'a_vencer', 'atrasado', 'confirmado', 'pago']
                                     .filter(status => !statusFilter || status === statusFilter)
                                     .map(status => {
                                         const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
                                         const statusMap = { 
-                                            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento' },
+                                            'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento' },
                                             'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
                                             'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago' }, 
                                             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer' }, 
