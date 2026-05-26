@@ -303,9 +303,36 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
             if (updateError) throw updateError;
 
+            // Let's resolve the subscriber phone/email robustly on-demand!
+            let subEmail = consumerUnit?.subscribers?.email;
+            let subPhone = consumerUnit?.subscribers?.phone;
+            let subName = consumerUnit?.subscribers?.name;
+            let subId = consumerUnit?.subscribers?.id;
+
+            if (!subEmail || !subPhone || !subId) {
+                console.log("Resolvendo dados do Assinante sob demanda no Modal Resumo...");
+                try {
+                    const { data: ucData } = await supabase
+                        .from('consumer_units')
+                        .select('id, subscriber_id, subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone)')
+                        .eq('id', invoice.uc_id || consumerUnit?.id)
+                        .single();
+                    
+                    if (ucData?.subscribers) {
+                        subEmail = ucData.subscribers.email;
+                        subPhone = ucData.subscribers.phone;
+                        subName = ucData.subscribers.name;
+                        subId = ucData.subscribers.id;
+                        console.log("Dados resolvidos sob demanda com sucesso:", subName, subEmail, subPhone);
+                    }
+                } catch (resolveErr) {
+                    console.error("Erro ao resolver dados do assinante:", resolveErr);
+                }
+            }
+
             // 2. Chamar o merger de PDF e as notificações automáticas
             const monthYear = invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
-            const cleanName = (consumerUnit?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const cleanName = (subName || consumerUnit?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
             const ucNumber = consumerUnit?.numero_uc || '';
             const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
 
@@ -313,14 +340,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             
             if (pdfBlob) {
                 await sendCombinedNotification({
-                    recipientEmail: consumerUnit?.subscribers?.email,
-                    recipientPhone: consumerUnit?.subscribers?.phone,
-                    subscriberName: consumerUnit?.subscribers?.name,
+                    recipientEmail: subEmail,
+                    recipientPhone: subPhone,
+                    subscriberName: subName || consumerUnit?.titular_conta || 'Assinante',
                     dueDate: formattedBoletoDueDate,
                     value: Number(invoice.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                     pdfBlob: pdfBlob,
                     fileName: fileName,
-                    subscriberId: consumerUnit?.subscribers?.id,
+                    subscriberId: subId,
                     ucId: invoice.uc_id,
                     profileId: profile?.id
                 });
