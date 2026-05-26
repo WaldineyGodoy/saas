@@ -783,7 +783,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
                                  {[
-                                     { id: 'pendente', label: 'Pendente', color: '#2563eb' },
+                                     { id: 'pendente', label: 'A Vencer', color: '#2563eb' },
                                      { id: 'pago', label: 'Pago', color: '#166534' },
                                      { id: 'erro', label: 'Erro', color: '#dc2626' },
                                      { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
