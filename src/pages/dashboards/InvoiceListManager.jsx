@@ -323,6 +323,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         dia_vencimento,
                         tarifa_concessionaria,
                         desconto_assinante,
+                        address,
                         subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(id, name, email, phone)
                     )

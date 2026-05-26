@@ -170,7 +170,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         return calculatedDateStr; // YYYY-MM-DD
     };
 
-    const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null) => {
+    const handleDownloadCombined = async (invToUse, forcedBoletoUrl = null, forceRegenerate = false) => {
         const inv = invToUse || invoice;
         const currentBoletoUrl = forcedBoletoUrl || invoice.asaas_boleto_url; 
         
@@ -194,7 +194,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                               inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
                               inv.asaas_pdf_storage_url?.includes('asaas.com');
             
-            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
+            if (inv.asaas_pdf_storage_url && !isRawAsaas && !forceRegenerate) {
                 console.log("Obtendo URL assinada para PDF individual...");
                 const { data: signedData, error: signedError } = await supabase.storage
                     .from('invoices_pdfs')
@@ -336,7 +336,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             const ucNumber = consumerUnit?.numero_uc || '';
             const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
 
-            const pdfBlob = await handleDownloadCombined(invoice, result.url);
+            // Construct a finalized invoice object copy with updated status and vencimento so the PDF details are rendered correctly!
+            const updatedInvoiceForPdf = {
+                ...invoice,
+                status: 'a_vencer',
+                vencimento: boletoDueDate,
+                asaas_boleto_url: result.url || null,
+                asaas_status: 'PENDING'
+            };
+            const pdfBlob = await handleDownloadCombined(updatedInvoiceForPdf, result.url, true);
             
             if (pdfBlob) {
                 await sendCombinedNotification({
@@ -505,9 +513,33 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const renderHiddenInvoiceDetail = (inv) => {
         if (!inv) return null;
         const uc = consumerUnit;
-        const statusLabel = inv.status?.toUpperCase() || 'N/A';
-        const statusColor = inv.status === 'pago' ? '#27ae60' : (inv.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+        const statusColorsPdf = {
+            pago: { color: '#27ae60', label: 'PAGO' },
+            a_vencer: { color: '#2563eb', label: 'A VENCER' },
+            sem_faturamento: { color: '#2563eb', label: 'A VENCER' },
+            atrasado: { color: '#dc2626', label: 'ATRASADO' },
+            cancelado: { color: '#64748b', label: 'CANCELADO' }
+        };
+        const currentPdfStatus = statusColorsPdf[inv.status] || statusColorsPdf.a_vencer;
+        const statusLabel = currentPdfStatus.label;
+        const statusColor = currentPdfStatus.color;
         const subscriber = consumerUnit?.subscribers;
+
+        const rawConsumo = Number(inv.consumo_kwh) || 0;
+        const rawCompensado = Number(inv.consumo_compensado) || 0;
+        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
+        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
+        
+        // Calculations
+        const consumoTotalReais = rawConsumo * rawTarifa;
+        const energiaCompensadaReais = rawCompensado * rawTarifa * (1 - multiplier);
+        const economiaReais = rawCompensado * rawTarifa * multiplier;
+        const ip = Number(inv.iluminacao_publica) || 0;
+        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+        const outros = Number(inv.outros_lancamentos) || 0;
+        const outrosTotal = tarifaMinimaExcedentes + outros;
+        const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 
         return (
             <div className="pdf-capture-wrapper">
@@ -531,12 +563,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             {statusLabel}
                         </span>
                     </div>
-
+ 
                     <div className="detail-grid">
-                        <div className="detail-section dark">
+                        <div className="detail-section dark" style={{ paddingBottom: '1rem', borderBottom: '1px solid #cbd5e1' }}>
                             <div className="detail-item">
                                 <label>ASSINANTE</label>
-                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
+                                <span style={{ textTransform: 'uppercase', fontWeight: '700' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
                             </div>
                             <div className="detail-row">
                                 <div className="detail-item">
@@ -555,86 +587,98 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                                 <div className="detail-item">
                                     <label>VENCIMENTO</label>
-                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
-                                        {inv.vencimento ? new Date(inv.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                                        {(() => {
+                                            const rawVenc = inv.status !== 'sem_faturamento' ? getBoletoDueDate() : inv.vencimento;
+                                            return rawVenc ? new Date(rawVenc + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A';
+                                        })()}
                                     </span>
                                 </div>
                             </div>
-                            <div className="detail-item">
-                                <label>TIPO DE LIGAÇÃO</label>
-                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                                    {uc?.tipo_ligacao || 'N/A'}
+                            <div className="detail-item" style={{ marginTop: '0.25rem' }}>
+                                <label>ENDEREÇO DA UC</label>
+                                <span style={{ fontSize: '0.8rem', color: '#1e293b', wordBreak: 'break-word', fontWeight: '500' }}>
+                                    {(() => {
+                                        const addr = uc?.address;
+                                        if (!addr) return 'Endereço não cadastrado';
+                                        if (typeof addr === 'string') return addr;
+                                        return [
+                                            addr.rua,
+                                            addr.numero ? `Nº ${addr.numero}` : '',
+                                            addr.complemento,
+                                            addr.bairro,
+                                            addr.cidade ? `${addr.cidade}-${addr.uf}` : ''
+                                        ].filter(Boolean).join(', ') || 'Endereço não cadastrado';
+                                    })()}
                                 </span>
                             </div>
                         </div>
                         <div className="detail-section metrics">
-                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
-
-                            <div className="metric-line">
-                                <span>+ Custo da Energia Compensada (Líquida):</span>
-                                <span>
-                                    {(() => {
-                                        const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
-                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                        const energiaCompensadaReais = rawConsumoCompensado * rawTarifa * (1 - multiplier);
-                                        return formatCurrency(energiaCompensadaReais);
-                                    })()}
+                            <div style={{ width: '100%' }}>
+                                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', marginBottom: '0.5rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '0.3rem' }}>
+                                    Composição da Fatura
+                                </h4>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b', fontWeight: 700 }}>
+                                            <th style={{ padding: '0.3rem 0', fontSize: '0.72rem', textTransform: 'uppercase' }}>Descrição do Lançamento</th>
+                                            <th style={{ padding: '0.3rem 0', textAlign: 'center', fontSize: '0.72rem', textTransform: 'uppercase' }}>Quantitativo</th>
+                                            <th style={{ padding: '0.3rem 0', textAlign: 'right', fontSize: '0.72rem', textTransform: 'uppercase' }}>Valores</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '0.5rem 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '0.5rem 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Energia Compensada Desc. {discountSnapshot}% -</div>
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#166534', fontWeight: '600' }}>- {rawCompensado} kwh</td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>{formatCurrency(energiaCompensadaReais)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '0.5rem 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Iluminação Pública</div>
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '0.5rem 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Outros</div>
+                                            </td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.3rem', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.4rem' }}>
+                                    * Valor calculado com base na tarifa cheia da concessionária.
+                                </div>
+                            </div>
+ 
+                            <div style={{
+                                marginTop: '1rem',
+                                padding: '0.8rem 1rem',
+                                borderRadius: '12px',
+                                background: '#eff6ff',
+                                border: '1.5px solid #bfdbfe',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e3a8a', letterSpacing: '0.05em' }}>
+                                    VALOR DO ASSINANTE (BOLETO)
                                 </span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Iluminação Pública:</span>
-                                <span>{formatCurrency(inv.iluminacao_publica)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Tarifa Mínima e Excedentes:</span>
-                                <span>{formatCurrency(inv.tarifa_minima)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Outros Lançamentos:</span>
-                                <span>{formatCurrency(inv.outros_lancamentos)}</span>
-                            </div>
-
-                            <div className="economy-box">
-                                <div className="metric-line economy">
-                                    <span>Economia Gerada:</span>
-                                    <span>
-                                        - {(() => {
-                                            const rawConsumoCompensado = Number(inv.consumo_compensado) || 0;
-                                            const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                            const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                            const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                            const economiaReais = rawConsumoCompensado * rawTarifa * multiplier;
-                                            return formatCurrency(economiaReais);
-                                        })()}
-                                    </span>
-                                </div>
-                                <div className="metric-line discount">
-                                    <span>Desconto Aplicado:</span>
-                                    <span>{inv.desconto_aplicado !== undefined ? inv.desconto_aplicado : (uc?.desconto_assinante || 0)}%</span>
-                                </div>
-                            </div>
-
-                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
-                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
-                                <div className="total-value">
-                                    {(() => {
-                                        const rawConsumo = Number(inv.consumo_kwh) || 0;
-                                        const rawCompensado = Number(inv.consumo_compensado) || 0;
-                                        const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-                                        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
-                                        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
-                                        
-                                        const compensadaLiquida = rawCompensado * rawTarifa * (1 - multiplier);
-                                        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
-                                        const ip = Number(inv.iluminacao_publica) || 0;
-                                        const outros = Number(inv.outros_lancamentos) || 0;
-                                        
-                                        const totalCalculado = compensadaLiquida + tarifaMinimaExcedentes + ip + outros;
-                                        return formatCurrency(totalCalculado);
-                                    })()}
-                                </div>
+                                <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1e3a8a' }}>
+                                    {formatCurrency(totalCalculado)}
+                                </span>
                             </div>
                         </div>
                     </div>
