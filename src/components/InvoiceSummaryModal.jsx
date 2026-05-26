@@ -693,11 +693,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <tbody>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '8px 0' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total</div>
-                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 'normal' }}>({rawConsumo} * R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })} *)</span></div>
                                             </td>
                                             <td style={{ padding: '8px 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
-                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}</td>
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '8px 0' }}>
@@ -1014,15 +1013,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>
                                                     <div>
-                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal', marginTop: '0.15rem' }}>
-                                                            ({invoice.consumo_kwh} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })})
-                                                        </div>
+                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span> <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>({invoice.consumo_kwh} * R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })} *)</span>
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{invoice.consumo_kwh} kwh</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>
-                                                    {formatCurrency(consumoTotalVal)}*
+                                                    {formatCurrency(consumoTotalVal)}
                                                 </td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>

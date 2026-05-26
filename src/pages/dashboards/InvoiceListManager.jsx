@@ -25,6 +25,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
     const [statusFilter, setStatusFilter] = useState('');
+    const [statusFaturaFilter, setStatusFaturaFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState(null);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -59,6 +60,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const handleTabChange = (tab) => {
         setActiveTab(tab);
         setStatusFilter('');
+        setStatusFaturaFilter('');
         if (tab === 'faturas') {
             if (viewMode === 'energy_list') setViewMode('list');
             else if (viewMode === 'energy_kanban') setViewMode('kanban');
@@ -133,6 +135,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 } else {
                     if (ebStatus !== statusFilter) return false;
                 }
+            }
+            if (statusFaturaFilter) {
+                if (inv.status !== statusFaturaFilter) return false;
             }
         }
 
@@ -1452,7 +1457,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     flexWrap: 'wrap',
                     marginTop: '0.5rem'
                 }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', marginRight: '1rem', borderRight: '1px solid #e2e8f0', paddingRight: '1rem' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0f172a' }}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
+                        </span>
+                    </div>
                     {activeTab === 'faturas' ? (
                         <>
                             {/* Botão Todos/Total */}
@@ -1589,6 +1599,79 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             }
                                         }}
                                         title={`Filtrar por ${status.label}`}
+                                    >
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({count})</span>
+                                    </button>
+                                );
+                            })}
+                            
+                            <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 0.5rem' }}></div>
+                            
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem' }}>Status Fatura:</span>
+                            
+                            <button
+                                onClick={() => setStatusFaturaFilter('')}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem',
+                                    padding: '0.25rem 0.5rem',
+                                    borderRadius: '6px',
+                                    border: statusFaturaFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                    background: statusFaturaFilter === '' ? '#f1f5f9' : 'transparent',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    outline: 'none'
+                                }}
+                                onMouseOver={e => {
+                                    e.currentTarget.style.background = '#f1f5f9';
+                                    e.currentTarget.style.borderColor = '#64748b';
+                                }}
+                                onMouseOut={e => {
+                                    if (statusFaturaFilter !== '') {
+                                        e.currentTarget.style.background = 'transparent';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                    }
+                                }}
+                                title="Mostrar todas as faturas"
+                            >
+                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b' }}></span>
+                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#0f172a' }}>({invoicesForTotals.length})</span>
+                            </button>
+
+                            {faturasStatuses.map(status => {
+                                const count = faturasCounts[status.key] || 0;
+                                const isActive = statusFaturaFilter === status.key;
+                                return (
+                                    <button
+                                        key={`fatura-${status.key}`}
+                                        onClick={() => setStatusFaturaFilter(isActive ? '' : status.key)}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.3rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px',
+                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                            background: isActive ? status.bg : 'transparent',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            outline: 'none'
+                                        }}
+                                        onMouseOver={e => {
+                                            e.currentTarget.style.background = status.bg;
+                                            e.currentTarget.style.borderColor = status.color;
+                                        }}
+                                        onMouseOut={e => {
+                                            if (!isActive) {
+                                                e.currentTarget.style.background = 'transparent';
+                                                e.currentTarget.style.borderColor = 'transparent';
+                                            }
+                                        }}
+                                        title={`Filtrar Fatura por ${status.label}`}
                                     >
                                         <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color }}></span>
                                         <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
