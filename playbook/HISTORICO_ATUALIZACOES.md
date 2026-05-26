@@ -1,15 +1,14 @@
 # Histórico de Atualizações - CRM B2W Energia
 
-## [26/05/2026] - Customização de Instruções do Boleto Asaas com Identificação e Endereço da UC
-- **Enriquecimento e Rastreabilidade de Informações**: Atualizada a formatação dinâmica do campo de instruções (*description*) do boleto do Asaas para incorporar dados de identificação e localização da UC, tornando a cobrança 100% clara para o cliente final.
-- **Campos Disponibilizados no Boleto**:
-  - **Identificação da Fatura**: Substituído o antigo ID técnico da fatura pela identificação personalizada cadastrada no modal da UC (`titular_conta`), como "Nome como aparece na conta".
-  - **Número da UC**: Identificador correspondente da Unidade Consumidora (`UC`).
-  - **Endereço da UC**: Renderização do endereço completo da UC estruturado no formato `Rua, Número - Bairro - Cidade/UF` a partir do campo JSONB `address`.
-  - **Mês de Referência**: Exibido de forma legível em formato brasileiro (`MM/AAAA`).
-  - **Energia Consumida**: Exibição da quantidade total consumida em kWh.
-  - **Energia Compensada**: Detalhamento dos créditos de energia compensados em kWh.
-- **Suporte a Faturas Consolidadas**: Para cobranças consolidadas (múltiplas UCs), o boleto renderiza o mês de referência e lista de forma compacta cada UC envolvida com seu respectivo número, identificação do titular, endereço abreviado e dados de consumo/compensação, mantendo as diretrizes de limite de 500 caracteres da API do Asaas.
+## [26/05/2026] - Otimização de Instruções do Boleto Asaas (Consolidação de Linhas contra Truncamento)
+- **Compactação e Rastreabilidade de Informações**: Atualizada a formatação do campo de instruções (*description*) do boleto do Asaas para agrupar os metadados de forma horizontal em apenas 3 linhas (usando o separador `|`). Isso previne que a informação de "Energia Compensada" seja cortada devido ao limite de espaço físico vertical do layout de PDF gerado nos servidores do Asaas.
+- **Estruturação Compacta no Boleto**:
+  - **Linha 1**: `Identificação: [titular_conta] | UC: [numero_uc] | Ref: [MM/AAAA]` (apelido personalizado da fatura, código da UC e competência legível).
+  - **Linha 2**: `Endereço: [Rua, Nº - Bairro - Cidade/UF]` (endereço da UC a partir do campo JSONB `address`).
+  - **Linha 3**: `Consumo: [consumo_kwh] kWh | Compensado: [consumo_compensado] kWh` (energia consumida e créditos compensados).
+- **Tratamento de Limites e Padrões Financeiros**:
+  - Respeitada a regra da FEBRABAN e do Asaas que fixa o texto obrigatório `"Não receber com cheque."` no cabeçalho das instruções.
+  - Como a plataforma do Asaas não permite alterar a fonte ou estilo das instruções (renderização do PDF feita pelo servidor deles), a consolidação horizontal garante que todo o conteúdo caiba perfeitamente no espaço sem perdas.
 - **Deploy e Git**: Alterações integradas e implantadas na Edge Function de produção `create-asaas-charge` no Supabase e sincronizadas via push no repositório SaaS.
 
 ---
