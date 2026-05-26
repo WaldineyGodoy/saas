@@ -541,53 +541,108 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         const outrosTotal = tarifaMinimaExcedentes + outros;
         const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 
+        const formatCurrency = (val) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+        };
+
         return (
-            <div className="pdf-capture-wrapper">
-                <div className="detail-card">
-                    <div className="branded-header">
+            <div style={{
+                width: '800px',
+                minWidth: '800px',
+                padding: '40px',
+                background: '#f8fafc',
+                boxSizing: 'border-box',
+                fontFamily: "'Inter', 'Montserrat', 'Helvetica', 'Arial', sans-serif"
+            }}>
+                <div style={{
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    width: '100%'
+                }}>
+                    <div style={{
+                        padding: '16px 24px',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        alignItems: 'center',
+                        background: '#ffffff'
+                    }}>
                         {branding?.logo_url ? (
-                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                            <img src={branding.logo_url} alt={branding.company_name} style={{ maxHeight: '48px', maxWidth: '180px', objectFit: 'contain' }} />
                         ) : (
-                            <div className="company-info-fallback">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '700', color: '#003366', fontSize: '1.1rem' }}>
                                 <FileText size={24} color="#FF6600" />
                                 <span>{branding?.company_name || 'B2W Energia'}</span>
                             </div>
                         )}
                     </div>
-                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                        <div className="header-info">
+                    <div style={{
+                        backgroundColor: branding?.primary_color || '#003366',
+                        padding: '20px 24px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <Info size={20} color="#ffffff" />
-                            <h3>Detalhamento da Fatura</h3>
+                            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem', fontWeight: 600 }}>Detalhamento da Fatura</h3>
                         </div>
-                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                        <span style={{
+                            padding: '6px 16px',
+                            borderRadius: '30px',
+                            color: '#ffffff',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            backgroundColor: statusColor
+                        }}>
                             {statusLabel}
                         </span>
                     </div>
  
-                    <div className="detail-grid">
-                        <div className="detail-section dark" style={{ paddingBottom: '1rem', borderBottom: '1px solid #cbd5e1' }}>
-                            <div className="detail-item">
-                                <label>ASSINANTE</label>
-                                <span style={{ textTransform: 'uppercase', fontWeight: '700' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.2fr',
+                        padding: '24px',
+                        gap: '24px',
+                        boxSizing: 'border-box',
+                        width: '100%',
+                        background: '#ffffff'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '24px',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '20px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ASSINANTE</label>
+                                <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
                             </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>NÚMERO DA UC</label>
-                                    <span>{uc?.numero_uc || 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>NÚMERO DA UC</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{uc?.numero_uc || 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
-                                    <span>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
                                 </div>
                             </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>MÊS REFERÊNCIA</label>
-                                    <span>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>MÊS REFERÊNCIA</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{inv.mes_referencia ? `${inv.mes_referencia.split('-')[1]}/${inv.mes_referencia.split('-')[0]}` : 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>VENCIMENTO</label>
-                                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>VENCIMENTO</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#dc2626' }}>
                                         {(() => {
                                             const rawVenc = inv.status !== 'sem_faturamento' ? getBoletoDueDate() : inv.vencimento;
                                             return rawVenc ? new Date(rawVenc + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A';
@@ -595,9 +650,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     </span>
                                 </div>
                             </div>
-                            <div className="detail-item" style={{ marginTop: '0.25rem' }}>
-                                <label>ENDEREÇO DA UC</label>
-                                <span style={{ fontSize: '0.8rem', color: '#1e293b', wordBreak: 'break-word', fontWeight: '500' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ENDEREÇO DA UC</label>
+                                <span style={{ fontSize: '0.8rem', color: '#1e293b', wordBreak: 'break-word', fontWeight: '500', lineHeight: '1.25' }}>
                                     {(() => {
                                         const addr = uc?.address;
                                         if (!addr) return 'Endereço não cadastrado';
@@ -613,65 +668,71 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </span>
                             </div>
                         </div>
-                        <div className="detail-section metrics">
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            boxSizing: 'border-box'
+                        }}>
                             <div style={{ width: '100%' }}>
-                                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', marginBottom: '0.5rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '0.3rem' }}>
+                                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', marginTop: 0, marginBottom: '8px', borderBottom: '2px solid #cbd5e1', paddingBottom: '4px' }}>
                                     Composição da Fatura
                                 </h4>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b', fontWeight: 700 }}>
-                                            <th style={{ padding: '0.3rem 0', fontSize: '0.72rem', textTransform: 'uppercase' }}>Descrição do Lançamento</th>
-                                            <th style={{ padding: '0.3rem 0', textAlign: 'center', fontSize: '0.72rem', textTransform: 'uppercase' }}>Quantitativo</th>
-                                            <th style={{ padding: '0.3rem 0', textAlign: 'right', fontSize: '0.72rem', textTransform: 'uppercase' }}>Valores</th>
+                                            <th style={{ padding: '6px 0', fontSize: '0.72rem', textTransform: 'uppercase' }}>Descrição do Lançamento</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'center', fontSize: '0.72rem', textTransform: 'uppercase' }}>Quantitativo</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'right', fontSize: '0.72rem', textTransform: 'uppercase' }}>Valores</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '0.5rem 0' }}>
+                                            <td style={{ padding: '8px 0' }}>
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total</div>
-                                                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
                                             </td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '0.5rem 0' }}>
+                                            <td style={{ padding: '8px 0' }}>
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Energia Compensada Desc. {discountSnapshot}% -</div>
                                             </td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#166534', fontWeight: '600' }}>- {rawCompensado} kwh</td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>{formatCurrency(energiaCompensadaReais)}</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#166534', fontWeight: '600' }}>- {rawCompensado} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>{formatCurrency(energiaCompensadaReais)}</td>
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '0.5rem 0' }}>
+                                            <td style={{ padding: '8px 0' }}>
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Iluminação Pública</div>
                                             </td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#64748b' }}>—</td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '0.5rem 0' }}>
+                                            <td style={{ padding: '8px 0' }}>
                                                 <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Outros</div>
                                             </td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'center', color: '#64748b' }}>—</td>
-                                            <td style={{ padding: '0.5rem 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
                                         </tr>
                                     </tbody>
                                 </table>
-                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.3rem', borderBottom: '1px solid #cbd5e1', paddingBottom: '0.4rem' }}>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '6px', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
                                     * Valor calculado com base na tarifa cheia da concessionária.
                                 </div>
                             </div>
  
                             <div style={{
-                                marginTop: '1rem',
-                                padding: '0.8rem 1rem',
+                                marginTop: '8px',
+                                padding: '12px 16px',
                                 borderRadius: '12px',
                                 background: '#eff6ff',
                                 border: '1.5px solid #bfdbfe',
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                alignItems: 'center'
+                                alignItems: 'center',
+                                boxSizing: 'border-box'
                             }}>
                                 <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e3a8a', letterSpacing: '0.05em' }}>
                                     VALOR DO ASSINANTE (BOLETO)

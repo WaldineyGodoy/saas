@@ -1232,147 +1232,236 @@ Associado`;
         // Get matching UC for this invoice to get technical data
         const uc = consumerUnits.find(u => u.id === invoice.consumer_unit_id);
 
-        const statusLabel = invoice.status?.toUpperCase() || 'N/A';
-        const statusColor = invoice.status === 'pago' ? '#27ae60' : (invoice.status === 'atrasado' ? '#dc2626' : '#f59e0b');
+        const statusColorsPdf = {
+            pago: { color: '#27ae60', label: 'PAGO' },
+            a_vencer: { color: '#2563eb', label: 'A VENCER' },
+            sem_faturamento: { color: '#2563eb', label: 'A VENCER' },
+            atrasado: { color: '#dc2626', label: 'ATRASADO' },
+            cancelado: { color: '#64748b', label: 'CANCELADO' }
+        };
+        const currentPdfStatus = statusColorsPdf[invoice.status] || statusColorsPdf.a_vencer;
+        const statusLabel = currentPdfStatus.label;
+        const statusColor = currentPdfStatus.color;
 
         // Data Sync Math
-        const tarifa = parseFloat(invoice.tarifa_concessionaria || uc?.tarifa_concessionaria || 1);
-        const totalKwh = parseFloat(invoice.consumo_kwh || 0);
-        const tarifaMinimaRs = parseFloat(invoice.tarifa_minima || 0);
-        const tarifaMinimaKwh = tarifaMinimaRs / tarifa;
+        const rawTarifa = parseFloat(invoice.tarifa_concessionaria || uc?.tarifa_concessionaria || 0.986);
+        const rawConsumo = parseFloat(invoice.consumo_kwh || 0);
+        const rawCompensado = parseFloat(invoice.consumo_compensado || 0);
+        const discountSnapshot = invoice.desconto_assinante !== undefined ? parseFloat(invoice.desconto_assinante) : (parseFloat(uc?.desconto_assinante) || 0);
+        const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
 
-        const consumoCompensadoKwh = Math.max(0, totalKwh - tarifaMinimaKwh);
-        const consumoCompensadoReais = consumoCompensadoKwh * tarifa;
+        // Calculations
+        const consumoTotalReais = rawConsumo * rawTarifa;
+        const energiaCompensadaReais = rawCompensado * rawTarifa * (1 - multiplier);
+        const ip = parseFloat(invoice.iluminacao_publica) || 0;
+        const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
+        const outros = parseFloat(invoice.outros_lancamentos) || 0;
+        const outrosTotal = tarifaMinimaExcedentes + outros;
+        const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 
-        const economia = parseFloat(invoice.economia_reais || 0);
-        const energiaCompensadaLiquida = Math.max(0, consumoCompensadoReais - economia);
-
-        const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+        const formatCurrency = (val) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+        };
 
         return (
-            <div className="pdf-capture-wrapper">
-                <div className="detail-card">
-                    <div className="branded-header">
+            <div style={{
+                width: '800px',
+                minWidth: '800px',
+                padding: '40px',
+                background: '#f8fafc',
+                boxSizing: 'border-box',
+                fontFamily: "'Inter', 'Montserrat', 'Helvetica', 'Arial', sans-serif"
+            }}>
+                <div style={{
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    width: '100%'
+                }}>
+                    <div style={{
+                        padding: '16px 24px',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        alignItems: 'center',
+                        background: '#ffffff'
+                    }}>
                         {branding?.logo_url ? (
-                            <img src={branding.logo_url} alt={branding.company_name} className="company-logo-modal" />
+                            <img src={branding.logo_url} alt={branding.company_name} style={{ maxHeight: '48px', maxWidth: '180px', objectFit: 'contain' }} />
                         ) : (
-                            <div className="company-info-fallback">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '700', color: '#003366', fontSize: '1.1rem' }}>
                                 <FileText size={24} color="#FF6600" />
                                 <span>{branding?.company_name || 'B2W Energia'}</span>
                             </div>
                         )}
                     </div>
-                    <div className="detail-header" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                        <div className="header-info">
+                    <div style={{
+                        backgroundColor: branding?.primary_color || '#003366',
+                        padding: '20px 24px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <Info size={20} color="#ffffff" />
-                            <h3>Detalhamento da Fatura</h3>
+                            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem', fontWeight: 600 }}>Detalhamento da Fatura</h3>
                         </div>
-                        <span className="detail-status" style={{ backgroundColor: statusColor }}>
+                        <span style={{
+                            padding: '6px 16px',
+                            borderRadius: '30px',
+                            color: '#ffffff',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            backgroundColor: statusColor
+                        }}>
                             {statusLabel}
                         </span>
                     </div>
-
-                    <div className="detail-grid">
-                        <div className="detail-section dark">
-                            <div className="detail-item">
-                                <label>ASSINANTE</label>
-                                <span style={{ textTransform: 'uppercase' }}>{subscriber?.name || 'N/A'}</span>
+ 
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.2fr',
+                        padding: '24px',
+                        gap: '24px',
+                        boxSizing: 'border-box',
+                        width: '100%',
+                        background: '#ffffff'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '24px',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '20px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ASSINANTE</label>
+                                <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{subscriber?.name || uc?.titular_conta || 'Assinante'}</span>
                             </div>
-                            <div className="detail-item">
-                                <label>ENDEREÇO DA UNIDADE</label>
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                                    {uc?.address ? 
-                                        `${uc.address.rua || ''}${uc.address.numero ? `, ${uc.address.numero}` : ''} - ${uc.address.bairro || ''} - ${uc.address.cidade || ''}/${uc.address.uf || ''}` : 
-                                        'N/A'
-                                    }
-                                </span>
-                            </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>NÚMERO DA UC</label>
-                                    <span>{uc?.numero_uc || 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>NÚMERO DA UC</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{uc?.numero_uc || 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>IDENTIFICAÇÃO (APELIDO)</label>
-                                    <span>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>IDENTIFICAÇÃO (APELIDO)</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{uc?.identification || uc?.titular_conta || 'Unidade Consumidora'}</span>
                                 </div>
                             </div>
-                            <div className="detail-row">
-                                <div className="detail-item">
-                                    <label>MÊS REFERÊNCIA</label>
-                                    <span>{invoice.mes_referencia ? `${invoice.mes_referencia.split('-')[1]}/${invoice.mes_referencia.split('-')[0]}` : 'N/A'}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>MÊS REFERÊNCIA</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>{invoice.mes_referencia ? `${invoice.mes_referencia.split('-')[1]}/${invoice.mes_referencia.split('-')[0]}` : 'N/A'}</span>
                                 </div>
-                                <div className="detail-item">
-                                    <label>VENCIMENTO</label>
-                                    <span style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>VENCIMENTO</label>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#dc2626' }}>
                                         {invoice.vencimento ? new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
                                     </span>
                                 </div>
                             </div>
-                            <div className="detail-item">
-                                <label>TIPO DE LIGAÇÃO</label>
-                                <span className="connection-type-badge" style={{ backgroundColor: branding?.primary_color || '#003366' }}>
-                                    {invoice.tipo_ligacao || uc?.tipo_ligacao || 'N/A'}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '4px' }}>ENDEREÇO DA UC</label>
+                                <span style={{ fontSize: '0.8rem', color: '#1e293b', wordBreak: 'break-word', fontWeight: '500', lineHeight: '1.25' }}>
+                                    {(() => {
+                                        const addr = uc?.address;
+                                        if (!addr) return 'Endereço não cadastrado';
+                                        if (typeof addr === 'string') return addr;
+                                        return [
+                                            addr.rua,
+                                            addr.numero ? `Nº ${addr.numero}` : '',
+                                            addr.complemento,
+                                            addr.bairro,
+                                            addr.cidade ? `${addr.cidade}-${addr.uf}` : ''
+                                        ].filter(Boolean).join(', ') || 'Endereço não cadastrado';
+                                    })()}
                                 </span>
                             </div>
                         </div>
-
-                        <div className="detail-section metrics">
-                            <div className="metric-line">
-                                <span>Consumo Compensado ({consumoCompensadoKwh.toFixed(0)} kWh):</span>
-                                <span>{formatCurrency(consumoCompensadoReais)}</span>
-                            </div>
-                            {invoice.energia_injetada > 0 && (
-                                <div className="metric-line secondary" style={{ borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
-                                    <span>Energia Injetada:</span>
-                                    <span style={{ color: '#0284c7', fontWeight: 'bold' }}>{invoice.energia_injetada} kWh</span>
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <div style={{ width: '100%' }}>
+                                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', textTransform: 'uppercase', marginTop: 0, marginBottom: '8px', borderBottom: '2px solid #cbd5e1', paddingBottom: '4px' }}>
+                                    Composição da Fatura
+                                </h4>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b', fontWeight: 700 }}>
+                                            <th style={{ padding: '6px 0', fontSize: '0.72rem', textTransform: 'uppercase' }}>Descrição do Lançamento</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'center', fontSize: '0.72rem', textTransform: 'uppercase' }}>Quantitativo</th>
+                                            <th style={{ padding: '6px 0', textAlign: 'right', fontSize: '0.72rem', textTransform: 'uppercase' }}>Valores</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Consumo total</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>({rawConsumo} x R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })})</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#1e293b', fontWeight: '600' }}>{rawConsumo} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(consumoTotalReais)}*</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Energia Compensada Desc. {discountSnapshot}% -</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#166534', fontWeight: '600' }}>- {rawCompensado} kwh</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#166534' }}>{formatCurrency(energiaCompensadaReais)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Iluminação Pública</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Outros</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '6px', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
+                                    * Valor calculado com base na tarifa cheia da concessionária.
                                 </div>
-                            )}
-                            <div className="metric-line secondary">
-                                <span>Valor da Tarifa:</span>
-                                <span>R$ {tarifa.toFixed(4)}</span>
                             </div>
-
-                            <div className="economy-box">
-                                <div className="metric-line economy">
-                                    <span>Economia Gerada:</span>
-                                    <span>- {formatCurrency(economia)}</span>
-                                </div>
-                                <div className="metric-line discount">
-                                    <span>Desconto Aplicado:</span>
-                                    <span>{invoice.desconto_assinante || uc?.desconto_assinante || 0}%</span>
-                                </div>
-                            </div>
-
-                            <div className="metric-line bold">
-                                <span>Energia Compensada Líquida:</span>
-                                <span>{formatCurrency(energiaCompensadaLiquida)}</span>
-                            </div>
-
-                            <hr style={{ borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
-
-                            <div className="metric-line">
-                                <span>+ Iluminação Pública:</span>
-                                <span>{formatCurrency(invoice.iluminacao_publica)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Tarifa Mínima:</span>
-                                <span>{formatCurrency(invoice.tarifa_minima)}</span>
-                            </div>
-                            <div className="metric-line">
-                                <span>+ Outros Lançamentos:</span>
-                                <span>{formatCurrency(invoice.outros_lancamentos)}</span>
-                            </div>
-
-                            <div className="total-box" style={{ borderColor: branding?.secondary_color || '#22c55e', backgroundColor: '#f0fdf4' }}>
-                                <div className="total-label" style={{ color: '#166534' }}>TOTAL A PAGAR</div>
-                                <div className="total-value">{formatCurrency(invoice.valor_a_pagar)}</div>
+ 
+                            <div style={{
+                                marginTop: '8px',
+                                padding: '12px 16px',
+                                borderRadius: '12px',
+                                background: '#eff6ff',
+                                border: '1.5px solid #bfdbfe',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                boxSizing: 'border-box'
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e3a8a', letterSpacing: '0.05em' }}>
+                                    VALOR DO ASSINANTE (BOLETO)
+                                </span>
+                                <span style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1e3a8a' }}>
+                                    {formatCurrency(totalCalculado)}
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         );
+    };
     };
 
     const handleCepBlur = async () => {

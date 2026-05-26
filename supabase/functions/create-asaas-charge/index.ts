@@ -227,16 +227,43 @@ serve(async (req) => {
             
             const ucLines = invoicesToCharge.map(inv => {
                 const ucNum = inv.consumer_units?.numero_uc || 'N/A';
+                const titular = inv.consumer_units?.titular_conta || 'N/A';
                 const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh}kWh` : '0kWh';
                 const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado}kWh` : '0kWh';
-                return `- UC ${ucNum} (${cons} | Comp: ${comp})`;
+                
+                const addrObj = inv.consumer_units?.address;
+                let addrShort = '';
+                if (addrObj) {
+                    const street = addrObj.rua || '';
+                    const num = addrObj.numero || '';
+                    addrShort = ` | ${street}${num ? `, ${num}` : ''}`;
+                }
+                
+                return `- UC ${ucNum} - ${titular}${addrShort} (${cons} | Comp: ${comp})`;
             }).join('\n');
             
             description += ucLines;
         } else {
             const inv = invoicesToCharge[0];
-            const invoiceIdShort = inv.id.substring(0, 8).toUpperCase();
+            const titularConta = inv.consumer_units?.titular_conta || 'N/A';
             const ucNum = inv.consumer_units?.numero_uc || 'N/A';
+            
+            // Formatar endereço completo da UC
+            const addrObj = inv.consumer_units?.address;
+            let addressStr = 'N/A';
+            if (addrObj) {
+                const street = addrObj.rua || '';
+                const num = addrObj.numero || '';
+                const neighborhood = addrObj.bairro || '';
+                const city = addrObj.cidade || '';
+                const state = addrObj.uf || '';
+                
+                const parts = [];
+                if (street) parts.push(num ? `${street}, ${num}` : street);
+                if (neighborhood) parts.push(neighborhood);
+                if (city) parts.push(state ? `${city}/${state}` : city);
+                addressStr = parts.join(' - ');
+            }
             
             let formattedRef = 'N/A';
             if (inv.mes_referencia) {
@@ -247,7 +274,7 @@ serve(async (req) => {
             const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh} kWh` : '0 kWh';
             const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado} kWh` : '0 kWh';
             
-            description = `Fatura ID: ${invoiceIdShort}\nUC: ${ucNum}\nMês Ref: ${formattedRef}\nEnergia Consumida: ${cons}\nEnergia Compensada: ${comp}`;
+            description = `Identificação da Fatura: ${titularConta}\nUC: ${ucNum}\nEndereço: ${addressStr}\nMês Ref: ${formattedRef}\nEnergia Consumida: ${cons}\nEnergia Compensada: ${comp}`;
         }
 
         // Limitar a descrição a 500 caracteres (limite máximo do Asaas para evitar erros)
