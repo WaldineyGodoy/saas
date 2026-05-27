@@ -771,8 +771,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 setMonthlyDetails({
                     ...prodData,
                     details: prodData.service_details || {},
-                    geracao_mensal_kwh: Number(prodData.geracao_mensal_kwh) || injectedEnergy || 0,
-                    energia_compensada: Number(prodData.energia_compensada) || injectedEnergy || totalCompensada || 0,
+                    geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
+                    energia_compensada: injectedEnergy || Number(prodData.energia_compensada) || totalCompensada || 0,
                     faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
