@@ -772,7 +772,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     ...prodData,
                     details: prodData.service_details || {},
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
-                    energia_compensada: injectedEnergy || Number(prodData.energia_compensada) || totalCompensada || 0,
+                    energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
                     faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
@@ -802,7 +802,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     status: 'em_producao',
                     geracao_mensal_kwh: injectedEnergy || 0,
                     geracao_prevista: prediction,
-                    energia_compensada: injectedEnergy || totalCompensada || 0,
+                    energia_compensada: totalCompensada || 0,
                     faturamento_mensal: totalFaturamento,
                     custo_disponibilidade: 0
                 });
