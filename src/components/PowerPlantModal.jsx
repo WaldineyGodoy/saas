@@ -772,7 +772,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     ...prodData,
                     details: prodData.service_details || {},
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
-                    energia_compensada: injectedEnergy || Number(prodData.energia_compensada) || 0,
+                    energia_compensada: injectedEnergy || Number(prodData.energia_compensada) || totalCompensada || 0,
                     faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
@@ -802,7 +802,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     status: 'em_producao',
                     geracao_mensal_kwh: injectedEnergy || 0,
                     geracao_prevista: prediction,
-                    energia_compensada: injectedEnergy || 0,
+                    energia_compensada: injectedEnergy || totalCompensada || 0,
                     faturamento_mensal: totalFaturamento,
                     custo_disponibilidade: 0
                 });
@@ -2663,7 +2663,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     
                                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                         <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal (kWh)</label>
+                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal - Energia Injetada (kWh)</label>
                                                             <input 
                                                                 type="number"
                                                                 value={monthlyDetails?.geracao_mensal_kwh || ''}
@@ -2683,7 +2683,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                             />
                                                         </div>
                                                         <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Injetada (kWh)</label>
+                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Compensada nas UCs (kWh)</label>
                                                             <input 
                                                                 type="number"
                                                                 value={monthlyDetails?.energia_compensada || ''}
