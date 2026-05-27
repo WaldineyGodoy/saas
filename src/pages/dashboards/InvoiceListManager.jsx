@@ -126,7 +126,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         if (inv.status === 'cancelado') return false;
         
         if (activeTab === 'faturas') {
-            if (inv.status === 'sem_faturamento') return false;
+            // Permitir 'sem_faturamento' na aba de faturas para auditoria e conferência antes do envio
+            // if (inv.status === 'sem_faturamento') return false;
             
             // Se ambos os valores forem zero ou nulos, não exibir no dashboard financeiro
             const valPagar = Number(inv.valor_a_pagar) || 0;
@@ -292,7 +293,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         if (inv.status === 'cancelado') return false;
 
         if (activeTab === 'faturas') {
-            if (inv.status === 'sem_faturamento') return false;
+            // Permitir 'sem_faturamento' no cálculo de totais
+            // if (inv.status === 'sem_faturamento') return false;
             const valPagar = Number(inv.valor_a_pagar) || 0;
             const valConcessionaria = Number(inv.valor_concessionaria) || 0;
             if (valPagar <= 0 && valConcessionaria <= 0) return false;
