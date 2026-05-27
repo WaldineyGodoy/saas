@@ -81,9 +81,14 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
 
     const handleCalendarCardClick = (uc) => {
-        setSelectedUcForModal(uc);
-        setUcModalSection('geral');
-        setIsUcModalOpen(true);
+        if (uc.matchingInvoice) {
+            setSelectedInvoiceForSummary(uc.matchingInvoice);
+            setIsSummaryModalOpen(true);
+        } else {
+            setSelectedUcForModal(uc);
+            setUcModalSection('geral');
+            setIsUcModalOpen(true);
+        }
     };
 
     // Efeito para sincronizar os estados salvos quando o usuário clica no menu do CRM (initialTab muda)
@@ -2495,15 +2500,20 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         }
 
         const day = unit.dia_leitura || 0;
-        const hasInvoice = invoices.some(inv => 
+        const matchingInvoice = invoices.find(inv => 
             inv.uc_id === unit.id && 
             (inv.mes_referencia?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter) || inv.vencimento?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter)) && 
             inv.status?.trim().toLowerCase() !== 'cancelado'
         );
+        const hasInvoice = !!matchingInvoice;
 
         let status = 'pending';
         if (hasInvoice) {
-            status = 'success';
+            if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro') {
+                status = 'error';
+            } else {
+                status = 'success';
+            }
         } else if (unit.last_scraping_status === 'processing') {
             status = 'processing';
         } else {
@@ -2513,8 +2523,6 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
 
             if (isFuture) {
                 status = 'not_available';
-            } else if (unit.last_scraping_status === 'success') {
-                status = 'success';
             } else if (unit.last_scraping_status === 'error') {
                 status = 'error';
             } else {
@@ -2535,7 +2543,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         }
 
         if (!acc[day]) acc[day] = [];
-        acc[day].push({ ...unit, displayStatus: status });
+        acc[day].push({ ...unit, displayStatus: status, matchingInvoice: matchingInvoice });
         return acc;
     }, {});
 
