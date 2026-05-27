@@ -236,16 +236,23 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             const compensado = Number(formData.consumo_compensado) || 0;
             const tarifaUC = Number(selectedUc.tarifa_concessionaria) || 0;
 
+            // Tarifa Efetiva = Consumo em Reais / Consumo Kwh
+            const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
+            const tarifaEfetiva = consumo > 0 ? (consumoReaisVal / consumo) : 0;
+
+            // PRIORIDADE: Utilizar Tarifa Efetiva se for maior que zero, caso contrário usa a tarifa de cadastro da UC
+            const tarifaFinal = tarifaEfetiva > 0 ? tarifaEfetiva : tarifaUC;
+
             const desconto = formData.desconto_aplicado !== '' 
                 ? Number(formData.desconto_aplicado) 
                 : Number(selectedUc.desconto_assinante || 0);
 
             const multiplier = desconto > 1 ? desconto / 100 : desconto;
 
-            // Cálculos operacionais idênticos às regras de faturamento
-            const tarifaMinimaExcedentes = Math.max(0, (consumo - compensado) * tarifaUC);
-            const energiaCompensadaReais = compensado * tarifaUC * (1 - multiplier);
-            const economiaGerada = compensado * tarifaUC * multiplier;
+            // Cálculos operacionais idênticos às regras de faturamento utilizando a tarifa final prioritária
+            const tarifaMinimaExcedentes = Math.max(0, (consumo - compensado) * tarifaFinal);
+            const energiaCompensadaReais = compensado * tarifaFinal * (1 - multiplier);
+            const economiaGerada = compensado * tarifaFinal * multiplier;
 
             const ip = typeof formData.iluminacao_publica === 'string' ? parseCurrency(formData.iluminacao_publica) : (Number(formData.iluminacao_publica) || 0);
             const outros = typeof formData.outros_lancamentos === 'string' ? parseCurrency(formData.outros_lancamentos) : (Number(formData.outros_lancamentos) || 0);
@@ -258,10 +265,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             } else {
                 valorAPagar = concessionariaVal;
             }
-
-            // Tarifa Efetiva = Consumo em Reais / Consumo Kwh
-            const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
-            const tarifaEfetiva = consumo > 0 ? (consumoReaisVal / consumo) : 0;
 
             setSimulation({
                 tarifaEfetiva,
@@ -1159,7 +1162,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         const diffSum = Math.abs(calculatedConcessionariaSum - totalFaturaVal);
         const diffSumLimit = compensado > 0 ? 5.00 : 0.50; // Limiar maior para GD devido a variações de Fio B por distribuidora
 
-        const diffTariff = selectedUc ? Math.abs(simulation.tarifaEfetiva - Number(selectedUc.tarifa_concessionaria)) : 0;
+        const baseTariff = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+        const diffTariff = selectedUc ? Math.abs(simulation.tarifaEfetiva - baseTariff) : 0;
+        const percentDiff = baseTariff > 0 ? (diffTariff / baseTariff) : 0;
 
         const alerts = [];
 
@@ -1175,10 +1180,10 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             });
         }
 
-        if (selectedUc && diffTariff > 0.02) {
+        if (selectedUc && percentDiff > 0.01) {
             alerts.push({
                 type: 'tariff',
-                message: `Divergência de Tarifa: A tarifa efetiva cobrada no PDF (${formatCurrency(simulation.tarifaEfetiva)}/kWh) difere da tarifa base configurada na UC (${formatCurrency(selectedUc.tarifa_concessionaria)}/kWh).`
+                message: `Divergência de Tarifa (>1%): A tarifa efetiva (${simulation.tarifaEfetiva.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}/kWh) difere da tarifa base cadastrada na UC (${baseTariff.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}/kWh) em ${(percentDiff * 100).toFixed(2)}%.`
             });
         }
 
