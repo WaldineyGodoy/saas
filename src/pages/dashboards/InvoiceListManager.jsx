@@ -11,6 +11,16 @@ import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
 
+let pageSessionState = {
+    viewMode: null,
+    monthFilter: null,
+    statusFilter: null,
+    statusFaturaFilter: null,
+    sortBy: null,
+    filterCriterion: null,
+    readingStatusFilter: null,
+    activeTab: null
+};
 
 export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
     const { showAlert, showConfirm } = useUI();
@@ -19,13 +29,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState(initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban');
+    const [viewMode, setViewMode] = useState(() => pageSessionState.viewMode || (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban'));
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-    const [monthFilter, setMonthFilter] = useState(new Date().toISOString().substring(0, 7));
-    const [statusFilter, setStatusFilter] = useState('');
-    const [statusFaturaFilter, setStatusFaturaFilter] = useState('');
+    const [monthFilter, setMonthFilter] = useState(() => pageSessionState.monthFilter || new Date().toISOString().substring(0, 7));
+    const [statusFilter, setStatusFilter] = useState(() => pageSessionState.statusFilter || '');
+    const [statusFaturaFilter, setStatusFaturaFilter] = useState(() => pageSessionState.statusFaturaFilter || '');
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState(null);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -34,9 +44,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
 
     // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeTab, setActiveTab] = useState(() => pageSessionState.activeTab || initialTab);
     // Estado de Ordenação
-    const [sortBy, setSortBy] = useState('ref_desc');
+    const [sortBy, setSortBy] = useState(() => pageSessionState.sortBy || 'ref_desc');
     // Estado de exibição do detalhe informativo da aba (! Info)
     const [activeInfoTab, setActiveInfoTab] = useState(null);
 
@@ -45,11 +55,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
     // Estado do Calendário de Leituras das UCs
-    const [readingStatusFilter, setReadingStatusFilter] = useState('');
+    const [readingStatusFilter, setReadingStatusFilter] = useState(() => pageSessionState.readingStatusFilter || '');
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
     const [ucModalSection, setUcModalSection] = useState('geral');
-    const [filterCriterion, setFilterCriterion] = useState('vencimento'); // 'mes_referencia' | 'vencimento'
+    const [filterCriterion, setFilterCriterion] = useState(() => pageSessionState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
 
     const handleCalendarCardClick = (uc) => {
         setSelectedUcForModal(uc);
@@ -57,10 +67,19 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         setIsUcModalOpen(true);
     };
 
+    useEffect(() => {
+        pageSessionState.viewMode = viewMode;
+        pageSessionState.monthFilter = monthFilter;
+        pageSessionState.statusFilter = statusFilter;
+        pageSessionState.statusFaturaFilter = statusFaturaFilter;
+        pageSessionState.sortBy = sortBy;
+        pageSessionState.filterCriterion = filterCriterion;
+        pageSessionState.readingStatusFilter = readingStatusFilter;
+        pageSessionState.activeTab = activeTab;
+    }, [viewMode, monthFilter, statusFilter, statusFaturaFilter, sortBy, filterCriterion, readingStatusFilter, activeTab]);
+
     const handleTabChange = (tab) => {
         setActiveTab(tab);
-        setStatusFilter('');
-        setStatusFaturaFilter('');
         if (tab === 'faturas') {
             if (viewMode === 'energy_list') setViewMode('list');
             else if (viewMode === 'energy_kanban') setViewMode('kanban');
