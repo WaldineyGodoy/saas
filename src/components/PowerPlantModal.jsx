@@ -659,6 +659,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         setLoadingMonthly(true);
         try {
             const firstDay = `${referenceMonth}-01`;
+            const [year, month] = referenceMonth.split('-');
+            let y = parseInt(year);
+            let m = parseInt(month) + 1;
+            if (m > 12) {
+                m = 1;
+                y++;
+            }
+            const nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
             
             // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
             let totalCompensada = 0;
@@ -703,7 +711,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 const [energyRes, faturamentoRes, prodRes] = await Promise.all([
                     supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                    supabase.from('invoices').select('valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', startD).lt('vencimento', endD).neq('status', 'cancelado'),
+                    supabase.from('invoices').select('valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
                     supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
                 ]);
 
@@ -797,12 +805,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     details: prodData.service_details || {},
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
                     energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
-                    faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
+                    faturamento_mensal: totalFaturamento,
                     faturamento_pago: faturamentoPago,
                     faturamento_a_vencer: faturamentoAVencer,
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
-                    custo_disponibilidade: totalContasEnergia || Number(prodData.custo_disponibilidade) || 0,
+                    custo_disponibilidade: totalContasEnergia,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
             } else {
@@ -2741,6 +2749,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                 </div>
                                                             </div>
 
+                                                            {/* Card: Faturamento Bruto Total no Período */}
+                                                            <div style={{ background: '#f0fdf4', borderRadius: '20px', border: '1.5px solid #bbf7d0', padding: '1.25rem 1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#166534' }}>Faturamento Bruto Total no Período:</span>
+                                                                <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#166534' }}>{formatCurrency(monthlyDetails?.faturamento_mensal || 0)}</span>
+                                                            </div>
+
                                                             {/* Card: Detalhamento do Faturamento por Status */}
                                                             <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                                                                 <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -2787,11 +2801,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#fef2f2', borderRadius: '10px', border: '1px dashed #fca5a5' }}>
                                                                         <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#991b1b' }}>(-) Contas de Energia no Período:</span>
                                                                         <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#991b1b' }}>{formatCurrency(totalContasEnergia)}</span>
-                                                                    </div>
-
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f0fdf4', borderRadius: '12px', border: '1.5px solid #bbf7d0', marginTop: '0.5rem' }}>
-                                                                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>Faturamento Bruto Total no Período:</span>
-                                                                        <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#166534' }}>{formatCurrency(monthlyDetails?.faturamento_mensal || 0)}</span>
                                                                     </div>
                                                                 </div>
                                                             </div>
