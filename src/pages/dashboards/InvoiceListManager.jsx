@@ -1464,254 +1464,284 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 </div>
 
                 {/* Legenda de Status e Quantitativo (Totais) Abaixo do submenu de forma totalmente horizontal */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.6rem 1rem',
-                    background: 'white',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                    flexWrap: 'wrap',
-                    marginTop: '0.5rem'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginRight: '1rem', borderRight: '1px solid #e2e8f0', paddingRight: '1rem' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '900', color: '#0f172a' }}>
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
-                        </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', width: '100%' }}>
+                    {/* Linha única de Legendas */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        padding: '0.6rem 1rem',
+                        background: 'white',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                        flexWrap: 'nowrap',
+                        overflowX: 'auto',
+                        whiteSpace: 'nowrap',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none'
+                    }}>
+                        {activeTab === 'faturas' ? (
+                            <>
+                                {/* Botão Todos/Total */}
+                                <button
+                                    onClick={() => setStatusFilter('')}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        padding: '0.25rem 0.6rem',
+                                        borderRadius: '6px',
+                                        border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                        background: statusFilter === '' ? '#f1f5f9' : 'transparent',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        outline: 'none',
+                                        flexShrink: 0
+                                    }}
+                                    onMouseOver={e => {
+                                        e.currentTarget.style.background = '#f1f5f9';
+                                        e.currentTarget.style.borderColor = '#64748b';
+                                    }}
+                                    onMouseOut={e => {
+                                        if (statusFilter !== '') {
+                                            e.currentTarget.style.background = 'transparent';
+                                            e.currentTarget.style.borderColor = 'transparent';
+                                        }
+                                    }}
+                                    title="Mostrar todos os registros"
+                                >
+                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                    </div>
+                                </button>
+
+                                {faturasStatuses.map(status => {
+                                    const count = faturasCounts[status.key] || 0;
+                                    const isActive = statusFilter === status.key;
+                                    return (
+                                        <button
+                                            key={status.key}
+                                            onClick={() => setStatusFilter(isActive ? '' : status.key)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                                background: isActive ? status.bg : 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                outline: 'none',
+                                                flexShrink: 0
+                                            }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.background = status.bg;
+                                                e.currentTarget.style.borderColor = status.color;
+                                            }}
+                                            onMouseOut={e => {
+                                                if (!isActive) {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.borderColor = 'transparent';
+                                                }
+                                            }}
+                                            title={`Filtrar por ${status.label}`}
+                                        >
+                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </>
+                        ) : (
+                            <>
+                                {/* Botão Todos/Total */}
+                                <button
+                                    onClick={() => setStatusFilter('')}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        padding: '0.25rem 0.6rem',
+                                        borderRadius: '6px',
+                                        border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                        background: statusFilter === '' ? '#f1f5f9' : 'transparent',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        outline: 'none',
+                                        flexShrink: 0
+                                    }}
+                                    onMouseOver={e => {
+                                        e.currentTarget.style.background = '#f1f5f9';
+                                        e.currentTarget.style.borderColor = '#64748b';
+                                    }}
+                                    onMouseOut={e => {
+                                        if (statusFilter !== '') {
+                                            e.currentTarget.style.background = 'transparent';
+                                            e.currentTarget.style.borderColor = 'transparent';
+                                        }
+                                    }}
+                                    title="Mostrar todas as contas"
+                                >
+                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                    </div>
+                                </button>
+
+                                {contasStatuses.map(status => {
+                                    const count = contasCounts[status.key] || 0;
+                                    const isActive = statusFilter === status.key || (status.key === 'atrasada' && statusFilter === 'atrasada') || (status.key === 'a_vencer' && statusFilter === 'a_vencer');
+                                    return (
+                                        <button
+                                            key={status.key}
+                                            onClick={() => setStatusFilter(isActive ? '' : status.key)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                                background: isActive ? status.bg : 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                outline: 'none',
+                                                flexShrink: 0
+                                            }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.background = status.bg;
+                                                e.currentTarget.style.borderColor = status.color;
+                                            }}
+                                            onMouseOut={e => {
+                                                if (!isActive) {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.borderColor = 'transparent';
+                                                }
+                                            }}
+                                            title={`Filtrar por ${status.label}`}
+                                        >
+                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                                
+                                <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 0.5rem', flexShrink: 0 }}></div>
+                                
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>Status Fatura:</span>
+                                
+                                <button
+                                    onClick={() => setStatusFaturaFilter('')}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        padding: '0.25rem 0.6rem',
+                                        borderRadius: '6px',
+                                        border: statusFaturaFilter === '' ? '1px solid #64748b' : '1px solid transparent',
+                                        background: statusFaturaFilter === '' ? '#f1f5f9' : 'transparent',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        outline: 'none',
+                                        flexShrink: 0
+                                    }}
+                                    onMouseOver={e => {
+                                        e.currentTarget.style.background = '#f1f5f9';
+                                        e.currentTarget.style.borderColor = '#64748b';
+                                    }}
+                                    onMouseOut={e => {
+                                        if (statusFaturaFilter !== '') {
+                                            e.currentTarget.style.background = 'transparent';
+                                            e.currentTarget.style.borderColor = 'transparent';
+                                        }
+                                    }}
+                                    title="Mostrar todas as faturas"
+                                >
+                                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
+                                        <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
+                                    </div>
+                                </button>
+
+                                {faturasStatuses.map(status => {
+                                    const count = faturasCounts[status.key] || 0;
+                                    const isActive = statusFaturaFilter === status.key;
+                                    return (
+                                        <button
+                                            key={`fatura-${status.key}`}
+                                            onClick={() => setStatusFaturaFilter(isActive ? '' : status.key)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.25rem 0.6rem',
+                                                borderRadius: '6px',
+                                                border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
+                                                background: isActive ? status.bg : 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                outline: 'none',
+                                                flexShrink: 0
+                                            }}
+                                            onMouseOver={e => {
+                                                e.currentTarget.style.background = status.bg;
+                                                e.currentTarget.style.borderColor = status.color;
+                                            }}
+                                            onMouseOut={e => {
+                                                if (!isActive) {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.borderColor = 'transparent';
+                                                }
+                                            }}
+                                            title={`Filtrar Fatura por ${status.label}`}
+                                        >
+                                            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
+                                                <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </>
+                        )}
                     </div>
-                    {activeTab === 'faturas' ? (
-                        <>
-                            {/* Botão Todos/Total */}
-                            <button
-                                onClick={() => setStatusFilter('')}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    padding: '0.25rem 0.6rem',
-                                    borderRadius: '6px',
-                                    border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                    background: statusFilter === '' ? '#f1f5f9' : 'transparent',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    outline: 'none'
-                                }}
-                                onMouseOver={e => {
-                                    e.currentTarget.style.background = '#f1f5f9';
-                                    e.currentTarget.style.borderColor = '#64748b';
-                                }}
-                                onMouseOut={e => {
-                                    if (statusFilter !== '') {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.borderColor = 'transparent';
-                                    }
-                                }}
-                                title="Mostrar todos os registros"
-                            >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                </div>
-                            </button>
 
-                            {faturasStatuses.map(status => {
-                                const count = faturasCounts[status.key] || 0;
-                                const isActive = statusFilter === status.key;
-                                return (
-                                    <button
-                                        key={status.key}
-                                        onClick={() => setStatusFilter(isActive ? '' : status.key)}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.4rem',
-                                            padding: '0.25rem 0.6rem',
-                                            borderRadius: '6px',
-                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                            background: isActive ? status.bg : 'transparent',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            outline: 'none'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.background = status.bg;
-                                            e.currentTarget.style.borderColor = status.color;
-                                        }}
-                                        onMouseOut={e => {
-                                            if (!isActive) {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.borderColor = 'transparent';
-                                            }
-                                        }}
-                                        title={`Filtrar por ${status.label}`}
-                                    >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </>
-                    ) : (
-                        <>
-                            {/* Botão Todos/Total */}
-                            <button
-                                onClick={() => setStatusFilter('')}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    padding: '0.25rem 0.6rem',
-                                    borderRadius: '6px',
-                                    border: statusFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                    background: statusFilter === '' ? '#f1f5f9' : 'transparent',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    outline: 'none'
-                                }}
-                                onMouseOver={e => {
-                                    e.currentTarget.style.background = '#f1f5f9';
-                                    e.currentTarget.style.borderColor = '#64748b';
-                                }}
-                                onMouseOut={e => {
-                                    if (statusFilter !== '') {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.borderColor = 'transparent';
-                                    }
-                                }}
-                                title="Mostrar todas as contas"
-                            >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todos</span>
-                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                </div>
-                            </button>
-
-                            {contasStatuses.map(status => {
-                                const count = contasCounts[status.key] || 0;
-                                const isActive = statusFilter === status.key || (status.key === 'atrasada' && statusFilter === 'atrasada') || (status.key === 'a_vencer' && statusFilter === 'a_vencer');
-                                return (
-                                    <button
-                                        key={status.key}
-                                        onClick={() => setStatusFilter(isActive ? '' : status.key)}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.4rem',
-                                            padding: '0.25rem 0.6rem',
-                                            borderRadius: '6px',
-                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                            background: isActive ? status.bg : 'transparent',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            outline: 'none'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.background = status.bg;
-                                            e.currentTarget.style.borderColor = status.color;
-                                        }}
-                                        onMouseOut={e => {
-                                            if (!isActive) {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.borderColor = 'transparent';
-                                            }
-                                        }}
-                                        title={`Filtrar por ${status.label}`}
-                                    >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                            
-                            <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 0.5rem' }}></div>
-                            
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem' }}>Status Fatura:</span>
-                            
-                            <button
-                                onClick={() => setStatusFaturaFilter('')}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.4rem',
-                                    padding: '0.25rem 0.6rem',
-                                    borderRadius: '6px',
-                                    border: statusFaturaFilter === '' ? '1px solid #64748b' : '1px solid transparent',
-                                    background: statusFaturaFilter === '' ? '#f1f5f9' : 'transparent',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    outline: 'none'
-                                }}
-                                onMouseOver={e => {
-                                    e.currentTarget.style.background = '#f1f5f9';
-                                    e.currentTarget.style.borderColor = '#64748b';
-                                }}
-                                onMouseOut={e => {
-                                    if (statusFaturaFilter !== '') {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.borderColor = 'transparent';
-                                    }
-                                }}
-                                title="Mostrar todas as faturas"
-                            >
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#64748b', flexShrink: 0 }}></span>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 'bold' }}>Todas</span>
-                                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'bold' }}>{invoicesForTotals.length}</span>
-                                </div>
-                            </button>
-
-                            {faturasStatuses.map(status => {
-                                const count = faturasCounts[status.key] || 0;
-                                const isActive = statusFaturaFilter === status.key;
-                                return (
-                                    <button
-                                        key={`fatura-${status.key}`}
-                                        onClick={() => setStatusFaturaFilter(isActive ? '' : status.key)}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.4rem',
-                                            padding: '0.25rem 0.6rem',
-                                            borderRadius: '6px',
-                                            border: isActive ? `1px solid ${status.color}` : '1px solid transparent',
-                                            background: isActive ? status.bg : 'transparent',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            outline: 'none'
-                                        }}
-                                        onMouseOver={e => {
-                                            e.currentTarget.style.background = status.bg;
-                                            e.currentTarget.style.borderColor = status.color;
-                                        }}
-                                        onMouseOut={e => {
-                                            if (!isActive) {
-                                                e.currentTarget.style.background = 'transparent';
-                                                e.currentTarget.style.borderColor = 'transparent';
-                                            }
-                                        }}
-                                        title={`Filtrar Fatura por ${status.label}`}
-                                    >
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: status.color, flexShrink: 0 }}></span>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1.2' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: '600' }}>{status.label}</span>
-                                            <span style={{ fontSize: '0.7rem', color: status.color, fontWeight: 'bold' }}>{count}</span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </>
-                    )}
+                    {/* Bloco Totais abaixo das legendas, alinhado à direita da tela */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        alignItems: 'center',
+                        width: '100%',
+                        marginTop: '0.25rem'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '0.5rem 1.25rem',
+                            background: 'white',
+                            borderRadius: '10px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                        }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
+                            <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Legenda de Status (Energia) integrada se necessário */}
