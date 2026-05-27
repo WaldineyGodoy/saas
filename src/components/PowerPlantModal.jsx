@@ -376,6 +376,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
     const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+    const [isUCsModified, setIsUCsModified] = useState(!usina);
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
         if (!id) return;
@@ -1113,6 +1114,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                     return newItems;
                 });
+                setIsUCsModified(true);
             }
             return;
         }
@@ -1140,6 +1142,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         }
                         return newSelected;
                     });
+                    setIsUCsModified(true);
                 }
             }
             return;
@@ -1158,6 +1161,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 );
                 if (confirm) {
                     setSelectedUCs(prev => prev.filter(u => u.id !== activeId));
+                    setIsUCsModified(true);
                 }
             }
             return;
@@ -1524,6 +1528,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 );
                                                 if (confirm) {
                                                     setSelectedUCs(selectedUCs.filter(u => u.id !== uc.id));
+                                                    setIsUCsModified(true);
                                                 }
                                             }}
                                         />
@@ -1590,6 +1595,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 );
                                                 if (confirm) {
                                                     setSelectedUCs([...selectedUCs, uc]);
+                                                    setIsUCsModified(true);
                                                 }
                                             }}
                                         />
@@ -1675,7 +1681,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
             if (operationError) throw operationError;
 
-            if (usinaId) {
+            if (usinaId && isUCsModified) {
                 // Clear all links first (or handle intelligently)
                 await supabase.from('consumer_units').update({ usina_id: null, prioridade: null }).eq('usina_id', usinaId);
 
@@ -2126,9 +2132,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                                     onClick={() => {
                                                                         if (isSelected) {
                                                                             setFormData({ ...formData, unidade_geradora: '', cnpj_cpf: '' });
+                                                                            setIsUCsModified(true);
                                                                         } else {
                                                                             setFormData({ ...formData, unidade_geradora: uc.numero_uc, cnpj_cpf: uc.cpf_cnpj_fatura || subscriber?.cpf_cnpj || '' });
                                                                             setSelectedUCs(prev => [uc, ...prev.filter(u => u.id !== uc.id)]);
+                                                                            setIsUCsModified(true);
                                                                         }
                                                                     }}
                                                                     style={{

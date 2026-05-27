@@ -57,10 +57,10 @@ BEGIN
 
                 -- Só aplica o novo status se ele for de ranque maior ou igual ao status atual
                 -- Além disso, mantém as travas de status inativos (desconectado, cancelado, cancelado_inadimplente)
-                IF OLD.status IN ('desconectado', 'cancelado', 'cancelado_inadimplente') THEN
+                IF OLD.status::text IN ('desconectado', 'cancelado', 'cancelado_inadimplente') THEN
                     NULL; -- Não altera de forma alguma
-                ELSIF v_suggested_status IS NOT NULL AND fn_get_uc_status_rank(v_suggested_status) >= fn_get_uc_status_rank(OLD.status) THEN
-                    NEW.status := v_suggested_status;
+                ELSIF v_suggested_status IS NOT NULL AND fn_get_uc_status_rank(v_suggested_status) >= fn_get_uc_status_rank(OLD.status::text) THEN
+                    NEW.status := v_suggested_status::public.uc_status;
                 END IF;
             END;
         ELSE
@@ -107,9 +107,9 @@ BEGIN
         -- E a trava contra reativação de UCs desconectadas ou canceladas
         UPDATE consumer_units
         SET status = CASE
-            WHEN NEW.status = 'gerando' AND fn_get_uc_status_rank('ativo') >= fn_get_uc_status_rank(status) THEN 'ativo'
-            WHEN NEW.status = 'em_conexao' AND fn_get_uc_status_rank('vinculado') >= fn_get_uc_status_rank(status) THEN 'vinculado'
-            WHEN NEW.status IN ('manutencao', 'inativa', 'cancelada') AND fn_get_uc_status_rank('sem_geracao') >= fn_get_uc_status_rank(status) THEN 'sem_geracao'
+            WHEN NEW.status = 'gerando' AND fn_get_uc_status_rank('ativo') >= fn_get_uc_status_rank(status::text) THEN 'ativo'::public.uc_status
+            WHEN NEW.status = 'em_conexao' AND fn_get_uc_status_rank('vinculado') >= fn_get_uc_status_rank(status::text) THEN 'vinculado'::public.uc_status
+            WHEN NEW.status IN ('manutencao', 'inativa', 'cancelada') AND fn_get_uc_status_rank('sem_geracao') >= fn_get_uc_status_rank(status::text) THEN 'sem_geracao'::public.uc_status
             ELSE status
         END
         WHERE usina_id = NEW.id 
@@ -135,12 +135,12 @@ BEGIN
     IF NEW.status = 'atrasado' AND v_uc_status NOT IN ('desconectado', 'cancelado', 'cancelado_inadimplente') THEN
         -- Não retroage status se o status atual da UC já for maior que 'em_atraso' (rank 7)
         IF fn_get_uc_status_rank('em_atraso') >= fn_get_uc_status_rank(v_uc_status) THEN
-            UPDATE consumer_units SET status = 'em_atraso' WHERE id = NEW.uc_id;
+            UPDATE consumer_units SET status = 'em_atraso'::public.uc_status WHERE id = NEW.uc_id;
         END IF;
         
         IF (CURRENT_DATE - NEW.vencimento) > 60 THEN
             IF fn_get_uc_status_rank('cancelado_inadimplente') >= fn_get_uc_status_rank(v_uc_status) THEN
-                UPDATE consumer_units SET status = 'cancelado_inadimplente' WHERE id = NEW.uc_id;
+                UPDATE consumer_units SET status = 'cancelado_inadimplente'::public.uc_status WHERE id = NEW.uc_id;
             END IF;
         END IF;
     END IF;
@@ -156,9 +156,9 @@ BEGIN
              )
              UPDATE consumer_units c
              SET status = CASE
-                WHEN (SELECT status FROM u_status) = 'gerando' AND fn_get_uc_status_rank('ativo') >= fn_get_uc_status_rank(status) THEN 'ativo'
-                WHEN (SELECT status FROM u_status) = 'em_conexao' AND fn_get_uc_status_rank('vinculado') >= fn_get_uc_status_rank(status) THEN 'vinculado'
-                WHEN (SELECT status FROM u_status) IN ('manutencao', 'inativa', 'cancelada') AND fn_get_uc_status_rank('sem_geracao') >= fn_get_uc_status_rank(status) THEN 'sem_geracao'
+                WHEN (SELECT status FROM u_status) = 'gerando' AND fn_get_uc_status_rank('ativo') >= fn_get_uc_status_rank(status::text) THEN 'ativo'::public.uc_status
+                WHEN (SELECT status FROM u_status) = 'em_conexao' AND fn_get_uc_status_rank('vinculado') >= fn_get_uc_status_rank(status::text) THEN 'vinculado'::public.uc_status
+                WHEN (SELECT status FROM u_status) IN ('manutencao', 'inativa', 'cancelada') AND fn_get_uc_status_rank('sem_geracao') >= fn_get_uc_status_rank(status::text) THEN 'sem_geracao'::public.uc_status
                 ELSE status
              END
              WHERE id = NEW.uc_id;
