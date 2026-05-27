@@ -687,14 +687,14 @@ Associado`;
             }
 
             const canvas = await html2canvas(element, {
-                scale: 2,
+                scale: 1.2,
                 useCORS: true,
                 allowTaint: true,
                 logging: false,
                 backgroundColor: "#f8fafc"
             });
 
-            const imgData = canvas.toDataURL('image/png');
+            const imgData = canvas.toDataURL('image/jpeg', 0.8);
             const pdf = new jsPDF('p', 'mm', 'a4');
             const imgWidth = 210;
             const pageHeight = 297;
@@ -703,14 +703,14 @@ Associado`;
             let position = 0;
 
             // Page 1
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
             heightLeft -= pageHeight;
 
             // Subsequent pages if height exceeds A4
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
                 heightLeft -= pageHeight;
             }
 
