@@ -663,6 +663,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
             let totalCompensada = 0;
             let totalFaturamento = 0;
+            let faturamentoPago = 0;
+            let faturamentoAVencer = 0;
+            let faturamentoSemFaturamento = 0;
+            let faturamentoAtrasado = 0;
+            let totalContasEnergia = 0;
             let prodData = null;
             let prodError = null;
 
@@ -698,7 +703,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 const [energyRes, faturamentoRes, prodRes] = await Promise.all([
                     supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                    supabase.from('invoices').select('valor_a_pagar').in('uc_id', ucIds).gte('vencimento', startD).lt('vencimento', endD).neq('status', 'cancelado'),
+                    supabase.from('invoices').select('valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', startD).lt('vencimento', endD).neq('status', 'cancelado'),
                     supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
                 ]);
 
@@ -708,6 +713,25 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
                 totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
+
+                if (faturamentoRes.data) {
+                    faturamentoRes.data.forEach(inv => {
+                        const val = Number(inv.valor_a_pagar) || 0;
+                        const concessionariaVal = Number(inv.valor_concessionaria) || 0;
+                        totalContasEnergia += concessionariaVal;
+
+                        if (inv.status === 'pago') {
+                            faturamentoPago += val;
+                        } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
+                            faturamentoAVencer += val;
+                        } else if (inv.status === 'sem_faturamento') {
+                            faturamentoSemFaturamento += val;
+                        } else if (inv.status === 'atrasado') {
+                            faturamentoAtrasado += val;
+                        }
+                    });
+                }
+
                 prodData = prodRes.data;
                 prodError = prodRes.error;
             } else {
@@ -774,6 +798,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
                     energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
                     faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
+                    faturamento_pago: faturamentoPago,
+                    faturamento_a_vencer: faturamentoAVencer,
+                    faturamento_sem_faturamento: faturamentoSemFaturamento,
+                    faturamento_atrasado: faturamentoAtrasado,
+                    custo_disponibilidade: totalContasEnergia || Number(prodData.custo_disponibilidade) || 0,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
             } else {
@@ -804,7 +833,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     geracao_prevista: prediction,
                     energia_compensada: totalCompensada || 0,
                     faturamento_mensal: totalFaturamento,
-                    custo_disponibilidade: 0
+                    faturamento_pago: faturamentoPago,
+                    faturamento_a_vencer: faturamentoAVencer,
+                    faturamento_sem_faturamento: faturamentoSemFaturamento,
+                    faturamento_atrasado: faturamentoAtrasado,
+                    custo_disponibilidade: totalContasEnergia
                 });
             }
         } catch (err) {
@@ -825,15 +858,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // 1. Calculate the final values
             const maintenance = monthlyDetails.manutencao || 0;
             const rent = monthlyDetails.arrendamento || 0;
-            const gestaoFixo = monthlyDetails.gestao_reais || 0;
-            // Gestão Percentual calculation: (Faturamento - Concessionária) * %
-            const faturamento = monthlyDetails.faturamento_mensal || 0;
-            const concessionaria = monthlyDetails.details?.['Energia'] || monthlyDetails.custo_disponibilidade || 0;
-            const gestaoVar = Math.max(0, (faturamento - concessionaria) * (Number(formData.gestao_percentual) / 100));
-            const gestaoTotal = gestaoFixo + gestaoVar;
+            const faturamentoPago = monthlyDetails.faturamento_pago || 0;
+            const concessionaria = monthlyDetails.custo_disponibilidade || 0;
+            
+            const subtotal = faturamentoPago - concessionaria;
+            const gestaoTotal = subtotal * (Number(formData.gestao_percentual) / 100);
             const otherServices = monthlyDetails.servicos || 0;
 
             const totalDespesas = maintenance + rent + gestaoTotal + otherServices;
+            const saldoReceber = subtotal - totalDespesas;
 
             // 2. Upsert generation_production
             const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
@@ -841,8 +874,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 ...mainData,
                 service_details: details || {},
                 custo_disponibilidade: concessionaria, // Ensure energy cost is mapped
+                faturas_pagas: faturamentoPago,
                 gestao_reais: gestaoTotal,
                 total_despesas: totalDespesas,
+                saldo_receber: saldoReceber,
                 fechamento: new Date().toISOString().split('T')[0],
                 status: 'liquidado'
             };
@@ -2587,274 +2622,333 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                                 {activeFinanceTab === 'lancamentos' && (
                                     <div style={{ animation: 'fadeIn 0.2s' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const [year, month] = referenceMonth.split('-').map(Number);
-                                                            const date = new Date(year, month - 2, 1);
-                                                            setReferenceMonth(date.toISOString().slice(0, 7));
-                                                        }}
-                                                        style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
-                                                    >
-                                                        <ChevronUp style={{ transform: 'rotate(-90deg)' }} size={18} />
-                                                    </button>
-                                                    
-                                                    <div style={{ textAlign: 'center', minWidth: '180px' }}>
-                                                        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Mês de Referência</label>
-                                                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', textTransform: 'capitalize' }}>
-                                                            {new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
-                                                            {(() => {
-                                                                const baseDate = parseISO(`${referenceMonth}-01`);
-                                                                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
-                                                                const diaLeitura = formData.dia_leitura || mainUG?.dia_leitura;
+                                        {(() => {
+                                            const faturamentoPago = monthlyDetails?.faturamento_pago || 0;
+                                            const totalContasEnergia = monthlyDetails?.custo_disponibilidade || 0;
+                                            const subtotal = faturamentoPago - totalContasEnergia;
+                                            const gestaoPercentual = Number(formData.gestao_percentual) || 0;
+                                            const gestaoTaxa = subtotal * (gestaoPercentual / 100);
+                                            const outrosServicos = (monthlyDetails?.manutencao || 0) + 
+                                                                   (monthlyDetails?.arrendamento || 0) + 
+                                                                   (monthlyDetails?.servicos || 0);
+                                            const totalServicos = gestaoTaxa + outrosServicos;
+                                            const saldoAReceber = subtotal - totalServicos;
 
-                                                                if (!diaLeitura) {
-                                                                    return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
-                                                                }
-                                                                const day = parseInt(diaLeitura);
-                                                                const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
-                                                                const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
-                                                                return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
-                                                            })()}
+                                            return (
+                                                <>
+                                                    {/* Header Row (Mês de Referência + Saldo a Receber) */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const [year, month] = referenceMonth.split('-').map(Number);
+                                                                    const date = new Date(year, month - 2, 1);
+                                                                    setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                }}
+                                                                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                            >
+                                                                <ChevronUp style={{ transform: 'rotate(-90deg)' }} size={18} />
+                                                            </button>
+                                                            
+                                                            <div style={{ textAlign: 'center', minWidth: '180px' }}>
+                                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Mês de Referência</label>
+                                                                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', textTransform: 'capitalize' }}>
+                                                                    {new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
+                                                                    {(() => {
+                                                                        const baseDate = parseISO(`${referenceMonth}-01`);
+                                                                        const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                                                                        const diaLeitura = formData.dia_leitura || mainUG?.dia_leitura;
+
+                                                                        if (!diaLeitura) {
+                                                                            return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
+                                                                        }
+                                                                        const day = parseInt(diaLeitura);
+                                                                        const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                                                                        const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                                                                        return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const [year, month] = referenceMonth.split('-').map(Number);
+                                                                    const date = new Date(year, month, 1);
+                                                                    setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                }}
+                                                                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                            >
+                                                                <ChevronUp style={{ transform: 'rotate(90deg)' }} size={18} />
+                                                            </button>
+                                                        </div>
+
+                                                        <div style={{ textAlign: 'right', padding: '0.5rem 1.25rem', background: '#eff6ff', borderRadius: '14px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                                                            <span style={{ fontSize: '0.72rem', color: '#1e3a8a', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>Saldo a Receber</span>
+                                                            <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                                {formatCurrency(saldoAReceber)}
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const [year, month] = referenceMonth.split('-').map(Number);
-                                                            const date = new Date(year, month, 1);
-                                                            setReferenceMonth(date.toISOString().slice(0, 7));
-                                                        }}
-                                                        style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
-                                                    >
-                                                        <ChevronUp style={{ transform: 'rotate(90deg)' }} size={18} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <span style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total de Serviços do Mês</span>
-                                                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#166534' }}>
-                                                    {formatCurrency(
-                                                        (monthlyDetails?.manutencao || 0) + 
-                                                        (monthlyDetails?.arrendamento || 0) + 
-                                                        (monthlyDetails?.gestao_reais || 0) + 
-                                                        (monthlyDetails?.servicos || 0)
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 1.5fr) 1fr', gap: '1.5rem', alignItems: 'start' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                                {/* Production Data Section */}
-                                                <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                                    <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                        <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a' }}>
-                                                            <Activity size={20} />
-                                                        </div>
-                                                        Dados de Operação e Performance
-                                                    </h4>
-                                                    
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal - Energia Injetada (kWh)</label>
-                                                            <input 
-                                                                type="number"
-                                                                value={monthlyDetails?.geracao_mensal_kwh || ''}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, geracao_mensal_kwh: Number(e.target.value)})}
-                                                                placeholder="0"
-                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista (kWh)</label>
-                                                            <input 
-                                                                type="number"
-                                                                value={monthlyDetails?.geracao_prevista || ''}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, geracao_prevista: Number(e.target.value)})}
-                                                                placeholder="0"
-                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#166534', background: '#f0fdf4', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Compensada nas UCs (kWh)</label>
-                                                            <input 
-                                                                type="number"
-                                                                value={monthlyDetails?.energia_compensada || ''}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, energia_compensada: Number(e.target.value)})}
-                                                                placeholder="0"
-                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Faturamento Bruto (R$)</label>
-                                                            <input 
-                                                                type="text"
-                                                                value={formatCurrency(monthlyDetails?.faturamento_mensal).replace('R$', '').trim()}
-                                                                onChange={e => setMonthlyDetails({...monthlyDetails, faturamento_mensal: parseCurrency(e.target.value)})}
-                                                                placeholder="0,00"
-                                                                style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Extract: Detailed and Editable */}
-                                                <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                                        <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
-                                                                <FileText size={20} />
-                                                            </div>
-                                                            Extrato Detalhado de Lançamentos
-                                                        </h4>
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                        {/* Row: Gestão */}
-                                                        {(monthlyDetails?.gestao_reais > 0) && (
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
-                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Gestão B2W</span>
-                                                                </div>
-                                                                <div style={{ position: 'relative', width: '120px' }}>
-                                                                    <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                                    <input 
-                                                                        type="text"
-                                                                        value={formatCurrency(monthlyDetails?.gestao_reais).replace('R$', '').trim()}
-                                                                        onChange={e => setMonthlyDetails({...monthlyDetails, gestao_reais: parseCurrency(e.target.value)})}
-                                                                        style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Row: Manutenção */}
-                                                        {(monthlyDetails?.manutencao > 0) && (
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Manutenção</span>
-                                                                </div>
-                                                                <div style={{ position: 'relative', width: '120px' }}>
-                                                                    <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                                    <input 
-                                                                        type="text"
-                                                                        value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
-                                                                        onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
-                                                                        style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Row: Arrendamento */}
-                                                        {(monthlyDetails?.arrendamento > 0) && (
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
-                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>Arrendamento</span>
-                                                                </div>
-                                                                <div style={{ position: 'relative', width: '120px' }}>
-                                                                    <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
-                                                                    <input 
-                                                                        type="text"
-                                                                        value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
-                                                                        onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
-                                                                        style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Individualized Services from Details JSONB */}
-                                                        {Object.keys(monthlyDetails?.details || {}).map((serv) => {
-                                                            const val = monthlyDetails?.details?.[serv] || 0;
-                                                            if (val <= 0 || ['Manutenção', 'Arrendamento', 'Gestão'].includes(serv)) return null;
-                                                            return (
-                                                                <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
-                                                                        <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.9rem' }}>
-                                                                            {serv === 'Energia' ? 'Energia - Custo de Disponibilidade' : serv}
-                                                                        </span>
+                                                    {/* Grid Row (2 columns: left is Operations + Status breakdown, right is Services + totalServicos in footer) */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'start', marginBottom: '1.5rem' }}>
+                                                        {/* Coluna Esquerda: Dados de Operação + Detalhamento de Faturamento */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                                            {/* Card: Dados de Operação e Performance */}
+                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                                                <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                    <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a' }}>
+                                                                        <Activity size={20} />
                                                                     </div>
-                                                                    <div style={{ position: 'relative', width: '120px' }}>
-                                                                        <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                    Dados de Operação e Performance
+                                                                </h4>
+                                                                
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal - Energia Injetada (kWh)</label>
                                                                         <input 
-                                                                            type="text"
-                                                                            value={formatCurrency(val).replace('R$', '').trim()}
-                                                                            onChange={e => {
-                                                                                const newVal = parseCurrency(e.target.value);
-                                                                                const newDetails = { ...(monthlyDetails?.details || {}), [serv]: newVal };
-                                                                                // Recalculate 'servicos' as the sum of all other services
-                                                                                const totalOthers = Object.values(newDetails).reduce((acc, curr) => acc + curr, 0);
-                                                                                setMonthlyDetails({
-                                                                                    ...monthlyDetails, 
-                                                                                    details: newDetails,
-                                                                                    servicos: totalOthers
-                                                                                });
-                                                                            }}
-                                                                            style={{ width: '100%', padding: '0.4rem 0.5rem 0.4rem 2.2rem', border: 'none', background: 'white', borderRadius: '8px', textAlign: 'right', fontWeight: 800, color: '#1e293b', outline: 'none' }}
+                                                                            type="number"
+                                                                            value={monthlyDetails?.geracao_mensal_kwh || ''}
+                                                                            onChange={e => setMonthlyDetails({...monthlyDetails, geracao_mensal_kwh: Number(e.target.value)})}
+                                                                            placeholder="0"
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista (kWh)</label>
+                                                                        <input 
+                                                                            type="number"
+                                                                            value={monthlyDetails?.geracao_prevista || ''}
+                                                                            onChange={e => setMonthlyDetails({...monthlyDetails, geracao_prevista: Number(e.target.value)})}
+                                                                            placeholder="0"
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #dcfce7', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#166534', background: '#f0fdf4', outline: 'none' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div style={{ gridColumn: 'span 2' }}>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Compensada nas UCs (kWh)</label>
+                                                                        <input 
+                                                                            type="number"
+                                                                            value={monthlyDetails?.energia_compensada || ''}
+                                                                            onChange={e => setMonthlyDetails({...monthlyDetails, energia_compensada: Number(e.target.value)})}
+                                                                            placeholder="0"
+                                                                            style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', fontWeight: 700, color: '#1e293b', outline: 'none' }}
                                                                         />
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                            </div>
 
-                                            {/* Status and Action Sidebar */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                <div style={{ padding: '1.5rem', background: monthlyDetails?.status === 'liquidado' ? '#f0fdf4' : '#fff7ed', borderRadius: '20px', border: `1px solid ${monthlyDetails?.status === 'liquidado' ? '#bbf7d0' : '#ffedd5'}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', fontSize: '0.85rem', fontWeight: 800, marginBottom: '1rem', textTransform: 'uppercase' }}>
-                                                        {monthlyDetails?.status === 'liquidado' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
-                                                        Status do Mês
-                                                    </div>
-                                                    <div style={{ fontSize: '1.25rem', fontWeight: 900, lineHeight: 1.2, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412' }}>
-                                                        {monthlyDetails?.status === 'liquidado' ? 'MÊS FECHADO' : 'PENDENTE DE FECHAMENTO'}
-                                                    </div>
-                                                    {monthlyDetails?.fechamento && (
-                                                        <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
-                                                            Encerrado em: {new Date(monthlyDetails.fechamento).toLocaleDateString('pt-BR')}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                            {/* Card: Detalhamento do Faturamento por Status */}
+                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                                                <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                    <div style={{ padding: '0.5rem', background: '#fff7ed', borderRadius: '10px', color: '#ea580c' }}>
+                                                                        <CreditCard size={20} />
+                                                                    </div>
+                                                                    Detalhamento de Receitas do Período
+                                                                </h4>
+                                                                
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                                    {/* Breakdown rows */}
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', borderLeft: '4px solid #3b82f6' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                                                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b' }}>Faturamento A Vencer:</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.faturamento_a_vencer || 0)}</span>
+                                                                    </div>
 
-                                                <button 
-                                                    type="button"
-                                                    onClick={handleFechamento}
-                                                    disabled={loading}
-                                                    style={{ 
-                                                        width: '100%',
-                                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '1.5rem', 
-                                                        background: monthlyDetails?.status === 'liquidado' ? '#3b82f6' : '#16a34a', 
-                                                        color: 'white', borderRadius: '20px', border: 'none', 
-                                                        cursor: 'pointer', 
-                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                                        opacity: loading ? 0.7 : 1
-                                                    }}>
-                                                    {monthlyDetails?.status === 'liquidado' ? <RefreshCcw size={32} /> : <CheckCircle size={32} />}
-                                                    <div style={{ textAlign: 'center' }}>
-                                                        <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                                                            {monthlyDetails?.status === 'liquidado' ? 'Reenviar Lançamentos' : 'Efetuar Fechamento'}
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', borderLeft: '4px solid #16a34a' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }} />
+                                                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b' }}>Faturamento Pago:</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(faturamentoPago)}</span>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', borderLeft: '4px solid #94a3b8' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#94a3b8' }} />
+                                                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b' }}>Sem Faturamento:</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.faturamento_sem_faturamento || 0)}</span>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '10px', borderLeft: '4px solid #dc2626' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#dc2626' }} />
+                                                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b' }}>Faturamento Atrasado:</span>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(monthlyDetails?.faturamento_atrasado || 0)}</span>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#fef2f2', borderRadius: '10px', border: '1px dashed #fca5a5' }}>
+                                                                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#991b1b' }}>(-) Contas de Energia no Período:</span>
+                                                                        <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#991b1b' }}>{formatCurrency(totalContasEnergia)}</span>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f0fdf4', borderRadius: '12px', border: '1.5px solid #bbf7d0', marginTop: '0.5rem' }}>
+                                                                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#166534' }}>Faturamento Bruto Total no Período:</span>
+                                                                        <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#166534' }}>{formatCurrency(monthlyDetails?.faturamento_mensal || 0)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.2rem' }}>
-                                                            Gravar lançamentos no Razão
+
+                                                        {/* Coluna Direita: Extrato Detalhado de Lançamentos */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                                            <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', minHeight: '425px', justifyContent: 'space-between' }}>
+                                                                <div>
+                                                                    <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                        <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
+                                                                            <FileText size={20} />
+                                                                        </div>
+                                                                        Extrato Detalhado de Lançamentos
+                                                                    </h4>
+
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                                                                        {/* Row: Gestão */}
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                                                                                <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.85rem' }}>Gestão B2W ({gestaoPercentual}%)</span>
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(gestaoTaxa)}</span>
+                                                                        </div>
+
+                                                                        {/* Row: Manutenção */}
+                                                                        {(monthlyDetails?.manutencao > 0) && (
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.85rem' }}>Manutenção</span>
+                                                                                </div>
+                                                                                <div style={{ position: 'relative', width: '100px' }}>
+                                                                                    <span style={{ position: 'absolute', left: '0.4rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                                    <input 
+                                                                                        type="text"
+                                                                                        value={formatCurrency(monthlyDetails?.manutencao).replace('R$', '').trim()}
+                                                                                        onChange={e => setMonthlyDetails({...monthlyDetails, manutencao: parseCurrency(e.target.value)})}
+                                                                                        style={{ width: '100%', padding: '0.3rem 0.4rem 0.3rem 1.6rem', border: 'none', background: 'white', borderRadius: '6px', textAlign: 'right', fontWeight: 800, color: '#1e293b', fontSize: '0.85rem', outline: 'none' }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Row: Arrendamento */}
+                                                                        {(monthlyDetails?.arrendamento > 0) && (
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
+                                                                                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.85rem' }}>Arrendamento</span>
+                                                                                </div>
+                                                                                <div style={{ position: 'relative', width: '100px' }}>
+                                                                                    <span style={{ position: 'absolute', left: '0.4rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                                    <input 
+                                                                                        type="text"
+                                                                                        value={formatCurrency(monthlyDetails?.arrendamento).replace('R$', '').trim()}
+                                                                                        onChange={e => setMonthlyDetails({...monthlyDetails, arrendamento: parseCurrency(e.target.value)})}
+                                                                                        style={{ width: '100%', padding: '0.3rem 0.4rem 0.3rem 1.6rem', border: 'none', background: 'white', borderRadius: '6px', textAlign: 'right', fontWeight: 800, color: '#1e293b', fontSize: '0.85rem', outline: 'none' }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Individualized Services */}
+                                                                        {Object.keys(monthlyDetails?.details || {}).map((serv) => {
+                                                                            const val = monthlyDetails?.details?.[serv] || 0;
+                                                                            if (val <= 0 || ['Manutenção', 'Arrendamento', 'Gestão'].includes(serv)) return null;
+                                                                            return (
+                                                                                <div key={serv} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }} />
+                                                                                        <span style={{ fontWeight: 700, color: '#475569', fontSize: '0.85rem' }}>
+                                                                                            {serv === 'Energia' ? 'Energia - Custo de Disponibilidade' : serv}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div style={{ position: 'relative', width: '100px' }}>
+                                                                                        <span style={{ position: 'absolute', left: '0.4rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>R$</span>
+                                                                                        <input 
+                                                                                            type="text"
+                                                                                            value={formatCurrency(val).replace('R$', '').trim()}
+                                                                                            onChange={e => {
+                                                                                                const newVal = parseCurrency(e.target.value);
+                                                                                                const newDetails = { ...(monthlyDetails?.details || {}), [serv]: newVal };
+                                                                                                const totalOthers = Object.values(newDetails).reduce((acc, curr) => acc + curr, 0);
+                                                                                                setMonthlyDetails({
+                                                                                                    ...monthlyDetails, 
+                                                                                                    details: newDetails,
+                                                                                                    servicos: totalOthers
+                                                                                                });
+                                                                                            }}
+                                                                                            style={{ width: '100%', padding: '0.3rem 0.4rem 0.3rem 1.6rem', border: 'none', background: 'white', borderRadius: '6px', textAlign: 'right', fontWeight: 800, color: '#1e293b', fontSize: '0.85rem', outline: 'none' }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Footer: Total de Serviços do Mês */}
+                                                                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total de Serviços do Mês</span>
+                                                                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#166534' }}>
+                                                                        {formatCurrency(totalServicos)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </button>
-                                            </div>
-                                        </div>
+
+                                                    {/* Status and Action centered at the bottom of the page */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginTop: '2rem', width: '100%' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', width: '100%', maxWidth: '600px', padding: '1.25rem 2rem', background: monthlyDetails?.status === 'liquidado' ? '#f0fdf4' : '#fff7ed', borderRadius: '20px', border: `1px solid ${monthlyDetails?.status === 'liquidado' ? '#bbf7d0' : '#ffedd5'}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', justifyContent: 'space-between' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase' }}>
+                                                                {monthlyDetails?.status === 'liquidado' ? <CheckCircle size={22} /> : <AlertCircle size={22} />} 
+                                                                Status do Mês:
+                                                            </div>
+                                                            <div style={{ fontSize: '1.2rem', fontWeight: 900, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412' }}>
+                                                                {monthlyDetails?.status === 'liquidado' ? 'MÊS FECHADO' : 'PENDENTE DE FECHAMENTO'}
+                                                            </div>
+                                                            {monthlyDetails?.fechamento && (
+                                                                <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>
+                                                                    Encerrado em: {new Date(monthlyDetails.fechamento).toLocaleDateString('pt-BR')}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <button 
+                                                            type="button"
+                                                            onClick={handleFechamento}
+                                                            disabled={loading}
+                                                            style={{ 
+                                                                width: '100%',
+                                                                maxWidth: '600px',
+                                                                display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.25rem 2rem', 
+                                                                background: monthlyDetails?.status === 'liquidado' ? '#3b82f6' : '#16a34a', 
+                                                                color: 'white', borderRadius: '20px', border: 'none', 
+                                                                cursor: 'pointer', 
+                                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                                                                opacity: loading ? 0.7 : 1
+                                                            }}>
+                                                            {monthlyDetails?.status === 'liquidado' ? <RefreshCcw size={28} /> : <CheckCircle size={28} />}
+                                                            <div style={{ textAlign: 'left' }}>
+                                                                <div style={{ fontWeight: 800, fontSize: '1.15rem' }}>
+                                                                    {monthlyDetails?.status === 'liquidado' ? 'Reenviar Lançamentos' : 'Efetuar Fechamento'}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.1rem' }}>
+                                                                    Gravar lançamentos no Razão
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 )}
                             </div>
