@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import SubscriberModal from '../../components/SubscriberModal';
-import { CreditCard, X, Eye, Pencil, RefreshCw, CheckCircle, AlertCircle, Clock, Calendar, ArrowUpDown, ChevronUp, ChevronDown, TrendingUp, DollarSign } from 'lucide-react';
+import { CreditCard, X, Eye, Pencil, RefreshCw, CheckCircle, AlertCircle, Clock, Calendar, ArrowUpDown, ChevronUp, ChevronDown, TrendingUp, DollarSign, Search } from 'lucide-react';
 import { createAsaasCharge } from '../../lib/api';
 import {
     DndContext,
@@ -452,18 +452,40 @@ export default function SubscriberList() {
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0'
             }}>
-                <div style={{ display: 'flex', gap: '1rem', flex: 1, minWidth: '300px' }}>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome, email, telefone ou CPF..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{
-                            padding: '0.6rem 1rem', width: '100%', maxWidth: '400px',
-                            border: '1px solid #cbd5e1', borderRadius: '6px',
-                            fontSize: '0.9rem', outline: 'none'
-                        }}
-                    />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '300px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#64748b' }}>Ordenar por:</span>
+                        <select 
+                            value={`${sortConfig.key}_${sortConfig.direction}`} 
+                            onChange={e => {
+                                const val = e.target.value;
+                                const lastUnderscore = val.lastIndexOf('_');
+                                const key = val.substring(0, lastUnderscore);
+                                const direction = val.substring(lastUnderscore + 1);
+                                setSortConfig({ key, direction });
+                            }} 
+                            style={{ padding: '0.4rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#0f172a', background: 'white', fontWeight: '600', outline: 'none', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                        >
+                            <option value="name_asc">Nome: Ordem alfabética (A-Z)</option>
+                            <option value="name_desc">Nome: Ordem alfabética (Z-A)</option>
+                            <option value="created_at_desc">Data de Cadastro: Mais Novo primeiro</option>
+                            <option value="created_at_asc">Data de Cadastro: Mais Antigo primeiro</option>
+                            <option value="status_asc">Status (A-Z)</option>
+                            <option value="status_desc">Status (Z-A)</option>
+                        </select>
+                    </div>
+
+                    <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Search size={16} color="#64748b" />
+                        <input 
+                            placeholder="Buscar Assinante..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            style={{ padding: '0.4rem', border: 'none', outline: 'none', fontSize: '0.85rem', width: '200px', background: 'transparent' }} 
+                        />
+                    </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>

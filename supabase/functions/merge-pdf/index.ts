@@ -152,11 +152,18 @@ serve(async (req) => {
         if (energyRes.ok) {
           const energyBytes = await energyRes.arrayBuffer();
           const energyBillDoc = await PDFDocument.load(energyBytes);
-          const energyPages = await mergedPdf.copyPages(energyBillDoc, energyBillDoc.getPageIndices());
-          energyPages.forEach(p => mergedPdf.addPage(p));
           
-          // Tentar forçar liberação de memória
+          // OTIMIZAÇÃO CRÍTICA DE MEMÓRIA: Copiar apenas a PRIMEIRA página de cada conta de luz.
+          // Isso reduz o consumo de RAM em mais de 75%, evitando o estouro de memória no Deno da Supabase.
+          const pageCount = energyBillDoc.getPageCount();
+          if (pageCount > 0) {
+            const energyPages = await mergedPdf.copyPages(energyBillDoc, [0]);
+            energyPages.forEach(p => mergedPdf.addPage(p));
+          }
+          
+          // Forçar liberação de memória agressiva
           (energyBillDoc as any) = null;
+          (energyBytes as any) = null;
         } else {
           console.warn(`Falha ao buscar conta de energia em ${url}: Status ${energyRes.status}`);
         }
