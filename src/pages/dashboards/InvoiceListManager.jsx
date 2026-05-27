@@ -12,13 +12,26 @@ import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
 
 let pageSessionState = {
-    viewMode: null,
-    monthFilter: null,
-    statusFilter: null,
-    statusFaturaFilter: null,
-    sortBy: null,
-    filterCriterion: null,
-    readingStatusFilter: null,
+    // Configurações salvas para a aba de Faturas
+    faturas: {
+        viewMode: 'kanban',
+        monthFilter: new Date().toISOString().substring(0, 7),
+        statusFilter: '',
+        statusFaturaFilter: '',
+        sortBy: 'ref_desc',
+        filterCriterion: 'vencimento',
+        readingStatusFilter: ''
+    },
+    // Configurações salvas para a aba de Contas de Energia
+    contas_energia: {
+        viewMode: 'energy_kanban',
+        monthFilter: new Date().toISOString().substring(0, 7),
+        statusFilter: '',
+        statusFaturaFilter: '',
+        sortBy: 'ref_desc',
+        filterCriterion: 'vencimento',
+        readingStatusFilter: ''
+    },
     activeTab: null
 };
 
@@ -29,13 +42,21 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState(() => hideTabs ? (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban') : (pageSessionState.viewMode || (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban')));
+
+    // Determinar a aba ativa inicial
+    const resolvedActiveTab = hideTabs ? initialTab : (pageSessionState.activeTab || initialTab);
+    const [activeTab, setActiveTab] = useState(resolvedActiveTab);
+
+    // Obter as configurações salvas na sessão para a aba atual
+    const savedState = pageSessionState[resolvedActiveTab] || {};
+
+    const [viewMode, setViewMode] = useState(() => savedState.viewMode || (resolvedActiveTab === 'contas_energia' ? 'energy_kanban' : 'kanban'));
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-    const [monthFilter, setMonthFilter] = useState(() => pageSessionState.monthFilter || new Date().toISOString().substring(0, 7));
-    const [statusFilter, setStatusFilter] = useState(() => pageSessionState.statusFilter || '');
-    const [statusFaturaFilter, setStatusFaturaFilter] = useState(() => pageSessionState.statusFaturaFilter || '');
+    const [monthFilter, setMonthFilter] = useState(() => savedState.monthFilter || new Date().toISOString().substring(0, 7));
+    const [statusFilter, setStatusFilter] = useState(() => savedState.statusFilter || '');
+    const [statusFaturaFilter, setStatusFaturaFilter] = useState(() => savedState.statusFaturaFilter || '');
     const [searchTerm, setSearchTerm] = useState('');
     const [generatingId, setGeneratingId] = useState(null);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -43,10 +64,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [payingId, setPayingId] = useState(null);
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
 
-    // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
-    const [activeTab, setActiveTab] = useState(() => hideTabs ? initialTab : (pageSessionState.activeTab || initialTab));
     // Estado de Ordenação
-    const [sortBy, setSortBy] = useState(() => pageSessionState.sortBy || 'ref_desc');
+    const [sortBy, setSortBy] = useState(() => savedState.sortBy || 'ref_desc');
     // Estado de exibição do detalhe informativo da aba (! Info)
     const [activeInfoTab, setActiveInfoTab] = useState(null);
 
@@ -55,11 +74,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
     // Estado do Calendário de Leituras das UCs
-    const [readingStatusFilter, setReadingStatusFilter] = useState(() => pageSessionState.readingStatusFilter || '');
+    const [readingStatusFilter, setReadingStatusFilter] = useState(() => savedState.readingStatusFilter || '');
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
     const [ucModalSection, setUcModalSection] = useState('geral');
-    const [filterCriterion, setFilterCriterion] = useState(() => pageSessionState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
+    const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
 
     const handleCalendarCardClick = (uc) => {
         setSelectedUcForModal(uc);
@@ -67,44 +86,73 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         setIsUcModalOpen(true);
     };
 
+    // Efeito para sincronizar os estados salvos quando o usuário clica no menu do CRM (initialTab muda)
     useEffect(() => {
         if (initialTab) {
             setActiveTab(initialTab);
-            if (initialTab === 'contas_energia') {
-                setViewMode('energy_kanban');
+            const saved = pageSessionState[initialTab] || {};
+            
+            // Restaura o modo de visualização salvo desta aba específica
+            if (saved.viewMode) {
+                setViewMode(saved.viewMode);
             } else {
-                setViewMode('kanban');
+                setViewMode(initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban');
             }
+            
+            // Restaura os filtros salvos desta aba específica
+            if (saved.monthFilter) setMonthFilter(saved.monthFilter);
+            if (saved.statusFilter !== undefined) setStatusFilter(saved.statusFilter);
+            if (saved.statusFaturaFilter !== undefined) setStatusFaturaFilter(saved.statusFaturaFilter);
+            if (saved.sortBy) setSortBy(saved.sortBy);
+            if (saved.filterCriterion) setFilterCriterion(saved.filterCriterion);
+            if (saved.readingStatusFilter !== undefined) setReadingStatusFilter(saved.readingStatusFilter);
         }
     }, [initialTab]);
 
+    // Efeito para salvar qualquer alteração de estado da aba ativa na sessão global
     useEffect(() => {
-        pageSessionState.viewMode = viewMode;
-        pageSessionState.monthFilter = monthFilter;
-        pageSessionState.statusFilter = statusFilter;
-        pageSessionState.statusFaturaFilter = statusFaturaFilter;
-        pageSessionState.sortBy = sortBy;
-        pageSessionState.filterCriterion = filterCriterion;
-        pageSessionState.readingStatusFilter = readingStatusFilter;
+        if (!pageSessionState[activeTab]) {
+            pageSessionState[activeTab] = {};
+        }
+        pageSessionState[activeTab].viewMode = viewMode;
+        pageSessionState[activeTab].monthFilter = monthFilter;
+        pageSessionState[activeTab].statusFilter = statusFilter;
+        pageSessionState[activeTab].statusFaturaFilter = statusFaturaFilter;
+        pageSessionState[activeTab].sortBy = sortBy;
+        pageSessionState[activeTab].filterCriterion = filterCriterion;
+        pageSessionState[activeTab].readingStatusFilter = readingStatusFilter;
         pageSessionState.activeTab = activeTab;
     }, [viewMode, monthFilter, statusFilter, statusFaturaFilter, sortBy, filterCriterion, readingStatusFilter, activeTab]);
 
     const handleTabChange = (tab) => {
         setActiveTab(tab);
-        if (tab === 'faturas') {
-            if (viewMode === 'energy_list') setViewMode('list');
-            else if (viewMode === 'energy_kanban') setViewMode('kanban');
-            else if (viewMode === 'energy_calendar') setViewMode('calendar');
-            else if (viewMode === 'energy_reading_calendar') setViewMode('calendar');
-            else if (viewMode === 'graph_node') setViewMode('graph_node');
-            else setViewMode('kanban');
-        } else if (tab === 'contas_energia') {
-            if (viewMode === 'list') setViewMode('energy_list');
-            else if (viewMode === 'kanban') setViewMode('energy_kanban');
-            else if (viewMode === 'calendar') setViewMode('energy_calendar');
-            else if (viewMode === 'graph_node') setViewMode('graph_node');
-            else setViewMode('energy_kanban');
+        const saved = pageSessionState[tab] || {};
+        
+        if (saved.viewMode) {
+            setViewMode(saved.viewMode);
+        } else {
+            if (tab === 'faturas') {
+                if (viewMode === 'energy_list') setViewMode('list');
+                else if (viewMode === 'energy_kanban') setViewMode('kanban');
+                else if (viewMode === 'energy_calendar') setViewMode('calendar');
+                else if (viewMode === 'energy_reading_calendar') setViewMode('calendar');
+                else if (viewMode === 'graph_node') setViewMode('graph_node');
+                else setViewMode('kanban');
+            } else if (tab === 'contas_energia') {
+                if (viewMode === 'list') setViewMode('energy_list');
+                else if (viewMode === 'kanban') setViewMode('energy_kanban');
+                else if (viewMode === 'calendar') setViewMode('energy_calendar');
+                else if (viewMode === 'graph_node') setViewMode('graph_node');
+                else setViewMode('energy_kanban');
+            }
         }
+        
+        if (saved.monthFilter) setMonthFilter(saved.monthFilter);
+        if (saved.statusFilter !== undefined) setStatusFilter(saved.statusFilter);
+        if (saved.statusFaturaFilter !== undefined) setStatusFaturaFilter(saved.statusFaturaFilter);
+        if (saved.sortBy) setSortBy(saved.sortBy);
+        if (saved.filterCriterion) setFilterCriterion(saved.filterCriterion);
+        if (saved.readingStatusFilter !== undefined) setReadingStatusFilter(saved.readingStatusFilter);
     };
 
     const getAnteriorLeitura = (currentInvoice) => {

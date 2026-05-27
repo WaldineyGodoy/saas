@@ -716,6 +716,47 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 prodError = prodRes.error;
             }
 
+            // 1.1. Buscar a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês
+            let ugId = null;
+            if (formData.unidade_geradora) {
+                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || 
+                               availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                ugId = mainUG?.id;
+                
+                if (!ugId) {
+                    try {
+                        const { data: ugData } = await supabase
+                            .from('consumer_units')
+                            .select('id')
+                            .eq('numero_uc', formData.unidade_geradora)
+                            .maybeSingle();
+                        ugId = ugData?.id;
+                    } catch (ugErr) {
+                        console.error('Erro ao buscar ID da UG:', ugErr);
+                    }
+                }
+            }
+
+            let injectedEnergy = 0;
+            if (ugId) {
+                try {
+                    const { data: ugInvoice } = await supabase
+                        .from('invoices')
+                        .select('energia_injetada')
+                        .eq('uc_id', ugId)
+                        .eq('mes_referencia', firstDay)
+                        .neq('status', 'cancelado')
+                        .maybeSingle();
+                    
+                    if (ugInvoice?.energia_injetada) {
+                        injectedEnergy = Number(ugInvoice.energia_injetada);
+                        console.log(`Energia injetada encontrada para a UG (${formData.unidade_geradora}):`, injectedEnergy);
+                    }
+                } catch (invoiceErr) {
+                    console.error('Erro ao buscar fatura da UG:', invoiceErr);
+                }
+            }
+
             // 2. Get prediction for the specific month from chart data
             const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
             const estimateObj = monthlyEstimates[monthIdx] || {};
@@ -730,7 +771,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 setMonthlyDetails({
                     ...prodData,
                     details: prodData.service_details || {},
-                    energia_compensada: prodData.energia_compensada || totalCompensada,
+                    geracao_mensal_kwh: Number(prodData.geracao_mensal_kwh) || injectedEnergy || 0,
+                    energia_compensada: Number(prodData.energia_compensada) || injectedEnergy || totalCompensada || 0,
                     faturamento_mensal: prodData.faturamento_mensal || totalFaturamento,
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
@@ -758,9 +800,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     details: defaultDetails,
                     servicos: Object.values(defaultDetails).reduce((acc, curr) => acc + curr, 0),
                     status: 'em_producao',
-                    geracao_mensal_kwh: 0,
+                    geracao_mensal_kwh: injectedEnergy || 0,
                     geracao_prevista: prediction,
-                    energia_compensada: totalCompensada,
+                    energia_compensada: injectedEnergy || totalCompensada || 0,
                     faturamento_mensal: totalFaturamento,
                     custo_disponibilidade: 0
                 });
