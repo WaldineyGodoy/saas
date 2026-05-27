@@ -29,7 +29,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [invoices, setInvoices] = useState([]);
     const [ucs, setUcs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState(() => pageSessionState.viewMode || (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban'));
+    const [viewMode, setViewMode] = useState(() => hideTabs ? (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban') : (pageSessionState.viewMode || (initialTab === 'contas_energia' ? 'energy_kanban' : 'kanban')));
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -44,7 +44,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
 
     // Estado da Aba Ativa: 'faturas' ou 'contas_energia'
-    const [activeTab, setActiveTab] = useState(() => pageSessionState.activeTab || initialTab);
+    const [activeTab, setActiveTab] = useState(() => hideTabs ? initialTab : (pageSessionState.activeTab || initialTab));
     // Estado de Ordenação
     const [sortBy, setSortBy] = useState(() => pageSessionState.sortBy || 'ref_desc');
     // Estado de exibição do detalhe informativo da aba (! Info)
@@ -66,6 +66,17 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         setUcModalSection('geral');
         setIsUcModalOpen(true);
     };
+
+    useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+            if (initialTab === 'contas_energia') {
+                setViewMode('energy_kanban');
+            } else {
+                setViewMode('kanban');
+            }
+        }
+    }, [initialTab]);
 
     useEffect(() => {
         pageSessionState.viewMode = viewMode;
