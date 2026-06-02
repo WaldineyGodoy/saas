@@ -726,7 +726,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         if (ebStatus === 'parcelada') return 'parcelada';
         if (ebStatus === 'contestada') return 'contestada';
         const today = new Date().toISOString().split('T')[0];
-        const isPastDue = inv.vencimento && inv.vencimento < today;
+        const dueDate = inv.vencimento_concessionaria || inv.vencimento;
+        const isPastDue = dueDate && dueDate < today;
         return isPastDue ? 'atrasado' : 'a_vencer';
     };
 
@@ -1711,7 +1712,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                             {filteredInvoicesConcessionaire.map(inv => {
                                                                 const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
                                                                 const today = new Date().toISOString().split('T')[0];
-                                                                const isPastDue = inv.vencimento && inv.vencimento < today && inv.energy_bill_status !== 'pago';
+                                                                const dueDate = inv.vencimento_concessionaria || inv.vencimento;
+                                                                const isPastDue = dueDate && dueDate < today && inv.energy_bill_status !== 'pago';
                                                                 return (
                                                                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                                                         <td style={{ padding: '0.85rem 0.5rem', fontWeight: 600, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
