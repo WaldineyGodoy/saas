@@ -209,7 +209,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 const ebStatus = inv.energy_bill_status || 'pendente';
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
                 const isPastDue = dueDate && dueDate < today;
 
                 if (statusFilter === 'atrasada') {
@@ -2139,7 +2139,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
-                                        const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                                        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
                                         const isPastDue = dueDate && dueDate < today;
 
                                         return (
