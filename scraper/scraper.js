@@ -462,6 +462,18 @@ async function run() {
 
     await browser.close();
     console.log('\nProcesso Calendário Neoenergia Finalizado.');
+
+    try {
+        console.log('Executando verificação de lembretes/gatilhos de vencimento...');
+        const { error: rpcError } = await supabase.rpc('fn_check_invoice_due_reminders');
+        if (rpcError) {
+            console.error('Erro ao processar lembretes de vencimento (RPC):', rpcError.message);
+        } else {
+            console.log('Verificação de lembretes concluída com sucesso.');
+        }
+    } catch (rpcErr) {
+        console.error('Falha ao chamar RPC de lembretes:', rpcErr.message);
+    }
 }
 
 async function parseInvoicePdf(filePath) {

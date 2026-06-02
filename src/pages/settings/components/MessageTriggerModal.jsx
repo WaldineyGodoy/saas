@@ -73,10 +73,11 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'cancelado', label: 'Cancelado' }
         ],
         invoice: [
-            { id: 'pendente', label: 'Pendente' },
-            { id: 'paga', label: 'Paga' },
-            { id: 'vencida', label: 'Vencida' },
-            { id: 'em_atraso', label: 'Em Ativação' },
+            { id: 'ag_emissao_boleto', label: 'Aguardando Emissão' },
+            { id: 'a_vencer', label: 'Pendente / A Vencer' },
+            { id: 'pago', label: 'Paga' },
+            { id: 'atrasado', label: 'Vencida' },
+            { id: 'cancelado', label: 'Cancelada' },
             { id: 'erro', label: 'Erro no Processamento' }
         ],
         supplier: [
