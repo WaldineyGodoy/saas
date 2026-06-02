@@ -390,6 +390,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             setEditData({
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento || '',
+                vencimento_concessionaria: invoice.vencimento_concessionaria || invoice.vencimento || '',
                 data_leitura_anterior: invoice.data_leitura_anterior || '',
                 data_leitura: invoice.data_leitura || '',
                 consumo_kwh: invoice.consumo_kwh || 0,
@@ -409,6 +410,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const handleEditChange = (field, value) => {
         const newData = { ...editData, [field]: value };
         
+        if (field === 'vencimento_concessionaria') {
+            if (['sem_faturamento', 'ag_emissao_boleto'].includes(invoice.status)) {
+                newData.vencimento = value;
+            }
+        }
+        
         // Recalcular Total Concessionária se algum valor financeiro mudar
         if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos'].includes(field)) {
             newData.valor_concessionaria = 
@@ -422,7 +429,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     };
 
     const handleSaveEdit = async () => {
-        if (!editData.vencimento || !editData.mes_referencia) {
+        if (!editData.vencimento_concessionaria || !editData.mes_referencia) {
             showAlert('Por favor, preencha o vencimento e o mês de referência.', 'warning');
             return;
         }
@@ -759,10 +766,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     };
 
         const getUtilityDueDate = () => {
-            if (!invoice.vencimento) return 'N/A';
+            const dateStr = invoice.vencimento_concessionaria || invoice.vencimento;
+            if (!dateStr) return 'N/A';
             // Mostrar a data exata da fatura, sem forçar o dia do cadastro da UC
             // Isso evita confusão quando o usuário edita a data e a UI continua mostrando a antiga
-            return new Date(invoice.vencimento + 'T12:00:00').toLocaleDateString('pt-BR');
+            return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR');
         };
 
         const currentStatus = invoice.status === 'cancelado' 
@@ -885,8 +893,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {isEditing ? (
                                     <input 
                                         type="date" 
-                                        value={editData.vencimento} 
-                                        onChange={e => handleEditChange('vencimento', e.target.value)}
+                                        value={editData.vencimento_concessionaria} 
+                                        onChange={e => handleEditChange('vencimento_concessionaria', e.target.value)}
                                         style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.2rem 0.5rem', fontSize: '0.9rem', marginTop: '0.25rem' }}
                                     />
                                 ) : (

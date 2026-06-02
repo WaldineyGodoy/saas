@@ -328,7 +328,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
         if (dueDate && dueDate < today) {
             return 'atrasada';
         }
@@ -2190,7 +2190,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                     {formatCurrency(cost)}
                                                 </td>
                                                 <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                                                    {inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}
+                                                    {inv.vencimento_concessionaria ? inv.vencimento_concessionaria.split('-').reverse().join('/') : (inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-')}
                                                 </td>
                                                 <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                                                     {getAnteriorLeitura(inv)}
@@ -2284,7 +2284,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         const ebStatus = inv.energy_bill_status || 'pendente';
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
-                                        const dueDate = inv.vencimento ? new Date(inv.vencimento) : null;
+                                        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
                                         const isPastDue = dueDate && dueDate < today;
 
                                         if (col === 'a_vencer') {
@@ -2345,7 +2345,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                     {inv.consumer_units?.numero_uc}
                                                                 </span>
                                                                 <span style={{ fontSize: '1rem', color: '#1e293b', fontWeight: '800' }}>
-                                                                    {inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-'}
+                                                                    {inv.vencimento_concessionaria ? inv.vencimento_concessionaria.split('-').reverse().join('/') : (inv.vencimento ? inv.vencimento.split('-').reverse().join('/') : '-')}
                                                                 </span>
                                                             </div>
                                                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>

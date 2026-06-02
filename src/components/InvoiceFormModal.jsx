@@ -94,6 +94,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 uc_id: invoice.uc_id,
                 mes_referencia: invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7) : '',
                 vencimento: invoice.vencimento ? invoice.vencimento.split('T')[0] : '',
+                vencimento_concessionaria: invoice.vencimento_concessionaria ? invoice.vencimento_concessionaria.split('T')[0] : (invoice.vencimento ? invoice.vencimento.split('T')[0] : ''),
                 consumo_kwh: invoice.consumo_kwh,
                 energia_injetada: invoice.energia_injetada !== undefined && invoice.energia_injetada !== null ? invoice.energia_injetada : '',
                 consumo_compensado: invoice.consumo_compensado || 0,
@@ -188,6 +189,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             ...prev,
             mes_referencia: bill.mes_referencia || prev.mes_referencia,
             vencimento: bill.vencimento || prev.vencimento,
+            vencimento_concessionaria: bill.vencimento_concessionaria || bill.vencimento || prev.vencimento_concessionaria || '',
             consumo_kwh: bill.consumo_kwh ?? prev.consumo_kwh,
             consumo_compensado: bill.consumo_compensado ?? prev.consumo_compensado,
             energia_injetada: bill.energia_injetada ?? prev.energia_injetada,
@@ -1161,6 +1163,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 uc_id: formData.uc_id,
                 mes_referencia: `${formData.mes_referencia}-01`,
                 vencimento: formData.vencimento,
+                vencimento_concessionaria: formData.vencimento_concessionaria || formData.vencimento || null,
                 consumo_kwh: Number(formData.consumo_kwh),
                 energia_injetada: formData.energia_injetada !== '' && formData.energia_injetada !== null ? Number(formData.energia_injetada) : 0,
                 consumo_reais: compensadaLiquida + tarifaMinimaExcedentes,
@@ -1395,7 +1398,18 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 )}
 
                 {/* Tabs Navigation */}
-                <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: 'white', padding: '0 1.25rem' }}>
+                <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #e2e8f0',
+                    background: 'white',
+                    padding: '0 1.25rem',
+                    flexWrap: 'nowrap',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    width: '100%',
+                    gap: '0.25rem'
+                }}>
                     {[
                         { id: 'geral', label: 'Identificação', icon: <Info size={18} /> },
                         { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
@@ -1419,8 +1433,24 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                 fontSize: '0.9rem',
                                 fontWeight: activeTab === tab.id ? '700' : '500',
                                 color: activeTab === tab.id ? '#2563eb' : '#64748b',
-                                borderBottom: activeTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                                transition: 'all 0.2s'
+                                borderBottom: activeTab === tab.id ? '3px solid #2563eb' : '3px solid transparent',
+                                transition: 'all 0.2s ease-in-out',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                outline: 'none',
+                                opacity: activeTab === tab.id ? 1 : 0.8
+                            }}
+                            onMouseOver={e => {
+                                if (activeTab !== tab.id) {
+                                    e.currentTarget.style.color = '#2563eb';
+                                    e.currentTarget.style.opacity = '1';
+                                }
+                            }}
+                            onMouseOut={e => {
+                                if (activeTab !== tab.id) {
+                                    e.currentTarget.style.color = '#64748b';
+                                    e.currentTarget.style.opacity = '0.8';
+                                }
                             }}
                         >
                             {tab.icon}
@@ -1590,7 +1620,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                     {/* Due Date */}
                                     <div className="bg-white p-4 rounded-xl border border-slate-200">
                                         <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vencimento</label>
-                                        <input type="date" required value={formData.vencimento} onChange={e => setFormData({ ...formData, vencimento: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#dc2626', fontWeight: 'bold' }} />
+                                        <input type="date" required value={formData.vencimento} onChange={e => {
+                                            const val = e.target.value;
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                vencimento: val,
+                                                vencimento_concessionaria: ['sem_faturamento', 'ag_emissao_boleto'].includes(prev.status) ? val : prev.vencimento_concessionaria
+                                            }));
+                                        }} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#dc2626', fontWeight: 'bold' }} />
                                     </div>
                                 </div>
                                 </div>

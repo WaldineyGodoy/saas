@@ -642,6 +642,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             uc_id: selectedUcId,
             mes_referencia: `${formData.mes_referencia}-01`,
             vencimento: formData.vencimento || null,
+            vencimento_concessionaria: formData.vencimento || null,
             data_leitura_anterior: formData.data_leitura_anterior || null,
             data_leitura: formData.data_leitura || null,
             consumo_kwh: Number(formData.consumo_kwh) || 0,

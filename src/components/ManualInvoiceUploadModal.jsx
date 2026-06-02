@@ -367,6 +367,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 uc_id: uc.id,
                 mes_referencia: mesRefFormat,
                 vencimento: extractedData.vencimento || null,
+                vencimento_concessionaria: extractedData.vencimento || null,
                 data_leitura: extractedData.dataLeitura || null,
                 tarifa_concessionaria: valorTarifa,
                 tarifa_minima: Math.max(0, ((extractedData.consumoKwh || 0) - (extractedData.consumoCompensado || 0)) * valorTarifa),
