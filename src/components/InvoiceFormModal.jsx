@@ -1277,6 +1277,19 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                             85% { opacity: 1; transform: translate(-50%, -50%); }
                             100% { opacity: 0; transform: translate(-50%, -40%); }
                         }
+                        .custom-tabs-scroll::-webkit-scrollbar {
+                            height: 5px;
+                        }
+                        .custom-tabs-scroll::-webkit-scrollbar-track {
+                            background: #f1f5f9;
+                        }
+                        .custom-tabs-scroll::-webkit-scrollbar-thumb {
+                            background: #cbd5e1;
+                            border-radius: 99px;
+                        }
+                        .custom-tabs-scroll::-webkit-scrollbar-thumb:hover {
+                            background: #94a3b8;
+                        }
                     `}</style>
                     {showSuccess && (
                         <div style={{
@@ -1398,18 +1411,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 )}
 
                 {/* Tabs Navigation */}
-                <div style={{
-                    display: 'flex',
-                    borderBottom: '1px solid #e2e8f0',
-                    background: 'white',
-                    padding: '0 1.25rem',
-                    flexWrap: 'nowrap',
-                    overflowX: 'auto',
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                    width: '100%',
-                    gap: '0.25rem'
-                }}>
+                <div 
+                    className="custom-tabs-scroll"
+                    style={{
+                        display: 'flex',
+                        borderBottom: '1px solid #e2e8f0',
+                        background: 'white',
+                        padding: '0 1.25rem',
+                        flexWrap: 'nowrap',
+                        overflowX: 'auto',
+                        width: '100%',
+                        gap: '0.25rem',
+                        scrollbarWidth: 'thin'
+                    }}
+                >
                     {[
                         { id: 'geral', label: 'Identificação', icon: <Info size={18} /> },
                         { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
@@ -1426,7 +1441,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '0.6rem',
-                                padding: '1rem 1.25rem',
+                                padding: '1rem 0.85rem',
                                 border: 'none',
                                 background: 'none',
                                 cursor: 'pointer',
