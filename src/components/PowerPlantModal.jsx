@@ -1595,7 +1595,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             subscribers={subscribers}
                                             isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
                                             onPreview={async () => {
-                                                const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                                const { data } = await supabase.from('consumer_units').select('*, subscribers:subscribers!consumer_units_subscriber_id_fkey(name, phone)').eq('id', uc.id).single();
                                                 setPreviewUC(data || uc);
                                                 setShowPreviewModal(true);
                                             }}
@@ -1666,7 +1666,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             subscribers={subscribers}
                                             isFixed={false}
                                             onPreview={async () => {
-                                                const { data } = await supabase.from('consumer_units').select('*, subscribers(name, phone)').eq('id', uc.id).single();
+                                                const { data } = await supabase.from('consumer_units').select('*, subscribers:subscribers!consumer_units_subscriber_id_fkey(name, phone)').eq('id', uc.id).single();
                                                 setPreviewUC(data || uc);
                                                 setShowPreviewModal(true);
                                             }}

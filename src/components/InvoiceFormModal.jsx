@@ -139,7 +139,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 try {
                     const { data: fullUc } = await supabase
                         .from('consumer_units')
-                        .select('*, subscribers(name)')
+                        .select('*, subscribers:subscribers!consumer_units_subscriber_id_fkey(name)')
                         .eq('id', formData.uc_id)
                         .single();
                     if (fullUc) {
