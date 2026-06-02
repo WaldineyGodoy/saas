@@ -9,7 +9,8 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useRef } from 'react';
 import './InvoicesModal.css';
-import { Download, Loader2, Info } from 'lucide-react';
+import { Download, Loader2, Info, Clock } from 'lucide-react';
+import HistoryTimeline from './HistoryTimeline';
 import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -1400,7 +1401,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                         { id: 'consumo', label: 'Consumo', icon: <Zap size={18} /> },
                         { id: 'financeiro', label: 'Financeiro', icon: <DollarSign size={18} /> },
                         { id: 'resumo', label: 'Conta de Energia', icon: <FileText size={18} /> },
-                        { id: 'resumo_fatura', label: 'Resumo da Fatura', icon: <Calculator size={18} /> }
+                        { id: 'resumo_fatura', label: 'Resumo da Fatura', icon: <Calculator size={18} /> },
+                        ...((invoice || localInvoiceId) ? [{ id: 'historico', label: 'Histórico', icon: <Clock size={18} /> }] : [])
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -2084,6 +2086,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'historico' && (invoice?.id || localInvoiceId) && (
+                            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                                <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
+                                    <HistoryTimeline
+                                        entityType="invoice"
+                                        entityId={invoice?.id || localInvoiceId}
+                                        entityName={`Fatura ${formData.mes_referencia} - UC ${selectedUc?.numero_uc || ''}`}
+                                        isInline={true}
+                                        hideHeader={true}
+                                    />
                                 </div>
                             </div>
                         )}
