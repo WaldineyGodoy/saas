@@ -292,16 +292,16 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
 
                 // LOG TO CRM HISTORY OF THE ENTITY
                 if (linkedEntityType && linkedEntityId) {
-                    let dbTable = '';
-                    if (linkedEntityType === 'assinante') dbTable = 'subscribers';
-                    else if (linkedEntityType === 'unidade_consumidora') dbTable = 'consumer_units';
-                    else if (linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') dbTable = 'invoices';
-                    else if (linkedEntityType === 'rateio_list') dbTable = 'rateio_lists';
+                    let crmEntityType = '';
+                    if (linkedEntityType === 'assinante') crmEntityType = 'subscriber';
+                    else if (linkedEntityType === 'unidade_consumidora') crmEntityType = 'uc';
+                    else if (linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') crmEntityType = 'invoice';
+                    else if (linkedEntityType === 'rateio_list') crmEntityType = 'rateio_list';
 
-                    if (dbTable) {
+                    if (crmEntityType) {
                         const contentLog = `Novo protocolo criado: "${title}" ${protocolNumber ? `(Nº: ${protocolNumber})` : ''}`;
                         await supabase.from('crm_history').insert({
-                            entity_type: dbTable,
+                            entity_type: crmEntityType,
                             entity_id: linkedEntityId,
                             content: contentLog,
                             created_by: user?.id,
