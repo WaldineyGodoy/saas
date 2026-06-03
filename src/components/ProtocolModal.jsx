@@ -225,11 +225,11 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             });
 
             setEntityOptions(mapped);
-            // Default to first option or preserve existing
+            // Default to empty or preserve existing if editing
             if (protocol?.linked_entity_type === linkedEntityType && protocol?.linked_entity_id) {
                 setLinkedEntityId(protocol.linked_entity_id);
-            } else if (mapped.length > 0) {
-                setLinkedEntityId(mapped[0].id);
+            } else {
+                setLinkedEntityId('');
             }
         } catch (err) {
             console.error('Error fetching linked entities:', err);
