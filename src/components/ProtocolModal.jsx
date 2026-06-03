@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2 } from 'lucide-react';
+import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2, AlertCircle, Info, MessageSquare } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import SubscriberModal from './SubscriberModal';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -144,6 +144,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [activeInvoice, setActiveInvoice] = useState(null);
     const [activeInvoiceCU, setActiveInvoiceCU] = useState(null);
     const [activeRateio, setActiveRateio] = useState(null);
+    const [activeTab, setActiveTab] = useState('tratativa');
 
     const handleOpenEntityModal = async () => {
         if (!linkedEntityType || !linkedEntityId) return;
@@ -440,213 +441,388 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: protocol?.id ? '1.2fr 1fr' : '1fr', gap: '0', flex: 1, minHeight: 0 }}>
-                    {/* Form Panel */}
-                    <form onSubmit={handleSave} style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', borderRight: protocol?.id ? '1px solid #e2e8f0' : 'none' }}>
-                        
-                        {/* Title */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Título / Assunto *</label>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={e => setTitle(e.target.value)}
-                                placeholder="Descreva brevemente o assunto..."
-                                required
-                                style={{
-                                    width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.2s'
-                                }}
-                                onFocus={e => e.target.style.borderColor = primaryColor}
-                                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                            />
-                        </div>
-
-                        {/* Description */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Descrição Inicial</label>
-                            <textarea
-                                value={description}
-                                onChange={e => setDescription(e.target.value)}
-                                placeholder="Insira detalhes adicionais do chamado..."
-                                style={{
-                                    width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                    outline: 'none', fontSize: '0.88rem', minHeight: '80px', resize: 'vertical'
-                                }}
-                                onFocus={e => e.target.style.borderColor = primaryColor}
-                                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                            />
-                        </div>
-
-                        {/* Protocol Number, Status */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Nº do Protocolo</label>
-                                <div style={{ position: 'relative' }}>
-                                    <Hash size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                    <input
-                                        type="text"
-                                        value={protocolNumber}
-                                        onChange={e => setProtocolNumber(e.target.value)}
-                                        placeholder="Ex: 2026-10293"
-                                        style={{
-                                            width: '100%', padding: '0.6rem 0.75rem 0.6rem 2rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                            outline: 'none', fontSize: '0.9rem', fontWeight: 600
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Status</label>
-                                <select
-                                    value={status}
-                                    onChange={e => setStatus(e.target.value)}
+                {/* Pipeline de Status no topo */}
+                <div style={{
+                    padding: '1.25rem 2rem',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: primaryColor }}></div>
+                            Status do Protocolo
+                        </label>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>Clique para alterar o status</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+                        {[
+                            { id: 'gerar', label: 'Gerar', icon: Plus, color: '#475569', bg: '#f1f5f9' },
+                            { id: 'em_tratativa', label: 'Em Tratativa', icon: Clock, color: '#ca8a04', bg: '#fef9c3' },
+                            { id: 'atrasado', label: 'Atrasado', icon: AlertCircle, color: '#dc2626', bg: '#fee2e2' },
+                            { id: 'concluida', label: 'Concluída', icon: CheckCircle, color: '#166534', bg: '#dcfce7' }
+                        ].map((s) => {
+                            const isActive = status === s.id;
+                            const Icon = s.icon;
+                            return (
+                                <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => setStatus(s.id)}
                                     style={{
-                                        width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                        outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
+                                        flex: '1 1 auto',
+                                        minWidth: '120px',
+                                        padding: '0.6rem 0.8rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid',
+                                        borderColor: isActive ? s.color : '#e2e8f0',
+                                        background: isActive ? s.bg : 'white',
+                                        color: isActive ? s.color : '#64748b',
+                                        fontWeight: isActive ? 700 : 500,
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem',
+                                        boxShadow: isActive ? `0 4px 6px -1px ${s.color}20` : 'none',
+                                        transform: isActive ? 'translateY(-1px)' : 'none'
                                     }}
                                 >
-                                    <option value="gerar">Gerar</option>
-                                    <option value="em_tratativa">Em Tratativa</option>
-                                    <option value="atrasado">Atrasado</option>
-                                    <option value="concluida">Concluída</option>
-                                </select>
-                            </div>
-                        </div>
+                                    <Icon size={14} strokeWidth={isActive ? 2.5 : 2} />
+                                    {s.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
-                        {/* Prazo e Vencimento */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Prazo (Dias Úteis)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={deadlineDays}
-                                    onChange={e => setDeadlineDays(e.target.value)}
-                                    placeholder="Dias úteis"
-                                    style={{
-                                        width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                        outline: 'none', fontSize: '0.9rem', fontWeight: 600
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Vencimento Calculado</label>
-                                <div style={{
-                                    padding: '0.6rem 0.75rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                    fontSize: '0.9rem', fontWeight: 700, color: dueDate ? '#ef4444' : '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem'
-                                }}>
-                                    <Calendar size={15} />
-                                    {dueDate ? formatDateBR(dueDate) : (protocolNumber ? 'Inativo' : 'Inativo (Nº obrigatório)')}
-                                </div>
-                            </div>
-                        </div>
+                {/* Tabs Navigation */}
+                <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #e2e8f0',
+                    background: 'white',
+                    padding: '0 1.25rem',
+                    flexWrap: 'nowrap',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    width: '100%',
+                    gap: '0.25rem'
+                }}>
+                    {[
+                        { id: 'tratativa', label: 'Tratativa', icon: <Clock size={18} /> },
+                        { id: 'entidade', label: 'Entidade', icon: <LinkIcon size={18} /> },
+                        ...((protocol?.id) ? [{ id: 'historico', label: 'Histórico', icon: <MessageSquare size={18} /> }] : [])
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '1rem 1.25rem',
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontSize: '0.9rem',
+                                fontWeight: activeTab === tab.id ? '700' : '500',
+                                color: activeTab === tab.id ? '#2563eb' : '#64748b',
+                                borderBottom: activeTab === tab.id ? '3px solid #2563eb' : '3px solid transparent',
+                                transition: 'all 0.2s ease-in-out',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                outline: 'none',
+                                opacity: activeTab === tab.id ? 1 : 0.8
+                            }}
+                            onMouseOver={e => {
+                                if (activeTab !== tab.id) {
+                                    e.currentTarget.style.color = '#2563eb';
+                                    e.currentTarget.style.opacity = '1';
+                                }
+                            }}
+                            onMouseOut={e => {
+                                if (activeTab !== tab.id) {
+                                    e.currentTarget.style.color = '#64748b';
+                                    e.currentTarget.style.opacity = '0.8';
+                                }
+                            }}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                        {/* Entity Linking */}
-                        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
-                            <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <LinkIcon size={14} /> Vincular Entidade
-                            </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Tipo de Entidade</label>
-                                    <select
-                                        value={linkedEntityType}
-                                        onChange={e => setLinkedEntityType(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                            outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
-                                        }}
-                                    >
-                                        <option value="">Nenhuma</option>
-                                        <option value="assinante">Assinante</option>
-                                        <option value="unidade_consumidora">Unidade Consumidora</option>
-                                        <option value="conta_energia">Conta de Energia (Concessionária)</option>
-                                        <option value="fatura">Fatura (Assinante)</option>
-                                        <option value="rateio_list">Lista de Rateio</option>
-                                    </select>
-                                </div>
-
-                                {linkedEntityType && (
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    {/* Form Panel */}
+                    <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <div style={{ padding: '2rem', minHeight: '350px' }}>
+                            {activeTab === 'tratativa' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', animation: 'fadeIn 0.2s ease-in-out' }}>
+                                    <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+                                    
+                                    {/* Title */}
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selecionar Registro</label>
-                                        <SearchableSelect
-                                            options={entityOptions}
-                                            value={linkedEntityId}
-                                            onChange={setLinkedEntityId}
-                                            placeholder="Digite para buscar..."
-                                            loading={loadingEntities}
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Título / Assunto *</label>
+                                        <input
+                                            type="text"
+                                            value={title}
+                                            onChange={e => setTitle(e.target.value)}
+                                            placeholder="Descreva brevemente o assunto..."
+                                            required
+                                            style={{
+                                                width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                outline: 'none', fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.2s'
+                                            }}
+                                            onFocus={e => e.target.style.borderColor = primaryColor}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
-                                )}
-                            </div>
-                            {linkedEntityType && linkedEntityId && (
-                                <div style={{ marginTop: '1rem' }}>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                                        Visualizar Entidade Vinculada
-                                    </label>
-                                    <div
-                                        onClick={handleOpenEntityModal}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '0.75rem 1rem',
-                                            backgroundColor: 'white',
-                                            border: '1px solid #cbd5e1',
-                                            borderRadius: '10px',
-                                            cursor: loadingEntityDetail ? 'wait' : 'pointer',
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                                        }}
-                                        onMouseEnter={e => {
-                                            e.currentTarget.style.borderColor = primaryColor;
-                                            e.currentTarget.style.backgroundColor = '#f8fafc';
-                                            e.currentTarget.style.transform = 'translateY(-1px)';
-                                            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
-                                        }}
-                                        onMouseLeave={e => {
-                                            e.currentTarget.style.borderColor = '#cbd5e1';
-                                            e.currentTarget.style.backgroundColor = 'white';
-                                            e.currentTarget.style.transform = 'none';
-                                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+
+                                    {/* Description */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Descrição Inicial</label>
+                                        <textarea
+                                            value={description}
+                                            onChange={e => setDescription(e.target.value)}
+                                            placeholder="Insira detalhes adicionais do chamado..."
+                                            style={{
+                                                width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                outline: 'none', fontSize: '0.88rem', minHeight: '100px', resize: 'vertical'
+                                            }}
+                                            onFocus={e => e.target.style.borderColor = primaryColor}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                                        />
+                                    </div>
+
+                                    {/* Protocol Number */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Nº do Protocolo</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <Hash size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                            <input
+                                                type="text"
+                                                value={protocolNumber}
+                                                onChange={e => setProtocolNumber(e.target.value)}
+                                                placeholder="Ex: 8058025076"
+                                                style={{
+                                                    width: '100%', padding: '0.65rem 0.85rem 0.65rem 2rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Prazo e Vencimento */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Prazo (Dias Úteis)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={deadlineDays}
+                                                onChange={e => setDeadlineDays(e.target.value)}
+                                                placeholder="Dias úteis"
+                                                style={{
+                                                    width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Vencimento Calculado</label>
                                             <div style={{
-                                                padding: '0.5rem',
-                                                background: primaryColor + '10',
-                                                borderRadius: '8px',
-                                                color: primaryColor,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
+                                                padding: '0.65rem 0.85rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                fontSize: '0.9rem', fontWeight: 700, color: dueDate ? '#ef4444' : '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', height: '38px'
                                             }}>
-                                                {linkedEntityType === 'assinante' && <User size={18} />}
-                                                {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
-                                                {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
-                                                {linkedEntityType === 'rateio_list' && <Layers size={18} />}
+                                                <Calendar size={15} />
+                                                {dueDate ? formatDateBR(dueDate) : (protocolNumber ? 'Inativo' : 'Inativo (Nº obrigatório)')}
                                             </div>
-                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
-                                                    {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'entidade' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', animation: 'fadeIn 0.2s ease-in-out' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Tipo de Entidade</label>
+                                        <select
+                                            value={linkedEntityType}
+                                            onChange={e => setLinkedEntityType(e.target.value)}
+                                            style={{
+                                                width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
+                                            }}
+                                        >
+                                            <option value="">Nenhuma</option>
+                                            <option value="assinante">Assinante</option>
+                                            <option value="unidade_consumidora">Unidade Consumidora</option>
+                                            <option value="conta_energia">Conta de Energia (Concessionária)</option>
+                                            <option value="fatura">Fatura (Assinante)</option>
+                                            <option value="rateio_list">Lista de Rateio</option>
+                                        </select>
+                                    </div>
+
+                                    {linkedEntityType && (
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selecionar Registro</label>
+                                            <SearchableSelect
+                                                options={entityOptions}
+                                                value={linkedEntityId}
+                                                onChange={setLinkedEntityId}
+                                                placeholder="Digite para buscar..."
+                                                loading={loadingEntities}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {linkedEntityType && linkedEntityId && (
+                                        <div style={{ marginTop: '0.5rem' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                                                Visualizar Entidade Vinculada
+                                            </label>
+                                            <div
+                                                onClick={handleOpenEntityModal}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    padding: '0.85rem 1.1rem',
+                                                    backgroundColor: 'white',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: '10px',
+                                                    cursor: loadingEntityDetail ? 'wait' : 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.borderColor = primaryColor;
+                                                    e.currentTarget.style.backgroundColor = '#f8fafc';
+                                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.borderColor = '#cbd5e1';
+                                                    e.currentTarget.style.backgroundColor = 'white';
+                                                    e.currentTarget.style.transform = 'none';
+                                                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                                                    <div style={{
+                                                        padding: '0.5rem',
+                                                        background: primaryColor + '10',
+                                                        borderRadius: '8px',
+                                                        color: primaryColor,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {linkedEntityType === 'assinante' && <User size={18} />}
+                                                        {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
+                                                        {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
+                                                        {linkedEntityType === 'rateio_list' && <Layers size={18} />}
+                                                    </div>
+                                                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
+                                                            {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
+                                                            {linkedEntityType === 'assinante' && 'Assinante'}
+                                                            {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
+                                                            {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
+                                                            {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
+                                                            {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
-                                                    {linkedEntityType === 'assinante' && 'Assinante'}
-                                                    {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
-                                                    {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
-                                                    {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
-                                                    {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '10px' }}>
+                                                    {loadingEntityDetail ? (
+                                                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                                    ) : (
+                                                        <ExternalLink size={16} />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '10px' }}>
-                                            {loadingEntityDetail ? (
-                                                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                    )}
+                                </div>
+                            )}
+
+                            {activeTab === 'historico' && protocol?.id && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.5fr', gap: '2rem', animation: 'fadeIn 0.2s ease-in-out' }}>
+                                    {/* Subtasks Section */}
+                                    <div style={{ borderRight: '1px solid #e2e8f0', paddingRight: '2rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                Sub-tarefas / Sub-protocolos
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowSubModal(true)}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.2rem',
+                                                    background: primaryColor, color: 'white', border: 'none',
+                                                    borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.75rem',
+                                                    fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                <Plus size={13} /> Nova
+                                            </button>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
+                                            {subProtocols.length === 0 ? (
+                                                <div style={{ padding: '1.5rem 1rem', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
+                                                    Nenhum sub-protocolo derivado.
+                                                </div>
                                             ) : (
-                                                <ExternalLink size={16} />
+                                                subProtocols.map(sub => (
+                                                    <div key={sub.id} style={{
+                                                        background: 'white', borderRadius: '8px', padding: '0.6rem 0.8rem',
+                                                        border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.25rem'
+                                                    }}>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{sub.title}</div>
+                                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                                            {sub.protocol_number ? `Nº ${sub.protocol_number} · ` : ''} Vence: {sub.due_date ? formatDateBR(sub.due_date) : '-'}
+                                                        </div>
+                                                        <span style={{
+                                                            alignSelf: 'flex-start',
+                                                            fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase',
+                                                            padding: '0.15rem 0.4rem', borderRadius: '99px', marginTop: '0.25rem',
+                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
+                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8'
+                                                        }}>
+                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'concluida' ? 'Concluída' : sub.status}
+                                                        </span>
+                                                    </div>
+                                                ))
                                             )}
+                                        </div>
+                                    </div>
+
+                                    {/* History Timeline */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            Linha do Tempo
+                                        </h4>
+                                        <div style={{ flex: 1, minHeight: '350px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem' }}>
+                                            <HistoryTimeline
+                                                entityType="protocol"
+                                                entityId={protocol.id}
+                                                entityName={title}
+                                                isInline={true}
+                                                hideHeader={true}
+                                                compact={true}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -654,14 +830,17 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                         </div>
 
                         {/* Actions */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1.25rem 2rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '18px', borderBottomRightRadius: '18px' }}>
                             <button
                                 type="button"
                                 onClick={onClose}
                                 style={{
                                     padding: '0.6rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                    background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer'
+                                    background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                             >
                                 Cancelar
                             </button>
@@ -671,84 +850,17 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 style={{
                                     padding: '0.6rem 1.5rem', border: 'none', borderRadius: '8px',
                                     background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.85rem',
-                                    cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                    cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                    transition: 'all 0.2s'
                                 }}
+                                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                             >
                                 <Save size={16} />
                                 {saving ? 'Salvando...' : 'Salvar Protocolo'}
                             </button>
                         </div>
                     </form>
-
-                    {/* Timeline & Sub-protocols Panel */}
-                    {protocol?.id && (
-                        <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', background: '#f1f5f9' }}>
-                            
-                            {/* Subtasks Section */}
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                    <h4 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                        Sub-tarefas / Sub-protocolos
-                                    </h4>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowSubModal(true)}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '0.2rem',
-                                            background: primaryColor, color: 'white', border: 'none',
-                                            borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.75rem',
-                                            fontWeight: 700, cursor: 'pointer'
-                                        }}
-                                    >
-                                        <Plus size={13} /> Nova
-                                    </button>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    {subProtocols.length === 0 ? (
-                                        <div style={{ padding: '1rem', background: 'white', borderRadius: '8px', textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
-                                            Nenhum sub-protocolo derivado.
-                                        </div>
-                                    ) : (
-                                        subProtocols.map(sub => (
-                                            <div key={sub.id} style={{
-                                                background: 'white', borderRadius: '8px', padding: '0.6rem 0.8rem',
-                                                border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                            }}>
-                                                <div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{sub.title}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                                                        {sub.protocol_number ? `Nº ${sub.protocol_number} · ` : ''} Vence: {sub.due_date ? formatDateBR(sub.due_date) : '-'}
-                                                    </div>
-                                                </div>
-                                                <span style={{
-                                                    fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase',
-                                                    padding: '0.15rem 0.4rem', borderRadius: '99px',
-                                                    background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
-                                                    color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8'
-                                                }}>
-                                                    {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'concluida' ? 'Concluída' : sub.status}
-                                                </span>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* History Timeline */}
-                            <div style={{ flex: 1, minHeight: '350px' }}>
-                                <HistoryTimeline
-                                    entityType="protocol"
-                                    entityId={protocol.id}
-                                    entityName={title}
-                                    isInline={true}
-                                    hideHeader={true}
-                                    compact={true}
-                                />
-                            </div>
-
-                        </div>
-                    )}
                 </div>
             </div>
 
