@@ -136,6 +136,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     // Sub-protocols state
     const [subProtocols, setSubProtocols] = useState([]);
     const [showSubModal, setShowSubModal] = useState(false);
+    const [editingSubProtocol, setEditingSubProtocol] = useState(null);
 
     // Entity details modals states
     const [loadingEntityDetail, setLoadingEntityDetail] = useState(false);
@@ -789,10 +790,29 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                 </div>
                                             ) : (
                                                 subProtocols.map(sub => (
-                                                    <div key={sub.id} style={{
-                                                        background: 'white', borderRadius: '8px', padding: '0.6rem 0.8rem',
-                                                        border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.25rem'
-                                                    }}>
+                                                    <div 
+                                                        key={sub.id} 
+                                                        onClick={() => setEditingSubProtocol(sub)}
+                                                        style={{
+                                                            background: 'white', 
+                                                            borderRadius: '8px', 
+                                                            padding: '0.6rem 0.8rem',
+                                                            border: '1px solid #e2e8f0', 
+                                                            display: 'flex', 
+                                                            flexDirection: 'column', 
+                                                            gap: '0.25rem',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.borderColor = primaryColor;
+                                                            e.currentTarget.style.backgroundColor = '#f8fafc';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.borderColor = '#e2e8f0';
+                                                            e.currentTarget.style.backgroundColor = 'white';
+                                                        }}
+                                                    >
                                                         <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{sub.title}</div>
                                                         <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                                                             {sub.protocol_number ? `Nº ${sub.protocol_number} · ` : ''} Vence: {sub.due_date ? formatDateBR(sub.due_date) : '-'}
@@ -916,6 +936,23 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 <RateioListModal
                     rateio={activeRateio}
                     onClose={() => setActiveRateio(null)}
+                />
+            )}
+
+            {/* Sub protocol editing modal overlay */}
+            {editingSubProtocol && (
+                <ProtocolModal
+                    protocol={editingSubProtocol}
+                    onClose={() => {
+                        setEditingSubProtocol(null);
+                        fetchSubProtocols();
+                        if (onUpdated) onUpdated();
+                    }}
+                    onUpdated={() => {
+                        fetchSubProtocols();
+                        setEditingSubProtocol(null);
+                        if (onUpdated) onUpdated();
+                    }}
                 />
             )}
         </div>
