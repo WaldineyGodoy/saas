@@ -22,6 +22,7 @@ import SettingsLayout from './dashboards/SettingsLayout';
 import GridMap from './dashboards/GridMap';
 import GraphNodeView from './dashboards/GraphNodeView';
 import RateioList from './dashboards/RateioList';
+import ProtocolList from './dashboards/ProtocolList';
 
 export default function Dashboard() {
     const { profile, signOut } = useAuth();
@@ -51,6 +52,18 @@ export default function Dashboard() {
             localStorage.setItem('dashboard_active_view', activeView);
         }
     }, [activeView]);
+
+    // Listen to open-protocol event from HistoryTimeline
+    useEffect(() => {
+        const handleOpenProtocol = (e) => {
+            if (e.detail?.protocolId) {
+                localStorage.setItem('open_protocol_id_on_load', e.detail.protocolId);
+                setActiveView('protocols');
+            }
+        };
+        window.addEventListener('open-protocol', handleOpenProtocol);
+        return () => window.removeEventListener('open-protocol', handleOpenProtocol);
+    }, []);
 
     const handleLogout = async () => {
         await signOut();
@@ -118,6 +131,7 @@ export default function Dashboard() {
         if (suppliersAllowed.includes(role)) {
             items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
             items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check' });
+            items.push({ id: 'protocols', label: 'Protocolos', icon: 'bi-clipboard-check' });
             items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
         }
 
@@ -159,6 +173,7 @@ export default function Dashboard() {
             case 'settings': return <SettingsLayout />;
             case 'grid_map': return <GridMap />;
             case 'rateio_list': return <RateioList />;
+            case 'protocols': return <ProtocolList />;
 
             default:
                 return <div style={{ padding: '2rem' }}><h2>Bem-vindo, {profile?.name}</h2><p>Selecione uma opção no menu.</p></div>;

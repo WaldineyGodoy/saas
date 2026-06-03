@@ -296,6 +296,32 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
                                                 return (
                                                     <>
                                                         {displayContent}
+                                                        {item.metadata?.protocol_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    window.dispatchEvent(new CustomEvent('open-protocol', { detail: { protocolId: item.metadata.protocol_id } }));
+                                                                }}
+                                                                style={{
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    marginLeft: '0.5rem',
+                                                                    background: 'var(--color-blue)',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '4px',
+                                                                    padding: '0.15rem 0.45rem',
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    textDecoration: 'none'
+                                                                }}
+                                                            >
+                                                                Ver Protocolo
+                                                            </button>
+                                                        )}
                                                         {isLong && (
                                                             <button
                                                                 type="button"
