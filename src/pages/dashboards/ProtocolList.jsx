@@ -85,7 +85,7 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
             <div style={{
                 background: 'white',
                 borderRadius: '12px',
-                padding: '1rem 1.1rem',
+                padding: '1.1rem 1.2rem',
                 border: `1px solid ${statusCfg.border}`,
                 boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                 cursor: 'pointer',
@@ -114,65 +114,43 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                     width: '4px', background: statusCfg.color, borderRadius: '12px 0 0 12px'
                 }} />
 
-                {/* Badges and actions */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                {/* 1 - Status and Protocol (same line) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
                     <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
-                        fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase',
+                        fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase',
                         background: statusCfg.bg, color: statusCfg.color,
-                        padding: '0.15rem 0.5rem', borderRadius: '99px'
+                        padding: '0.2rem 0.55rem', borderRadius: '99px', letterSpacing: '0.04em'
                     }}>
-                        <StatusIcon size={9} />{statusCfg.label}
+                        <StatusIcon size={10} />{statusCfg.label}
                     </span>
-                    {!isOverlay && (
-                        <button
-                            onClick={handleDelete}
-                            style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: '#cbd5e1', padding: '0.2rem', borderRadius: '4px',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fee2e2'; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#cbd5e1'; e.currentTarget.style.background = 'none'; }}
-                        >
-                            <Trash2 size={13} />
-                        </button>
+                    {protocol.protocol_number ? (
+                        <span style={{ fontSize: '0.72rem', color: '#6d28d9', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <Hash size={11} /> {protocol.protocol_number}
+                        </span>
+                    ) : (
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>Sem nº</span>
                     )}
                 </div>
 
-                {/* Title */}
-                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.4rem', lineHeight: 1.3 }}>
+                {/* 2 - Nome da entidade */}
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <LinkIcon size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' }}>
+                        {protocol.linked_entity_name || 'Entidade não vinculada'}
+                    </span>
+                </div>
+
+                {/* 3 - Titulo do protocolo (small font) */}
+                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '0.6rem', lineHeight: 1.3 }}>
                     {protocol.title}
                 </div>
 
-                {/* Protocol Number */}
-                {protocol.protocol_number && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.4rem' }}>
-                        <Hash size={11} color="#6d28d9" />
-                        <span style={{ fontSize: '0.72rem', color: '#6d28d9', fontWeight: 700 }}>
-                            {protocol.protocol_number}
-                        </span>
-                    </div>
-                )}
-
-                {/* Linked Entity Type / ID */}
-                {protocol.linked_entity_type && (
-                    <div style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                        background: '#f1f5f9', borderRadius: '6px', padding: '0.2rem 0.4rem',
-                        marginBottom: '0.5rem'
-                    }}>
-                        <LinkIcon size={11} color="#64748b" />
-                        <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 600, textTransform: 'capitalize' }}>
-                            {protocol.linked_entity_type.replace('_', ' ')}
-                        </span>
-                    </div>
-                )}
-
-                {/* Due Date row */}
+                {/* 4 - Vencimento */}
                 <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    marginTop: '0.4rem', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9'
+                    background: '#f8fafc', borderRadius: '8px', padding: '0.4rem 0.6rem',
+                    marginBottom: '0.75rem'
                 }}>
                     <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</span>
                     <span style={{
@@ -181,6 +159,44 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                     }}>
                         {protocol.due_date ? formatDateBR(protocol.due_date) : 'Sem prazo'}
                     </span>
+                </div>
+
+                {/* 5 - Lixeira e visualizar (same line - inferior) */}
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9'
+                }} onClick={e => e.stopPropagation()}>
+                    {!isOverlay ? (
+                        <button
+                            onClick={handleDelete}
+                            style={{
+                                background: '#fee2e2', border: 'none', cursor: 'pointer',
+                                color: '#ef4444', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                                display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.72rem', fontWeight: 700,
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#fecaca'; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fee2e2'; }}
+                        >
+                            <Trash2 size={13} /> Excluir
+                        </button>
+                    ) : <div />}
+                    
+                    {!isOverlay ? (
+                        <button
+                            onClick={() => onClick(protocol)}
+                            style={{
+                                background: branding?.primary_color || '#003366', border: 'none', cursor: 'pointer',
+                                color: 'white', padding: '0.35rem 0.65rem', borderRadius: '6px',
+                                display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.72rem', fontWeight: 700,
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
+                        >
+                            Visualizar
+                        </button>
+                    ) : <div />}
                 </div>
             </div>
         </div>
@@ -280,7 +296,7 @@ export default function ProtocolList() {
         try {
             // Fetch protocols (only top-level protocols first, parent_protocol_id is null)
             const { data, error } = await supabase
-                .from('protocols')
+                .from('v_protocols')
                 .select('*')
                 .is('parent_protocol_id', null)
                 .order('created_at', { ascending: false });
@@ -310,7 +326,7 @@ export default function ProtocolList() {
     const fetchAndOpenProtocol = async (id) => {
         try {
             const { data, error } = await supabase
-                .from('protocols')
+                .from('v_protocols')
                 .select('*')
                 .eq('id', id)
                 .single();
