@@ -284,6 +284,75 @@ export default function ProtocolList() {
     const [selectedProtocol, setSelectedProtocol] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [activeId, setActiveId] = useState(null);
+    const [sortBy, setSortBy] = useState('created_at_desc');
+
+    const getSortedKanbanProtocols = (statusId, items) => {
+        const list = items.filter(p => p.status === statusId);
+        if (statusId === 'gerar') {
+            // por data de criação - mais antigos primeiros
+            return list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        }
+        if (statusId === 'em_tratativa') {
+            // por ordem de vencimento: os vencimentos mais proximos primeiros
+            return list.sort((a, b) => {
+                const dueA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+                const dueB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+                return dueA - dueB;
+            });
+        }
+        if (statusId === 'atrasado') {
+            // por ordem de vencimento: os mais atrasados primeiros (oldest due date first)
+            return list.sort((a, b) => {
+                const dueA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+                const dueB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+                return dueA - dueB;
+            });
+        }
+        if (statusId === 'concluida') {
+            // por ordem de modificação: os mais recentes primeiros
+            return list.sort((a, b) => {
+                const timeA = new Date(a.updated_at || a.created_at).getTime();
+                const timeB = new Date(b.updated_at || b.created_at).getTime();
+                return timeB - timeA;
+            });
+        }
+        return list;
+    };
+
+    const getSortedListProtocols = (items) => {
+        const list = [...items];
+        return list.sort((a, b) => {
+            if (sortBy === 'created_at_desc') {
+                return new Date(b.created_at) - new Date(a.created_at);
+            }
+            if (sortBy === 'created_at_asc') {
+                return new Date(a.created_at) - new Date(b.created_at);
+            }
+            if (sortBy === 'due_date_asc') {
+                const dueA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+                const dueB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+                return dueA - dueB;
+            }
+            if (sortBy === 'due_date_desc') {
+                const dueA = a.due_date ? new Date(a.due_date).getTime() : -Infinity;
+                const dueB = b.due_date ? new Date(b.due_date).getTime() : -Infinity;
+                return dueB - dueA;
+            }
+            if (sortBy === 'title_asc') {
+                return (a.title || '').localeCompare(b.title || '');
+            }
+            if (sortBy === 'title_desc') {
+                return (b.title || '').localeCompare(a.title || '');
+            }
+            if (sortBy === 'status_asc') {
+                return (a.status || '').localeCompare(b.status || '');
+            }
+            if (sortBy === 'status_desc') {
+                return (b.status || '').localeCompare(a.status || '');
+            }
+            return 0;
+        });
+    };
 
     const primaryColor = branding?.primary_color || '#003366';
 
@@ -506,6 +575,31 @@ export default function ProtocolList() {
                     />
                 </div>
 
+                {/* Sorting Select (Only in List View) */}
+                {viewMode === 'list' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#64748b' }}>Ordenar por:</span>
+                        <select 
+                            value={sortBy} 
+                            onChange={e => setSortBy(e.target.value)} 
+                            style={{ 
+                                padding: '0.45rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', 
+                                fontSize: '0.82rem', color: '#0f172a', background: 'white', fontWeight: '600', 
+                                outline: 'none', cursor: 'pointer', transition: 'border-color 0.2s' 
+                            }}
+                        >
+                            <option value="created_at_desc">Criado em: Mais Novo primeiro</option>
+                            <option value="created_at_asc">Criado em: Mais Antigo primeiro</option>
+                            <option value="due_date_asc">Vencimento: Mais Próximo primeiro</option>
+                            <option value="due_date_desc">Vencimento: Mais Distante primeiro</option>
+                            <option value="title_asc">Título: A-Z</option>
+                            <option value="title_desc">Título: Z-A</option>
+                            <option value="status_asc">Status: A-Z</option>
+                            <option value="status_desc">Status: Z-A</option>
+                        </select>
+                    </div>
+                )}
+
                 {/* View toggle */}
                 <div style={{
                     display: 'flex', border: '1px solid #e2e8f0',
@@ -556,7 +650,7 @@ export default function ProtocolList() {
                                 <KanbanColumn
                                     key={status.id}
                                     status={status}
-                                    protocols={filtered.filter(p => p.status === status.id)}
+                                    protocols={getSortedKanbanProtocols(status.id, filtered)}
                                     onCardClick={p => setSelectedProtocol(p)}
                                     onDelete={handleDelete}
                                 />
@@ -599,7 +693,7 @@ export default function ProtocolList() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map(p => {
+                                {getSortedListProtocols(filtered).map(p => {
                                     const statusCfg = STATUSES.find(s => s.id === p.status) || STATUSES[0];
                                     const StatusIcon = statusCfg.icon;
                                     return (
