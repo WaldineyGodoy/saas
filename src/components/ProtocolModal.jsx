@@ -25,6 +25,90 @@ function formatDateBR(iso) {
     return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function SearchableSelect({ options, value, onChange, placeholder, loading }) {
+    const [search, setSearch] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    
+    // Sync initial value or changes
+    useEffect(() => {
+        const selected = options.find(o => o.id === value);
+        if (selected) {
+            setSearch(selected.label);
+        } else {
+            setSearch('');
+        }
+    }, [value, options]);
+
+    const filtered = options.filter(o => 
+        o.label.toLowerCase().includes(search.toLowerCase())
+    );
+
+    return (
+        <div style={{ position: 'relative' }}>
+            <input
+                type="text"
+                placeholder={loading ? "Carregando..." : placeholder}
+                value={search}
+                onChange={(e) => {
+                    setSearch(e.target.value);
+                    setIsOpen(true);
+                }}
+                onFocus={() => setIsOpen(true)}
+                disabled={loading}
+                style={{
+                    width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                    outline: 'none', fontSize: '0.85rem', fontWeight: 600, background: 'white'
+                }}
+            />
+            {isOpen && !loading && (
+                <>
+                    {/* Backdrop to close list when clicking outside */}
+                    <div 
+                        onClick={() => {
+                            setIsOpen(false);
+                            const selected = options.find(o => o.id === value);
+                            setSearch(selected ? selected.label : '');
+                        }}
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }} 
+                    />
+                    <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0,
+                        backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '8px',
+                        marginTop: '4px', maxHeight: '180px', overflowY: 'auto', zIndex: 101,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                    }}>
+                        {filtered.length === 0 ? (
+                            <div style={{ padding: '0.6rem 0.75rem', fontSize: '0.85rem', color: '#94a3b8' }}>
+                                Nenhum registro encontrado
+                            </div>
+                        ) : (
+                            filtered.map(opt => (
+                                <div
+                                    key={opt.id}
+                                    onClick={() => {
+                                        onChange(opt.id);
+                                        setSearch(opt.label);
+                                        setIsOpen(false);
+                                    }}
+                                    style={{
+                                        padding: '0.6rem 0.75rem', fontSize: '0.85rem', fontWeight: 600,
+                                        color: '#334155', cursor: 'pointer', transition: 'background 0.15s',
+                                        backgroundColor: opt.id === value ? '#eff6ff' : 'white'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = opt.id === value ? '#eff6ff' : 'white'}
+                                >
+                                    {opt.label}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
 export default function ProtocolModal({ protocol, parentProtocolId, onClose, onUpdated }) {
     const { showAlert } = useUI();
     const { branding } = useBranding();
@@ -420,26 +504,13 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 {linkedEntityType && (
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selecionar Registro</label>
-                                        {loadingEntities ? (
-                                            <div style={{ fontSize: '0.85rem', color: '#94a3b8', padding: '0.6rem 0' }}>Carregando...</div>
-                                        ) : (
-                                            <select
-                                                value={linkedEntityId}
-                                                onChange={e => setLinkedEntityId(e.target.value)}
-                                                style={{
-                                                    width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                    outline: 'none', fontSize: '0.85rem', fontWeight: 600, background: 'white'
-                                                }}
-                                            >
-                                                {entityOptions.length === 0 ? (
-                                                    <option value="">Nenhum registro encontrado</option>
-                                                ) : (
-                                                    entityOptions.map(opt => (
-                                                        <option key={opt.id} value={opt.id}>{opt.label}</option>
-                                                    ))
-                                                )}
-                                            </select>
-                                        )}
+                                        <SearchableSelect
+                                            options={entityOptions}
+                                            value={linkedEntityId}
+                                            onChange={setLinkedEntityId}
+                                            placeholder="Digite para buscar..."
+                                            loading={loadingEntities}
+                                        />
                                     </div>
                                 )}
                             </div>
