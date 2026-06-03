@@ -261,14 +261,14 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 // Invoices that are concessionaria bills (valor_concessionaria > 0)
                 ({ data, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, concessionaria')
+                    .select('id, mes_referencia, concessionaria, consumer_units(numero_uc, titular_conta)')
                     .not('concessionaria', 'is', null)
                     .order('mes_referencia', { ascending: false }));
             } else if (linkedEntityType === 'fatura') {
                 // Invoices that are subscriber bills
                 ({ data, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, valor_a_pagar')
+                    .select('id, mes_referencia, valor_a_pagar, consumer_units(numero_uc, titular_conta)')
                     .order('mes_referencia', { ascending: false }));
             } else if (linkedEntityType === 'rateio_list') {
                 ({ data, error } = await supabase.from('rateio_lists').select('id, usina_name, created_at').order('created_at', { ascending: false }));
@@ -282,9 +282,11 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 } else if (linkedEntityType === 'unidade_consumidora') {
                     return { id: item.id, label: `${item.titular_conta} (UC: ${item.numero_uc})` };
                 } else if (linkedEntityType === 'conta_energia') {
-                    return { id: item.id, label: `${item.concessionaria} - Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}` };
+                    const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
+                    return { id: item.id, label: `${item.concessionaria}${ucInfo} - Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}` };
                 } else if (linkedEntityType === 'fatura') {
-                    return { id: item.id, label: `Fatura Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''} - Valor: R$ ${Number(item.valor_a_pagar).toFixed(2)}` };
+                    const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
+                    return { id: item.id, label: `Fatura Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}${ucInfo} - Valor: R$ ${Number(item.valor_a_pagar).toFixed(2)}` };
                 } else if (linkedEntityType === 'rateio_list') {
                     return { id: item.id, label: `${item.usina_name} - Criada: ${formatDateBR(item.created_at)}` };
                 }
