@@ -877,7 +877,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const saldoReceber = subtotal - totalDespesas;
 
             // 2. Upsert generation_production
-            const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
+            const { 
+                details, 
+                id: prodId, 
+                created_at, 
+                geracao_real, 
+                updated_at, 
+                faturamento_pago,
+                faturamento_a_vencer,
+                faturamento_sem_faturamento,
+                faturamento_atrasado,
+                ...mainData 
+            } = monthlyDetails;
             const upsertData = {
                 ...mainData,
                 service_details: details || {},
