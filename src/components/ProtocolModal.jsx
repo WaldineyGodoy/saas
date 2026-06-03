@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText } from 'lucide-react';
+import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import SubscriberModal from './SubscriberModal';
+import ConsumerUnitModal from './ConsumerUnitModal';
+import InvoiceSummaryModal from './InvoiceSummaryModal';
+import RateioListModal from './RateioListModal';
 
 // Helper to calculate business days (skips Saturday and Sunday)
 function calculateBusinessDays(startDate, numDays) {
@@ -132,6 +136,68 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     // Sub-protocols state
     const [subProtocols, setSubProtocols] = useState([]);
     const [showSubModal, setShowSubModal] = useState(false);
+
+    // Entity details modals states
+    const [loadingEntityDetail, setLoadingEntityDetail] = useState(false);
+    const [activeSubscriber, setActiveSubscriber] = useState(null);
+    const [activeConsumerUnit, setActiveConsumerUnit] = useState(null);
+    const [activeInvoice, setActiveInvoice] = useState(null);
+    const [activeInvoiceCU, setActiveInvoiceCU] = useState(null);
+    const [activeRateio, setActiveRateio] = useState(null);
+
+    const handleOpenEntityModal = async () => {
+        if (!linkedEntityType || !linkedEntityId) return;
+        setLoadingEntityDetail(true);
+        try {
+            if (linkedEntityType === 'assinante') {
+                const { data, error } = await supabase
+                    .from('subscribers')
+                    .select('*')
+                    .eq('id', linkedEntityId)
+                    .single();
+                if (error) throw error;
+                setActiveSubscriber(data);
+            } else if (linkedEntityType === 'unidade_consumidora') {
+                const { data, error } = await supabase
+                    .from('consumer_units')
+                    .select('*')
+                    .eq('id', linkedEntityId)
+                    .single();
+                if (error) throw error;
+                setActiveConsumerUnit(data);
+            } else if (linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') {
+                const { data: invoiceData, error: invError } = await supabase
+                    .from('invoices')
+                    .select('*')
+                    .eq('id', linkedEntityId)
+                    .single();
+                if (invError) throw invError;
+                
+                if (invoiceData?.consumer_unit_id) {
+                    const { data: cuData } = await supabase
+                        .from('consumer_units')
+                        .select('*')
+                        .eq('id', invoiceData.consumer_unit_id)
+                        .single();
+                    setActiveInvoiceCU(cuData);
+                }
+                setActiveInvoice(invoiceData);
+            } else if (linkedEntityType === 'rateio_list') {
+                const { data, error } = await supabase
+                    .from('rateio_lists')
+                    .select('*')
+                    .eq('id', linkedEntityId)
+                    .single();
+                if (error) throw error;
+                setActiveRateio(data);
+            }
+        } catch (err) {
+            console.error('Error fetching entity details:', err);
+            showAlert('Erro ao carregar detalhes da entidade.', 'error');
+        } finally {
+            setLoadingEntityDetail(false);
+        }
+    };
 
     const primaryColor = branding?.primary_color || '#003366';
 
@@ -514,6 +580,77 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                     </div>
                                 )}
                             </div>
+                            {linkedEntityType && linkedEntityId && (
+                                <div style={{ marginTop: '1rem' }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                                        Visualizar Entidade Vinculada
+                                    </label>
+                                    <div
+                                        onClick={handleOpenEntityModal}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '0.75rem 1rem',
+                                            backgroundColor: 'white',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '10px',
+                                            cursor: loadingEntityDetail ? 'wait' : 'pointer',
+                                            transition: 'all 0.2s',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.borderColor = primaryColor;
+                                            e.currentTarget.style.backgroundColor = '#f8fafc';
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.borderColor = '#cbd5e1';
+                                            e.currentTarget.style.backgroundColor = 'white';
+                                            e.currentTarget.style.transform = 'none';
+                                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                                            <div style={{
+                                                padding: '0.5rem',
+                                                background: primaryColor + '10',
+                                                borderRadius: '8px',
+                                                color: primaryColor,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}>
+                                                {linkedEntityType === 'assinante' && <User size={18} />}
+                                                {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
+                                                {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
+                                                {linkedEntityType === 'rateio_list' && <Layers size={18} />}
+                                            </div>
+                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
+                                                    {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
+                                                    {linkedEntityType === 'assinante' && 'Assinante'}
+                                                    {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
+                                                    {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
+                                                    {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
+                                                    {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '10px' }}>
+                                            {loadingEntityDetail ? (
+                                                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                            ) : (
+                                                <ExternalLink size={16} />
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}
@@ -629,6 +766,41 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                         fetchSubProtocols();
                         setShowSubModal(false);
                     }}
+                />
+            )}
+
+            {/* Linked Entity Modals */}
+            {activeSubscriber && (
+                <SubscriberModal
+                    subscriber={activeSubscriber}
+                    onClose={() => setActiveSubscriber(null)}
+                    onSave={() => {}}
+                />
+            )}
+
+            {activeConsumerUnit && (
+                <ConsumerUnitModal
+                    consumerUnit={activeConsumerUnit}
+                    onClose={() => setActiveConsumerUnit(null)}
+                    onSave={() => {}}
+                />
+            )}
+
+            {activeInvoice && (
+                <InvoiceSummaryModal
+                    invoice={activeInvoice}
+                    consumerUnit={activeInvoiceCU}
+                    onClose={() => {
+                        setActiveInvoice(null);
+                        setActiveInvoiceCU(null);
+                    }}
+                />
+            )}
+
+            {activeRateio && (
+                <RateioListModal
+                    rateio={activeRateio}
+                    onClose={() => setActiveRateio(null)}
                 />
             )}
         </div>
