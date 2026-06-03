@@ -261,8 +261,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 // Invoices that are concessionaria bills (valor_concessionaria > 0)
                 ({ data, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, concessionaria, consumer_units(numero_uc, titular_conta)')
-                    .not('concessionaria', 'is', null)
+                    .select('id, mes_referencia, valor_concessionaria, consumer_units(numero_uc, titular_conta, concessionaria)')
+                    .not('valor_concessionaria', 'is', null)
                     .order('mes_referencia', { ascending: false }));
             } else if (linkedEntityType === 'fatura') {
                 // Invoices that are subscriber bills
@@ -282,8 +282,9 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 } else if (linkedEntityType === 'unidade_consumidora') {
                     return { id: item.id, label: `${item.titular_conta} (UC: ${item.numero_uc})` };
                 } else if (linkedEntityType === 'conta_energia') {
+                    const conName = item.consumer_units?.concessionaria || 'Concessionária';
                     const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
-                    return { id: item.id, label: `${item.concessionaria}${ucInfo} - Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}` };
+                    return { id: item.id, label: `${conName}${ucInfo} - Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}` };
                 } else if (linkedEntityType === 'fatura') {
                     const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
                     return { id: item.id, label: `Fatura Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}${ucInfo} - Valor: R$ ${Number(item.valor_a_pagar).toFixed(2)}` };
