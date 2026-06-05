@@ -1796,7 +1796,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 // If monthly details are populated, save them to generation_production
                 if (monthlyDetails) {
-                    const { details, id: prodId, created_at, geracao_real, updated_at, ...mainData } = monthlyDetails;
+                    const { 
+                        details, 
+                        id: prodId, 
+                        created_at, 
+                        geracao_real, 
+                        updated_at, 
+                        faturamento_pago,
+                        faturamento_a_vencer,
+                        faturamento_sem_faturamento,
+                        faturamento_atrasado,
+                        ...mainData 
+                    } = monthlyDetails;
                     const upsertData = {
                         ...mainData,
                         usina_id: usinaId,
