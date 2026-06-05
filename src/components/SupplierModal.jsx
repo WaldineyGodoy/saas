@@ -579,12 +579,32 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         <>
         <style>{`
             @media print {
+                html, body, #root {
+                    height: auto !important;
+                    overflow: visible !important;
+                    position: static !important;
+                    background: white !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
                 body * { visibility: hidden !important; }
-                .extrato-print-container, .extrato-print-container * { visibility: visible !important; }
+                
+                .print-wrapper {
+                    position: static !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                    display: block !important;
+                    background: transparent !important;
+                }
+
+                .extrato-print-container, .extrato-print-container * { 
+                    visibility: visible !important; 
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+
                 .extrato-print-container { 
-                    position: absolute !important; 
-                    left: 0 !important; 
-                    top: 0 !important; 
+                    position: static !important; 
                     width: 100% !important; 
                     max-width: none !important;
                     background: white !important;
@@ -593,21 +613,25 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     max-height: none !important;
                     overflow: visible !important;
                     margin: 0 !important;
-                    padding: 20px !important;
+                    padding: 0 !important;
                     transform: none !important;
                 }
+                
                 .print-only-header { display: block !important; }
                 .no-print { display: none !important; }
                 
-                table { page-break-inside: auto; width: 100%; }
+                table { page-break-inside: auto; width: 100%; border-collapse: collapse; }
                 tr { page-break-inside: avoid; page-break-after: auto; }
                 thead { display: table-header-group; }
                 tfoot { display: table-footer-group; }
                 
-                @page { margin: 1cm; }
+                /* Ensure value colors print accurately */
+                .print-value {
+                    font-weight: 800 !important;
+                }
             }
         `}</style>
-        <div style={{
+        <div className="print-wrapper" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)',
             display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
@@ -1258,7 +1282,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                         </div>
                                                                     </td>
                                                                     <td style={{ padding: '1.25rem 0.5rem', textAlign: 'right' }}>
-                                                                        <div style={{
+                                                                        <div className="print-value" style={{
                                                                             fontWeight: '800',
                                                                             fontSize: '1.05rem',
                                                                             color: isRevenue ? '#10b981' : '#ef4444'
@@ -1362,7 +1386,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         )}
 
                         {/* Modal Footer Actions */}
-                        <div style={{ 
+                        <div className="no-print" style={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
                             alignItems: 'center',
