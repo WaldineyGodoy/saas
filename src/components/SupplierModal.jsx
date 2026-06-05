@@ -18,6 +18,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [activeTab, setActiveTab] = useState('geral');
     const [usinas, setUsinas] = useState([]);
     const [ledgerEntries, setLedgerEntries] = useState([]);
+    const [repasseOrigins, setRepasseOrigins] = useState({});
     const [ledgerLoading, setLedgerLoading] = useState(false);
     const [expandedTx, setExpandedTx] = useState(null);
     const [txDetails, setTxDetails] = useState([]);
@@ -103,6 +104,28 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             if (error) throw error;
             setLedgerEntries(data || []);
+
+            // Pre-fetch subscriber names for repasse entries
+            const repasseTxs = (data || [])
+                .filter(e => e.description?.toLowerCase().includes('repasse'))
+                .map(e => e.transaction_id);
+
+            if (repasseTxs.length > 0) {
+                const { data: repasseData } = await supabase
+                    .from('view_ledger_enriched')
+                    .select('transaction_id, entity_name, account_code')
+                    .in('transaction_id', repasseTxs)
+                    .in('account_code', ['1.1.2', '4.1.1']);
+                
+                if (repasseData) {
+                    const originMap = {};
+                    repasseData.forEach(r => {
+                        if (r.entity_name) originMap[r.transaction_id] = r.entity_name;
+                    });
+                    setRepasseOrigins(originMap);
+                }
+            }
+
         } catch (err) {
             console.error('Error fetching ledger:', err);
         } finally {
@@ -506,7 +529,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     };
 
     const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleString('pt-BR', {
+        if (!dateStr) return '';
+        // If it's just a YYYY-MM-DD string, add time to prevent timezone shift
+        const dateObj = dateStr.length === 10 ? new Date(dateStr + 'T12:00:00') : new Date(dateStr);
+        return dateObj.toLocaleString('pt-BR', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric'
@@ -545,11 +571,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             'RENT': 'Aluguel',
             'TAX': 'Taxa',
             'SUBSCRIPTION': 'Assinatura',
-            'ADJUSTMENT': 'Ajuste',
-            'SUBSCRIBER': 'Assinante',
-            'PLANT': 'Ufina',
-            'POWERPLANT': 'Ufina'
-        };
         return map[name.toUpperCase()] || name;
     };
 
@@ -564,12 +585,25 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     left: 0 !important; 
                     top: 0 !important; 
                     width: 100% !important; 
+                    max-width: none !important;
                     background: white !important;
                     box-shadow: none !important;
                     height: auto !important;
+                    max-height: none !important;
                     overflow: visible !important;
+                    margin: 0 !important;
+                    padding: 20px !important;
+                    transform: none !important;
                 }
+                .print-only-header { display: block !important; }
                 .no-print { display: none !important; }
+                
+                table { page-break-inside: auto; width: 100%; }
+                tr { page-break-inside: avoid; page-break-after: auto; }
+                thead { display: table-header-group; }
+                tfoot { display: table-footer-group; }
+                
+                @page { margin: 1cm; }
             }
         `}</style>
         <div style={{
@@ -581,9 +615,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 background: '#f8fafc', 
                 borderRadius: '30px', 
                 width: '95%', 
-                maxWidth: '850px', 
+                maxWidth: '1200px', 
                 maxHeight: '90vh', 
-                overflow: 'hidden',
+                overflowY: 'auto',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                 display: 'flex',
                 flexDirection: 'column'
@@ -1120,13 +1154,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 </div>
 
                                 <div style={sectionStyle}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                    <div style={{ display: 'none' }} className="print-only-header">
+                                        <div style={{ marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #e2e8f0', color: '#1e293b' }}>
+                                            <h2 style={{ margin: '0 0 0.5rem 0' }}>Extrato de Conta - {formData.name}</h2>
+                                            <div style={{ display: 'flex', gap: '2rem', fontSize: '0.9rem' }}>
+                                                <div><strong>Período:</strong> {extratoStartDate ? formatDate(extratoStartDate) : 'Início'} até {extratoEndDate ? formatDate(extratoEndDate) : 'Hoje'}</div>
+                                                <div><strong>Tipo:</strong> {extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}</div>
+                                                <div><strong>Saldo Acumulado:</strong> {formatCurrency(ledgerBalance)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                                         <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                                             <Search size={20} color="#3b82f6" /> Lançamentos Recentes
                                         </h4>
-                                        <div style={{ display: 'none' }} className="print-only-title">
-                                            Extrato de Conta - {formData.name} - {new Date().toLocaleDateString('pt-BR')}
-                                        </div>
                                     </div>
                                     
                                     {ledgerLoading ? (
@@ -1154,7 +1196,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         const isRevenue = entry.amount < 0;
                                                         
                                                         const isRepasse = entry.description?.toLowerCase().includes('repasse');
-                                                        const subscriberOrig = isRepasse ? (entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name || 'Assinante') : null;
+                                                        const subscriberOrig = isRepasse ? (repasseOrigins[entry.transaction_id] || entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name) : null;
                                                         const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
 
                                                         return (
@@ -1193,14 +1235,18 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                                                             </div>
                                                                             <div>
-                                                                                <div style={{ fontWeight: '700', color: '#475569', fontSize: '0.85rem' }}>
-                                                                                    {entry.description}
-                                                                                </div>
-                                                                                
-                                                                                {subscriberOrig && (
-                                                                                    <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: '800', marginTop: '0.15rem' }}>
-                                                                                        Origem: {subscriberOrig}
-                                                                                        {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
+                                                                                {subscriberOrig ? (
+                                                                                    <>
+                                                                                        <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                            Origem: {translateEntity(subscriberOrig)}
+                                                                                        </div>
+                                                                                        <div style={{ fontWeight: '600', color: '#64748b', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                                                                                            {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
+                                                                                        </div>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                        {entry.description}
                                                                                     </div>
                                                                                 )}
 
