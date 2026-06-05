@@ -570,7 +570,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             'MAINTENANCE': 'Manutenção',
             'RENT': 'Aluguel',
             'TAX': 'Taxa',
-            'SUBSCRIPTION': 'Assinatura',
+            'SUBSCRIPTION': 'Assinatura'
+        };
         return map[name.toUpperCase()] || name;
     };
 
