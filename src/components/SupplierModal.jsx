@@ -1048,19 +1048,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             type="date"
                                             value={extratoStartDate}
                                             onChange={e => setExtratoStartDate(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
                                         />
                                         <span style={{ opacity: 0.8 }}>até</span>
                                         <input
                                             type="date"
                                             value={extratoEndDate}
                                             onChange={e => setExtratoEndDate(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
                                         />
                                         <select
                                             value={extratoType}
                                             onChange={e => setExtratoType(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
                                         >
                                             <option value="all">Todos os tipos</option>
                                             <option value="credit">Créditos</option>
@@ -1154,7 +1154,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         const isRevenue = entry.amount < 0;
                                                         
                                                         const isRepasse = entry.description?.toLowerCase().includes('repasse');
-                                                        const subscriberOrig = isRepasse ? translateEntity(entry.entity_name) : null;
+                                                        const subscriberOrig = isRepasse ? (entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name || 'Assinante') : null;
                                                         const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
 
                                                         return (
@@ -1193,18 +1193,18 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                                                             </div>
                                                                             <div>
-                                                                                <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem' }}>
+                                                                                <div style={{ fontWeight: '700', color: '#475569', fontSize: '0.85rem' }}>
                                                                                     {entry.description}
                                                                                 </div>
                                                                                 
                                                                                 {subscriberOrig && (
-                                                                                    <div style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: '600', marginTop: '0.15rem' }}>
+                                                                                    <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: '800', marginTop: '0.15rem' }}>
                                                                                         Origem: {subscriberOrig}
                                                                                         {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
                                                                                     </div>
                                                                                 )}
 
-                                                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em', marginTop: '0.15rem' }}>
+                                                                                <div style={{ fontSize: '0.8rem', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.025em', marginTop: '0.2rem', fontWeight: '800' }}>
                                                                                     {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
                                                                                 </div>
                                                                             </div>
