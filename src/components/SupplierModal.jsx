@@ -27,6 +27,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [paymentAmount, setPaymentAmount] = useState(0);
     const [isPartial, setIsPartial] = useState(false);
 
+    // Extrato Filters
+    const [extratoStartDate, setExtratoStartDate] = useState('');
+    const [extratoEndDate, setExtratoEndDate] = useState('');
+    const [extratoType, setExtratoType] = useState('all');
+
     // Manual Entry State
     const [manualEntryAmount, setManualEntryAmount] = useState('');
     const [manualEntryType, setManualEntryType] = useState('credit');
@@ -510,6 +515,26 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const ledgerBalance = ledgerEntries.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
+    const filteredLedgerEntries = ledgerEntries.filter(entry => {
+        let isValid = true;
+        if (extratoStartDate) {
+            isValid = isValid && new Date(entry.created_at) >= new Date(extratoStartDate + 'T00:00:00');
+        }
+        if (extratoEndDate) {
+            isValid = isValid && new Date(entry.created_at) <= new Date(extratoEndDate + 'T23:59:59');
+        }
+        if (extratoType === 'credit') {
+            isValid = isValid && entry.amount < 0; // Negative means credit to supplier
+        } else if (extratoType === 'debit') {
+            isValid = isValid && entry.amount > 0;
+        }
+        return isValid;
+    });
+
+    const handlePrintExtrato = () => {
+        window.print();
+    };
+
     const translateEntity = (name) => {
         if (!name) return '';
         const map = {
@@ -529,12 +554,30 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     };
 
     return (
+        <>
+        <style>{`
+            @media print {
+                body * { visibility: hidden !important; }
+                .extrato-print-container, .extrato-print-container * { visibility: visible !important; }
+                .extrato-print-container { 
+                    position: absolute !important; 
+                    left: 0 !important; 
+                    top: 0 !important; 
+                    width: 100% !important; 
+                    background: white !important;
+                    box-shadow: none !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                }
+                .no-print { display: none !important; }
+            }
+        `}</style>
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)',
             display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ 
+            <div className="extrato-print-container" style={{ 
                 background: '#f8fafc', 
                 borderRadius: '30px', 
                 width: '95%', 
@@ -546,7 +589,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 flexDirection: 'column'
             }}>
                 {/* Premium Header */}
-                <div style={{
+                <div className="no-print" style={{
                     background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
                     padding: '1.5rem 2rem',
                     color: 'white',
@@ -578,7 +621,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 </div>
 
                 {/* Horizontal Navigation */}
-                <div style={{
+                <div className="no-print" style={{
                     display: 'flex',
                     gap: '1rem',
                     padding: '0.75rem 2rem',
@@ -981,8 +1024,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                         {activeTab === 'extrato' && (
                             <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                {/* Balance Card */}
-                                <div style={{
+                                <div className="no-print" style={{
                                     background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
                                     padding: '2rem',
                                     borderRadius: '24px',
@@ -991,12 +1033,60 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)'
+                                    boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
+                                    flexWrap: 'wrap',
+                                    gap: '1rem'
                                 }}>
-                                    <div>
+                                    <div style={{ flex: 1, minWidth: '250px' }}>
                                         <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
                                         <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
                                     </div>
+
+                                    {/* Filters inside Header to save space */}
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <input
+                                            type="date"
+                                            value={extratoStartDate}
+                                            onChange={e => setExtratoStartDate(e.target.value)}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                        />
+                                        <span style={{ opacity: 0.8 }}>até</span>
+                                        <input
+                                            type="date"
+                                            value={extratoEndDate}
+                                            onChange={e => setExtratoEndDate(e.target.value)}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                        />
+                                        <select
+                                            value={extratoType}
+                                            onChange={e => setExtratoType(e.target.value)}
+                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem' }}
+                                        >
+                                            <option value="all">Todos os tipos</option>
+                                            <option value="credit">Créditos</option>
+                                            <option value="debit">Débitos</option>
+                                        </select>
+
+                                        <button 
+                                            type="button"
+                                            onClick={handlePrintExtrato}
+                                            style={{ 
+                                                background: 'rgba(255,255,255,0.2)', 
+                                                padding: '0.6rem 1rem', 
+                                                borderRadius: '8px',
+                                                border: '1px solid rgba(255,255,255,0.3)',
+                                                color: 'white',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem'
+                                            }}
+                                        >
+                                            PDF
+                                        </button>
+                                    </div>
+
                                     <button 
                                         type="button"
                                         onClick={handlePayPix}
@@ -1030,15 +1120,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 </div>
 
                                 <div style={sectionStyle}>
-                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                        <Search size={20} color="#3b82f6" /> Lançamentos Recentes
-                                    </h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                            <Search size={20} color="#3b82f6" /> Lançamentos Recentes
+                                        </h4>
+                                        <div style={{ display: 'none' }} className="print-only-title">
+                                            Extrato de Conta - {formData.name} - {new Date().toLocaleDateString('pt-BR')}
+                                        </div>
+                                    </div>
                                     
                                     {ledgerLoading ? (
                                         <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Carregando extrato...</div>
-                                    ) : ledgerEntries.length === 0 ? (
+                                    ) : filteredLedgerEntries.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '16px' }}>
-                                            Nenhum lançamento encontrado para este fornecedor.
+                                            Nenhum lançamento encontrado para os filtros selecionados.
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto' }}>
@@ -1052,11 +1147,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {ledgerEntries.map(entry => {
+                                                    {filteredLedgerEntries.map(entry => {
                                                         // In the vision of the Supplier (Account 2.1.1 - Liability):
                                                         // Credit (Negative amount) = Money they have to receive (Revenue/Positive for them)
                                                         // Debit (Positive amount) = Money deducted from them (Expense/Negative for them)
                                                         const isRevenue = entry.amount < 0;
+                                                        
+                                                        const isRepasse = entry.description?.toLowerCase().includes('repasse');
+                                                        const subscriberOrig = isRepasse ? translateEntity(entry.entity_name) : null;
+                                                        const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
 
                                                         return (
                                                             <React.Fragment key={entry.id}>
@@ -1080,7 +1179,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                     </td>
                                                                     <td style={{ padding: '1.25rem 0.5rem' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                            <div style={{
+                                                                            <div className="no-print" style={{
                                                                                 width: '32px',
                                                                                 height: '32px',
                                                                                 borderRadius: '10px',
@@ -1088,7 +1187,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 color: isRevenue ? '#10b981' : '#ef4444',
                                                                                 display: 'flex',
                                                                                 alignItems: 'center',
-                                                                                justifyContent: 'center'
+                                                                                justifyContent: 'center',
+                                                                                flexShrink: 0
                                                                             }}>
                                                                                 {isRevenue ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                                                             </div>
@@ -1096,7 +1196,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem' }}>
                                                                                     {entry.description}
                                                                                 </div>
-                                                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+                                                                                
+                                                                                {subscriberOrig && (
+                                                                                    <div style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: '600', marginTop: '0.15rem' }}>
+                                                                                        Origem: {subscriberOrig}
+                                                                                        {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.025em', marginTop: '0.15rem' }}>
                                                                                     {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
                                                                                 </div>
                                                                             </div>
@@ -1190,7 +1298,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         )}
 
                         {activeTab === 'historico' && supplier && (
-                            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
                                     <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                                         <History size={20} color="#3b82f6" /> Timeline de Auditoria
@@ -1230,11 +1338,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             border: 'none',
                                             borderRadius: '14px',
                                             fontWeight: '700',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s'
+                                            justifyContent: 'center',
+                                            cursor: 'pointer'
                                         }}
                                     >
-                                        <Trash2 size={18} /> Excluir
+                                        <Trash2 size={18} /> Excluir Fornecedor
                                     </button>
                                 )}
                             </div>
