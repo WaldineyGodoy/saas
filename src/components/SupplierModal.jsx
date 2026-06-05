@@ -1497,5 +1497,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 </div>
             )}
         </div>
+        </>
     );
 }
