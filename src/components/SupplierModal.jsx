@@ -558,7 +558,85 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     });
 
     const handlePrintExtrato = () => {
-        window.print();
+        const printContent = document.querySelector('.extrato-print-container');
+        if (!printContent) return;
+        
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = 'none';
+        
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        
+        const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+            .map(s => s.outerHTML)
+            .join('');
+            
+        doc.write(`
+            <html>
+                <head>
+                    <title>Extrato de Conta - ${supplier?.name || 'Fornecedor'}</title>
+                    ${styles}
+                    <style>
+                        body { 
+                            background: white !important; 
+                            margin: 20px !important; 
+                            padding: 0 !important; 
+                            font-family: inherit;
+                        }
+                        .no-print { display: none !important; }
+                        .print-only-header { display: block !important; }
+                        
+                        .extrato-print-container { 
+                            box-shadow: none !important; 
+                            max-width: none !important; 
+                            width: 100% !important; 
+                            border-radius: 0 !important;
+                            height: auto !important;
+                            max-height: none !important;
+                            overflow: visible !important;
+                            background: white !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        
+                        * { 
+                            -webkit-print-color-adjust: exact !important; 
+                            print-color-adjust: exact !important; 
+                        }
+                        
+                        table { 
+                            page-break-inside: auto; 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                        }
+                        tr { page-break-inside: avoid; page-break-after: auto; }
+                        thead { display: table-header-group; }
+                        tfoot { display: table-footer-group; }
+                        
+                        .print-value { font-weight: 800 !important; }
+                    </style>
+                </head>
+                <body>
+                    <div class="extrato-print-container">
+                        ${printContent.innerHTML}
+                    </div>
+                </body>
+            </html>
+        `);
+        doc.close();
+        
+        iframe.contentWindow.focus();
+        setTimeout(() => {
+            iframe.contentWindow.print();
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        }, 500);
     };
 
     const translateEntity = (name) => {
@@ -578,57 +656,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     return (
         <>
         <style>{`
-            @media print {
-                html, body, #root {
-                    height: auto !important;
-                    overflow: visible !important;
-                    position: static !important;
-                    background: white !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-                body * { visibility: hidden !important; }
-                
-                .print-wrapper {
-                    position: static !important;
-                    height: auto !important;
-                    overflow: visible !important;
-                    display: block !important;
-                    background: transparent !important;
-                }
-
-                .extrato-print-container, .extrato-print-container * { 
-                    visibility: visible !important; 
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                }
-
-                .extrato-print-container { 
-                    position: static !important; 
-                    width: 100% !important; 
-                    max-width: none !important;
-                    background: white !important;
-                    box-shadow: none !important;
-                    height: auto !important;
-                    max-height: none !important;
-                    overflow: visible !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    transform: none !important;
-                }
-                
-                .print-only-header { display: block !important; }
-                .no-print { display: none !important; }
-                
-                table { page-break-inside: auto; width: 100%; border-collapse: collapse; }
-                tr { page-break-inside: avoid; page-break-after: auto; }
-                thead { display: table-header-group; }
-                tfoot { display: table-footer-group; }
-                
-                /* Ensure value colors print accurately */
-                .print-value {
-                    font-weight: 800 !important;
-                }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
             }
         `}</style>
         <div className="print-wrapper" style={{
