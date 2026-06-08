@@ -241,57 +241,58 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     });
 
     const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+        let primaryResult = 0;
         if (sortBy === 'ref_desc') {
             const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
             const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
-            return dateB - dateA;
-        }
-        if (sortBy === 'ref_asc') {
+            primaryResult = dateB - dateA;
+        } else if (sortBy === 'ref_asc') {
             const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
             const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
-            return dateA - dateB;
-        }
-        if (sortBy === 'venc_desc') {
+            primaryResult = dateA - dateB;
+        } else if (sortBy === 'venc_desc') {
             const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
             const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
-            return dateB - dateA;
-        }
-        if (sortBy === 'venc_asc') {
+            primaryResult = dateB - dateA;
+        } else if (sortBy === 'venc_asc') {
             const dateA = a.vencimento ? new Date(a.vencimento) : new Date(0);
             const dateB = b.vencimento ? new Date(b.vencimento) : new Date(0);
-            return dateA - dateB;
-        }
-        if (sortBy === 'uc_asc') {
+            primaryResult = dateA - dateB;
+        } else if (sortBy === 'uc_asc') {
             const ucA = a.consumer_units?.numero_uc || '';
             const ucB = b.consumer_units?.numero_uc || '';
-            return ucA.localeCompare(ucB);
-        }
-        if (sortBy === 'uc_desc') {
+            primaryResult = ucA.localeCompare(ucB);
+        } else if (sortBy === 'uc_desc') {
             const ucA = a.consumer_units?.numero_uc || '';
             const ucB = b.consumer_units?.numero_uc || '';
-            return ucB.localeCompare(ucA);
-        }
-        if (sortBy === 'valor_desc') {
+            primaryResult = ucB.localeCompare(ucA);
+        } else if (sortBy === 'valor_desc') {
             const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
             const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
-            return valB - valA;
-        }
-        if (sortBy === 'valor_asc') {
+            primaryResult = valB - valA;
+        } else if (sortBy === 'valor_asc') {
             const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
             const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
-            return valA - valB;
-        }
-        if (sortBy === 'assinante_asc') {
+            primaryResult = valA - valB;
+        } else if (sortBy === 'assinante_asc') {
             const nameA = a.consumer_units?.subscribers?.name || '';
             const nameB = b.consumer_units?.subscribers?.name || '';
-            return nameA.localeCompare(nameB);
-        }
-        if (sortBy === 'assinante_desc') {
+            primaryResult = nameA.localeCompare(nameB);
+        } else if (sortBy === 'assinante_desc') {
             const nameA = a.consumer_units?.subscribers?.name || '';
             const nameB = b.consumer_units?.subscribers?.name || '';
-            return nameB.localeCompare(nameA);
+            primaryResult = nameB.localeCompare(nameA);
         }
-        return 0;
+
+        // Se o critério principal empatar e não for ordenação primária pelo próprio mês de referência,
+        // aplica a ordenação secundária: Mês de Ref. com o Mais Novo Primeiro (decrescente)
+        if (primaryResult === 0 && sortBy !== 'ref_desc' && sortBy !== 'ref_asc') {
+            const dateA = a.mes_referencia ? new Date(a.mes_referencia) : new Date(0);
+            const dateB = b.mes_referencia ? new Date(b.mes_referencia) : new Date(0);
+            return dateB - dateA; // Mais novo primeiro
+        }
+
+        return primaryResult;
     });
 
     const getInvoiceDueDate = (inv) => {
