@@ -5,11 +5,13 @@ import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2 } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
 import AuditGraphViewInvoiceSummary from './AuditGraphViewInvoiceSummary';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 let pageSessionState = {
     // Configurações salvas para a aba de Faturas
@@ -317,6 +319,120 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         const formattedDay = String(dueDay).padStart(2, '0');
         const formattedMonth = String(nextMonth).padStart(2, '0');
         return `${formattedDay}/${formattedMonth}/${nextYear}`;
+    };
+
+    const handleGenerateExtrato = () => {
+        if (sortedInvoices.length === 0) {
+            showAlert('Nenhum registro para exportar.', 'warning');
+            return;
+        }
+
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Título e Header
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 51, 102); // Navy Blue
+        doc.text('EXTRATO DE FATURAS E EVENTOS', 14, 18);
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139); // Slate Grey
+        const generationDate = new Date().toLocaleString('pt-BR');
+        doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
+
+        // Linha divisória
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(14, 22, pageWidth - 14, 22);
+
+        // Resumo financeiro / Filtros aplicados
+        const totalFact = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+        const totalEnergyBill = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0))), 0);
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42); // Charcoal
+        doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 30);
+        doc.text(`Total Contas de Energia: ${formatCurrency(totalEnergyBill)}`, 85, 30);
+        doc.text(`Total Registros: ${sortedInvoices.length}`, 180, 30);
+
+        // Mapear dados para a tabela
+        const tableBody = sortedInvoices.map(inv => {
+            const factValue = Number(inv.valor_a_pagar) || 0;
+            const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
+            const statusLabel = 
+                inv.status === 'sem_faturamento' ? 'Sem Faturamento' : 
+                inv.status === 'pago' ? 'Pago' : 
+                inv.status === 'a_vencer' ? 'A Vencer' : 
+                inv.status === 'atrasado' ? 'Atrasado' : 
+                inv.status === 'em_transf_titularidade' ? 'Em Transf. Titularidade' : 
+                inv.status === 'desconectado' ? 'Desconectado' : 
+                inv.status === 'ag_emissao_boleto' ? 'Aguardando Emissão' : 
+                inv.status === 'cancelado' ? 'Cancelado' : inv.status || '-';
+
+            return [
+                inv.consumer_units?.numero_uc || '-',
+                inv.consumer_units?.subscribers?.name || inv.consumer_units?.titular_conta || '-',
+                inv.mes_referencia ? (() => {
+                    const [year, month] = inv.mes_referencia.split('-');
+                    return `${month}/${year}`;
+                })() : '-',
+                inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-',
+                formatCurrency(energyBillValue),
+                getInvoiceDueDate(inv),
+                getAnteriorLeitura(inv),
+                inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-',
+                formatCurrency(factValue),
+                statusLabel
+            ];
+        });
+
+        // Tabela autoTable
+        autoTable(doc, {
+            startY: 36,
+            head: [[
+                'Unidade Consumidora', 
+                'Assinante / Titular', 
+                'Mês Ref.', 
+                'Energia Compensada', 
+                'Conta Energia', 
+                'Vencimento', 
+                'Leitura Ant.', 
+                'Leitura Atual', 
+                'Vr. Fatura', 
+                'Status'
+            ]],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+            bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            margin: { left: 14, right: 14 },
+            columnStyles: {
+                0: { cellWidth: 32 },
+                1: { cellWidth: 45 },
+                2: { cellWidth: 16, halign: 'center' },
+                3: { cellWidth: 28, halign: 'center' },
+                4: { cellWidth: 26, halign: 'right' },
+                5: { cellWidth: 24, halign: 'center' },
+                6: { cellWidth: 22, halign: 'center' },
+                7: { cellWidth: 22, halign: 'center' },
+                8: { cellWidth: 26, halign: 'right' },
+                9: { cellWidth: 28, halign: 'center' }
+            },
+            didDrawPage: (data) => {
+                const str = `Página ${data.pageNumber}`;
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(148, 163, 184);
+                doc.text(str, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+            }
+        });
+
+        doc.save(`Extrato_Faturas_${new Date().toISOString().substring(0, 10)}.pdf`);
+        showAlert('Extrato gerado com sucesso!', 'success');
     };
 
     const resolveEnergyStatus = (inv) => {
@@ -1512,6 +1628,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={handleGenerateExtrato} style={{ background: 'white', color: '#003366', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #bfdbfe', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Printer size={16} /> Extrato
+                            </button>
                             <button onClick={() => setIsHistoryModalOpen(true)} style={{ background: 'white', color: '#475569', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                 <History size={16} /> Histórico
                             </button>
@@ -1901,9 +2020,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Unidade Consumidora</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '80px' }}>Mês de ref.</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Energia Compensada</th>
-                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vr. da Fatura</th>
-                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vencimento</th>
                                                 <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '120px' }}>Conta de Energia</th>
+                                                <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vencimento</th>
+                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Leitura Ant.</th>
+                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Leitura Atual</th>
+                                                <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '100px' }}>Vr. da Fatura</th>
                                                 <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: '80px' }}>Status</th>
                                             </tr>
                                         </thead>
@@ -1987,41 +2108,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             })() : '-'}
                                                         </td>
 
-                                                        {/* 2.5. Energia Compensada */}
+                                                        {/* 3. Energia Compensada */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', color: '#16a34a', fontWeight: 'bold', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                                             {inv.consumo_compensado ? `${inv.consumo_compensado} kWh` : '-'}
                                                         </td>
 
-                                                        {/* 3. Vr. da Fatura + Boleto */}
-                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                                                                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
-                                                                {inv.asaas_boleto_url && inv.status !== 'pago' && (
-                                                                    <a 
-                                                                        href={inv.asaas_boleto_url} 
-                                                                        target="_blank" 
-                                                                        rel="noopener noreferrer" 
-                                                                        style={{ 
-                                                                            padding: '0.3rem 0.6rem',
-                                                                            background: '#dcfce7', 
-                                                                            color: '#166534', 
-                                                                            border: '1px solid #bbf7d0', 
-                                                                            borderRadius: '4px', 
-                                                                            textDecoration: 'none', 
-                                                                            fontSize: '0.7rem',
-                                                                            fontWeight: 'bold'
-                                                                        }}
-                                                                    >
-                                                                        BOLETO
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        </td>
-
-                                                        {/* 4. Vencimento Corrigido */}
-                                                        <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap', minWidth: '100px' }}>{getInvoiceDueDate(inv)}</td>
-                                                        
-                                                        {/* 5. Conta de Energia + Pagar */}
+                                                        {/* 4. Conta de Energia + Pagar */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                                                                 <div style={{ fontWeight: '800', color: '#ef4444', fontSize: '1.1rem' }}>{formatCurrency(energyBillValue)}</div>
@@ -2086,7 +2178,46 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             </div>
                                                         </td>
 
-                                                        {/* 6. Status */}
+                                                        {/* 5. Vencimento Corrigido */}
+                                                        <td style={{ padding: '1rem', color: '#334155', whiteSpace: 'nowrap', minWidth: '100px' }}>{getInvoiceDueDate(inv)}</td>
+                                                        
+                                                        {/* 6. Leitura Ant. */}
+                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                            {getAnteriorLeitura(inv)}
+                                                        </td>
+
+                                                        {/* 7. Leitura Atual */}
+                                                        <td style={{ padding: '1rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                                                            {inv.data_leitura ? inv.data_leitura.split('T')[0].split('-').reverse().join('/') : '-'}
+                                                        </td>
+
+                                                        {/* 8. Vr. da Fatura + Boleto */}
+                                                        <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                                                                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
+                                                                {inv.asaas_boleto_url && inv.status !== 'pago' && (
+                                                                    <a 
+                                                                        href={inv.asaas_boleto_url} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer" 
+                                                                        style={{ 
+                                                                            padding: '0.3rem 0.6rem',
+                                                                            background: '#dcfce7', 
+                                                                            color: '#166534', 
+                                                                            border: '1px solid #bbf7d0', 
+                                                                            borderRadius: '4px', 
+                                                                            textDecoration: 'none', 
+                                                                            fontSize: '0.7rem',
+                                                                            fontWeight: 'bold'
+                                                                        }}
+                                                                    >
+                                                                        BOLETO
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* 9. Status */}
                                                         <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{getStatusBadge(inv.status)}</td>
                                                     </tr>
                                                 );
@@ -2098,15 +2229,18 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                     <span>Total de Registros: </span>
                                                     <span style={{ fontWeight: '800', color: 'var(--color-blue)' }}>{sortedInvoices.length} {sortedInvoices.length === 1 ? 'fatura' : 'faturas'}</span>
                                                 </td>
-                                                <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                    <div style={{ color: '#0f172a', fontSize: '0.95rem', fontWeight: '900' }}>
-                                                        {formatCurrency(totalFactValue)}
-                                                    </div>
-                                                </td>
                                                 <td style={{ padding: '1rem' }}></td>
                                                 <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ color: '#ef4444', fontSize: '0.95rem', fontWeight: '900' }}>
                                                         {formatCurrency(totalEnergyBillValue)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '1rem' }}></td>
+                                                <td style={{ padding: '1rem' }}></td>
+                                                <td style={{ padding: '1rem' }}></td>
+                                                <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ color: '#0f172a', fontSize: '0.95rem', fontWeight: '900' }}>
+                                                        {formatCurrency(totalFactValue)}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '1rem' }}></td>
