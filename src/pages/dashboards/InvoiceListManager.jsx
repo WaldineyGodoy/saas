@@ -350,14 +350,35 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
         // Resumo financeiro / Filtros aplicados
         const totalFact = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
-        const totalEnergyBill = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0))), 0);
         
+        const totalAtrasado = sortedInvoices
+            .filter(inv => inv.status === 'atrasado')
+            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+        const totalSemFaturamento = sortedInvoices
+            .filter(inv => inv.status === 'sem_faturamento')
+            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+        const totalPago = sortedInvoices
+            .filter(inv => inv.status === 'pago' || inv.status === 'confirmado')
+            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+        const totalAVencer = sortedInvoices
+            .filter(inv => inv.status === 'a_vencer')
+            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+
+        let statusSummaryText = `Atrasado: ${formatCurrency(totalAtrasado)}    |    Sem Faturamento: ${formatCurrency(totalSemFaturamento)}    |    Pago: ${formatCurrency(totalPago)}`;
+        if (totalAVencer > 0) {
+            statusSummaryText += `    |    A Vencer: ${formatCurrency(totalAVencer)}`;
+        }
+
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(15, 23, 42); // Charcoal
-        doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 30);
-        doc.text(`Total Contas de Energia: ${formatCurrency(totalEnergyBill)}`, 85, 30);
-        doc.text(`Total Registros: ${sortedInvoices.length}`, 180, 30);
+        doc.text(`Total Faturas: ${formatCurrency(totalFact)}`, 14, 29);
+        doc.text(`Total Registros: ${sortedInvoices.length}`, pageWidth - 14, 29, { align: 'right' });
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105); // Slate 600
+        doc.text(statusSummaryText, 14, 35);
 
         // Mapear dados para a tabela
         const tableBody = sortedInvoices.map(inv => {
@@ -392,7 +413,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
         // Tabela autoTable
         autoTable(doc, {
-            startY: 36,
+            startY: 40,
             head: [[
                 'Unidade Consumidora', 
                 'Assinante / Titular', 
