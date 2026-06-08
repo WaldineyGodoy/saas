@@ -200,7 +200,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const valConcessionaria = Number(inv.valor_concessionaria) || 0;
             if (valPagar <= 0 && valConcessionaria <= 0) return false;
 
-            if (statusFilter && inv.status !== statusFilter) return false;
+            if (statusFilter) {
+                const filterVal = statusFilter === 'ag_emissao_boleto' ? 'sem_faturamento' : statusFilter;
+                const recordVal = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
+                if (recordVal !== filterVal) return false;
+            }
         } else {
             // Contas de energia (Concessionária)
             if (!['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade)) return false;
@@ -518,7 +522,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     });
 
     const faturasCounts = invoicesForTotals.reduce((acc, inv) => {
-        const status = inv.status;
+        const status = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
         acc[status] = (acc[status] || 0) + 1;
         return acc;
     }, {});
@@ -812,6 +816,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const getStatusBadge = (status) => {
         const map = {
             'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
+            'ag_emissao_boleto': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
             'atrasado': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Pagamento Confirmado', icon: CheckCircle2 },
@@ -1563,7 +1568,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         ) : activeTab === 'faturas' ? (
                             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.85rem' }}>
                                 <option value="">Todos os Status</option>
-                                <option value="ag_emissao_boleto">Sem Faturamento</option>
+                                <option value="sem_faturamento">Sem Faturamento</option>
                                 <option value="a_vencer">A Vencer</option>
                                 <option value="atrasado">Atrasado</option>
                                 <option value="confirmado">Confirmado</option>
