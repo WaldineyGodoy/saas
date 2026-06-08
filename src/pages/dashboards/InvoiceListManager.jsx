@@ -400,7 +400,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
             return [
                 inv.consumer_units?.numero_uc || '-',
-                inv.consumer_units?.subscribers?.name || inv.consumer_units?.titular_conta || '-',
+                abbreviateName(inv.consumer_units?.subscribers?.name || inv.consumer_units?.titular_conta, 20),
                 inv.mes_referencia ? (() => {
                     const [year, month] = inv.mes_referencia.split('-');
                     return `${month}/${year}`;
