@@ -142,7 +142,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     const invoiceIds = invoiceEntries.map(e => e.reference_id);
                     const { data: invoiceData } = await supabase
                         .from('invoices')
-                        .select('id, mes_referencia, consumer_units(uc_code, subscribers(name))')
+                        .select('id, mes_referencia, consumo_compensado, consumer_units(uc_code, subscribers(name))')
                         .in('id', invoiceIds);
                     
                     if (invoiceData) {
@@ -164,7 +164,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 }
                                 
                                 if (ucCode && refMonth) {
-                                    originMap[entry.transaction_id] = `${shortName} UC ${ucCode} - Ref: ${refMonth}`;
+                                    const kwh = inv.consumo_compensado ? ` - ${inv.consumo_compensado} kWh` : '';
+                                    originMap[entry.transaction_id] = `${shortName} UC ${ucCode} - Ref: ${refMonth}${kwh}`;
                                 }
                             }
                         });
