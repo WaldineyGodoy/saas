@@ -9,7 +9,8 @@ import {
     CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
-
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
