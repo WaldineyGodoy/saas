@@ -42,6 +42,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [zeroInvoiceMonth, setZeroInvoiceMonth] = useState(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
     const [subscriberSearchTerm, setSubscriberSearchTerm] = useState('');
     const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
+    const [titularSearchTerm, setTitularSearchTerm] = useState('');
+    const [showTitularDropdown, setShowTitularDropdown] = useState(false);
     const [activeSubscriberForModal, setActiveSubscriberForModal] = useState(null);
     const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
     const [invoices, setInvoices] = useState([]);
@@ -1246,6 +1248,221 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                 </span>
                                                             </div>
 
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ fontWeight: 500 }}>{sub.cpf_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span>{sub.phone || 'Sem Telefone'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', gridColumn: 'span 2' }}>
+                                                                    <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{sub.email || 'Sem E-mail'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {/* Titular da Fatura Field */}
+                                                <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Titular da Fatura (Assinante B2W Titular)</label>
+                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                        <div style={{ position: 'relative', flex: 1 }}>
+                                                            <input
+                                                                type="text"
+                                                                value={titularSearchTerm}
+                                                                onFocus={() => setShowTitularDropdown(true)}
+                                                                onBlur={() => setTimeout(() => setShowTitularDropdown(false), 250)}
+                                                                onChange={e => {
+                                                                    setTitularSearchTerm(e.target.value);
+                                                                    setShowTitularDropdown(true);
+                                                                }}
+                                                                placeholder={
+                                                                    formData.titular_fatura_id 
+                                                                        ? subscribers.find(s => s.id === formData.titular_fatura_id)?.name || "Buscar para trocar titular..." 
+                                                                        : "Buscar titular por nome, CPF/CNPJ..."
+                                                                }
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '0.7rem 2.5rem 0.7rem 0.7rem', 
+                                                                    border: '1px solid #e2e8f0', 
+                                                                    borderRadius: '8px', 
+                                                                    outline: 'none',
+                                                                    fontSize: '0.9rem',
+                                                                    transition: 'border-color 0.2s',
+                                                                    borderColor: showTitularDropdown ? 'var(--color-blue)' : '#e2e8f0'
+                                                                }}
+                                                            />
+                                                            <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                                <FileSearch size={18} />
+                                                            </div>
+                                                        </div>
+                                                        {formData.titular_fatura_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({ ...prev, titular_fatura_id: '' }));
+                                                                    setTitularSearchTerm('');
+                                                                }}
+                                                                style={{
+                                                                    padding: '0.7rem 1rem',
+                                                                    background: '#ef4444',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '8px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '0.85rem',
+                                                                    fontWeight: 500,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.25rem',
+                                                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                }}
+                                                            >
+                                                                Desvincular
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Dropdown de Resultados da Busca do Titular */}
+                                                    {showTitularDropdown && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '100%',
+                                                            left: 0,
+                                                            right: 0,
+                                                            background: 'white',
+                                                            border: '1px solid #e2e8f0',
+                                                            borderRadius: '8px',
+                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                                            maxHeight: '200px',
+                                                            overflowY: 'auto',
+                                                            zIndex: 100,
+                                                            marginTop: '4px'
+                                                        }}>
+                                                            {subscribers
+                                                                .filter(s => {
+                                                                    const term = titularSearchTerm.toLowerCase().trim();
+                                                                    if (!term) return true;
+                                                                    return (
+                                                                        s.name?.toLowerCase().includes(term) ||
+                                                                        s.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                        s.email?.toLowerCase().includes(term) ||
+                                                                        s.phone?.toLowerCase().includes(term)
+                                                                    );
+                                                                })
+                                                                .map(s => (
+                                                                    <div
+                                                                        key={s.id}
+                                                                        onMouseDown={() => {
+                                                                            setFormData(prev => ({ 
+                                                                                ...prev, 
+                                                                                titular_fatura_id: s.id,
+                                                                                cpf_cnpj_fatura: prev.cpf_cnpj_fatura || s.cpf_cnpj,
+                                                                                portal_credentials: s.portal_credentials || prev.portal_credentials || { url: '', login: '', password: '' }
+                                                                            }));
+                                                                            setTitularSearchTerm('');
+                                                                            setShowTitularDropdown(false);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '0.75rem 1rem',
+                                                                            cursor: 'pointer',
+                                                                            borderBottom: '1px solid #f1f5f9',
+                                                                            transition: 'background 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                                    >
+                                                                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{s.name}</div>
+                                                                        <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                                            <span>CPF/CNPJ: {s.cpf_cnpj}</span>
+                                                                            {s.email && <span>E-mail: {s.email}</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            }
+                                                            {subscribers.filter(s => {
+                                                                const term = titularSearchTerm.toLowerCase().trim();
+                                                                if (!term) return true;
+                                                                return (
+                                                                    s.name?.toLowerCase().includes(term) ||
+                                                                    s.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                    s.email?.toLowerCase().includes(term) ||
+                                                                    s.phone?.toLowerCase().includes(term)
+                                                                );
+                                                            }).length === 0 && (
+                                                                <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                                                                    Nenhum titular encontrado.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Card do Titular da Fatura */}
+                                                {(() => {
+                                                    const sub = subscribers.find(s => s.id === formData.titular_fatura_id);
+                                                    if (!sub) return null;
+                                                    return (
+                                                        <div 
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)',
+                                                                border: '1.5px solid #bbf7d0',
+                                                                borderRadius: '12px',
+                                                                padding: '1rem',
+                                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.75rem',
+                                                                position: 'relative',
+                                                                overflow: 'hidden'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                e.currentTarget.style.borderColor = '#22c55e';
+                                                                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(34, 197, 94, 0.1), 0 4px 6px -4px rgba(34, 197, 94, 0.1)';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.borderColor = '#bbf7d0';
+                                                                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
+                                                            }}
+                                                        >
+                                                            {/* Background accent line */}
+                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: '#22c55e' }}></div>
+                                                            
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <User size={18} color="#22c55e" style={{ minWidth: '18px' }} />
+                                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{sub.name}</h5>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowCredentialsModal(true)}
+                                                                    style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 700,
+                                                                        background: '#dcfce7',
+                                                                        color: '#15803d',
+                                                                        padding: '0.2rem 0.6rem',
+                                                                        borderRadius: '20px',
+                                                                        border: 'none',
+                                                                        cursor: 'pointer',
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.05em',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '0.25rem'
+                                                                    }}
+                                                                >
+                                                                    <Key size={12} /> Credenciais
+                                                                </button>
+                                                            </div>
+ 
                                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                                     <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
