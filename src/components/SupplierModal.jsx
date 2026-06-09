@@ -116,6 +116,22 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .map(e => e.transaction_id);
 
             if (repasseTxs.length > 0) {
+                const originMap = {};
+
+                // Fallback: Fetch basic entity names for older entries that might lack invoice links
+                const { data: repasseData } = await supabase
+                    .from('view_ledger_enriched')
+                    .select('transaction_id, entity_name, account_code')
+                    .in('transaction_id', repasseTxs)
+                    .in('account_code', ['1.1.2', '4.1.1']);
+                
+                if (repasseData) {
+                    repasseData.forEach(r => {
+                        if (r.entity_name) originMap[r.transaction_id] = r.entity_name;
+                    });
+                }
+
+                // Primary: Fetch rich invoice data for recent/correct entries
                 const { data: invoiceEntries } = await supabase
                     .from('ledger_entries')
                     .select('transaction_id, reference_id')
@@ -124,7 +140,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 
                 if (invoiceEntries && invoiceEntries.length > 0) {
                     const invoiceIds = invoiceEntries.map(e => e.reference_id);
-                    
                     const { data: invoiceData } = await supabase
                         .from('invoices')
                         .select('id, mes_referencia, consumer_units(uc_code, subscribers(name))')
@@ -134,11 +149,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         const invMap = {};
                         invoiceData.forEach(inv => invMap[inv.id] = inv);
 
-                        const originMap = {};
                         invoiceEntries.forEach(entry => {
                             const inv = invMap[entry.reference_id];
                             if (inv) {
-                                const subscriberName = inv.consumer_units?.subscribers?.name || '';
+                                const subscriberName = inv.consumer_units?.subscribers?.name || originMap[entry.transaction_id] || '';
                                 const parts = subscriberName.trim().split(' ');
                                 const shortName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0];
                                 const ucCode = inv.consumer_units?.uc_code || '';
@@ -149,12 +163,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     refMonth = `${m}/${y}`;
                                 }
                                 
-                                originMap[entry.transaction_id] = `${shortName} UC ${ucCode} - Ref: ${refMonth}`;
+                                if (ucCode && refMonth) {
+                                    originMap[entry.transaction_id] = `${shortName} UC ${ucCode} - Ref: ${refMonth}`;
+                                }
                             }
                         });
-                        setRepasseOrigins(originMap);
                     }
                 }
+                setRepasseOrigins(originMap);
             }
 
         } catch (err) {
