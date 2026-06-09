@@ -855,175 +855,96 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     };
 
-    const handleFechamento = async () => {
-        if (!monthlyDetails) return;
+    const handlePrintRelatorio = () => {
+        const printContent = document.querySelector('.relatorio-usina-print-container');
+        if (!printContent) return;
 
-        setLoading(true);
-        try {
-            const firstDay = `${referenceMonth}-01`;
-            const transactionId = crypto.randomUUID();
-            
-            // 1. Calculate the final values
-            const maintenance = monthlyDetails.manutencao || 0;
-            const rent = monthlyDetails.arrendamento || 0;
-            const faturamentoPago = monthlyDetails.faturamento_pago || 0;
-            const concessionaria = monthlyDetails.custo_disponibilidade || 0;
-            
-            const subtotal = faturamentoPago - concessionaria;
-            const gestaoTotal = subtotal * (Number(formData.gestao_percentual) / 100);
-            const otherServices = monthlyDetails.servicos || 0;
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = 'none';
 
-            const totalDespesas = maintenance + rent + gestaoTotal + otherServices;
-            const saldoReceber = subtotal - totalDespesas;
+        document.body.appendChild(iframe);
 
-            // 2. Upsert generation_production
-            const { 
-                details, 
-                id: prodId, 
-                created_at, 
-                geracao_real, 
-                updated_at, 
-                faturamento_pago,
-                faturamento_a_vencer,
-                faturamento_sem_faturamento,
-                faturamento_atrasado,
-                ...mainData 
-            } = monthlyDetails;
-            const upsertData = {
-                ...mainData,
-                service_details: details || {},
-                custo_disponibilidade: concessionaria, // Ensure energy cost is mapped
-                faturas_pagas: faturamentoPago,
-                gestao_reais: gestaoTotal,
-                total_despesas: totalDespesas,
-                saldo_receber: saldoReceber,
-                fechamento: new Date().toISOString().split('T')[0],
-                status: 'liquidado'
-            };
+        const doc = iframe.contentWindow.document;
+        doc.open();
+
+        const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+            .map(s => s.outerHTML)
+            .join('');
+
+        const periodString = (() => {
+            const baseDate = parseISO(`${referenceMonth}-01`);
+            const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+            const diaLeitura = mainUG?.dia_leitura;
             
-            if (prodId) {
-                upsertData.id = prodId;
+            if (!diaLeitura) {
+                return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
             }
+            const day = parseInt(diaLeitura);
+            const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+            const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+            return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
+        })();
 
-            const { error: prodError } = await supabase
-                .from('generation_production')
-                .upsert(upsertData);
+        doc.write(`
+            <html>
+                <head>
+                    <title>Relatório de Operação - ${usina?.name || 'Usina'}</title>
+                    ${styles}
+                    <style>
+                        body { 
+                            background: white !important; 
+                            margin: 20px !important; 
+                            padding: 0 !important; 
+                            font-family: inherit;
+                        }
+                        .no-print { display: none !important; }
+                        
+                        .relatorio-usina-print-container { 
+                            box-shadow: none !important; 
+                            max-width: none !important; 
+                            width: 100% !important; 
+                            border-radius: 0 !important;
+                            height: auto !important;
+                            max-height: none !important;
+                            overflow: visible !important;
+                            background: white !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        
+                        * { 
+                            -webkit-print-color-adjust: exact !important; 
+                            print-color-adjust: exact !important; 
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div style="margin-bottom: 2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 1rem;">
+                        <h1 style="margin: 0 0 0.5rem 0; color: #1e293b; font-size: 1.5rem;">Relatório de Operação e Faturamento</h1>
+                        <h2 style="margin: 0; color: #64748b; font-size: 1.1rem; font-weight: 500;">Usina: ${usina?.name}</h2>
+                        <div style="margin-top: 1rem; color: #475569; font-size: 0.9rem;">
+                            <strong>Mês de Referência:</strong> ${new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}<br/>
+                            <strong>Período Apurado:</strong> ${periodString}
+                        </div>
+                    </div>
+                    <div class="relatorio-usina-print-container">
+                        ${printContent.innerHTML}
+                    </div>
+                </body>
+            </html>
+        `);
+        doc.close();
 
-            if (prodError) throw prodError;
-
-            const periodString = (() => {
-                const baseDate = parseISO(`${referenceMonth}-01`);
-                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
-                const diaLeitura = mainUG?.dia_leitura;
-                
-                if (!diaLeitura) {
-                    return `01/${format(baseDate, 'MM/yyyy')} a ${format(endOfMonth(baseDate), 'dd/MM/yyyy')}`;
-                }
-                const day = parseInt(diaLeitura);
-                const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
-                const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
-                return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
-            })();
-
-            // 3. Create Ledger Entries
-            const entries = [];
-            const supplierId = formData.supplier_id; // Reference for account 2.1.1
-            
-            // 0. Gross Faturamento - Increases Liability to Usina (Credit)
-            if (faturamento > 0) {
-                entries.push({
-                    transaction_id: transactionId,
-                    account_code: '2.1.1',
-                    amount: -faturamento, // Credit (Increases liability)
-                    description: `Faturamento Mensal - ${usina.name} - ${referenceMonth} (${periodString})`,
-                    reference_type: 'supplier',
-                    reference_id: supplierId,
-                    is_sandbox: false
-                });
-                // Balancing entry: Debit to Revenue (reducing B2W's gross revenue by the part that belongs to the plant)
-                entries.push({
-                    transaction_id: transactionId,
-                    account_code: '3.1.0', 
-                    amount: faturamento, // Debit
-                    description: `Provisão Repasse Usina - ${usina.name} - ${referenceMonth} (${periodString})`,
-                    reference_type: 'supplier',
-                    reference_id: supplierId,
-                    is_sandbox: false
-                });
-            }
-
-            // Helper to add entry pair (Debit Investor, Credit Revenue/Liability)
-            const addPosting = (accountCode, amount, desc) => {
-                if (amount <= 0) return;
-                // Debit Investor (Positive) - Liability to Power Plant
-                entries.push({
-                    transaction_id: transactionId,
-                    account_code: '2.1.1', // Obrigações Usinas
-                    amount: amount,
-                    description: `${desc} - ${referenceMonth} (${periodString})`,
-                    reference_type: 'supplier',
-                    reference_id: supplierId,
-                    is_sandbox: false
-                });
-                // Credit Revenue or Other Liability (Negative)
-                entries.push({
-                    transaction_id: transactionId,
-                    account_code: accountCode,
-                    amount: -amount,
-                    description: `${desc} - ${referenceMonth} (${periodString})`,
-                    reference_type: 'supplier',
-                    reference_id: supplierId,
-                    is_sandbox: false
-                });
-            };
-
-            // Gestão Fixa as "Despesa Extra" (2.1.4)
-            if (gestaoFixo > 0) addPosting('2.1.4', gestaoFixo, 'Taxa Fixa Gestão B2W');
-            // Gestão Variável as primary Management Fee (3.1.1)
-            if (gestaoVar > 0) addPosting('3.1.1', gestaoVar, 'Taxa Variável Gestão B2W');
-            
-            if (maintenance > 0) addPosting('3.1.3', maintenance, 'Receita Manutenção Usina');
-            if (rent > 0) addPosting('3.1.4', rent, 'Receita Arrendamento Usina');
-            
-            // Separate Ledger entries for detailed services
-            if (details) {
-                Object.entries(details).forEach(([name, val]) => {
-                    if (val > 0) {
-                        addPosting('2.1.4', val, `Serviço ${name}`);
-                    }
-                });
-            }
-
-            if (entries.length > 0) {
-                const { data: accountsData } = await supabase.from('ledger_accounts').select('id, code');
-                const accountMap = accountsData?.reduce((acc, curr) => ({ ...acc, [curr.code]: curr.id }), {}) || {};
-
-                const finalEntries = entries.map(entry => {
-                    const mappedId = accountMap[entry.account_code];
-                    // Fallback logic for accounts that might not exist yet
-                    let finalId = mappedId;
-                    if (!finalId) {
-                        if (entry.account_code.startsWith('3.')) finalId = accountMap['3.1.0'] || accountMap['3.0.0'];
-                        if (entry.account_code.startsWith('2.1')) finalId = accountMap['2.1.0'] || accountMap['2.0.0'];
-                    }
-                    delete entry.account_code;
-                    return { ...entry, account_id: finalId || entry.account_id };
-                }).filter(e => e.account_id);
-
-                if (finalEntries.length > 0) {
-                    const { error: ledgerError } = await supabase.from('ledger_entries').insert(finalEntries);
-                    if (ledgerError) throw ledgerError;
-                }
-            }
-
-            showAlert('Fechamento realizado com sucesso!', 'success');
-            fetchMonthlyDetails();
-        } catch (err) {
-            console.error('Error in fechamento:', err);
-            showAlert('Erro ao realizar fechamento: ' + err.message, 'error');
-        } finally {
-            setLoading(false);
-        }
+        iframe.contentWindow.focus();
+        setTimeout(() => {
+            iframe.contentWindow.print();
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        }, 500);
     };
 
     const fetchAvailableUCs = async () => {
@@ -2662,7 +2583,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                 )}
 
                                 {activeFinanceTab === 'lancamentos' && (
-                                    <div style={{ animation: 'fadeIn 0.2s' }}>
+                                    <div className="relatorio-usina-print-container" style={{ animation: 'fadeIn 0.2s' }}>
                                         {(() => {
                                             const faturamentoPago = monthlyDetails?.faturamento_pago || 0;
                                             const totalContasEnergia = monthlyDetails?.custo_disponibilidade || 0;
@@ -2945,45 +2866,28 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         </div>
                                                     </div>
 
-                                                    {/* Status and Action centered at the bottom of the page */}
+                                                    {/* Action button centered at the bottom of the page */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginTop: '2rem', width: '100%' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', width: '100%', maxWidth: '600px', padding: '1.25rem 2rem', background: monthlyDetails?.status === 'liquidado' ? '#f0fdf4' : '#fff7ed', borderRadius: '20px', border: `1px solid ${monthlyDetails?.status === 'liquidado' ? '#bbf7d0' : '#ffedd5'}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', justifyContent: 'space-between' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412', fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                                                                {monthlyDetails?.status === 'liquidado' ? <CheckCircle size={22} /> : <AlertCircle size={22} />} 
-                                                                Status do Mês:
-                                                            </div>
-                                                            <div style={{ fontSize: '1.2rem', fontWeight: 900, color: monthlyDetails?.status === 'liquidado' ? '#166534' : '#9a3412' }}>
-                                                                {monthlyDetails?.status === 'liquidado' ? 'MÊS FECHADO' : 'PENDENTE DE FECHAMENTO'}
-                                                            </div>
-                                                            {monthlyDetails?.fechamento && (
-                                                                <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>
-                                                                    Encerrado em: {new Date(monthlyDetails.fechamento).toLocaleDateString('pt-BR')}
-                                                                </div>
-                                                            )}
-                                                        </div>
-
                                                         <button 
                                                             type="button"
-                                                            onClick={handleFechamento}
-                                                            disabled={loading}
+                                                            onClick={handlePrintRelatorio}
                                                             style={{ 
                                                                 width: '100%',
                                                                 maxWidth: '600px',
                                                                 display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.25rem 2rem', 
-                                                                background: monthlyDetails?.status === 'liquidado' ? '#3b82f6' : '#16a34a', 
+                                                                background: '#1e293b', 
                                                                 color: 'white', borderRadius: '20px', border: 'none', 
                                                                 cursor: 'pointer', 
                                                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                                                opacity: loading ? 0.7 : 1
+                                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
                                                             }}>
-                                                            {monthlyDetails?.status === 'liquidado' ? <RefreshCcw size={28} /> : <CheckCircle size={28} />}
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                                                             <div style={{ textAlign: 'left' }}>
                                                                 <div style={{ fontWeight: 800, fontSize: '1.15rem' }}>
-                                                                    {monthlyDetails?.status === 'liquidado' ? 'Reenviar Lançamentos' : 'Efetuar Fechamento'}
+                                                                    Gerar Relatório em PDF
                                                                 </div>
                                                                 <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.1rem' }}>
-                                                                    Gravar lançamentos no Razão
+                                                                    Imprimir relatório de operação deste mês
                                                                 </div>
                                                             </div>
                                                         </button>
