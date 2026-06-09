@@ -116,18 +116,44 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .map(e => e.transaction_id);
 
             if (repasseTxs.length > 0) {
-                const { data: repasseData } = await supabase
-                    .from('view_ledger_enriched')
-                    .select('transaction_id, entity_name, account_code')
+                const { data: invoiceEntries } = await supabase
+                    .from('ledger_entries')
+                    .select('transaction_id, reference_id')
                     .in('transaction_id', repasseTxs)
-                    .in('account_code', ['1.1.2', '4.1.1']);
+                    .eq('reference_type', 'invoice');
                 
-                if (repasseData) {
-                    const originMap = {};
-                    repasseData.forEach(r => {
-                        if (r.entity_name) originMap[r.transaction_id] = r.entity_name;
-                    });
-                    setRepasseOrigins(originMap);
+                if (invoiceEntries && invoiceEntries.length > 0) {
+                    const invoiceIds = invoiceEntries.map(e => e.reference_id);
+                    
+                    const { data: invoiceData } = await supabase
+                        .from('invoices')
+                        .select('id, mes_referencia, consumer_units(uc_code, subscribers(name))')
+                        .in('id', invoiceIds);
+                    
+                    if (invoiceData) {
+                        const invMap = {};
+                        invoiceData.forEach(inv => invMap[inv.id] = inv);
+
+                        const originMap = {};
+                        invoiceEntries.forEach(entry => {
+                            const inv = invMap[entry.reference_id];
+                            if (inv) {
+                                const subscriberName = inv.consumer_units?.subscribers?.name || '';
+                                const parts = subscriberName.trim().split(' ');
+                                const shortName = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0];
+                                const ucCode = inv.consumer_units?.uc_code || '';
+                                
+                                let refMonth = inv.mes_referencia || '';
+                                if (refMonth.includes('-')) {
+                                    const [y, m] = refMonth.split('-');
+                                    refMonth = `${m}/${y}`;
+                                }
+                                
+                                originMap[entry.transaction_id] = `${shortName} UC ${ucCode} - Ref: ${refMonth}`;
+                            }
+                        });
+                        setRepasseOrigins(originMap);
+                    }
                 }
             }
 
@@ -605,7 +631,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                 let descText = entry.description || '';
                 if (subscriberOrig) {
-                    descText = `Origem: ${translateEntity(subscriberOrig)}\n${entry.description} ${kwhCompensated ? '| ' + kwhCompensated + ' kWh' : ''}`;
+                    descText = `${subscriberOrig}\n${entry.description} ${kwhCompensated ? '| ' + kwhCompensated + ' kWh' : ''}`;
                 }
 
                 const valueStr = (isRevenue ? '+' : '-') + formatCurrency(entry.amount);
@@ -786,7 +812,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 {subscriberOrig ? (
                                                     <div>
                                                         <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '10px' }}>
-                                                            Origem: {translateEntity(subscriberOrig)}
+                                                            {subscriberOrig}
                                                         </div>
                                                         <div style={{ color: '#64748b', fontSize: '8px', marginTop: '1px' }}>
                                                             {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh`}
@@ -797,9 +823,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         {entry.description}
                                                     </div>
                                                 )}
-                                                <div style={{ fontSize: '8px', color: isRevenue ? '#10b981' : '#ef4444', textTransform: 'uppercase', fontWeight: 'bold', marginTop: '2px' }}>
-                                                    {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
-                                                </div>
                                             </td>
                                             <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '700', color: isRevenue ? '#166534' : '#991b1b', fontSize: '10px' }}>
                                                 {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
@@ -1465,7 +1488,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                 {subscriberOrig ? (
                                                                                     <>
                                                                                         <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '0.95rem' }}>
-                                                                                            Origem: {translateEntity(subscriberOrig)}
+                                                                                            {subscriberOrig}
                                                                                         </div>
                                                                                         <div style={{ fontWeight: '600', color: '#64748b', fontSize: '0.8rem', marginTop: '0.15rem' }}>
                                                                                             {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh compensados`}
@@ -1476,10 +1499,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                                         {entry.description}
                                                                                     </div>
                                                                                 )}
-
-                                                                                <div style={{ fontSize: '0.8rem', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.025em', marginTop: '0.2rem', fontWeight: '800' }}>
-                                                                                    {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
-                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     </td>
