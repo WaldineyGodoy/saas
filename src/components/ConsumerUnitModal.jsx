@@ -6,7 +6,7 @@ import {
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
     Loader2, Trash2, Smartphone as PhoneIcon, MessageCircle, FileText, Smartphone as MobileIcon,
     History as HistoryIcon, DollarSign, Globe, MapPin, Building2, CreditCard,
-    Filter, Clock, Ban, AlertCircle, CheckCircle, Info
+    Filter, Clock, Ban, AlertCircle, CheckCircle, Info, Lock, Unlock
 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -52,6 +52,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [statusFilter, setStatusFilter] = useState('all');
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [editingCredentialsType, setEditingCredentialsType] = useState(null);
+    const [tempCredentials, setTempCredentials] = useState({ url: '', login: '', password: '' });
+    const [isUcNumberLocked, setIsUcNumberLocked] = useState(true);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -392,8 +395,22 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     };
 
     const fetchUsinas = async () => {
-        const { data } = await supabase.from('usinas').select('id, name').order('name');
+        const { data } = await supabase.from('usinas').select('id, name, status, concessionaria, cnpj_cpf, portal_credentials, modalidade, potencia_kwp').order('name');
         setUsinas(data || []);
+    };
+
+    const openTitularCredentials = () => {
+        const titular = subscribers.find(s => s.id === formData.titular_fatura_id);
+        setTempCredentials(titular?.portal_credentials || { url: '', login: '', password: '' });
+        setEditingCredentialsType('titular');
+        setShowCredentialsModal(true);
+    };
+
+    const openUsinaCredentials = () => {
+        const usina = usinas.find(u => u.id === formData.usina_id);
+        setTempCredentials(usina?.portal_credentials || { url: '', login: '', password: '' });
+        setEditingCredentialsType('usina');
+        setShowCredentialsModal(true);
     };
 
     // Sync portal_credentials with titular when subscribers or titular changes
@@ -1035,16 +1052,51 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Zap size={18} color="var(--color-blue)" /> Identificação da UC
                                             </h4>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Número da UC <span style={{ color: '#ef4444' }}>*</span></label>
-                                                    <input
-                                                        required
-                                                        value={formData.numero_uc}
-                                                        onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
-                                                        placeholder="Ex: 7204400277"
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                                    />
+                                                    <div style={{ position: 'relative' }}>
+                                                        <input
+                                                            required
+                                                            readOnly={isUcNumberLocked}
+                                                            value={formData.numero_uc}
+                                                            onChange={e => setFormData({ ...formData, numero_uc: e.target.value })}
+                                                            placeholder="Ex: 7204400277"
+                                                            style={{ 
+                                                                width: '100%', 
+                                                                padding: '0.7rem 2.5rem 0.7rem 0.7rem', 
+                                                                border: '1px solid #e2e8f0', 
+                                                                borderRadius: '8px', 
+                                                                outline: 'none',
+                                                                background: isUcNumberLocked ? '#f1f5f9' : 'white',
+                                                                color: isUcNumberLocked ? '#64748b' : '#0f172a',
+                                                                cursor: isUcNumberLocked ? 'not-allowed' : 'text'
+                                                            }}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsUcNumberLocked(!isUcNumberLocked)}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                right: '0.5rem',
+                                                                top: '50%',
+                                                                transform: 'translateY(-50%)',
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                padding: '0.4rem',
+                                                                color: isUcNumberLocked ? '#ef4444' : '#22c55e',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                borderRadius: '4px',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            title={isUcNumberLocked ? "Desbloquear campo para editar" : "Bloquear campo contra alterações"}
+                                                        >
+                                                            {isUcNumberLocked ? <Lock size={16} /> : <Unlock size={16} />}
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Identificação na Fatura</label>
@@ -1061,7 +1113,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
                                         <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <User size={18} color="var(--color-blue)" /> Titularidade e Contato
+                                                <Link size={18} color="var(--color-blue)" /> Vínculos
                                             </h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                 <div style={{ position: 'relative' }}>
@@ -1442,7 +1494,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                 </div>
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setShowCredentialsModal(true)}
+                                                                    onClick={openTitularCredentials}
                                                                     style={{
                                                                         fontSize: '0.7rem',
                                                                         fontWeight: 700,
@@ -1489,6 +1541,133 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                         style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
                                                     />
                                                 </div>
+
+                                                {/* Usina Vinculada Field */}
+                                                <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Usina Vinculada</label>
+                                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                        <select
+                                                            value={formData.usina_id || ''}
+                                                            onChange={e => setFormData(prev => ({ ...prev, usina_id: e.target.value }))}
+                                                            style={{ 
+                                                                flex: 1,
+                                                                padding: '0.7rem', 
+                                                                border: '1px solid #e2e8f0', 
+                                                                borderRadius: '8px', 
+                                                                outline: 'none',
+                                                                fontSize: '0.9rem',
+                                                                background: 'white'
+                                                            }}
+                                                        >
+                                                            <option value="">Nenhuma...</option>
+                                                            {usinas.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                                        </select>
+                                                        {formData.usina_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({ ...prev, usina_id: '' }));
+                                                                }}
+                                                                style={{
+                                                                    padding: '0.7rem 1rem',
+                                                                    background: '#ef4444',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '8px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '0.85rem',
+                                                                    fontWeight: 500,
+                                                                    boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
+                                                                }}
+                                                            >
+                                                                Desvincular
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Card da Usina Vinculada */}
+                                                {(() => {
+                                                    const usina = usinas.find(u => u.id === formData.usina_id);
+                                                    if (!usina) return null;
+                                                    return (
+                                                        <div 
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)',
+                                                                border: '1.5px solid #fde68a',
+                                                                borderRadius: '12px',
+                                                                padding: '1rem',
+                                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '0.75rem',
+                                                                position: 'relative',
+                                                                overflow: 'hidden'
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                e.currentTarget.style.borderColor = '#d97706';
+                                                                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(217, 119, 6, 0.1), 0 4px 6px -4px rgba(217, 119, 6, 0.1)';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.borderColor = '#fde68a';
+                                                                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
+                                                            }}
+                                                        >
+                                                            {/* Background accent line */}
+                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: '#f59e0b' }}></div>
+                                                            
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                    <Building2 size={18} color="#f59e0b" style={{ minWidth: '18px' }} />
+                                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{usina.name}</h5>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={openUsinaCredentials}
+                                                                    style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 700,
+                                                                        background: '#fef3c7',
+                                                                        color: '#b45309',
+                                                                        padding: '0.2rem 0.6rem',
+                                                                        borderRadius: '20px',
+                                                                        border: 'none',
+                                                                        cursor: 'pointer',
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.05em',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '0.25rem'
+                                                                    }}
+                                                                >
+                                                                    <Key size={12} /> Credenciais
+                                                                </button>
+                                                            </div>
+ 
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ fontWeight: 500 }}>CNPJ/CPF: {usina.cnpj_cpf || 'Sem CNPJ/CPF'}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Zap size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span>Potência: {usina.potencia_kwp || '0'} kWp</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Globe size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span>Concessionária: {usina.concessionaria}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                    <Clock size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                    <span style={{ textTransform: 'capitalize' }}>Status: {usina.status}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     </div>
@@ -1628,7 +1807,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '1.25rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Concessionária</label>
                                             <select
@@ -1638,17 +1817,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             >
                                                 <option value="">Selecione...</option>
                                                 {concessionariaOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Usina</label>
-                                            <select
-                                                value={formData.usina_id}
-                                                onChange={e => setFormData({ ...formData, usina_id: e.target.value })}
-                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                            >
-                                                <option value="">Nenhuma...</option>
-                                                {usinas.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                                             </select>
                                         </div>
                                         <div>
@@ -2128,9 +2296,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             }}>
                                 <Key size={24} />
                             </div>
-                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>Credenciais do Titular</h4>
+                            <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                                {editingCredentialsType === 'usina' ? 'Credenciais da Usina' : 'Credenciais do Titular'}
+                            </h4>
                             <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
-                                {subscribers.find(s => s.id === formData.titular_fatura_id)?.name || 'Portal da concessionária'}
+                                {editingCredentialsType === 'usina' 
+                                    ? (usinas.find(u => u.id === formData.usina_id)?.name || 'Portal da Usina')
+                                    : (subscribers.find(s => s.id === formData.titular_fatura_id)?.name || 'Portal da concessionária')
+                                }
                             </p>
                         </div>
 
@@ -2139,10 +2312,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>URL do Portal</label>
                                 <input
                                     type="url"
-                                    value={formData.portal_credentials?.url || ''}
-                                    onChange={e => setFormData({
-                                        ...formData,
-                                        portal_credentials: { ...formData.portal_credentials, url: e.target.value }
+                                    value={tempCredentials?.url || ''}
+                                    onChange={e => setTempCredentials({
+                                        ...tempCredentials,
+                                        url: e.target.value
                                     })}
                                     placeholder="http://portal.concessionaria.com.br"
                                     style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
@@ -2153,10 +2326,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Email / Login</label>
                                 <input
                                     type="text"
-                                    value={formData.portal_credentials?.login || ''}
-                                    onChange={e => setFormData({
-                                        ...formData,
-                                        portal_credentials: { ...formData.portal_credentials, login: e.target.value }
+                                    value={tempCredentials?.login || ''}
+                                    onChange={e => setTempCredentials({
+                                        ...tempCredentials,
+                                        login: e.target.value
                                     })}
                                     placeholder="login@exemplo.com"
                                     style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
@@ -2168,10 +2341,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPassword ? "text" : "password"}
-                                        value={formData.portal_credentials?.password || ''}
-                                        onChange={e => setFormData({
-                                            ...formData,
-                                            portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                        value={tempCredentials?.password || ''}
+                                        onChange={e => setTempCredentials({
+                                            ...tempCredentials,
+                                            password: e.target.value
                                         })}
                                         placeholder="••••••••"
                                         style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
@@ -2198,24 +2371,39 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             <button
                                 type="button"
                                 onClick={async () => {
-                                    if (!formData.titular_fatura_id) return;
                                     setLoading(true);
                                     try {
-                                        const { error } = await supabase
-                                            .from('subscribers')
-                                            .update({ portal_credentials: formData.portal_credentials })
-                                            .eq('id', formData.titular_fatura_id);
+                                        if (editingCredentialsType === 'titular') {
+                                            if (!formData.titular_fatura_id) return;
+                                            const { error } = await supabase
+                                                .from('subscribers')
+                                                .update({ portal_credentials: tempCredentials })
+                                                .eq('id', formData.titular_fatura_id);
 
-                                        if (error) throw error;
+                                            if (error) throw error;
 
-                                        // Update local subscribers state
-                                        setSubscribers(prev => prev.map(s => 
-                                            s.id === formData.titular_fatura_id 
-                                                ? { ...s, portal_credentials: formData.portal_credentials }
-                                                : s
-                                        ));
+                                            setSubscribers(prev => prev.map(s => 
+                                                s.id === formData.titular_fatura_id 
+                                                    ? { ...s, portal_credentials: tempCredentials }
+                                                    : s
+                                            ));
+                                            showAlert('Credenciais do titular salvas com sucesso!', 'success');
+                                        } else if (editingCredentialsType === 'usina') {
+                                            if (!formData.usina_id) return;
+                                            const { error } = await supabase
+                                                .from('usinas')
+                                                .update({ portal_credentials: tempCredentials })
+                                                .eq('id', formData.usina_id);
 
-                                        showAlert('Credenciais do titular salvas com sucesso!', 'success');
+                                            if (error) throw error;
+
+                                            setUsinas(prev => prev.map(u => 
+                                                u.id === formData.usina_id 
+                                                    ? { ...u, portal_credentials: tempCredentials }
+                                                    : u
+                                            ));
+                                            showAlert('Credenciais da usina salvas com sucesso!', 'success');
+                                        }
                                         setShowCredentialsModal(false);
                                     } catch (err) {
                                         showAlert('Erro ao salvar credenciais: ' + err.message, 'error');
