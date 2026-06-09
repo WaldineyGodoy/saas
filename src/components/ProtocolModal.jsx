@@ -284,8 +284,18 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     return { id: item.id, label: `${item.titular_conta} (UC: ${item.numero_uc})` };
                 } else if (linkedEntityType === 'conta_energia') {
                     const conName = item.consumer_units?.concessionaria || 'Concessionária';
-                    const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
-                    return { id: item.id, label: `${conName}${ucInfo} - Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}` };
+                    const ucNum = item.consumer_units?.numero_uc || 'Sem UC';
+                    const titular = item.consumer_units?.titular_conta || 'Sem Assinante';
+                    let refMonth = '';
+                    if (item.mes_referencia) {
+                        const parts = item.mes_referencia.substring(0, 7).split('-');
+                        if (parts.length === 2) {
+                            refMonth = `${parts[1]}-${parts[0]}`;
+                        } else {
+                            refMonth = item.mes_referencia.substring(0, 7);
+                        }
+                    }
+                    return { id: item.id, label: `UC ${ucNum} - Ref. ${refMonth} - ${titular} - ${conName}` };
                 } else if (linkedEntityType === 'fatura') {
                     const ucInfo = item.consumer_units ? ` (UC: ${item.consumer_units.numero_uc} - ${item.consumer_units.titular_conta})` : '';
                     return { id: item.id, label: `Fatura Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}${ucInfo} - Valor: R$ ${Number(item.valor_a_pagar).toFixed(2)}` };
