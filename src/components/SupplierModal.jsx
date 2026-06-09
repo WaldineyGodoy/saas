@@ -40,6 +40,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [manualEntryType, setManualEntryType] = useState('credit');
     const [manualEntryDescription, setManualEntryDescription] = useState('');
     const [manualEntryLoading, setManualEntryLoading] = useState(false);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const extratoPrintRef = useRef(null);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -560,32 +562,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     });
 
     const handlePrintExtrato = async () => {
-        const printContent = document.querySelector('.extrato-print-container');
+        const printContent = extratoPrintRef.current;
         if (!printContent) return;
         
+        setIsGeneratingPdf(true);
         try {
-            // Temporarily make the header visible for the screenshot
-            const header = printContent.querySelector('.print-only-header');
-            if (header) {
-                header.style.display = 'block';
-                // Adjust some styles for the screenshot if needed
-                header.style.backgroundColor = 'white';
-            }
-            
-            // Hide no-print elements temporarily
-            const noPrintElements = printContent.querySelectorAll('.no-print');
-            noPrintElements.forEach(el => el.style.display = 'none');
+            // Wait a small timeout to make sure React rendered the hidden area fully
+            await new Promise(resolve => setTimeout(resolve, 600));
 
             const canvas = await html2canvas(printContent, {
                 scale: 2,
                 useCORS: true,
                 logging: false,
-                backgroundColor: "#ffffff"
+                backgroundColor: "#f8fafc"
             });
-
-            // Restore original display styles
-            if (header) header.style.display = 'none';
-            noPrintElements.forEach(el => el.style.display = '');
 
             const imgData = canvas.toDataURL('image/jpeg', 1.0);
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -618,7 +608,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             
         } catch (error) {
             console.error('Erro ao gerar PDF:', error);
-            if (showAlert) showAlert('Erro ao gerar PDF', 'error');
+            if (showAlert) showAlert('Erro ao gerar PDF: ' + error.message, 'error');
+        } finally {
+            setIsGeneratingPdf(false);
         }
     };
 
@@ -634,6 +626,153 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             'SUBSCRIPTION': 'Assinatura'
         };
         return map[name.toUpperCase()] || name;
+    };
+
+    const renderHiddenExtratoDetail = () => {
+        return (
+            <div style={{
+                width: '800px',
+                minWidth: '800px',
+                padding: '40px',
+                background: '#f8fafc',
+                boxSizing: 'border-box',
+                fontFamily: "'Inter', 'Montserrat', 'Helvetica', 'Arial', sans-serif"
+            }}>
+                <div style={{
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    width: '100%'
+                }}>
+                    {/* Branded Header */}
+                    <div style={{
+                        padding: '16px 24px',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        alignItems: 'center',
+                        background: '#ffffff'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '700', color: '#003366', fontSize: '1.1rem' }}>
+                            <span>B2W Energia</span>
+                        </div>
+                    </div>
+
+                    {/* Dark Title Banner */}
+                    <div style={{
+                        backgroundColor: '#003366',
+                        padding: '20px 24px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <h3 style={{ margin: 0, color: '#ffffff', fontSize: '1.1rem', fontWeight: 600 }}>
+                                EXTRATO DE CONTA
+                            </h3>
+                        </div>
+                        <span style={{
+                            padding: '6px 16px',
+                            borderRadius: '30px',
+                            color: '#ffffff',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            backgroundColor: '#2563eb'
+                        }}>
+                            {formData.name}
+                        </span>
+                    </div>
+
+                    {/* Info Section */}
+                    <div style={{
+                        padding: '24px',
+                        background: '#ffffff',
+                        borderBottom: '1px solid #e2e8f0'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#475569' }}>
+                            <div style={{ display: 'flex', gap: '2rem' }}>
+                                <div><strong>Período:</strong> {extratoStartDate ? formatDate(extratoStartDate) : 'Início'} até {extratoEndDate ? formatDate(extratoEndDate) : 'Hoje'}</div>
+                                <div><strong>Tipo:</strong> {extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Gerado em: {new Date().toLocaleString('pt-BR')}</span>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                            <div style={{
+                                background: '#f0fdf4',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid #dcfce7',
+                                display: 'inline-block'
+                            }}>
+                                <strong style={{ fontSize: '1.1rem', color: '#166534' }}>
+                                    Saldo Acumulado: {formatCurrency(ledgerBalance)}
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table Area */}
+                    <div style={{ padding: '24px', background: '#ffffff' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', background: '#f1f5f9' }}>
+                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Data</th>
+                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Entidade</th>
+                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Descrição</th>
+                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredLedgerEntries.map((entry, index) => {
+                                    const isRevenue = entry.amount < 0;
+                                    const isRepasse = entry.description?.toLowerCase().includes('repasse');
+                                    const subscriberOrig = isRepasse ? (repasseOrigins[entry.transaction_id] || entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name) : null;
+                                    const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
+
+                                    return (
+                                        <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9', background: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                            <td style={{ padding: '12px 15px', whiteSpace: 'nowrap', color: '#475569' }}>
+                                                {formatDate(entry.created_at)}
+                                            </td>
+                                            <td style={{ padding: '12px 15px', color: '#475569', fontWeight: '500' }}>
+                                                {translateEntity(entry.entity_name || 'Sistema')}
+                                            </td>
+                                            <td style={{ padding: '12px 15px' }}>
+                                                {subscriberOrig ? (
+                                                    <div>
+                                                        <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                                                            Origem: {translateEntity(subscriberOrig)}
+                                                        </div>
+                                                        <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
+                                                            {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh`}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                                                        {entry.description}
+                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: '0.7rem', color: isRevenue ? '#10b981' : '#ef4444', textTransform: 'uppercase', fontWeight: 'bold', marginTop: '4px' }}>
+                                                    {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '12px 15px', textAlign: 'right', fontWeight: '700', color: isRevenue ? '#166534' : '#991b1b', fontSize: '0.95rem' }}>
+                                                {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -1142,6 +1281,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <button 
                                             type="button"
                                             onClick={handlePrintExtrato}
+                                            disabled={isGeneratingPdf}
                                             style={{ 
                                                 background: 'rgba(255,255,255,0.2)', 
                                                 padding: '0.6rem 1rem', 
@@ -1149,13 +1289,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 border: '1px solid rgba(255,255,255,0.3)',
                                                 color: 'white',
                                                 fontWeight: 'bold',
-                                                cursor: 'pointer',
+                                                cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '0.5rem'
+                                                gap: '0.5rem',
+                                                opacity: isGeneratingPdf ? 0.7 : 1
                                             }}
                                         >
-                                            PDF <Download size={16} />
+                                            {isGeneratingPdf ? 'Gerando...' : 'PDF'} <Download size={16} />
                                         </button>
                                     </div>
 
@@ -1588,6 +1729,13 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     </div>
                 </div>
             )}
+            
+            {/* Hidden Offscreen Container for Generating High-Quality Extrato PDF */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', overflow: 'hidden', height: 0 }}>
+                <div ref={extratoPrintRef}>
+                    {renderHiddenExtratoDetail()}
+                </div>
+            </div>
         </div>
         </>
     );
