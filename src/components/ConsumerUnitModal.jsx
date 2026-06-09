@@ -55,6 +55,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [editingCredentialsType, setEditingCredentialsType] = useState(null);
     const [tempCredentials, setTempCredentials] = useState({ url: '', login: '', password: '' });
     const [isUcNumberLocked, setIsUcNumberLocked] = useState(true);
+    const [usinaSearchTerm, setUsinaSearchTerm] = useState('');
+    const [showUsinaDropdown, setShowUsinaDropdown] = useState(false);
 
     // Helpers for Currency/Numbers
     const formatCurrency = (val) => {
@@ -1533,40 +1535,46 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     );
                                                 })()}
 
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>CPF/CNPJ Fatura</label>
-                                                    <input
-                                                        value={formData.cpf_cnpj_fatura}
-                                                        onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                                    />
-                                                </div>
-
                                                 {/* Usina Vinculada Field */}
                                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Usina Vinculada</label>
                                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                        <select
-                                                            value={formData.usina_id || ''}
-                                                            onChange={e => setFormData(prev => ({ ...prev, usina_id: e.target.value }))}
-                                                            style={{ 
-                                                                flex: 1,
-                                                                padding: '0.7rem', 
-                                                                border: '1px solid #e2e8f0', 
-                                                                borderRadius: '8px', 
-                                                                outline: 'none',
-                                                                fontSize: '0.9rem',
-                                                                background: 'white'
-                                                            }}
-                                                        >
-                                                            <option value="">Nenhuma...</option>
-                                                            {usinas.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                                        </select>
+                                                        <div style={{ position: 'relative', flex: 1 }}>
+                                                            <input
+                                                                type="text"
+                                                                value={usinaSearchTerm}
+                                                                onFocus={() => setShowUsinaDropdown(true)}
+                                                                onBlur={() => setTimeout(() => setShowUsinaDropdown(false), 250)}
+                                                                onChange={e => {
+                                                                    setUsinaSearchTerm(e.target.value);
+                                                                    setShowUsinaDropdown(true);
+                                                                }}
+                                                                placeholder={
+                                                                    formData.usina_id 
+                                                                        ? usinas.find(u => u.id === formData.usina_id)?.name || "Buscar para trocar usina..." 
+                                                                        : "Buscar usina por nome, CNPJ/CPF..."
+                                                                }
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '0.7rem 2.5rem 0.7rem 0.7rem', 
+                                                                    border: '1px solid #e2e8f0', 
+                                                                    borderRadius: '8px', 
+                                                                    outline: 'none',
+                                                                    fontSize: '0.9rem',
+                                                                    transition: 'border-color 0.2s',
+                                                                    borderColor: showUsinaDropdown ? 'var(--color-blue)' : '#e2e8f0'
+                                                                }}
+                                                            />
+                                                            <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                                                                <FileSearch size={18} />
+                                                            </div>
+                                                        </div>
                                                         {formData.usina_id && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setFormData(prev => ({ ...prev, usina_id: '' }));
+                                                                    setUsinaSearchTerm('');
                                                                 }}
                                                                 style={{
                                                                     padding: '0.7rem 1rem',
@@ -1577,6 +1585,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                     cursor: 'pointer',
                                                                     fontSize: '0.85rem',
                                                                     fontWeight: 500,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.25rem',
                                                                     boxShadow: '0 2px 4px rgba(239, 68, 68, 0.2)'
                                                                 }}
                                                             >
@@ -1584,6 +1595,76 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                             </button>
                                                         )}
                                                     </div>
+
+                                                    {/* Dropdown de Resultados da Busca da Usina */}
+                                                    {showUsinaDropdown && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '100%',
+                                                            left: 0,
+                                                            right: 0,
+                                                            background: 'white',
+                                                            border: '1px solid #e2e8f0',
+                                                            borderRadius: '8px',
+                                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                                            maxHeight: '200px',
+                                                            overflowY: 'auto',
+                                                            zIndex: 100,
+                                                            marginTop: '4px'
+                                                        }}>
+                                                            {usinas
+                                                                .filter(u => {
+                                                                    const term = usinaSearchTerm.toLowerCase().trim();
+                                                                    if (!term) return true;
+                                                                    return (
+                                                                        u.name?.toLowerCase().includes(term) ||
+                                                                        u.cnpj_cpf?.toLowerCase().includes(term) ||
+                                                                        u.concessionaria?.toLowerCase().includes(term)
+                                                                    );
+                                                                })
+                                                                .map(u => (
+                                                                    <div
+                                                                        key={u.id}
+                                                                        onMouseDown={() => {
+                                                                            setFormData(prev => ({ 
+                                                                                ...prev, 
+                                                                                usina_id: u.id
+                                                                            }));
+                                                                            setUsinaSearchTerm('');
+                                                                            setShowUsinaDropdown(false);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '0.75rem 1rem',
+                                                                            cursor: 'pointer',
+                                                                            borderBottom: '1px solid #f1f5f9',
+                                                                            transition: 'background 0.15s'
+                                                                        }}
+                                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                                    >
+                                                                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{u.name}</div>
+                                                                        <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                                                                            <span>CNPJ/CPF: {u.cnpj_cpf || 'Sem CNPJ/CPF'}</span>
+                                                                            <span>Concessionária: {u.concessionaria}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            }
+                                                            {usinas.filter(u => {
+                                                                const term = usinaSearchTerm.toLowerCase().trim();
+                                                                if (!term) return true;
+                                                                return (
+                                                                    u.name?.toLowerCase().includes(term) ||
+                                                                    u.cnpj_cpf?.toLowerCase().includes(term) ||
+                                                                    u.concessionaria?.toLowerCase().includes(term)
+                                                                );
+                                                            }).length === 0 && (
+                                                                <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                                                                    Nenhuma usina encontrada.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Card da Usina Vinculada */}
