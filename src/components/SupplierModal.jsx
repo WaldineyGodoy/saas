@@ -11,6 +11,7 @@ import {
 import HistoryTimeline from './HistoryTimeline';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
@@ -562,40 +563,80 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     });
 
     const handlePrintExtrato = async () => {
-        const printContent = extratoPrintRef.current;
-        if (!printContent) return;
-        
         setIsGeneratingPdf(true);
         try {
-            // Wait a small timeout to make sure React rendered the hidden area fully
-            await new Promise(resolve => setTimeout(resolve, 600));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Delay para atualizar botão na UI
 
-            const canvas = await html2canvas(printContent, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: "#f8fafc"
+            const pdf = new jsPDF('p', 'pt', 'a4');
+            
+            // Header
+            pdf.setFontSize(14);
+            pdf.setTextColor(0, 51, 102); // #003366
+            pdf.text('EXTRATO DE CONTA', 40, 40);
+            
+            pdf.setFontSize(10);
+            pdf.setTextColor(100);
+            pdf.text(formData.name || 'Fornecedor', 40, 55);
+
+            // Period and Balance
+            pdf.setFontSize(9);
+            pdf.setTextColor(0, 0, 0);
+            const periodStr = `Período: ${extratoStartDate ? formatDate(extratoStartDate) : 'Início'} até ${extratoEndDate ? formatDate(extratoEndDate) : 'Hoje'}`;
+            const typeStr = `Tipo: ${extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}`;
+            pdf.text(`${periodStr}   |   ${typeStr}`, 40, 75);
+            
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(ledgerBalance >= 0 ? '#166534' : '#991b1b');
+            pdf.text(`Saldo Acumulado: ${formatCurrency(ledgerBalance)}`, 40, 90);
+            pdf.setTextColor(0, 0, 0);
+
+            // Table
+            const tableColumn = ["Data", "Entidade", "Descrição", "Valor"];
+            const tableRows = [];
+
+            filteredLedgerEntries.forEach(entry => {
+                const date = formatDate(entry.created_at);
+                const entity = translateEntity(entry.entity_name || 'Sistema');
+                
+                const isRevenue = entry.amount < 0;
+                const isRepasse = entry.description?.toLowerCase().includes('repasse');
+                const subscriberOrig = isRepasse ? (repasseOrigins[entry.transaction_id] || entry.metadata?.subscriber_name || entry.metadata?.consumer_name || entry.metadata?.nome_assinante || entry.metadata?.originator_name) : null;
+                const kwhCompensated = entry.metadata?.kwh || entry.metadata?.kwh_compensado || entry.metadata?.kWh || null;
+
+                let descText = entry.description || '';
+                if (subscriberOrig) {
+                    descText = `Origem: ${translateEntity(subscriberOrig)}\n${entry.description} ${kwhCompensated ? '| ' + kwhCompensated + ' kWh' : ''}`;
+                }
+
+                const valueStr = (isRevenue ? '+' : '-') + formatCurrency(entry.amount);
+
+                tableRows.push([date, entity, descText, valueStr]);
             });
 
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgWidth = 210;
-            const pageHeight = 297;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            // Page 1
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-            heightLeft -= pageHeight;
-
-            // Subsequent pages if height exceeds A4
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight; // This shifts the image up for the next page
-                pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-                heightLeft -= pageHeight;
-            }
+            autoTable(pdf, {
+                startY: 105,
+                head: [tableColumn],
+                body: tableRows,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 51, 102], fontSize: 9 },
+                styles: { fontSize: 8, cellPadding: 4 },
+                columnStyles: {
+                    0: { cellWidth: 60 },
+                    1: { cellWidth: 80 },
+                    2: { cellWidth: 'auto' },
+                    3: { cellWidth: 80, halign: 'right', fontStyle: 'bold' }
+                },
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 3) {
+                        const valStr = data.cell.raw;
+                        if (valStr.startsWith('+')) {
+                            data.cell.styles.textColor = [22, 101, 52]; // #166534
+                        } else if (valStr.startsWith('-')) {
+                            data.cell.styles.textColor = [153, 27, 27]; // #991b1b
+                        }
+                    }
+                }
+            });
 
             const cleanName = (formData.name || 'Fornecedor').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
             const fileName = `Extrato_${cleanName}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -603,9 +644,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             pdf.save(fileName);
             
             if (showAlert) {
-                showAlert('PDF gerado e baixado com sucesso!', 'success');
+                showAlert('PDF gerado com sucesso!', 'success');
             }
-            
         } catch (error) {
             console.error('Erro ao gerar PDF:', error);
             if (showAlert) showAlert('Erro ao gerar PDF: ' + error.message, 'error');
