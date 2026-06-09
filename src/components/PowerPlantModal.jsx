@@ -1438,15 +1438,26 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
         const confirmed = await showConfirm(
             'Criar Lista de Rateio',
-            `Criar um card de Lista de Rateio para a usina "${formData.name}" com ${selectedUCs.length} UC(s) vinculada(s)?`,
+            `Criar um card de Lista de Rateio para a usina "${formData.name}"?\n\nSerão incluídas apenas UCs Ativas, Em Atraso e Ag. Conexão (${selectedUCs.filter(uc => uc.tipo_unidade === 'geradora' || ['ativo', 'em_atraso', 'aguardando_conexao'].includes(uc.status)).length} de ${selectedUCs.length} UC(s)).`,
             'Sim, Criar',
             'Cancelar'
         );
         if (!confirmed) return;
 
+        // Only include UCs with allowed statuses (+ geradora is always included)
+        const ALLOWED_RATEIO_STATUSES = ['ativo', 'em_atraso', 'aguardando_conexao'];
+        const eligibleUCs = selectedUCs.filter(uc =>
+            uc.tipo_unidade === 'geradora' || ALLOWED_RATEIO_STATUSES.includes(uc.status)
+        );
+
+        if (eligibleUCs.length === 0) {
+            showAlert('Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) para criar a lista.', 'warning');
+            return;
+        }
+
         // Build the same processedUCs logic as handleGenerateList
-        const geradora = selectedUCs.find(u => u.tipo_unidade === 'geradora');
-        const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
+        const geradora = eligibleUCs.find(u => u.tipo_unidade === 'geradora');
+        const beneficiarias = eligibleUCs.filter(u => u.tipo_unidade !== 'geradora');
         const sortedUCs = geradora ? [geradora, ...beneficiarias] : beneficiarias;
         const isPorcentagem = formData.rateio_type === 'porcentagem';
         let processedUCs = [];

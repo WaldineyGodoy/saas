@@ -79,6 +79,13 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
     const isPorcentagem = rateio.rateio_type === 'porcentagem';
     const statusDates = rateio.status_dates || {};
 
+    // Only show UCs with allowed statuses (geradora always included)
+    const ALLOWED_RATEIO_STATUSES = ['ativo', 'em_atraso', 'aguardando_conexao'];
+    const eligibleUCs = ucs.filter(uc =>
+        uc.tipo_unidade === 'geradora' || ALLOWED_RATEIO_STATUSES.includes(uc.status)
+    );
+    const excludedCount = ucs.length - eligibleUCs.length;
+
     /* ── Save Protocolo ────────────────────────────────────────── */
     const handleSaveProtocolo = async () => {
         setSavingProtocolo(true);
@@ -165,14 +172,14 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
 
     /* ── Anexo IV ──────────────────────────────────────────────── */
     const handleGenerateAnexoIV = () => {
-        if (!ucs || ucs.length === 0) {
-            showAlert('Não há UCs no snapshot para gerar o Anexo IV.', 'warning');
+        if (eligibleUCs.length === 0) {
+            showAlert('Não há UCs elegíveis no snapshot para gerar o Anexo IV.', 'warning');
             return;
         }
 
-        // CSV
+        // CSV — only eligible UCs
         const csvHeaders = ['tipoCompensacao', 'cpf/cnpj', 'Conta contrato', 'Prioridade', 'Porcentagem', 'Saldo Remanescente'];
-        const csvRows = ucs.map(uc => [
+        const csvRows = eligibleUCs.map(uc => [
             uc.tipo_unidade === 'geradora' ? 'Unidade Geradora' : 'Unidade consumidora',
             uc.cpf_cnpj || '',
             uc.numero_uc,
@@ -228,7 +235,7 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
         autoTable(doc, {
             startY: currentY,
             head: [['Conta Contato', 'CPF/CNPJ', 'Unidade Consumidora', isPorcentagem ? 'Percentual' : 'Prioridade']],
-            body: ucs.map(uc => [
+            body: eligibleUCs.map(uc => [
                 uc.numero_uc,
                 uc.cpf_cnpj || '',
                 uc.tipo_unidade === 'geradora' ? 'Principal(Gerador)' : 'Compensação',
@@ -552,8 +559,17 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <Users size={16} color="#64748b" />
                                 <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b' }}>
-                                    Unidades Consumidoras <span style={{ color: '#94a3b8', fontWeight: 500 }}>({ucs.length})</span>
+                                    Unidades Consumidoras <span style={{ color: '#94a3b8', fontWeight: 500 }}>({eligibleUCs.length})</span>
                                 </span>
+                                {excludedCount > 0 && (
+                                    <span style={{
+                                        fontSize: '0.7rem', color: '#b45309', background: '#fffbeb',
+                                        border: '1px solid #fde68a', padding: '0.15rem 0.55rem',
+                                        borderRadius: '99px', fontWeight: 700
+                                    }}>
+                                        {excludedCount} excluída{excludedCount !== 1 ? 's' : ''} (status inelegível)
+                                    </span>
+                                )}
                             </div>
                             <span style={{
                                 fontSize: '0.7rem', color: '#94a3b8', background: '#f1f5f9',
@@ -563,10 +579,10 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                             </span>
                         </div>
 
-                        {ucs.length === 0 ? (
+                        {eligibleUCs.length === 0 ? (
                             <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8' }}>
                                 <AlertTriangle size={26} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
-                                <p style={{ margin: 0, fontSize: '0.85rem' }}>Nenhuma UC registrada neste rateio.</p>
+                                <p style={{ margin: 0, fontSize: '0.85rem' }}>Nenhuma UC elegível (Ativa, Em Atraso ou Ag. Conexão) neste rateio.</p>
                             </div>
                         ) : (
                             <div style={{ overflowX: 'auto' }}>
@@ -585,7 +601,7 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {ucs.map((uc, idx) => {
+                                        {eligibleUCs.map((uc, idx) => {
                                             const ucBadge = getUCStatusBadge(uc.status);
                                             const isGeradora = uc.tipo_unidade === 'geradora';
                                             return (
