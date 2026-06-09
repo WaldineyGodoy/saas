@@ -107,7 +107,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         pix_string: '',
         valor_concessionaria: '',
         desconto_aplicado: '',
-        energy_bill_status: 'pendente'
+        valor_concessionaria: '',
+        desconto_aplicado: '',
+        energy_bill_status: 'pendente',
+        fio_b_vr_unit: '',
+        fio_b_total: ''
     });
 
     // Simulações Calculadas
@@ -398,6 +402,49 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 extractedSaldo = parseConsumption(saldoMatch[1]);
                             }
                         }
+
+                        // 4. Extração de Fio B Vr Unit e Fio B Total
+                        try {
+                            let consumoTusdUnit = 0;
+                            let compTusdUnit = 0;
+                            let qtdCompTusd = 0;
+
+                            const parseUnitValue = (v) => {
+                                if (!v) return 0;
+                                let cleaned = v.trim();
+                                if (cleaned.includes(',')) {
+                                    cleaned = cleaned.replace('.', '').replace(',', '.');
+                                } else {
+                                    cleaned = cleaned.replace(',', '.');
+                                }
+                                return parseFloat(cleaned) || 0;
+                            };
+
+                            const consumoTusdExato = cleanText.match(/Consumo\s+TUSD\s+kWh\s+[\d,.]+\s+([\d,]+)\s+[\d,.]+/i);
+                            if (consumoTusdExato) {
+                                consumoTusdUnit = parseUnitValue(consumoTusdExato[1]);
+                            }
+
+                            const compTusdExato = cleanText.match(/G\dComp.*?\-TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
+                            if (compTusdExato) {
+                                qtdCompTusd = parseConsumption(compTusdExato[1]);
+                                compTusdUnit = parseUnitValue(compTusdExato[2]);
+                            } else {
+                                const compGdMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP).*?TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
+                                if (compGdMatch) {
+                                    qtdCompTusd = parseConsumption(compGdMatch[1]);
+                                    compTusdUnit = parseUnitValue(compGdMatch[2]);
+                                }
+                            }
+
+                            if (consumoTusdUnit > 0 && compTusdUnit > 0) {
+                                const diff = consumoTusdUnit - compTusdUnit;
+                                parsedData.fio_b_vr_unit = diff;
+                                parsedData.fio_b_total = diff * qtdCompTusd;
+                            }
+                        } catch (fioBErr) {
+                            console.warn('Erro ao calcular Fio B localmente:', fioBErr);
+                        }
                     } catch (fallbackErr) {
                         console.warn('Erro ao rodar o fallback local:', fallbackErr);
                     }
@@ -483,7 +530,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         iluminacao_publica: parsedData.iluminacao_publica ? formatCurrency(parsedData.iluminacao_publica) : '',
                         outros_lancamentos: parsedData.outros_lancamentos ? formatCurrency(parsedData.outros_lancamentos) : '',
                         linha_digitavel: parsedData.linha_digitavel || '',
-                        pix_string: parsedData.pix_string || ''
+                        pix_string: parsedData.pix_string || '',
+                        fio_b_vr_unit: parsedData.fio_b_vr_unit !== undefined ? formatCurrency(parsedData.fio_b_vr_unit) : '',
+                        fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : ''
                     }));
 
                     showAlert('Conta processada com sucesso!', 'success');
@@ -535,7 +584,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             linha_digitavel: '',
             pix_string: '',
             valor_concessionaria: '',
-            desconto_aplicado: ''
+            desconto_aplicado: '',
+            fio_b_vr_unit: '',
+            fio_b_total: ''
         });
     }
 
@@ -1801,6 +1852,29 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                     value={formData.outros_lancamentos} 
                                                     onChange={e => handleCurrencyInputChange('outros_lancamentos', e.target.value)} 
                                                     className="sandbox-input" 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                            <div>
+                                                <label className="sandbox-label" title="Diferença unitária entre Consumo TUSD e Energia Compensada TUSD">Fio B (Vr Unit)</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={formData.fio_b_vr_unit} 
+                                                    onChange={e => handleCurrencyInputChange('fio_b_vr_unit', e.target.value)} 
+                                                    className="sandbox-input" 
+                                                    style={{ color: '#0f172a' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="sandbox-label" title="Fio B Vr Unit * Qtd Compensada TUSD">Fio B (Total)</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={formData.fio_b_total} 
+                                                    onChange={e => handleCurrencyInputChange('fio_b_total', e.target.value)} 
+                                                    className="sandbox-input" 
+                                                    style={{ color: '#0f172a' }}
                                                 />
                                             </div>
                                         </div>
