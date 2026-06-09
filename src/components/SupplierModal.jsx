@@ -717,14 +717,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     </div>
 
                     {/* Table Area */}
-                    <div style={{ padding: '24px', background: '#ffffff' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <div style={{ padding: '16px 24px', background: '#ffffff' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                             <thead>
                                 <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', background: '#f1f5f9' }}>
-                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Data</th>
-                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Entidade</th>
-                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700 }}>Descrição</th>
-                                    <th style={{ padding: '12px 15px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>Valor</th>
+                                    <th style={{ padding: '6px 10px', color: '#475569', fontWeight: 700, fontSize: '10px' }}>Data</th>
+                                    <th style={{ padding: '6px 10px', color: '#475569', fontWeight: 700, fontSize: '10px' }}>Entidade</th>
+                                    <th style={{ padding: '6px 10px', color: '#475569', fontWeight: 700, fontSize: '10px' }}>Descrição</th>
+                                    <th style={{ padding: '6px 10px', color: '#475569', fontWeight: 700, textAlign: 'right', fontSize: '10px' }}>Valor</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -736,32 +736,32 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                                     return (
                                         <tr key={entry.id} style={{ borderBottom: '1px solid #f1f5f9', background: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                                            <td style={{ padding: '12px 15px', whiteSpace: 'nowrap', color: '#475569' }}>
+                                            <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#475569', fontSize: '10px' }}>
                                                 {formatDate(entry.created_at)}
                                             </td>
-                                            <td style={{ padding: '12px 15px', color: '#475569', fontWeight: '500' }}>
+                                            <td style={{ padding: '6px 10px', color: '#475569', fontWeight: '500', fontSize: '10px' }}>
                                                 {translateEntity(entry.entity_name || 'Sistema')}
                                             </td>
-                                            <td style={{ padding: '12px 15px' }}>
+                                            <td style={{ padding: '6px 10px' }}>
                                                 {subscriberOrig ? (
                                                     <div>
-                                                        <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                                                        <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '10px' }}>
                                                             Origem: {translateEntity(subscriberOrig)}
                                                         </div>
-                                                        <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
+                                                        <div style={{ color: '#64748b', fontSize: '8px', marginTop: '1px' }}>
                                                             {entry.description} {kwhCompensated && ` | ${kwhCompensated} kWh`}
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                                                    <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '10px' }}>
                                                         {entry.description}
                                                     </div>
                                                 )}
-                                                <div style={{ fontSize: '0.7rem', color: isRevenue ? '#10b981' : '#ef4444', textTransform: 'uppercase', fontWeight: 'bold', marginTop: '4px' }}>
+                                                <div style={{ fontSize: '8px', color: isRevenue ? '#10b981' : '#ef4444', textTransform: 'uppercase', fontWeight: 'bold', marginTop: '2px' }}>
                                                     {isRevenue ? 'Crédito / Receita' : 'Débito / Desconto'}
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '12px 15px', textAlign: 'right', fontWeight: '700', color: isRevenue ? '#166534' : '#991b1b', fontSize: '0.95rem' }}>
+                                            <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '700', color: isRevenue ? '#166534' : '#991b1b', fontSize: '10px' }}>
                                                 {isRevenue ? '+' : '-'}{formatCurrency(entry.amount)}
                                             </td>
                                         </tr>
