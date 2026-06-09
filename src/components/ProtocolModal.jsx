@@ -529,7 +529,6 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 }}>
                     {[
                         { id: 'tratativa', label: 'Tratativa', icon: <Clock size={18} /> },
-                        { id: 'entidade', label: 'Entidade', icon: <LinkIcon size={18} /> },
                         ...((protocol?.id) ? [{ id: 'historico', label: 'Histórico', icon: <MessageSquare size={18} /> }] : [])
                     ].map(tab => (
                         <button
@@ -546,8 +545,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 cursor: 'pointer',
                                 fontSize: '0.9rem',
                                 fontWeight: activeTab === tab.id ? '700' : '500',
-                                color: activeTab === tab.id ? '#2563eb' : '#64748b',
-                                borderBottom: activeTab === tab.id ? '3px solid #2563eb' : '3px solid transparent',
+                                color: activeTab === tab.id ? primaryColor : '#64748b',
+                                borderBottom: activeTab === tab.id ? `3px solid ${primaryColor}` : '3px solid transparent',
                                 transition: 'all 0.2s ease-in-out',
                                 whiteSpace: 'nowrap',
                                 flexShrink: 0,
@@ -556,7 +555,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                             }}
                             onMouseOver={e => {
                                 if (activeTab !== tab.id) {
-                                    e.currentTarget.style.color = '#2563eb';
+                                    e.currentTarget.style.color = primaryColor;
                                     e.currentTarget.style.opacity = '1';
                                 }
                             }}
@@ -660,114 +659,116 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
 
-                            {activeTab === 'entidade' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', animation: 'fadeIn 0.2s ease-in-out' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Tipo de Entidade</label>
-                                        <select
-                                            value={linkedEntityType}
-                                            onChange={e => setLinkedEntityType(e.target.value)}
-                                            style={{
-                                                width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
-                                            }}
-                                        >
-                                            <option value="">Nenhuma</option>
-                                            <option value="assinante">Assinante</option>
-                                            <option value="unidade_consumidora">Unidade Consumidora</option>
-                                            <option value="conta_energia">Conta de Energia (Concessionária)</option>
-                                            <option value="fatura">Fatura (Assinante)</option>
-                                            <option value="rateio_list">Lista de Rateio</option>
-                                        </select>
-                                    </div>
-
-                                    {linkedEntityType && (
+                                    {/* Vincular Entidade Section */}
+                                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <LinkIcon size={14} /> Vincular Entidade
+                                        </h4>
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selecionar Registro</label>
-                                            <SearchableSelect
-                                                options={entityOptions}
-                                                value={linkedEntityId}
-                                                onChange={setLinkedEntityId}
-                                                placeholder="Digite para buscar..."
-                                                loading={loadingEntities}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {linkedEntityType && linkedEntityId && (
-                                        <div style={{ marginTop: '0.5rem' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                                                Visualizar Entidade Vinculada
-                                            </label>
-                                            <div
-                                                onClick={handleOpenEntityModal}
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Tipo de Entidade</label>
+                                            <select
+                                                value={linkedEntityType}
+                                                onChange={e => setLinkedEntityType(e.target.value)}
                                                 style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    padding: '0.85rem 1.1rem',
-                                                    backgroundColor: 'white',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '10px',
-                                                    cursor: loadingEntityDetail ? 'wait' : 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                                                }}
-                                                onMouseEnter={e => {
-                                                    e.currentTarget.style.borderColor = primaryColor;
-                                                    e.currentTarget.style.backgroundColor = '#f8fafc';
-                                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                                    e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
-                                                }}
-                                                onMouseLeave={e => {
-                                                    e.currentTarget.style.borderColor = '#cbd5e1';
-                                                    e.currentTarget.style.backgroundColor = 'white';
-                                                    e.currentTarget.style.transform = 'none';
-                                                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                                                    width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
                                                 }}
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-                                                    <div style={{
-                                                        padding: '0.5rem',
-                                                        background: primaryColor + '10',
-                                                        borderRadius: '8px',
-                                                        color: primaryColor,
+                                                <option value="">Nenhuma</option>
+                                                <option value="assinante">Assinante</option>
+                                                <option value="unidade_consumidora">Unidade Consumidora</option>
+                                                <option value="conta_energia">Conta de Energia (Concessionária)</option>
+                                                <option value="fatura">Fatura (Assinante)</option>
+                                                <option value="rateio_list">Lista de Rateio</option>
+                                            </select>
+                                        </div>
+
+                                        {linkedEntityType && (
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selecionar Registro</label>
+                                                <SearchableSelect
+                                                    options={entityOptions}
+                                                    value={linkedEntityId}
+                                                    onChange={setLinkedEntityId}
+                                                    placeholder="Digite para buscar..."
+                                                    loading={loadingEntities}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {linkedEntityType && linkedEntityId && (
+                                            <div style={{ marginTop: '0.5rem' }}>
+                                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                                                    Visualizar Entidade Vinculada
+                                                </label>
+                                                <div
+                                                    onClick={handleOpenEntityModal}
+                                                    style={{
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }}>
-                                                        {linkedEntityType === 'assinante' && <User size={18} />}
-                                                        {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
-                                                        {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
-                                                        {linkedEntityType === 'rateio_list' && <Layers size={18} />}
-                                                    </div>
-                                                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
-                                                            {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                                        justifyContent: 'space-between',
+                                                        padding: '0.85rem 1.1rem',
+                                                        backgroundColor: 'white',
+                                                        border: '1px solid #cbd5e1',
+                                                        borderRadius: '10px',
+                                                        cursor: loadingEntityDetail ? 'wait' : 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.borderColor = primaryColor;
+                                                        e.currentTarget.style.backgroundColor = '#f8fafc';
+                                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.05)';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.borderColor = '#cbd5e1';
+                                                        e.currentTarget.style.backgroundColor = 'white';
+                                                        e.currentTarget.style.transform = 'none';
+                                                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                                                        <div style={{
+                                                            padding: '0.5rem',
+                                                            background: primaryColor + '10',
+                                                            borderRadius: '8px',
+                                                            color: primaryColor,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0
+                                                        }}>
+                                                            {linkedEntityType === 'assinante' && <User size={18} />}
+                                                            {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
+                                                            {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
+                                                            {linkedEntityType === 'rateio_list' && <Layers size={18} />}
                                                         </div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
-                                                            {linkedEntityType === 'assinante' && 'Assinante'}
-                                                            {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
-                                                            {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
-                                                            {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
-                                                            {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
+                                                                {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
+                                                                {linkedEntityType === 'assinante' && 'Assinante'}
+                                                                {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
+                                                                {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
+                                                                {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
+                                                                {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '10px' }}>
-                                                    {loadingEntityDetail ? (
-                                                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <ExternalLink size={16} />
-                                                    )}
+                                                    <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '10px' }}>
+                                                        {loadingEntityDetail ? (
+                                                            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                                        ) : (
+                                                            <ExternalLink size={16} />
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
