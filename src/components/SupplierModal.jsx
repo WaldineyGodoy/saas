@@ -1217,75 +1217,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     </div>
                                 </div>
 
-                                {/* Manual Ledger Entry Block */}
-                                {supplier?.id && (
-                                    <div style={sectionStyle}>
-                                        <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                            <ArrowUpDown size={20} color="#8b5cf6" /> Lançamentos Avulsos
-                                        </h4>
-                                        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                                            Registre bonificações (créditos) ou descontos/despesas (débitos) diretamente na conta do fornecedor.
-                                        </p>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
-                                            <div>
-                                                <label style={labelStyle}>Tipo</label>
-                                                <select
-                                                    style={inputStyle}
-                                                    value={manualEntryType}
-                                                    onChange={e => setManualEntryType(e.target.value)}
-                                                >
-                                                    <option value="credit">Crédito a Receber (+)</option>
-                                                    <option value="debit">Débito / Desconto (-)</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label style={labelStyle}>Descrição do Lançamento</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    placeholder="Ex: Bonificação, Ajuste, Despesa extra"
-                                                    value={manualEntryDescription}
-                                                    onChange={e => setManualEntryDescription(e.target.value)}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label style={labelStyle}>Valor (R$)</label>
-                                                <input
-                                                    style={inputStyle}
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    placeholder="0,00"
-                                                    value={manualEntryAmount}
-                                                    onChange={e => setManualEntryAmount(e.target.value)}
-                                                />
-                                            </div>
-                                            <div>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleManualEntry}
-                                                    disabled={manualEntryLoading || !manualEntryAmount || !manualEntryDescription}
-                                                    style={{
-                                                        background: manualEntryType === 'credit' ? '#10b981' : '#ef4444',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        padding: '0 1.5rem',
-                                                        borderRadius: '12px',
-                                                        fontWeight: 'bold',
-                                                        cursor: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 'not-allowed' : 'pointer',
-                                                        opacity: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 0.7 : 1,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.5rem',
-                                                        height: '46px',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    {manualEntryLoading ? 'Lançando...' : 'Lançar'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+
 
                                 <div style={{ 
                                     background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
@@ -1337,94 +1269,198 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     color: 'white',
                                     marginBottom: '2rem',
                                     display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
+                                    flexDirection: 'column',
                                     boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)',
-                                    flexWrap: 'wrap',
-                                    gap: '1rem'
+                                    gap: '1.25rem'
                                 }}>
-                                    <div style={{ flex: 1, minWidth: '250px' }}>
-                                        <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
-                                        <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
-                                    </div>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '1rem',
+                                        width: '100%'
+                                    }}>
+                                        <div style={{ flex: '1 1 250px' }}>
+                                            <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
+                                            <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
+                                        </div>
 
-                                    {/* Filters inside Header to save space */}
-                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        <input
-                                            type="date"
-                                            value={extratoStartDate}
-                                            onChange={e => setExtratoStartDate(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                        />
-                                        <span style={{ opacity: 0.8 }}>até</span>
-                                        <input
-                                            type="date"
-                                            value={extratoEndDate}
-                                            onChange={e => setExtratoEndDate(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                        />
-                                        <select
-                                            value={extratoType}
-                                            onChange={e => setExtratoType(e.target.value)}
-                                            style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
-                                        >
-                                            <option value="all">Todos os tipos</option>
-                                            <option value="credit">Créditos</option>
-                                            <option value="debit">Débitos</option>
-                                        </select>
+                                        {/* Filters inside Header to save space */}
+                                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <input
+                                                type="date"
+                                                value={extratoStartDate}
+                                                onChange={e => setExtratoStartDate(e.target.value)}
+                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
+                                            />
+                                            <span style={{ opacity: 0.8 }}>até</span>
+                                            <input
+                                                type="date"
+                                                value={extratoEndDate}
+                                                onChange={e => setExtratoEndDate(e.target.value)}
+                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
+                                            />
+                                            <select
+                                                value={extratoType}
+                                                onChange={e => setExtratoType(e.target.value)}
+                                                style={{ padding: '0.5rem', borderRadius: '8px', border: 'none', fontSize: '0.85rem', color: '#1e293b', fontWeight: '600' }}
+                                            >
+                                                <option value="all">Todos os tipos</option>
+                                                <option value="credit">Créditos</option>
+                                                <option value="debit">Débitos</option>
+                                            </select>
+
+                                            <button 
+                                                type="button"
+                                                onClick={handlePrintExtrato}
+                                                disabled={isGeneratingPdf}
+                                                style={{ 
+                                                    background: 'rgba(255,255,255,0.2)', 
+                                                    padding: '0.6rem 1rem', 
+                                                    borderRadius: '8px',
+                                                    border: '1px solid rgba(255,255,255,0.3)',
+                                                    color: 'white',
+                                                    fontWeight: 'bold',
+                                                    cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    opacity: isGeneratingPdf ? 0.7 : 1
+                                                }}
+                                            >
+                                                {isGeneratingPdf ? 'Gerando...' : 'PDF'} <Download size={16} />
+                                            </button>
+                                        </div>
 
                                         <button 
                                             type="button"
-                                            onClick={handlePrintExtrato}
-                                            disabled={isGeneratingPdf}
+                                            onClick={handlePayPix}
+                                            disabled={paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))}
                                             style={{ 
-                                                background: 'rgba(255,255,255,0.2)', 
-                                                padding: '0.6rem 1rem', 
-                                                borderRadius: '8px',
-                                                border: '1px solid rgba(255,255,255,0.3)',
-                                                color: 'white',
-                                                fontWeight: 'bold',
-                                                cursor: isGeneratingPdf ? 'not-allowed' : 'pointer',
+                                                background: 'white', 
+                                                padding: '1rem 2rem', 
+                                                borderRadius: '20px',
+                                                border: 'none',
+                                                color: '#1d4ed8',
+                                                fontWeight: '800',
+                                                fontSize: '1rem',
+                                                cursor: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
+                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '0.5rem',
-                                                opacity: isGeneratingPdf ? 0.7 : 1
+                                                gap: '0.75rem',
+                                                opacity: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
+                                                transition: 'transform 0.2s'
                                             }}
+                                            onMouseEnter={(e) => { 
+                                                if (!paying && ledgerBalance < 0 && ['superadmin', 'admin', 'gerente'].includes(profile?.role)) {
+                                                    e.currentTarget.style.transform = 'scale(1.05)'; 
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                                         >
-                                            {isGeneratingPdf ? 'Gerando...' : 'PDF'} <Download size={16} />
+                                            <Wallet size={20} />
+                                            {paying ? 'Processando...' : 'Pagar Agora'}
                                         </button>
                                     </div>
 
-                                    <button 
-                                        type="button"
-                                        onClick={handlePayPix}
-                                        disabled={paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))}
-                                        style={{ 
-                                            background: 'white', 
-                                            padding: '1rem 2rem', 
-                                            borderRadius: '20px',
-                                            border: 'none',
-                                            color: '#1d4ed8',
-                                            fontWeight: '800',
-                                            fontSize: '1rem',
-                                            cursor: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
-                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.75rem',
-                                            opacity: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
-                                            transition: 'transform 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => { 
-                                            if (!paying && ledgerBalance < 0 && ['superadmin', 'admin', 'gerente'].includes(profile?.role)) {
-                                                e.currentTarget.style.transform = 'scale(1.05)'; 
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                    >
-                                        <Wallet size={20} />
-                                        {paying ? 'Processando...' : 'Pagar Agora'}
-                                    </button>
+                                    {supplier?.id && (
+                                        <>
+                                            <div style={{ width: '100%', height: '1px', background: 'rgba(255, 255, 255, 0.2)', margin: '0.25rem 0' }} />
+                                            
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2.5fr 1.5fr auto', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
+                                                    <select
+                                                        value={manualEntryType}
+                                                        onChange={e => setManualEntryType(e.target.value)}
+                                                        style={{
+                                                            padding: '0.55rem 0.75rem',
+                                                            borderRadius: '10px',
+                                                            border: '1px solid rgba(255,255,255,0.25)',
+                                                            background: 'rgba(255,255,255,0.15)',
+                                                            color: 'white',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none',
+                                                            cursor: 'pointer',
+                                                            height: '38px'
+                                                        }}
+                                                    >
+                                                        <option value="credit" style={{ color: '#1e293b' }}>Crédito (+)</option>
+                                                        <option value="debit" style={{ color: '#1e293b' }}>Débito (-)</option>
+                                                    </select>
+                                                    
+                                                    <input
+                                                        placeholder="Descrição do lançamento avulso"
+                                                        value={manualEntryDescription}
+                                                        onChange={e => setManualEntryDescription(e.target.value)}
+                                                        style={{
+                                                            padding: '0.55rem 0.75rem',
+                                                            borderRadius: '10px',
+                                                            border: 'none',
+                                                            background: 'rgba(255,255,255,0.95)',
+                                                            color: '#1e293b',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none',
+                                                            height: '38px'
+                                                        }}
+                                                    />
+                                                    
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        placeholder="Valor R$ 0,00"
+                                                        value={manualEntryAmount}
+                                                        onChange={e => setManualEntryAmount(e.target.value)}
+                                                        style={{
+                                                            padding: '0.55rem 0.75rem',
+                                                            borderRadius: '10px',
+                                                            border: 'none',
+                                                            background: 'rgba(255,255,255,0.95)',
+                                                            color: '#1e293b',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '700',
+                                                            outline: 'none',
+                                                            height: '38px'
+                                                        }}
+                                                    />
+                                                    
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleManualEntry}
+                                                        disabled={manualEntryLoading || !manualEntryAmount || !manualEntryDescription}
+                                                        style={{
+                                                            background: 'white',
+                                                            color: manualEntryType === 'credit' ? '#10b981' : '#ef4444',
+                                                            border: 'none',
+                                                            padding: '0 1.5rem',
+                                                            borderRadius: '10px',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '0.85rem',
+                                                            cursor: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 'not-allowed' : 'pointer',
+                                                            opacity: (manualEntryLoading || !manualEntryAmount || !manualEntryDescription) ? 0.7 : 1,
+                                                            transition: 'all 0.2s',
+                                                            height: '38px',
+                                                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            if (!manualEntryLoading && manualEntryAmount && manualEntryDescription) {
+                                                                e.currentTarget.style.background = manualEntryType === 'credit' ? '#e6fbf4' : '#fde8e8';
+                                                            }
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = 'white';
+                                                        }}
+                                                    >
+                                                        {manualEntryLoading ? 'Lançando...' : 'Lançar'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div style={sectionStyle}>
