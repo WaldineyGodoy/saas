@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
@@ -557,103 +557,67 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         return isValid;
     });
 
-    const handlePrintExtrato = () => {
+    const handlePrintExtrato = async () => {
         const printContent = document.querySelector('.extrato-print-container');
         if (!printContent) return;
         
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0px';
-        iframe.style.height = '0px';
-        iframe.style.border = 'none';
-        
-        document.body.appendChild(iframe);
-        
-        const doc = iframe.contentWindow.document;
-        doc.open();
-        
-        const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-            .map(s => s.outerHTML)
-            .join('');
+        try {
+            // Temporarily make the header visible for the screenshot
+            const header = printContent.querySelector('.print-only-header');
+            if (header) {
+                header.style.display = 'block';
+                // Adjust some styles for the screenshot if needed
+                header.style.backgroundColor = 'white';
+            }
             
-        doc.write(`
-            <html>
-                <head>
-                    <title>Extrato de Conta - ${supplier?.name || 'Fornecedor'}</title>
-                    ${styles}
-                    <style>
-                        @page { size: portrait; margin: 1cm; }
-                        body { 
-                            background: white !important; 
-                            margin: 0 !important; 
-                            padding: 0 !important; 
-                            font-family: 'Inter', system-ui, sans-serif;
-                            color: #1e293b;
-                        }
-                        .no-print { display: none !important; }
-                        .print-only-header { display: block !important; }
-                        
-                        .extrato-print-container { 
-                            box-shadow: none !important; 
-                            max-width: none !important; 
-                            width: 100% !important; 
-                            border-radius: 0 !important;
-                            height: auto !important;
-                            max-height: none !important;
-                            overflow: visible !important;
-                            background: white !important;
-                            padding: 0 !important;
-                            margin: 0 !important;
-                        }
-                        
-                        * { 
-                            -webkit-print-color-adjust: exact !important; 
-                            print-color-adjust: exact !important; 
-                        }
-                        
-                        table { 
-                            page-break-inside: auto; 
-                            width: 100%; 
-                            border-collapse: collapse; 
-                            font-size: 0.8rem !important;
-                        }
-                        tr { page-break-inside: avoid; page-break-after: auto; }
-                        thead { display: table-header-group; }
-                        tfoot { display: table-footer-group; }
-                        
-                        th {
-                            background: #003366 !important;
-                            color: #ffffff !important;
-                            padding: 10px 15px !important;
-                            text-transform: capitalize !important;
-                            font-weight: 700 !important;
-                            border: none !important;
-                        }
-                        
-                        td {
-                            padding: 10px 15px !important;
-                            border-bottom: 1px solid #f1f5f9 !important;
-                        }
-                        
-                        .print-value { font-weight: 800 !important; }
-                    </style>
-                </head>
-                <body>
-                    <div class="extrato-print-container">
-                        ${printContent.innerHTML}
-                    </div>
-                </body>
-            </html>
-        `);
-        doc.close();
-        
-        iframe.contentWindow.focus();
-        setTimeout(() => {
-            iframe.contentWindow.print();
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
-        }, 500);
+            // Hide no-print elements temporarily
+            const noPrintElements = printContent.querySelectorAll('.no-print');
+            noPrintElements.forEach(el => el.style.display = 'none');
+
+            const canvas = await html2canvas(printContent, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: "#ffffff"
+            });
+
+            // Restore original display styles
+            if (header) header.style.display = 'none';
+            noPrintElements.forEach(el => el.style.display = '');
+
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210;
+            const pageHeight = 297;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            // Page 1
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+            heightLeft -= pageHeight;
+
+            // Subsequent pages if height exceeds A4
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight; // This shifts the image up for the next page
+                pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                heightLeft -= pageHeight;
+            }
+
+            const cleanName = (formData.name || 'Fornecedor').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
+            const fileName = `Extrato_${cleanName}_${new Date().toISOString().split('T')[0]}.pdf`;
+            
+            pdf.save(fileName);
+            
+            if (showAlert) {
+                showAlert('PDF gerado e baixado com sucesso!', 'success');
+            }
+            
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            if (showAlert) showAlert('Erro ao gerar PDF', 'error');
+        }
     };
 
     const translateEntity = (name) => {
@@ -1189,7 +1153,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 gap: '0.5rem'
                                             }}
                                         >
-                                            PDF
+                                            PDF <Download size={16} />
                                         </button>
                                     </div>
 
