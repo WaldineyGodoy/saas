@@ -35,8 +35,8 @@ DECLARE
     v_account_despesas_op uuid;
     v_account_taxa_bancaria uuid;
 BEGIN
-    -- Only proceed if status changed to 'pago'
-    IF NEW.status = 'pago' AND (OLD.status IS DISTINCT FROM 'pago') THEN
+    -- Only proceed if status changed to 'pago' or 'liquidado'
+    IF NEW.status::text IN ('pago', 'liquidado') AND OLD.status IS DISTINCT FROM NEW.status THEN
         
         v_transaction_id := gen_random_uuid();
         v_valor_total := NEW.valor_a_pagar;
@@ -80,17 +80,12 @@ BEGIN
         IF v_service_values IS NOT NULL THEN
             v_valor_b2w_manutencao := COALESCE((v_service_values->>'Manutenção')::numeric, 0);
             v_valor_b2w_arrendamento := COALESCE((v_service_values->>'Arrendamento')::numeric, 0);
-            
-            v_valor_despesas_op := COALESCE((v_service_values->>'Água')::numeric, 0) + 
-                                   COALESCE((v_service_values->>'Energia')::numeric, 0) + 
-                                   COALESCE((v_service_values->>'Internet')::numeric, 0);
         END IF;
 
         -- 6. Calculate Investor Share (Residual)
         v_valor_investidor := v_valor_total - v_valor_concessionaria - 
                               (v_valor_b2w_gestao + v_comissao_recorrente) - 
-                              v_valor_b2w_manutencao - v_valor_b2w_arrendamento - 
-                              v_valor_despesas_op - v_comissao_start;
+                              v_comissao_start;
 
         -- 7. Calculate Asaas Fee (0.99 or 1.99)
         IF NOW() < '2026-04-19'::timestamp THEN
@@ -108,7 +103,6 @@ BEGIN
         SELECT id INTO v_account_investidor FROM public.ledger_accounts WHERE code = '2.1.1';
         SELECT id INTO v_account_concessionaria FROM public.ledger_accounts WHERE code = '2.1.3.01';
         SELECT id INTO v_account_comissoes FROM public.ledger_accounts WHERE code = '2.1.2';
-        SELECT id INTO v_account_despesas_op FROM public.ledger_accounts WHERE code = '2.1.4';
 
         -- 9. Create Entries
         -- [Lógica de inserções no ledger_entries conforme o trigger aplicado via migration]
@@ -135,20 +129,7 @@ BEGIN
             VALUES (v_transaction_id, v_account_gestao, -v_valor_b2w_gestao, 'Receita Gestão B2W (Líquida)', 'invoice', NEW.id);
         END IF;
         
-        IF v_valor_b2w_manutencao > 0 THEN
-            INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
-            VALUES (v_transaction_id, v_account_manutencao, -v_valor_b2w_manutencao, 'Receita Manutenção B2W', 'invoice', NEW.id);
-        END IF;
 
-        IF v_valor_b2w_arrendamento > 0 THEN
-            INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
-            VALUES (v_transaction_id, v_account_arrendamento, -v_valor_b2w_arrendamento, 'Receita Arrendamento B2W', 'invoice', NEW.id);
-        END IF;
-
-        IF v_valor_despesas_op > 0 THEN
-            INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
-            VALUES (v_transaction_id, v_account_despesas_op, -v_valor_despesas_op, 'Provisão Despesas Operacionais Usina', 'invoice', NEW.id);
-        END IF;
 
         IF v_valor_investidor > 0 THEN
             INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
