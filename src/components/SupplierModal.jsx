@@ -582,11 +582,13 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     <title>Extrato de Conta - ${supplier?.name || 'Fornecedor'}</title>
                     ${styles}
                     <style>
+                        @page { size: portrait; margin: 1cm; }
                         body { 
                             background: white !important; 
-                            margin: 20px !important; 
+                            margin: 0 !important; 
                             padding: 0 !important; 
-                            font-family: inherit;
+                            font-family: 'Inter', system-ui, sans-serif;
+                            color: #1e293b;
                         }
                         .no-print { display: none !important; }
                         .print-only-header { display: block !important; }
@@ -613,10 +615,25 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             page-break-inside: auto; 
                             width: 100%; 
                             border-collapse: collapse; 
+                            font-size: 0.8rem !important;
                         }
                         tr { page-break-inside: avoid; page-break-after: auto; }
                         thead { display: table-header-group; }
                         tfoot { display: table-footer-group; }
+                        
+                        th {
+                            background: #003366 !important;
+                            color: #ffffff !important;
+                            padding: 10px 15px !important;
+                            text-transform: capitalize !important;
+                            font-weight: 700 !important;
+                            border: none !important;
+                        }
+                        
+                        td {
+                            padding: 10px 15px !important;
+                            border-bottom: 1px solid #f1f5f9 !important;
+                        }
                         
                         .print-value { font-weight: 800 !important; }
                     </style>
@@ -1210,12 +1227,20 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                                 <div style={sectionStyle}>
                                     <div style={{ display: 'none' }} className="print-only-header">
-                                        <div style={{ marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '2px solid #e2e8f0', color: '#1e293b' }}>
-                                            <h2 style={{ margin: '0 0 0.5rem 0' }}>Extrato de Conta - {formData.name}</h2>
-                                            <div style={{ display: 'flex', gap: '2rem', fontSize: '0.9rem' }}>
-                                                <div><strong>Período:</strong> {extratoStartDate ? formatDate(extratoStartDate) : 'Início'} até {extratoEndDate ? formatDate(extratoEndDate) : 'Hoje'}</div>
-                                                <div><strong>Tipo:</strong> {extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}</div>
-                                                <div><strong>Saldo Acumulado:</strong> {formatCurrency(ledgerBalance)}</div>
+                                        <div style={{ marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <h2 style={{ margin: '0', color: '#003366', fontSize: '1.2rem', textTransform: 'uppercase' }}>EXTRATO DE CONTA - {formData.name}</h2>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Gerado em: {new Date().toLocaleString('pt-BR')}</div>
+                                            </div>
+                                            
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', fontSize: '0.9rem' }}>
+                                                <div style={{ display: 'flex', gap: '2rem' }}>
+                                                    <div><strong>Período:</strong> {extratoStartDate ? formatDate(extratoStartDate) : 'Início'} até {extratoEndDate ? formatDate(extratoEndDate) : 'Hoje'}</div>
+                                                    <div><strong>Tipo:</strong> {extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}</div>
+                                                </div>
+                                                <div>
+                                                    <strong style={{ fontSize: '1.1rem' }}>Saldo Acumulado: {formatCurrency(ledgerBalance)}</strong>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1236,11 +1261,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <div style={{ overflowX: 'auto' }}>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                                 <thead>
-                                                    <tr style={{ borderBottom: '2px solid #f1f5f9', textAlign: 'left' }}>
-                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b' }}>Data</th>
-                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b' }}>Entidade</th>
-                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b' }}>Descrição</th>
-                                                        <th style={{ padding: '1rem 0.5rem', color: '#64748b', textAlign: 'right' }}>Valor</th>
+                                                    <tr style={{ textAlign: 'left' }}>
+                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Data</th>
+                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Entidade</th>
+                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366' }}>Descrição</th>
+                                                        <th style={{ padding: '12px 15px', color: '#ffffff', background: '#003366', textAlign: 'right' }}>Valor</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
