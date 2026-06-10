@@ -36,7 +36,8 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         { id: 'consumer_unit', label: 'Unidade Consumidora' },
         { id: 'invoice', label: 'Fatura' },
         { id: 'supplier', label: 'Fornecedor' },
-        { id: 'power_plant', label: 'Usina' }
+        { id: 'power_plant', label: 'Usina' },
+        { id: 'financial_transfer', label: 'Resgate de Saldo' }
     ];
 
     const entityStatusOptions = {
@@ -92,6 +93,11 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'manutencao', label: 'Manutenção' },
             { id: 'inativa', label: 'Inativa' },
             { id: 'cancelada', label: 'Cancelada' }
+        ],
+        financial_transfer: [
+            { id: 'pending', label: 'Pendente / Solicitado' },
+            { id: 'completed', label: 'Concluído / Pago' },
+            { id: 'failed', label: 'Falhou / Cancelado' }
         ]
     };
 

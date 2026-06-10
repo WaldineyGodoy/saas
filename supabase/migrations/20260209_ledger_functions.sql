@@ -107,7 +107,7 @@ BEGIN
         -- 9. Create Entries
         -- [Lógica de inserções no ledger_entries conforme o trigger aplicado via migration]
         INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-        VALUES (v_transaction_id, v_account_bank, v_valor_total, 'Recebimento Fatura ' || NEW.id, 'invoice', NEW.id, NEW.asaas_payment_id);
+        VALUES (v_transaction_id, v_account_bank, v_valor_total, 'Recebimento Fatura ' || NEW.id, 'invoice', NEW.id, CASE WHEN NEW.asaas_payment_id IS NULL THEN NULL ELSE NEW.asaas_payment_id || ':' || NEW.id END);
 
         INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
         VALUES (v_transaction_id, v_account_taxa_bancaria, v_taxa_asaas, 'Taxa Boleto Asaas', 'invoice', NEW.id);

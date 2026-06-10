@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -11,22 +12,32 @@ serve(async (req) => {
     }
 
     try {
-        const { amount, pixKey, pixKeyType, description, usinaId } = await req.json()
+        const body = await req.json()
+        const amount = body.amount ?? body.value
+        const pixKey = body.pixKey ?? body.pix_key
+        const pixKeyType = body.pixKeyType ?? body.pix_key_type
+        const description = body.description
+        const usinaId = body.usinaId ?? body.usina_id
+        const supplierId = body.supplierId ?? body.supplier_id
+        const destinationType = body.destinationType ?? (supplierId ? 'supplier' : 'usina')
+        const destinationId = supplierId ?? usinaId
 
         // 1. Validation
         if (!amount || !pixKey) {
             throw new Error('Missing required fields: amount or pixKey')
         }
 
-        // 2. Auth Check (Mocked or Real)
-        // In a real scenario, check if user is admin via Supabase Auth context
+        // 2. Initialize Supabase Client
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+        const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
         // 3. Call Asaas API (Simulated if no API Key, but code structure is real)
         const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')
         const ASAAS_URL = Deno.env.get('ASAAS_API_URL') || 'https://sandbox.asaas.com/api/v3'
 
         let transferId = 'simulated_' + crypto.randomUUID();
-        let status = 'DONE';
+        let status = 'PENDING';
 
         if (ASAAS_API_KEY) {
             // Real Call
@@ -53,11 +64,30 @@ serve(async (req) => {
             }
 
             transferId = data.id;
-            status = data.status; // 'PENDING' usually
+            status = data.status; // 'PENDING' or 'DONE' / 'CONFIRMED'
         } else {
             console.log("Simulating Asaas Transfer:", { amount, pixKey });
             // Simulate delay
             await new Promise(r => setTimeout(r, 1000));
+            status = 'DONE'; // Sandbox finishes immediately in simulation
+        }
+
+        // 4. Record the transfer request in the database
+        const dbStatus = (status === 'DONE' || status === 'CONFIRMED') ? 'completed' : 'pending';
+        const { data: dbRecord, error: dbError } = await supabase
+            .from('financial_transfers')
+            .insert({
+                amount: amount,
+                destination_type: destinationType,
+                destination_id: destinationId,
+                status: dbStatus,
+                asaas_transfer_id: transferId
+            })
+            .select()
+            .single();
+
+        if (dbError) {
+            console.error('Error inserting financial_transfer:', dbError);
         }
 
         return new Response(
