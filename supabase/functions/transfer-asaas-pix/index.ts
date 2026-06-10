@@ -32,9 +32,22 @@ serve(async (req) => {
         const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
-        // 3. Call Asaas API (Simulated if no API Key, but code structure is real)
-        const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')
-        const ASAAS_URL = Deno.env.get('ASAAS_API_URL') || 'https://sandbox.asaas.com/api/v3'
+        // 3. Get Asaas Config from DB
+        const { data: configData, error: configError } = await supabase
+            .from('integrations_config')
+            .select('*')
+            .eq('service_name', 'financial_api')
+            .single()
+
+        if (configError || !configData) {
+            throw new Error('Integração Financeira não configurada no painel CRM.')
+        }
+
+        const isSandbox = configData.environment === 'sandbox'
+        const ASAAS_API_KEY = isSandbox ? configData.sandbox_api_key : configData.api_key
+        const ASAAS_URL = isSandbox 
+            ? (configData.sandbox_endpoint_url || 'https://sandbox.asaas.com/api/v3') 
+            : (configData.endpoint_url || 'https://api.asaas.com/v3')
 
         let transferId = 'simulated_' + crypto.randomUUID();
         let status = 'PENDING';
