@@ -119,6 +119,9 @@ BEGIN
 
         IF FOUND THEN
             v_result := REPLACE(v_result, '{{Valor do Resgate}}', 'R$ ' || translate(to_char(v_data.amount::numeric, 'FM999,999,990.00'), ',.', '.,'));
+            v_result := REPLACE(v_result, '{{Valor del Resgate}}', 'R$ ' || translate(to_char(v_data.amount::numeric, 'FM999,999,990.00'), ',.', '.,'));
+            v_result := REPLACE(v_result, '{{Valor de Resgate}}', 'R$ ' || translate(to_char(v_data.amount::numeric, 'FM999,999,990.00'), ',.', '.,'));
+            v_result := REPLACE(v_result, '{{Valor Resgatado}}', 'R$ ' || translate(to_char(v_data.amount::numeric, 'FM999,999,990.00'), ',.', '.,'));
             v_result := REPLACE(v_result, '{{Valor}}', 'R$ ' || translate(to_char(v_data.amount::numeric, 'FM999,999,990.00'), ',.', '.,'));
             v_result := REPLACE(v_result, '{{Status do Resgate}}', COALESCE(v_data.status, ''));
             v_result := REPLACE(v_result, '{{Chave PIX}}', COALESCE(v_data.supplier_pix_key, ''));
