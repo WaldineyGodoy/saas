@@ -72,33 +72,6 @@ serve(async (req) => {
                     .eq('asaas_transfer_id', transfer.id)
                     .select('id, destination_id, amount')
                     .single();
-
-                if (finTransfer) {
-                    if (newStatus === 'completed') {
-                        // Mark ledger as completed
-                        await supabase
-                            .from('ledger_entries')
-                            .update({ status: 'completed' })
-                            .eq('reference_id', finTransfer.id);
-                    } else if (newStatus === 'failed') {
-                        // Mark ledger as failed
-                        await supabase
-                            .from('ledger_entries')
-                            .update({ status: 'failed' })
-                            .eq('reference_id', finTransfer.id);
-
-                        // Efetuar estorno (Refund)
-                        await supabase.from('ledger_entries').insert({
-                            entity_type: 'supplier',
-                            entity_id: finTransfer.destination_id,
-                            amount: -finTransfer.amount, // Negative means credit back to supplier
-                            type: 'estorno',
-                            status: 'completed',
-                            reference_id: finTransfer.id,
-                            description: 'Estorno: Falha no Resgate PIX'
-                        });
-                    }
-                }
             }
 
             return new Response(JSON.stringify({ received: true, status: 'transfer_processed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

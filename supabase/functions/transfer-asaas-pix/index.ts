@@ -126,20 +126,6 @@ serve(async (req) => {
 
         if (dbError) {
             console.error('Error inserting financial_transfer:', dbError);
-        } else if (dbRecord && destinationType === 'supplier') {
-            // 5. Debit Ledger Immediately
-            const { error: ledgerError } = await supabase
-                .from('ledger_entries')
-                .insert({
-                    entity_type: 'supplier',
-                    entity_id: destinationId,
-                    amount: Math.abs(amount), // Positive means Debit
-                    type: 'resgate',
-                    status: 'pending',
-                    reference_id: dbRecord.id,
-                    description: 'Resgate PIX Solicitado'
-                });
-            if (ledgerError) console.error('Error inserting ledger debit:', ledgerError);
         }
 
         return new Response(
