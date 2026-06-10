@@ -32,6 +32,22 @@ serve(async (req) => {
         const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
+        // 2.5 Anti-Fraud Throttle (2 minutes)
+        if (destinationId) {
+            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+            const { data: recentTransfers } = await supabase
+                .from('financial_transfers')
+                .select('id')
+                .eq('destination_type', destinationType)
+                .eq('destination_id', destinationId)
+                .gte('created_at', twoMinutesAgo)
+                .limit(1);
+                
+            if (recentTransfers && recentTransfers.length > 0) {
+                throw new Error('Bloqueio de segurança: Resgate já solicitado recentemente. Aguarde alguns minutos.');
+            }
+        }
+
         // 3. Get Asaas Config from DB
         const { data: configData, error: configError } = await supabase
             .from('integrations_config')
@@ -110,6 +126,20 @@ serve(async (req) => {
 
         if (dbError) {
             console.error('Error inserting financial_transfer:', dbError);
+        } else if (dbRecord && destinationType === 'supplier') {
+            // 5. Debit Ledger Immediately
+            const { error: ledgerError } = await supabase
+                .from('ledger_entries')
+                .insert({
+                    entity_type: 'supplier',
+                    entity_id: destinationId,
+                    amount: Math.abs(amount), // Positive means Debit
+                    type: 'resgate',
+                    status: 'pending',
+                    reference_id: dbRecord.id,
+                    description: 'Resgate PIX Solicitado'
+                });
+            if (ledgerError) console.error('Error inserting ledger debit:', ledgerError);
         }
 
         return new Response(

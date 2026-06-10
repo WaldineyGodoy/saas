@@ -54,9 +54,55 @@ serve(async (req) => {
         }
 
         const eventData = JSON.parse(rawBody);
-        const { event, payment } = eventData;
+        const { event, payment, transfer } = eventData;
 
-        console.log(`Webhook Event: ${event}`, payment);
+        console.log(`Webhook Event: ${event}`, payment || transfer);
+
+        if (event.startsWith('TRANSFER_') && transfer && transfer.id) {
+            // Process Transfer Event
+            let newStatus = '';
+            if (event === 'TRANSFER_DONE' || event === 'TRANSFER_CONFIRMED') newStatus = 'completed';
+            else if (event === 'TRANSFER_FAILED' || event === 'TRANSFER_REVERSED') newStatus = 'failed';
+            else if (event === 'TRANSFER_PENDING') newStatus = 'pending';
+
+            if (newStatus) {
+                const { data: finTransfer, error: finError } = await supabase
+                    .from('financial_transfers')
+                    .update({ status: newStatus })
+                    .eq('asaas_transfer_id', transfer.id)
+                    .select('id, destination_id, amount')
+                    .single();
+
+                if (finTransfer) {
+                    if (newStatus === 'completed') {
+                        // Mark ledger as completed
+                        await supabase
+                            .from('ledger_entries')
+                            .update({ status: 'completed' })
+                            .eq('reference_id', finTransfer.id);
+                    } else if (newStatus === 'failed') {
+                        // Mark ledger as failed
+                        await supabase
+                            .from('ledger_entries')
+                            .update({ status: 'failed' })
+                            .eq('reference_id', finTransfer.id);
+
+                        // Efetuar estorno (Refund)
+                        await supabase.from('ledger_entries').insert({
+                            entity_type: 'supplier',
+                            entity_id: finTransfer.destination_id,
+                            amount: -finTransfer.amount, // Negative means credit back to supplier
+                            type: 'estorno',
+                            status: 'completed',
+                            reference_id: finTransfer.id,
+                            description: 'Estorno: Falha no Resgate PIX'
+                        });
+                    }
+                }
+            }
+
+            return new Response(JSON.stringify({ received: true, status: 'transfer_processed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
 
         if (!payment || !payment.id) {
             return new Response(JSON.stringify({ received: true, status: 'no_payment' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
