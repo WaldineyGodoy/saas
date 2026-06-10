@@ -241,21 +241,21 @@ export default function TriggerMessageDashboard() {
                                 display: 'flex',
                                 flexDirection: 'column'
                             }}>
-                                <div className="kanban-column-header">
+                                 <div className="kanban-column-header">
                                     <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                         {col.label}
                                     </h4>
                                     <span style={{ background: '#e2e8f0', color: '#64748b', fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: '10px', fontWeight: 700 }}>
-                                        {triggers.filter(t => t.entity_type === col.id).length}
+                                        {triggers.filter(t => col.id === 'supplier' ? (t.entity_type === 'supplier' || t.entity_type === 'financial_transfer') : t.entity_type === col.id).length}
                                     </span>
                                 </div>
                                 
                                 <div className="kanban-column-content" style={{ flex: 1, overflowY: 'auto' }}>
                                     {triggers
-                                        .filter(t => t.entity_type === col.id)
+                                        .filter(t => col.id === 'supplier' ? (t.entity_type === 'supplier' || t.entity_type === 'financial_transfer') : t.entity_type === col.id)
                                         .map(trigger => renderCard(trigger))
                                     }
-                                    {triggers.filter(t => t.entity_type === col.id).length === 0 && (
+                                    {triggers.filter(t => col.id === 'supplier' ? (t.entity_type === 'supplier' || t.entity_type === 'financial_transfer') : t.entity_type === col.id).length === 0 && (
                                         <div style={{ 
                                             textAlign: 'center', 
                                             padding: '3rem 1rem', 
