@@ -52,12 +52,21 @@ serve(async (req) => {
         let transferId = 'simulated_' + crypto.randomUUID();
         let status = 'PENDING';
 
+        // Map Pix Key Type to Asaas Format
+        let formattedPixKeyType = 'CPF';
+        if (pixKeyType) {
+            const t = pixKeyType.toUpperCase();
+            if (t === 'TELEFONE' || t === 'CELULAR') formattedPixKeyType = 'PHONE';
+            else if (t === 'ALEATORIA') formattedPixKeyType = 'EVP';
+            else formattedPixKeyType = t;
+        }
+
         if (ASAAS_API_KEY) {
             // Real Call
             const transferPayload = {
                 value: amount,
                 pixAddressKey: pixKey,
-                pixAddressKeyType: pixKeyType, // 'CPF', 'CNPJ', 'EMAIL', 'PHONE', 'EVP'
+                pixAddressKeyType: formattedPixKeyType, // 'CPF', 'CNPJ', 'EMAIL', 'PHONE', 'EVP'
                 description: description || 'Repasse Usina',
                 operationType: 'PIX'
             };
