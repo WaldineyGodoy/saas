@@ -108,25 +108,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            
-            // Plano B: Hide automatic entries from June 1st to June 10th
-            const startDate = new Date('2026-06-01T00:00:00Z');
-            const endDate = new Date('2026-06-11T03:00:00Z');
-            
-            const filteredData = (data || []).filter(item => {
-                const itemDate = new Date(item.created_at);
-                const isWithinPeriod = itemDate >= startDate && itemDate <= endDate;
-                if (isWithinPeriod) {
-                    // Only keep manual entries ('SUPPLIER' uppercase) during this period
-                    return item.reference_type === 'SUPPLIER';
-                }
-                return true;
-            });
-
-            setLedgerEntries(filteredData);
+            setLedgerEntries(data || []);
 
             // Pre-fetch subscriber names for repasse entries
-            const repasseTxs = filteredData
+            const repasseTxs = (data || [])
                 .filter(e => e.description?.toLowerCase().includes('repasse'))
                 .map(e => e.transaction_id);
 
