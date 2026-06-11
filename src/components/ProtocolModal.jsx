@@ -674,27 +674,11 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                         />
                                     </div>
 
-                                    {/* Protocol Number & Organogram Tree */}
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Nº do Protocolo</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Hash size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                            <input
-                                                type="text"
-                                                value={protocolNumber}
-                                                onChange={e => setProtocolNumber(e.target.value)}
-                                                placeholder="Ex: 8058025076"
-                                                style={{
-                                                    width: '100%', padding: '0.65rem 0.85rem 0.65rem 2rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600
-                                                }}
-                                            />
-                                        </div>
-
-                                        {/* Sub-protocols Organogram Tree */}
-                                        {parentProtocol && (
+                                    {/* Sub-protocols Organogram Tree & Fields */}
+                                    {parentProtocol && (
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Organograma de Sub-protocolos</label>
                                             <div style={{
-                                                marginTop: '1.5rem',
                                                 padding: '1.5rem',
                                                 background: '#f8fafc',
                                                 borderRadius: '12px',
@@ -704,7 +688,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                 alignItems: 'center',
                                                 position: 'relative'
                                             }}>
-                                                {/* Parent Node */}
+                                                {/* Parent Node Card */}
                                                 <div 
                                                     onClick={() => setCurrentProtocol(parentProtocol)}
                                                     style={{
@@ -712,15 +696,14 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                         color: currentProtocol?.id === parentProtocol.id ? 'white' : '#1e3a8a',
                                                         border: currentProtocol?.id === parentProtocol.id ? `2px solid ${primaryColor}` : '1px solid #bfdbfe',
                                                         borderRadius: '12px',
-                                                        padding: '0.75rem 1.25rem',
-                                                        minWidth: '220px',
-                                                        textAlign: 'center',
+                                                        padding: '0.85rem 1.25rem',
+                                                        minWidth: '280px',
                                                         cursor: 'pointer',
                                                         fontWeight: 700,
-                                                        fontSize: '0.85rem',
                                                         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
                                                         transition: 'all 0.2s',
-                                                        zIndex: 2
+                                                        zIndex: 2,
+                                                        position: 'relative'
                                                     }}
                                                     onMouseEnter={e => {
                                                         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -731,12 +714,105 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                         e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
                                                     }}
                                                 >
-                                                    <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                    <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
                                                         Protocolo Pai {parentProtocol.protocol_number ? `(${parentProtocol.protocol_number})` : ''}
                                                     </div>
-                                                    <div style={{ marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', fontSize: '0.9rem' }}>
                                                         {parentProtocol.title}
                                                     </div>
+
+                                                    {/* Fields inside active Parent Card */}
+                                                    {currentProtocol?.id === parentProtocol.id ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
+                                                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.5rem' }}>
+                                                                <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                    Nº do Protocolo
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={protocolNumber}
+                                                                    onChange={e => setProtocolNumber(e.target.value)}
+                                                                    placeholder="Ex: 8058025076"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '0.3rem 0.5rem',
+                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: 600,
+                                                                        color: 'white',
+                                                                        background: 'rgba(255,255,255,0.1)',
+                                                                        outline: 'none'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                        Prazo (Dias)
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={deadlineDays}
+                                                                        onChange={e => setDeadlineDays(e.target.value)}
+                                                                        placeholder="Dias"
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '0.3rem 0.5rem',
+                                                                            border: '1px solid rgba(255,255,255,0.2)',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: 600,
+                                                                            color: 'white',
+                                                                            background: 'rgba(255,255,255,0.1)',
+                                                                            outline: 'none'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                        Vencimento
+                                                                    </label>
+                                                                    <div style={{
+                                                                        padding: '0.3rem 0.5rem',
+                                                                        background: 'rgba(255,255,255,0.05)',
+                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.72rem',
+                                                                        fontWeight: 700,
+                                                                        color: '#fca5a5',
+                                                                        height: '25px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '0.25rem'
+                                                                    }}>
+                                                                        <Calendar size={11} />
+                                                                        {dueDate ? formatDateBR(dueDate) : 'Inativo'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem', borderTop: '1px solid #bfdbfe', paddingTop: '0.5rem' }}>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
+                                                                <Hash size={11} />
+                                                                {parentProtocol.protocol_number || 'Sem número'}
+                                                            </span>
+                                                            {parentProtocol.deadline_days && (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
+                                                                    <Clock size={11} />
+                                                                    {parentProtocol.deadline_days}d
+                                                                </span>
+                                                            )}
+                                                            {parentProtocol.due_date && (
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
+                                                                    <Calendar size={11} />
+                                                                    {formatDateBR(parentProtocol.due_date)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {treeSubProtocols.length > 0 && (
@@ -819,9 +895,9 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                 color: isSelected ? 'white' : '#334155',
                                                                                 border: isSelected ? `2px solid ${primaryColor}` : '1px solid #cbd5e1',
                                                                                 borderRadius: '8px',
-                                                                                padding: '0.6rem 1rem',
-                                                                                minWidth: '200px',
-                                                                                maxWidth: '300px',
+                                                                                padding: '0.85rem 1rem',
+                                                                                minWidth: '280px',
+                                                                                maxWidth: '320px',
                                                                                 cursor: 'pointer',
                                                                                 boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
                                                                                 transition: 'all 0.2s',
@@ -842,20 +918,114 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                             <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                                 {sub.title}
                                                                             </div>
-                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', fontSize: '0.65rem' }}>
-                                                                                <span style={{
-                                                                                    fontWeight: 700,
-                                                                                    padding: '0.1rem 0.35rem',
-                                                                                    borderRadius: '99px',
-                                                                                    background: isSelected ? 'rgba(255,255,255,0.2)' : (sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff'),
-                                                                                    color: isSelected ? 'white' : (sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8')
-                                                                                }}>
-                                                                                    {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
-                                                                                </span>
-                                                                                <span style={{ opacity: 0.8 }}>
-                                                                                    {sub.due_date ? formatDateBR(sub.due_date) : ''}
-                                                                                </span>
-                                                                            </div>
+
+                                                                            {/* Fields inside active Sub-protocol Card */}
+                                                                            {isSelected ? (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
+                                                                                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.5rem' }}>
+                                                                                        <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                            Nº do Protocolo
+                                                                                        </label>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={protocolNumber}
+                                                                                            onChange={e => setProtocolNumber(e.target.value)}
+                                                                                            placeholder="Ex: 8058025076"
+                                                                                            style={{
+                                                                                                width: '100%',
+                                                                                                padding: '0.3rem 0.5rem',
+                                                                                                border: '1px solid rgba(255,255,255,0.2)',
+                                                                                                borderRadius: '6px',
+                                                                                                fontSize: '0.75rem',
+                                                                                                fontWeight: 600,
+                                                                                                color: 'white',
+                                                                                                background: 'rgba(255,255,255,0.1)',
+                                                                                                outline: 'none'
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                                                        <div>
+                                                                                            <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                                Prazo (Dias)
+                                                                                            </label>
+                                                                                            <input
+                                                                                                type="number"
+                                                                                                min="0"
+                                                                                                value={deadlineDays}
+                                                                                                onChange={e => setDeadlineDays(e.target.value)}
+                                                                                                placeholder="Dias"
+                                                                                                style={{
+                                                                                                    width: '100%',
+                                                                                                    padding: '0.3rem 0.5rem',
+                                                                                                    border: '1px solid rgba(255,255,255,0.2)',
+                                                                                                    borderRadius: '6px',
+                                                                                                    fontSize: '0.75rem',
+                                                                                                    fontWeight: 600,
+                                                                                                    color: 'white',
+                                                                                                    background: 'rgba(255,255,255,0.1)',
+                                                                                                    outline: 'none'
+                                                                                                }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                                Vencimento
+                                                                                            </label>
+                                                                                            <div style={{
+                                                                                                padding: '0.3rem 0.5rem',
+                                                                                                background: 'rgba(255,255,255,0.05)',
+                                                                                                border: '1px solid rgba(255,255,255,0.2)',
+                                                                                                borderRadius: '6px',
+                                                                                                fontSize: '0.72rem',
+                                                                                                fontWeight: 700,
+                                                                                                color: '#fca5a5',
+                                                                                                height: '25px',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                gap: '0.25rem'
+                                                                                            }}>
+                                                                                                <Calendar size={11} />
+                                                                                                {dueDate ? formatDateBR(dueDate) : 'Inativo'}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.5rem' }}>
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
+                                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', color: '#64748b', fontWeight: 600 }}>
+                                                                                            <Hash size={11} />
+                                                                                            {sub.protocol_number || 'Sem número'}
+                                                                                        </span>
+                                                                                        <span style={{
+                                                                                            fontWeight: 700,
+                                                                                            padding: '0.1rem 0.35rem',
+                                                                                            borderRadius: '99px',
+                                                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
+                                                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : sub.status === 'replica' ? '#6d28d9' : '#1d4ed8'
+                                                                                        }}>
+                                                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    {(sub.deadline_days || sub.due_date) && (
+                                                                                        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>
+                                                                                            {sub.deadline_days && (
+                                                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                                                                    <Clock size={11} />
+                                                                                                    {sub.deadline_days}d
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {sub.due_date && (
+                                                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                                                                    <Calendar size={11} />
+                                                                                                    {formatDateBR(sub.due_date)}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -894,36 +1064,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                     <Plus size={14} /> Novo Sub-protocolo
                                                 </button>
                                             </div>
-                                        )}
-                                    </div>
-
-                                    {/* Prazo e Vencimento */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Prazo (Dias Úteis)</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={deadlineDays}
-                                                onChange={e => setDeadlineDays(e.target.value)}
-                                                placeholder="Dias úteis"
-                                                style={{
-                                                    width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                    outline: 'none', fontSize: '0.9rem', fontWeight: 600
-                                                }}
-                                            />
                                         </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Vencimento Calculado</label>
-                                            <div style={{
-                                                padding: '0.65rem 0.85rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                fontSize: '0.9rem', fontWeight: 700, color: dueDate ? '#ef4444' : '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', height: '38px'
-                                            }}>
-                                                <Calendar size={15} />
-                                                {dueDate ? formatDateBR(dueDate) : (protocolNumber ? 'Inativo' : 'Inativo (Nº obrigatório)')}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     {/* Vincular Entidade Section */}
                                     <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
