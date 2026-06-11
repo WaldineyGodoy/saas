@@ -657,23 +657,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                             onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
-
-                                    {/* Description */}
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Descrição Inicial</label>
-                                        <textarea
-                                            value={description}
-                                            onChange={e => setDescription(e.target.value)}
-                                            placeholder="Insira detalhes adicionais do chamado..."
-                                            style={{
-                                                width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                                outline: 'none', fontSize: '0.88rem', minHeight: '100px', resize: 'vertical'
-                                            }}
-                                            onFocus={e => e.target.style.borderColor = primaryColor}
-                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-                                    </div>
-
+                                    
                                     {/* Sub-protocols Organogram Tree & Fields */}
                                     {parentProtocol && (
                                         <div>
@@ -792,26 +776,55 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                     </div>
                                                                 </div>
                                                             </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                    Descrição da Tratativa
+                                                                </label>
+                                                                <textarea
+                                                                    value={description}
+                                                                    onChange={e => setDescription(e.target.value)}
+                                                                    placeholder="Insira detalhes da tratativa..."
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '0.35rem 0.5rem',
+                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '0.75rem',
+                                                                        color: 'white',
+                                                                        background: 'rgba(255,255,255,0.1)',
+                                                                        outline: 'none',
+                                                                        minHeight: '60px',
+                                                                        resize: 'vertical'
+                                                                    }}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem', borderTop: '1px solid #bfdbfe', paddingTop: '0.5rem' }}>
-                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
-                                                                <Hash size={11} />
-                                                                {parentProtocol.protocol_number || 'Sem número'}
-                                                            </span>
-                                                            {parentProtocol.deadline_days && (
+                                                        <>
+                                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem', borderTop: '1px solid #bfdbfe', paddingTop: '0.5rem' }}>
                                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
-                                                                    <Clock size={11} />
-                                                                    {parentProtocol.deadline_days}d
+                                                                    <Hash size={11} />
+                                                                    {parentProtocol.protocol_number || 'Sem número'}
                                                                 </span>
+                                                                {parentProtocol.deadline_days && (
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
+                                                                        <Clock size={11} />
+                                                                        {parentProtocol.deadline_days}d
+                                                                    </span>
+                                                                )}
+                                                                {parentProtocol.due_date && (
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
+                                                                        <Calendar size={11} />
+                                                                        {formatDateBR(parentProtocol.due_date)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {parentProtocol.description && (
+                                                                <div style={{ fontSize: '0.75rem', color: '#1e3a8a', opacity: 0.9, fontStyle: 'italic', marginTop: '0.35rem', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                                    {parentProtocol.description}
+                                                                </div>
                                                             )}
-                                                            {parentProtocol.due_date && (
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 600 }}>
-                                                                    <Calendar size={11} />
-                                                                    {formatDateBR(parentProtocol.due_date)}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        </>
                                                     )}
                                                 </div>
 
@@ -990,6 +1003,39 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
+                                                                                    <div>
+                                                                                        <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                            Descrição da Tratativa
+                                                                                        </label>
+                                                                                        <textarea
+                                                                                            value={description}
+                                                                                            onChange={e => setDescription(e.target.value)}
+                                                                                            placeholder="Insira detalhes da tratativa..."
+                                                                                            style={{
+                                                                                                width: '100%',
+                                                                                                padding: '0.35rem 0.5rem',
+                                                                                                border: '1px solid rgba(255,255,255,0.2)',
+                                                                                                borderRadius: '6px',
+                                                                                                fontSize: '0.75rem',
+                                                                                                color: 'white',
+                                                                                                background: 'rgba(255,255,255,0.1)',
+                                                                                                outline: 'none',
+                                                                                                minHeight: '60px',
+                                                                                                resize: 'vertical'
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', fontSize: '0.65rem' }}>
+                                                                                        <span style={{
+                                                                                            fontWeight: 700,
+                                                                                            padding: '0.1rem 0.35rem',
+                                                                                            borderRadius: '99px',
+                                                                                            background: 'rgba(255,255,255,0.2)',
+                                                                                            color: 'white'
+                                                                                        }}>
+                                                                                            {status === 'em_tratativa' ? 'Em Tratativa' : status === 'replica' ? 'Réplica' : status === 'concluida' ? 'Concluída' : status}
+                                                                                        </span>
+                                                                                    </div>
                                                                                 </div>
                                                                             ) : (
                                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.5rem' }}>
@@ -1003,7 +1049,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                             padding: '0.1rem 0.35rem',
                                                                                             borderRadius: '99px',
                                                                                             background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
-                                                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : sub.status === 'replica' ? '#6d28d9' : '#1d4ed8'
+                                                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8'
                                                                                         }}>
                                                                                             {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
                                                                                         </span>
@@ -1022,6 +1068,11 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                                     {formatDateBR(sub.due_date)}
                                                                                                 </span>
                                                                                             )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {sub.description && (
+                                                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', opacity: 0.9, fontStyle: 'italic', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                                                            {sub.description}
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
