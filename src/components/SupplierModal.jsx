@@ -104,7 +104,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .from('view_ledger_enriched')
                 .select('*')
                 .eq('account_code', '2.1.1')
-                .eq('reference_id', supplier.id)
+                .or(`reference_id.eq.${supplier.id},supplier_id.eq.${supplier.id}`)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
