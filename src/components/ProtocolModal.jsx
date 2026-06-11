@@ -475,6 +475,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                         {[
                             { id: 'gerar', label: 'Gerar', icon: Plus, color: '#475569', bg: '#f1f5f9' },
                             { id: 'em_tratativa', label: 'Em Tratativa', icon: Clock, color: '#ca8a04', bg: '#fef9c3' },
+                            { id: 'replica', label: 'Réplica', icon: RefreshCw, color: '#6d28d9', bg: '#f5f3ff' },
                             { id: 'atrasado', label: 'Atrasado', icon: AlertCircle, color: '#dc2626', bg: '#fee2e2' },
                             { id: 'concluida', label: 'Concluída', icon: CheckCircle, color: '#166534', bg: '#dcfce7' }
                         ].map((s) => {
@@ -832,10 +833,10 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                             alignSelf: 'flex-start',
                                                             fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase',
                                                             padding: '0.15rem 0.4rem', borderRadius: '99px', marginTop: '0.25rem',
-                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
-                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8'
+                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : sub.status === 'replica' ? '#f5f3ff' : '#eff6ff',
+                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : sub.status === 'replica' ? '#6d28d9' : '#1d4ed8'
                                                         }}>
-                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'concluida' ? 'Concluída' : sub.status}
+                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
                                                         </span>
                                                     </div>
                                                 ))

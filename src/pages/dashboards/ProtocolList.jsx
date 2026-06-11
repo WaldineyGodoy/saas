@@ -27,6 +27,10 @@ const STATUSES = [
         bg: '#fffbeb', border: '#fde68a', icon: Clock, lightBg: '#fef3c7'
     },
     {
+        id: 'replica', label: 'Réplica', color: '#6d28d9',
+        bg: '#f5f3ff', border: '#ddd6fe', icon: RefreshCw, lightBg: '#ede9fe'
+    },
+    {
         id: 'atrasado', label: 'Atrasado', color: '#dc2626',
         bg: '#fef2f2', border: '#fecaca', icon: AlertTriangle, lightBg: '#fee2e2'
     },
@@ -155,9 +159,12 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                     <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Vencimento</span>
                     <span style={{
                         fontSize: '0.72rem', fontWeight: 700,
-                        color: protocol.status === 'concluida' ? '#166534' : protocol.due_date && new Date(protocol.due_date) < new Date() ? '#ef4444' : '#475569'
+                        color: protocol.status === 'concluida' ? '#166534' : 
+                               ((protocol.status !== 'replica' || (Number(protocol.sub_protocols_count) > 0)) && protocol.due_date && new Date(protocol.due_date) < new Date()) ? '#ef4444' : '#475569'
                     }}>
-                        {protocol.due_date ? formatDateBR(protocol.due_date) : 'Sem prazo'}
+                        {protocol.status === 'replica' && (!protocol.sub_protocols_count || Number(protocol.sub_protocols_count) === 0) 
+                            ? 'Pausado (Ag. Sub-protocolo)' 
+                            : (protocol.due_date ? formatDateBR(protocol.due_date) : 'Sem prazo')}
                     </span>
                 </div>
 
@@ -293,6 +300,14 @@ export default function ProtocolList() {
             return list.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         }
         if (statusId === 'em_tratativa') {
+            // por ordem de vencimento: os vencimentos mais proximos primeiros
+            return list.sort((a, b) => {
+                const dueA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+                const dueB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+                return dueA - dueB;
+            });
+        }
+        if (statusId === 'replica') {
             // por ordem de vencimento: os vencimentos mais proximos primeiros
             return list.sort((a, b) => {
                 const dueA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
@@ -475,6 +490,7 @@ export default function ProtocolList() {
         total: protocols.length,
         gerar: protocols.filter(p => p.status === 'gerar').length,
         em_tratativa: protocols.filter(p => p.status === 'em_tratativa').length,
+        replica: protocols.filter(p => p.status === 'replica').length,
         atrasado: protocols.filter(p => p.status === 'atrasado').length,
         concluida: protocols.filter(p => p.status === 'concluida').length,
     };
@@ -739,8 +755,15 @@ export default function ProtocolList() {
                                             <td style={{ padding: '0.9rem 1rem', fontWeight: 700, color: '#1e293b' }}>
                                                 {p.deadline_days !== null ? `${p.deadline_days} dias` : '—'}
                                             </td>
-                                            <td style={{ padding: '0.9rem 1rem', color: p.status !== 'concluida' && p.due_date && new Date(p.due_date) < new Date() ? '#ef4444' : '#475569', fontWeight: 700 }}>
-                                                {p.due_date ? (
+                                            <td style={{ 
+                                                padding: '0.9rem 1rem', 
+                                                color: p.status === 'concluida' ? '#166534' : 
+                                                       ((p.status !== 'replica' || (Number(p.sub_protocols_count) > 0)) && p.due_date && new Date(p.due_date) < new Date()) ? '#ef4444' : '#475569', 
+                                                fontWeight: 700 
+                                            }}>
+                                                {p.status === 'replica' && (!p.sub_protocols_count || Number(p.sub_protocols_count) === 0) ? (
+                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontStyle: 'italic' }}>Pausado (Ag. Sub-protocolo)</span>
+                                                ) : p.due_date ? (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                                         <Calendar size={12} />
                                                         {formatDateBR(p.due_date)}
