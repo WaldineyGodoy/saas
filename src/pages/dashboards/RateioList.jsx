@@ -28,8 +28,16 @@ const STATUSES = [
         bg: '#fffbeb', border: '#fde68a', icon: Clock, lightBg: '#fef3c7'
     },
     {
+        id: 'reprovada', label: 'Reprovada', color: '#dc2626',
+        bg: '#fef2f2', border: '#fca5a5', icon: AlertTriangle, lightBg: '#fee2e2'
+    },
+    {
         id: 'concluida', label: 'Concluída', color: '#166534',
         bg: '#f0fdf4', border: '#bbf7d0', icon: CheckCircle, lightBg: '#dcfce7'
+    },
+    {
+        id: 'cancelada', label: 'Cancelada', color: '#4b5563',
+        bg: '#f3f4f6', border: '#d1d5db', icon: XCircle, lightBg: '#e5e7eb'
     }
 ];
 
@@ -76,7 +84,9 @@ function KanbanCard({ rateio, onClick, onDelete, isOverlay }) {
     let currentStatusDate = null;
     if (rateio.status === 'criada') currentStatusDate = rateio.created_at;
     else if (rateio.status === 'processando') currentStatusDate = statusDates.processando_at;
+    else if (rateio.status === 'reprovada') currentStatusDate = statusDates.reprovada_at;
     else if (rateio.status === 'concluida') currentStatusDate = statusDates.concluida_at;
+    else if (rateio.status === 'cancelada') currentStatusDate = statusDates.cancelada_at;
 
     return (
         <div
@@ -188,7 +198,11 @@ function KanbanCard({ rateio, onClick, onDelete, isOverlay }) {
                         padding: '0.35rem 0.5rem'
                     }}>
                         <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>
-                            {rateio.status === 'criada' ? 'Criado em' : rateio.status === 'processando' ? 'Iniciado em' : 'Concluído em'}
+                            {rateio.status === 'criada' ? 'Criado em' : 
+                             rateio.status === 'processando' ? 'Iniciado em' : 
+                             rateio.status === 'reprovada' ? 'Reprovado em' :
+                             rateio.status === 'concluida' ? 'Concluído em' : 
+                             rateio.status === 'cancelada' ? 'Cancelado em' : 'Atualizado em'}
                         </div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>
                             {currentStatusDate ? formatDateBR(currentStatusDate) : '-'}
@@ -389,7 +403,9 @@ export default function RateioList() {
         total: rateios.length,
         criada: rateios.filter(r => r.status === 'criada').length,
         processando: rateios.filter(r => r.status === 'processando').length,
+        reprovada: rateios.filter(r => r.status === 'reprovada').length,
         concluida: rateios.filter(r => r.status === 'concluida').length,
+        cancelada: rateios.filter(r => r.status === 'cancelada').length,
     };
 
     const activeRateio = rateios.find(r => r.id === activeId);

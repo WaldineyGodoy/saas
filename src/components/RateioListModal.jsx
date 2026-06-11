@@ -4,10 +4,11 @@ import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import {
     X, Download, CheckCircle, Clock, Zap, Users, FileText, AlertTriangle,
-    ChevronRight, Activity, Hash, Calendar, Edit3, Save
+    ChevronRight, Activity, Hash, Calendar, Edit3, Save, XCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import HistoryTimeline from './HistoryTimeline';
 
 const STATUS_CONFIG = {
     criada: {
@@ -16,9 +17,10 @@ const STATUS_CONFIG = {
         bg: '#eff6ff',
         border: '#bfdbfe',
         icon: FileText,
-        next: 'processando',
-        nextLabel: 'Iniciar Processamento',
-        nextColor: '#f59e0b'
+        transitions: [
+            { target: 'processando', label: 'Iniciar Processamento', color: '#b45309', icon: Clock },
+            { target: 'cancelada', label: 'Cancelar', color: '#4b5563', icon: XCircle }
+        ]
     },
     processando: {
         label: 'Processando',
@@ -26,9 +28,22 @@ const STATUS_CONFIG = {
         bg: '#fffbeb',
         border: '#fde68a',
         icon: Clock,
-        next: 'concluida',
-        nextLabel: 'Marcar como Concluída',
-        nextColor: '#10b981'
+        transitions: [
+            { target: 'concluida', label: 'Marcar como Concluída', color: '#166534', icon: CheckCircle },
+            { target: 'reprovada', label: 'Reprovar', color: '#dc2626', icon: AlertTriangle },
+            { target: 'cancelada', label: 'Cancelar', color: '#4b5563', icon: XCircle }
+        ]
+    },
+    reprovada: {
+        label: 'Reprovada',
+        color: '#dc2626',
+        bg: '#fef2f2',
+        border: '#fca5a5',
+        icon: AlertTriangle,
+        transitions: [
+            { target: 'processando', label: 'Voltar para Processamento', color: '#b45309', icon: Clock },
+            { target: 'cancelada', label: 'Cancelar', color: '#4b5563', icon: XCircle }
+        ]
     },
     concluida: {
         label: 'Concluída',
@@ -36,13 +51,21 @@ const STATUS_CONFIG = {
         bg: '#f0fdf4',
         border: '#bbf7d0',
         icon: CheckCircle,
-        next: null,
-        nextLabel: null,
-        nextColor: null
+        transitions: [
+            { target: 'cancelada', label: 'Cancelar', color: '#4b5563', icon: XCircle }
+        ]
+    },
+    cancelada: {
+        label: 'Cancelada',
+        color: '#4b5563',
+        bg: '#f3f4f6',
+        border: '#d1d5db',
+        icon: XCircle,
+        transitions: []
     }
 };
 
-const STATUS_ORDER = ['criada', 'processando', 'concluida'];
+const STATUS_ORDER = ['criada', 'processando', 'reprovada', 'concluida', 'cancelada'];
 
 function formatDateBR(isoString) {
     if (!isoString) return null;
@@ -105,14 +128,21 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
         }
     };
 
-    /* ── Advance Status ────────────────────────────────────────── */
-    const handleAdvanceStatus = async () => {
-        if (!statusCfg.next) return;
+    /* ── Update Status ────────────────────────────────────────── */
+    const handleUpdateStatus = async (targetStatus) => {
+        const targetCfg = STATUS_CONFIG[targetStatus];
+        if (!targetCfg) return;
 
-        const isFinishing = statusCfg.next === 'concluida';
-        const confirmMsg = isFinishing
-            ? `Ao marcar como Concluída, todas as UCs vinculadas que não estiverem ativas serão automaticamente ativadas. Confirmar?`
-            : `Deseja avançar o status para "${STATUS_CONFIG[statusCfg.next]?.label}"?`;
+        const isFinishing = targetStatus === 'concluida';
+        let confirmMsg = `Deseja alterar o status para "${targetCfg.label}"?`;
+
+        if (isFinishing) {
+            confirmMsg = `Ao marcar como Concluída, todas as UCs vinculadas que não estiverem ativas serão automaticamente ativadas. Confirmar?`;
+        } else if (targetStatus === 'cancelada') {
+            confirmMsg = `Tem certeza que deseja Cancelar esta lista de rateio?`;
+        } else if (targetStatus === 'reprovada') {
+            confirmMsg = `Deseja marcar esta lista de rateio como Reprovada?`;
+        }
 
         const confirmed = await showConfirm('Alterar Status', confirmMsg, 'Sim, Confirmar', 'Cancelar');
         if (!confirmed) return;
@@ -122,13 +152,13 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
             const now = new Date().toISOString();
             const newStatusDates = {
                 ...statusDates,
-                [`${statusCfg.next}_at`]: now
+                [`${targetStatus}_at`]: now
             };
 
             const { error } = await supabase
                 .from('rateio_lists')
                 .update({
-                    status: statusCfg.next,
+                    status: targetStatus,
                     status_dates: newStatusDates,
                     updated_at: now
                 })
@@ -158,7 +188,7 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                     showAlert('Status atualizado para Concluída!', 'success');
                 }
             } else {
-                showAlert(`Status → "${STATUS_CONFIG[statusCfg.next]?.label}"!`, 'success');
+                showAlert(`Status → "${targetCfg.label}"!`, 'success');
             }
 
             if (onUpdated) onUpdated();
@@ -356,18 +386,26 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                             }}>
                                 <Download size={15} /> Anexo IV
                             </button>
-                            {statusCfg.next && (
-                                <button onClick={handleAdvanceStatus} disabled={loading} style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    padding: '0.55rem 1.1rem',
-                                    background: statusCfg.nextColor,
-                                    color: 'white', border: 'none', borderRadius: '10px',
-                                    cursor: loading ? 'wait' : 'pointer', fontSize: '0.83rem', fontWeight: 700,
-                                    opacity: loading ? 0.7 : 1
-                                }}>
-                                    <ChevronRight size={15} />{statusCfg.nextLabel}
-                                </button>
-                            )}
+                            {(statusCfg.transitions || []).map((trans) => {
+                                const TransIcon = trans.icon;
+                                return (
+                                    <button
+                                        key={trans.target}
+                                        onClick={() => handleUpdateStatus(trans.target)}
+                                        disabled={loading}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                            padding: '0.55rem 1.1rem',
+                                            background: trans.color,
+                                            color: 'white', border: 'none', borderRadius: '10px',
+                                            cursor: loading ? 'wait' : 'pointer', fontSize: '0.83rem', fontWeight: 700,
+                                            opacity: loading ? 0.7 : 1
+                                        }}
+                                    >
+                                        <TransIcon size={15} />{trans.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -544,6 +582,27 @@ export default function RateioListModal({ rateio, onClose, onUpdated }) {
                                 );
                             })}
                         </div>
+                    </div>
+
+                    {/* ── History Timeline / Informações Complementares ── */}
+                    <div style={{
+                        background: 'white', borderRadius: '14px', padding: '1.25rem 1.5rem',
+                        border: '1px solid #e2e8f0', boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                            <Clock size={16} color="#64748b" />
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                Informações Complementares e Histórico
+                            </span>
+                        </div>
+                        <HistoryTimeline
+                            entityType="rateio"
+                            entityId={rateio.id}
+                            entityName={rateio.usina_name}
+                            isInline={true}
+                            compact={true}
+                            hideHeader={true}
+                        />
                     </div>
 
                     {/* ── UCs Table ─────────────────────────────────────── */}
