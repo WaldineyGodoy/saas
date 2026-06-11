@@ -119,24 +119,25 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Form fields
-    const [title, setTitle] = useState(protocol?.title || '');
-    const [description, setDescription] = useState(protocol?.description || '');
-    const [protocolNumber, setProtocolNumber] = useState(protocol?.protocol_number || '');
-    const [status, setStatus] = useState(protocol?.status || 'gerar');
-    const [deadlineDays, setDeadlineDays] = useState(protocol?.deadline_days || '');
-    const [dueDate, setDueDate] = useState(protocol?.due_date || null);
+    // Form fields & tree state
+    const [currentProtocol, setCurrentProtocol] = useState(protocol);
+    const [parentProtocol, setParentProtocol] = useState(null);
+    const [treeSubProtocols, setTreeSubProtocols] = useState([]);
+
+    const [title, setTitle] = useState(currentProtocol?.title || '');
+    const [description, setDescription] = useState(currentProtocol?.description || '');
+    const [protocolNumber, setProtocolNumber] = useState(currentProtocol?.protocol_number || '');
+    const [status, setStatus] = useState(currentProtocol?.status || 'gerar');
+    const [deadlineDays, setDeadlineDays] = useState(currentProtocol?.deadline_days || '');
+    const [dueDate, setDueDate] = useState(currentProtocol?.due_date || null);
     
     // Entity linking
-    const [linkedEntityType, setLinkedEntityType] = useState(protocol?.linked_entity_type || '');
-    const [linkedEntityId, setLinkedEntityId] = useState(protocol?.linked_entity_id || '');
+    const [linkedEntityType, setLinkedEntityType] = useState(currentProtocol?.linked_entity_type || '');
+    const [linkedEntityId, setLinkedEntityId] = useState(currentProtocol?.linked_entity_id || '');
     const [entityOptions, setEntityOptions] = useState([]);
     const [loadingEntities, setLoadingEntities] = useState(false);
 
-    // Sub-protocols state
-    const [subProtocols, setSubProtocols] = useState([]);
     const [showSubModal, setShowSubModal] = useState(false);
-    const [editingSubProtocol, setEditingSubProtocol] = useState(null);
 
     // Entity details modals states
     const [loadingEntityDetail, setLoadingEntityDetail] = useState(false);
@@ -146,6 +147,34 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [activeInvoiceCU, setActiveInvoiceCU] = useState(null);
     const [activeRateio, setActiveRateio] = useState(null);
     const [activeTab, setActiveTab] = useState('tratativa');
+
+    // Keep currentProtocol in sync with prop if it changes externally
+    useEffect(() => {
+        setCurrentProtocol(protocol);
+    }, [protocol]);
+
+    // Sync form inputs when active protocol changes
+    useEffect(() => {
+        if (currentProtocol) {
+            setTitle(currentProtocol.title || '');
+            setDescription(currentProtocol.description || '');
+            setProtocolNumber(currentProtocol.protocol_number || '');
+            setStatus(currentProtocol.status || 'gerar');
+            setDeadlineDays(currentProtocol.deadline_days || '');
+            setDueDate(currentProtocol.due_date || null);
+            setLinkedEntityType(currentProtocol.linked_entity_type || '');
+            setLinkedEntityId(currentProtocol.linked_entity_id || '');
+        } else {
+            setTitle('');
+            setDescription('');
+            setProtocolNumber('');
+            setStatus('gerar');
+            setDeadlineDays('');
+            setDueDate(null);
+            setLinkedEntityType('');
+            setLinkedEntityId('');
+        }
+    }, [currentProtocol]);
 
     const handleOpenEntityModal = async () => {
         if (!linkedEntityType || !linkedEntityId) return;
@@ -227,26 +256,56 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
         }
     }, [protocolNumber, deadlineDays]);
 
-    // Fetch child sub-protocols if we have a protocol ID
-    useEffect(() => {
-        if (protocol?.id) {
-            fetchSubProtocols();
+    // Load parent and sub-protocols tree
+    const loadTreeData = async () => {
+        const rootId = currentProtocol?.parent_protocol_id || currentProtocol?.id || parentProtocolId;
+        if (!rootId) {
+            setParentProtocol(null);
+            setTreeSubProtocols([]);
+            return;
         }
-    }, [protocol?.id]);
 
-    const fetchSubProtocols = async () => {
         try {
-            const { data, error } = await supabase
-                .from('protocols')
-                .select('*')
-                .eq('parent_protocol_id', protocol.id)
-                .order('created_at', { ascending: true });
-            if (error) throw error;
-            setSubProtocols(data || []);
+            let rootParent = null;
+            if (currentProtocol?.id && !currentProtocol.parent_protocol_id) {
+                rootParent = currentProtocol;
+            } else if (parentProtocolId && !currentProtocol?.parent_protocol_id) {
+                const { data, error } = await supabase
+                    .from('protocols')
+                    .select('*')
+                    .eq('id', parentProtocolId)
+                    .single();
+                if (error) throw error;
+                rootParent = data;
+            } else {
+                const rootParentId = currentProtocol?.parent_protocol_id || parentProtocolId;
+                const { data, error } = await supabase
+                    .from('protocols')
+                    .select('*')
+                    .eq('id', rootParentId)
+                    .single();
+                if (error) throw error;
+                rootParent = data;
+            }
+            setParentProtocol(rootParent);
+
+            if (rootParent?.id) {
+                const { data, error } = await supabase
+                    .from('protocols')
+                    .select('*')
+                    .eq('parent_protocol_id', rootParent.id)
+                    .order('created_at', { ascending: true });
+                if (error) throw error;
+                setTreeSubProtocols(data || []);
+            }
         } catch (err) {
-            console.error('Error fetching sub protocols:', err);
+            console.error('Error loading tree data:', err);
         }
     };
+
+    useEffect(() => {
+        loadTreeData();
+    }, [currentProtocol, parentProtocolId]);
 
     const fetchEntityOptions = async () => {
         setLoadingEntities(true);
@@ -307,8 +366,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
 
             setEntityOptions(mapped);
             // Default to empty or preserve existing if editing
-            if (protocol?.linked_entity_type === linkedEntityType && protocol?.linked_entity_id) {
-                setLinkedEntityId(protocol.linked_entity_id);
+            if (currentProtocol?.linked_entity_type === linkedEntityType && currentProtocol?.linked_entity_id) {
+                setLinkedEntityId(currentProtocol.linked_entity_id);
             } else {
                 setLinkedEntityId('');
             }
@@ -341,18 +400,18 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 linked_entity_id: linkedEntityId || null,
                 deadline_days: deadlineDays ? Number(deadlineDays) : null,
                 due_date: dueDate,
-                parent_protocol_id: parentProtocolId || protocol?.parent_protocol_id || null,
+                parent_protocol_id: parentProtocolId || currentProtocol?.parent_protocol_id || null,
                 updated_at: now
             };
 
             let returnedProtocol = null;
 
-            if (protocol?.id) {
+            if (currentProtocol?.id) {
                 // Update
                 const { data, error } = await supabase
                     .from('protocols')
                     .update(payload)
-                    .eq('id', protocol.id)
+                    .eq('id', currentProtocol.id)
                     .select()
                     .single();
                 if (error) throw error;
@@ -439,7 +498,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                         </div>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>
-                                {protocol?.id ? `Editar Protocolo` : parentProtocolId ? `Novo Sub-protocolo / Tarefa` : `Criar Novo Protocolo`}
+                                {currentProtocol?.id ? (currentProtocol.parent_protocol_id ? `Editar Sub-protocolo` : `Editar Protocolo`) : parentProtocolId ? `Novo Sub-protocolo / Tarefa` : `Criar Novo Protocolo`}
                             </h3>
                             <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
                                 Gerencie atualizações de chamados, prazos e resoluções
@@ -530,7 +589,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 }}>
                     {[
                         { id: 'tratativa', label: 'Tratativa', icon: <Clock size={18} /> },
-                        ...((protocol?.id) ? [{ id: 'historico', label: 'Histórico', icon: <MessageSquare size={18} /> }] : [])
+                        ...((currentProtocol?.id) ? [{ id: 'historico', label: 'Histórico', icon: <MessageSquare size={18} /> }] : [])
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -615,7 +674,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                         />
                                     </div>
 
-                                    {/* Protocol Number */}
+                                    {/* Protocol Number & Organogram Tree */}
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Nº do Protocolo</label>
                                         <div style={{ position: 'relative' }}>
@@ -631,6 +690,211 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                 }}
                                             />
                                         </div>
+
+                                        {/* Sub-protocols Organogram Tree */}
+                                        {parentProtocol && (
+                                            <div style={{
+                                                marginTop: '1.5rem',
+                                                padding: '1.5rem',
+                                                background: '#f8fafc',
+                                                borderRadius: '12px',
+                                                border: '1px solid #e2e8f0',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                position: 'relative'
+                                            }}>
+                                                {/* Parent Node */}
+                                                <div 
+                                                    onClick={() => setCurrentProtocol(parentProtocol)}
+                                                    style={{
+                                                        background: currentProtocol?.id === parentProtocol.id ? primaryColor : '#eff6ff',
+                                                        color: currentProtocol?.id === parentProtocol.id ? 'white' : '#1e3a8a',
+                                                        border: currentProtocol?.id === parentProtocol.id ? `2px solid ${primaryColor}` : '1px solid #bfdbfe',
+                                                        borderRadius: '12px',
+                                                        padding: '0.75rem 1.25rem',
+                                                        minWidth: '220px',
+                                                        textAlign: 'center',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.85rem',
+                                                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+                                                        transition: 'all 0.2s',
+                                                        zIndex: 2
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                                        e.currentTarget.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.1)';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.transform = 'none';
+                                                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
+                                                    }}
+                                                >
+                                                    <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                        Protocolo Pai {parentProtocol.protocol_number ? `(${parentProtocol.protocol_number})` : ''}
+                                                    </div>
+                                                    <div style={{ marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {parentProtocol.title}
+                                                    </div>
+                                                </div>
+
+                                                {treeSubProtocols.length > 0 && (
+                                                    <>
+                                                        {/* Spacer with vertical stem line below parent */}
+                                                        <div style={{ position: 'relative', height: '1.5rem', width: '100%' }}>
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                left: '50%',
+                                                                top: 0,
+                                                                bottom: 0,
+                                                                width: '2px',
+                                                                backgroundColor: '#94a3b8'
+                                                            }} />
+                                                        </div>
+
+                                                        {/* Children container list */}
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '1rem',
+                                                            width: '100%',
+                                                            position: 'relative'
+                                                        }}>
+                                                            {treeSubProtocols.map((sub, index) => {
+                                                                const isSelected = currentProtocol?.id === sub.id;
+                                                                const isLast = index === treeSubProtocols.length - 1;
+                                                                return (
+                                                                    <div 
+                                                                        key={sub.id}
+                                                                        style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            position: 'relative',
+                                                                            width: '100%',
+                                                                            paddingLeft: 'calc(50% + 2rem)',
+                                                                            minHeight: '3.5rem'
+                                                                        }}
+                                                                    >
+                                                                        {/* Top-half stem line */}
+                                                                        <div style={{
+                                                                            position: 'absolute',
+                                                                            left: '50%',
+                                                                            top: 0,
+                                                                            bottom: '50%',
+                                                                            width: '2px',
+                                                                            backgroundColor: '#94a3b8'
+                                                                        }} />
+
+                                                                        {/* Bottom-half stem line (if not last) */}
+                                                                        {!isLast && (
+                                                                            <div style={{
+                                                                                position: 'absolute',
+                                                                                left: '50%',
+                                                                                top: '50%',
+                                                                                bottom: 0,
+                                                                                width: '2px',
+                                                                                backgroundColor: '#94a3b8'
+                                                                            }} />
+                                                                        )}
+
+                                                                        {/* Horizontal branch line */}
+                                                                        <div style={{
+                                                                            position: 'absolute',
+                                                                            left: '50%',
+                                                                            width: '2rem',
+                                                                            height: '1.5rem',
+                                                                            top: 'calc(50% - 1.5rem)',
+                                                                            borderBottom: '2px solid #94a3b8',
+                                                                            borderLeft: '2px solid #94a3b8',
+                                                                            borderBottomLeftRadius: '8px',
+                                                                            pointerEvents: 'none'
+                                                                        }} />
+
+                                                                        {/* Sub-protocol Card */}
+                                                                        <div 
+                                                                            onClick={() => setCurrentProtocol(sub)}
+                                                                            style={{
+                                                                                background: isSelected ? primaryColor : 'white',
+                                                                                color: isSelected ? 'white' : '#334155',
+                                                                                border: isSelected ? `2px solid ${primaryColor}` : '1px solid #cbd5e1',
+                                                                                borderRadius: '8px',
+                                                                                padding: '0.6rem 1rem',
+                                                                                minWidth: '200px',
+                                                                                maxWidth: '300px',
+                                                                                cursor: 'pointer',
+                                                                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                                                                                transition: 'all 0.2s',
+                                                                                zIndex: 1
+                                                                            }}
+                                                                            onMouseEnter={e => {
+                                                                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                                                                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)';
+                                                                            }}
+                                                                            onMouseLeave={e => {
+                                                                                e.currentTarget.style.transform = 'none';
+                                                                                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+                                                                            }}
+                                                                        >
+                                                                            <div style={{ fontSize: '0.65rem', color: isSelected ? 'rgba(255,255,255,0.8)' : '#b91c1c', fontWeight: 800, textTransform: 'uppercase' }}>
+                                                                                {sub.protocol_number ? `Sub Protocolo (${sub.protocol_number})` : 'Sub Protocolo'}
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                                {sub.title}
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', fontSize: '0.65rem' }}>
+                                                                                <span style={{
+                                                                                    fontWeight: 700,
+                                                                                    padding: '0.1rem 0.35rem',
+                                                                                    borderRadius: '99px',
+                                                                                    background: isSelected ? 'rgba(255,255,255,0.2)' : (sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff'),
+                                                                                    color: isSelected ? 'white' : (sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8')
+                                                                                }}>
+                                                                                    {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
+                                                                                </span>
+                                                                                <span style={{ opacity: 0.8 }}>
+                                                                                    {sub.due_date ? formatDateBR(sub.due_date) : ''}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {/* Button to add sub-protocol directly inside the organogram */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowSubModal(true)}
+                                                    style={{
+                                                        marginTop: '1.5rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.3rem',
+                                                        background: 'white',
+                                                        color: primaryColor,
+                                                        border: `1px dashed ${primaryColor}`,
+                                                        borderRadius: '8px',
+                                                        padding: '0.4rem 0.8rem',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        zIndex: 2
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.backgroundColor = primaryColor + '10';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.backgroundColor = 'white';
+                                                    }}
+                                                >
+                                                    <Plus size={14} /> Novo Sub-protocolo
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Prazo e Vencimento */}
@@ -773,92 +1037,20 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 </div>
                             )}
 
-                            {activeTab === 'historico' && protocol?.id && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.5fr', gap: '2rem', animation: 'fadeIn 0.2s ease-in-out' }}>
-                                    {/* Subtasks Section */}
-                                    <div style={{ borderRight: '1px solid #e2e8f0', paddingRight: '2rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                            <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                Sub-tarefas / Sub-protocolos
-                                            </h4>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowSubModal(true)}
-                                                style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.2rem',
-                                                    background: primaryColor, color: 'white', border: 'none',
-                                                    borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.75rem',
-                                                    fontWeight: 700, cursor: 'pointer'
-                                                }}
-                                            >
-                                                <Plus size={13} /> Nova
-                                            </button>
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
-                                            {subProtocols.length === 0 ? (
-                                                <div style={{ padding: '1.5rem 1rem', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
-                                                    Nenhum sub-protocolo derivado.
-                                                </div>
-                                            ) : (
-                                                subProtocols.map(sub => (
-                                                    <div 
-                                                        key={sub.id} 
-                                                        onClick={() => setEditingSubProtocol(sub)}
-                                                        style={{
-                                                            background: 'white', 
-                                                            borderRadius: '8px', 
-                                                            padding: '0.6rem 0.8rem',
-                                                            border: '1px solid #e2e8f0', 
-                                                            display: 'flex', 
-                                                            flexDirection: 'column', 
-                                                            gap: '0.25rem',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.15s ease'
-                                                        }}
-                                                        onMouseEnter={e => {
-                                                            e.currentTarget.style.borderColor = primaryColor;
-                                                            e.currentTarget.style.backgroundColor = '#f8fafc';
-                                                        }}
-                                                        onMouseLeave={e => {
-                                                            e.currentTarget.style.borderColor = '#e2e8f0';
-                                                            e.currentTarget.style.backgroundColor = 'white';
-                                                        }}
-                                                    >
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>{sub.title}</div>
-                                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                                                            {sub.protocol_number ? `Nº ${sub.protocol_number} · ` : ''} Vence: {sub.due_date ? formatDateBR(sub.due_date) : '-'}
-                                                        </div>
-                                                        <span style={{
-                                                            alignSelf: 'flex-start',
-                                                            fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase',
-                                                            padding: '0.15rem 0.4rem', borderRadius: '99px', marginTop: '0.25rem',
-                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : sub.status === 'replica' ? '#f5f3ff' : '#eff6ff',
-                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : sub.status === 'replica' ? '#6d28d9' : '#1d4ed8'
-                                                        }}>
-                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
-                                                        </span>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* History Timeline */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Linha do Tempo
-                                        </h4>
-                                        <div style={{ flex: 1, minHeight: '350px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem' }}>
-                                            <HistoryTimeline
-                                                entityType="protocol"
-                                                entityId={protocol.id}
-                                                entityName={title}
-                                                isInline={true}
-                                                hideHeader={true}
-                                                compact={true}
-                                            />
-                                        </div>
+                            {activeTab === 'historico' && currentProtocol?.id && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.2s ease-in-out' }}>
+                                    <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        Linha do Tempo / Histórico da Tratativa
+                                    </h4>
+                                    <div style={{ minHeight: '400px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem' }}>
+                                        <HistoryTimeline
+                                            entityType="protocol"
+                                            entityId={currentProtocol.id}
+                                            entityName={title}
+                                            isInline={true}
+                                            hideHeader={true}
+                                            compact={false}
+                                        />
                                     </div>
                                 </div>
                             )}
@@ -892,7 +1084,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                             >
                                 <Save size={16} />
-                                {saving ? 'Salvando...' : 'Salvar Protocolo'}
+                                {saving ? 'Salvando...' : (currentProtocol?.parent_protocol_id ? 'Salvar Sub-protocolo' : 'Salvar Protocolo')}
                             </button>
                         </div>
                     </form>
@@ -902,16 +1094,17 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             {/* Sub protocol creation modal overlay */}
             {showSubModal && (
                 <ProtocolModal
-                    parentProtocolId={protocol?.id}
+                    parentProtocolId={parentProtocol?.id || currentProtocol?.id}
                     protocol={{
                         linked_entity_type: linkedEntityType,
                         linked_entity_id: linkedEntityId,
-                        title: `Subtarefa de: ${title}`
+                        title: `Subtarefa de: ${parentProtocol?.title || currentProtocol?.title}`
                     }}
                     onClose={() => setShowSubModal(false)}
                     onUpdated={() => {
-                        fetchSubProtocols();
+                        loadTreeData();
                         setShowSubModal(false);
+                        if (onUpdated) onUpdated();
                     }}
                 />
             )}
@@ -948,23 +1141,6 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 <RateioListModal
                     rateio={activeRateio}
                     onClose={() => setActiveRateio(null)}
-                />
-            )}
-
-            {/* Sub protocol editing modal overlay */}
-            {editingSubProtocol && (
-                <ProtocolModal
-                    protocol={editingSubProtocol}
-                    onClose={() => {
-                        setEditingSubProtocol(null);
-                        fetchSubProtocols();
-                        if (onUpdated) onUpdated();
-                    }}
-                    onUpdated={() => {
-                        fetchSubProtocols();
-                        setEditingSubProtocol(null);
-                        if (onUpdated) onUpdated();
-                    }}
                 />
             )}
         </div>

@@ -128,13 +128,16 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                     }}>
                         <StatusIcon size={10} />{statusCfg.label}
                     </span>
-                    {protocol.protocol_number ? (
-                        <span style={{ fontSize: '0.72rem', color: '#6d28d9', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                            <Hash size={11} /> {protocol.protocol_number}
-                        </span>
-                    ) : (
-                        <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>Sem nº</span>
-                    )}
+                    {(() => {
+                        const displayProtoNum = protocol.latest_sub_protocol_number || protocol.protocol_number;
+                        return displayProtoNum ? (
+                            <span style={{ fontSize: '0.72rem', color: '#6d28d9', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <Hash size={11} /> {displayProtoNum}
+                            </span>
+                        ) : (
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>Sem nº</span>
+                        );
+                    })()}
                 </div>
 
                 {/* 2 - Nome da entidade */}
@@ -719,14 +722,17 @@ export default function ProtocolList() {
                                                 {p.title}
                                             </td>
                                             <td style={{ padding: '0.9rem 1rem' }}>
-                                                {p.protocol_number ? (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                        <Hash size={12} color="#6d28d9" />
-                                                        <span style={{ fontWeight: 700, color: '#6d28d9' }}>{p.protocol_number}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: '#cbd5e1' }}>—</span>
-                                                )}
+                                                {(() => {
+                                                    const displayProtoNum = p.latest_sub_protocol_number || p.protocol_number;
+                                                    return displayProtoNum ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                            <Hash size={12} color="#6d28d9" />
+                                                            <span style={{ fontWeight: 700, color: '#6d28d9' }}>{displayProtoNum}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ color: '#cbd5e1' }}>—</span>
+                                                    );
+                                                })()}
                                             </td>
                                             <td style={{ padding: '0.9rem 1rem' }}>
                                                 <span style={{
