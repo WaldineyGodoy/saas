@@ -123,6 +123,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [currentProtocol, setCurrentProtocol] = useState(protocol);
     const [parentProtocol, setParentProtocol] = useState(null);
     const [treeSubProtocols, setTreeSubProtocols] = useState([]);
+    const [initialSelectDone, setInitialSelectDone] = useState(false);
 
     const [title, setTitle] = useState(currentProtocol?.title || '');
     const [description, setDescription] = useState(currentProtocol?.description || '');
@@ -151,6 +152,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
         setCurrentProtocol(protocol);
+        setInitialSelectDone(false);
     }, [protocol]);
 
     // Sync form inputs when active protocol changes
@@ -204,15 +206,15 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .single();
                 if (invError) throw invError;
                 
-                if (invoiceData?.consumer_unit_id) {
-                    const { data: cuData } = await supabase
-                        .from('consumer_units')
-                        .select('*')
-                        .eq('id', invoiceData.consumer_unit_id)
-                        .single();
-                    setActiveInvoiceCU(cuData);
-                }
+                const { data: cuData, error: cuError } = await supabase
+                    .from('consumer_units')
+                    .select('*')
+                    .eq('id', invoiceData.consumer_unit_id)
+                    .single();
+                if (cuError) throw cuError;
+
                 setActiveInvoice(invoiceData);
+                setActiveInvoiceCU(cuData);
             } else if (linkedEntityType === 'rateio_list') {
                 const { data, error } = await supabase
                     .from('rateio_lists')
@@ -244,9 +246,10 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
 
     // Calculate due date automatically
     useEffect(() => {
-        if (protocolNumber && deadlineDays && Number(deadlineDays) > 0) {
-            const calculated = calculateBusinessDays(new Date(), Number(deadlineDays));
-            if (calculated) {
+        if (protocolNumber && deadlineDays) {
+            const days = Number(deadlineDays);
+            if (!isNaN(days) && days >= 0) {
+                const calculated = calculateBusinessDays(new Date(), days);
                 setDueDate(calculated.toISOString());
                 // Auto transition to "em_tratativa" when protocol number and deadline are filled
                 setStatus('em_tratativa');
@@ -266,37 +269,36 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
         }
 
         try {
-            let rootParent = null;
-            if (currentProtocol?.id && !currentProtocol.parent_protocol_id) {
-                rootParent = currentProtocol;
-            } else if (parentProtocolId && !currentProtocol?.parent_protocol_id) {
-                const { data, error } = await supabase
-                    .from('protocols')
-                    .select('*')
-                    .eq('id', parentProtocolId)
-                    .single();
-                if (error) throw error;
-                rootParent = data;
-            } else {
-                const rootParentId = currentProtocol?.parent_protocol_id || parentProtocolId;
-                const { data, error } = await supabase
-                    .from('protocols')
-                    .select('*')
-                    .eq('id', rootParentId)
-                    .single();
-                if (error) throw error;
-                rootParent = data;
-            }
+            // Fetch clean root parent from DB to make sure we don't have overridden values from list view
+            const { data: rootParent, error: parentError } = await supabase
+                .from('protocols')
+                .select('*')
+                .eq('id', rootId)
+                .single();
+            if (parentError) throw parentError;
             setParentProtocol(rootParent);
 
             if (rootParent?.id) {
-                const { data, error } = await supabase
+                const { data: subs, error: subsError } = await supabase
                     .from('protocols')
                     .select('*')
                     .eq('parent_protocol_id', rootParent.id)
                     .order('created_at', { ascending: true });
-                if (error) throw error;
-                setTreeSubProtocols(data || []);
+                if (subsError) throw subsError;
+                
+                const subProtocolsList = subs || [];
+                setTreeSubProtocols(subProtocolsList);
+
+                // Auto-select the last open protocol/sub-protocol on first load
+                if (!initialSelectDone) {
+                    const chain = [rootParent, ...subProtocolsList];
+                    const openNodes = chain.filter(n => n.status !== 'concluida');
+                    const target = openNodes.length > 0 ? openNodes[openNodes.length - 1] : chain[chain.length - 1];
+                    if (target && target.id !== currentProtocol?.id) {
+                        setCurrentProtocol(target);
+                    }
+                    setInitialSelectDone(true);
+                }
             }
         } catch (err) {
             console.error('Error loading tree data:', err);

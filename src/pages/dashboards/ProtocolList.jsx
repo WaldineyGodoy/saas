@@ -163,11 +163,9 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                     <span style={{
                         fontSize: '0.72rem', fontWeight: 700,
                         color: protocol.status === 'concluida' ? '#166534' : 
-                               ((protocol.status !== 'replica' || (Number(protocol.sub_protocols_count) > 0)) && protocol.due_date && new Date(protocol.due_date) < new Date()) ? '#ef4444' : '#475569'
+                               (protocol.status === 'atrasado' ? '#ef4444' : '#475569')
                     }}>
-                        {protocol.status === 'replica' && (!protocol.sub_protocols_count || Number(protocol.sub_protocols_count) === 0) 
-                            ? 'Pausado (Ag. Sub-protocolo)' 
-                            : (protocol.due_date ? formatDateBR(protocol.due_date) : 'Sem prazo')}
+                        {protocol.due_date ? formatDateBR(protocol.due_date) : 'Sem prazo'}
                     </span>
                 </div>
 
@@ -381,14 +379,55 @@ export default function ProtocolList() {
     const fetchProtocols = async () => {
         setLoading(true);
         try {
-            // Fetch protocols (only top-level protocols first, parent_protocol_id is null)
+            // Fetch all protocols (parents and subs) to compute effective status/deadlines
             const { data, error } = await supabase
                 .from('v_protocols')
                 .select('*')
-                .is('parent_protocol_id', null)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: true }); // ascending to process chronological order naturally
             if (error) throw error;
-            setProtocols(data || []);
+            
+            const rawData = data || [];
+            
+            // Extract top-level protocols
+            const topLevel = rawData.filter(p => p.parent_protocol_id === null);
+            
+            // Process each top-level protocol to find its latest sub-protocol derivation and active deadlines
+            const processed = topLevel.map(parent => {
+                // Find all sub-protocols
+                const subs = rawData.filter(sub => sub.parent_protocol_id === parent.id);
+                
+                // Latest derivation (last sub-protocol, or parent if none)
+                const latestDerivation = subs.length > 0 ? subs[subs.length - 1] : parent;
+                
+                // "o prazo em contagem será o prazo do ultimo protocolo ou sub-protocolo aberto."
+                // Chain is parent followed by subs
+                const chain = [parent, ...subs];
+                const openNodes = chain.filter(n => n.status !== 'concluida');
+                const lastOpenNode = openNodes.length > 0 ? openNodes[openNodes.length - 1] : chain[chain.length - 1];
+                
+                // "o status só entra em atraso quando a ultima derivação entra em atraso."
+                const isLatestDelayed = latestDerivation.due_date && 
+                                        new Date(latestDerivation.due_date) < new Date() && 
+                                        latestDerivation.status !== 'concluida';
+                                        
+                const effectiveStatus = isLatestDelayed ? 'atrasado' : latestDerivation.status;
+                
+                return {
+                    ...parent,
+                    protocol_number: latestDerivation.protocol_number || parent.protocol_number,
+                    status: effectiveStatus,
+                    due_date: lastOpenNode.due_date,
+                    deadline_days: lastOpenNode.deadline_days,
+                    latest_derivation_id: latestDerivation.id,
+                    sub_protocols_count: subs.length,
+                    is_delayed: isLatestDelayed
+                };
+            });
+            
+            // Sort by created_at desc for displaying in list/kanban
+            processed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            setProtocols(processed);
         } catch (err) {
             console.error('Error fetching protocols:', err);
             showAlert('Erro ao carregar protocolos.', 'error');
@@ -470,15 +509,17 @@ export default function ProtocolList() {
 
         if (!newStatus || !activeProto || activeProto.status === newStatus) return;
 
+        // Optimistically update status in frontend
         setProtocols(prev => prev.map(p =>
             p.id === active.id ? { ...p, status: newStatus } : p
         ));
 
         try {
+            const targetId = activeProto.latest_derivation_id || active.id;
             const { error } = await supabase
                 .from('protocols')
                 .update({ status: newStatus, updated_at: new Date().toISOString() })
-                .eq('id', active.id);
+                .eq('id', targetId);
 
             if (error) throw error;
             showAlert(`Status atualizado para: ${STATUSES.find(s => s.id === newStatus).label}`, 'success');
@@ -764,12 +805,10 @@ export default function ProtocolList() {
                                             <td style={{ 
                                                 padding: '0.9rem 1rem', 
                                                 color: p.status === 'concluida' ? '#166534' : 
-                                                       ((p.status !== 'replica' || (Number(p.sub_protocols_count) > 0)) && p.due_date && new Date(p.due_date) < new Date()) ? '#ef4444' : '#475569', 
+                                                       (p.status === 'atrasado' ? '#ef4444' : '#475569'), 
                                                 fontWeight: 700 
                                             }}>
-                                                {p.status === 'replica' && (!p.sub_protocols_count || Number(p.sub_protocols_count) === 0) ? (
-                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontStyle: 'italic' }}>Pausado (Ag. Sub-protocolo)</span>
-                                                ) : p.due_date ? (
+                                                {p.due_date ? (
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                                         <Calendar size={12} />
                                                         {formatDateBR(p.due_date)}
