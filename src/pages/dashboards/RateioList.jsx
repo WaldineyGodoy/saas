@@ -5,7 +5,7 @@ import { useBranding } from '../../contexts/BrandingContext';
 import RateioListModal from '../../components/RateioListModal';
 import {
     FileText, Clock, CheckCircle, Zap, Users, Calendar, Hash,
-    Search, LayoutList, Columns, RefreshCw, Trash2
+    Search, LayoutList, Columns, RefreshCw, Trash2, AlertTriangle, XCircle
 } from 'lucide-react';
 import {
     DndContext, PointerSensor, useSensor, useSensors,
