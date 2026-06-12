@@ -289,13 +289,15 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 const subProtocolsList = subs || [];
                 setTreeSubProtocols(subProtocolsList);
 
-                // Auto-select the last open protocol/sub-protocol on first load
+                // Auto-select the last open protocol/sub-protocol on first load (only if editing existing)
                 if (!initialSelectDone) {
-                    const chain = [rootParent, ...subProtocolsList];
-                    const openNodes = chain.filter(n => n.status !== 'concluida');
-                    const target = openNodes.length > 0 ? openNodes[openNodes.length - 1] : chain[chain.length - 1];
-                    if (target && target.id !== currentProtocol?.id) {
-                        setCurrentProtocol(target);
+                    if (protocol?.id) {
+                        const chain = [rootParent, ...subProtocolsList];
+                        const openNodes = chain.filter(n => n.status !== 'concluida');
+                        const target = openNodes.length > 0 ? openNodes[openNodes.length - 1] : chain[chain.length - 1];
+                        if (target && target.id !== currentProtocol?.id) {
+                            setCurrentProtocol(target);
+                        }
                     }
                     setInitialSelectDone(true);
                 }
