@@ -415,6 +415,7 @@ export default function ProtocolList() {
                 return {
                     ...parent,
                     protocol_number: latestDerivation.protocol_number || parent.protocol_number,
+                    parent_protocol_number: parent.protocol_number,
                     status: effectiveStatus,
                     due_date: lastOpenNode.due_date,
                     deadline_days: lastOpenNode.deadline_days,
@@ -473,6 +474,7 @@ export default function ProtocolList() {
             p.title?.toLowerCase().includes(q) ||
             p.description?.toLowerCase().includes(q) ||
             p.protocol_number?.toLowerCase().includes(q) ||
+            p.parent_protocol_number?.toLowerCase().includes(q) ||
             p.status?.toLowerCase().includes(q) ||
             p.linked_entity_type?.toLowerCase().includes(q)
         );
