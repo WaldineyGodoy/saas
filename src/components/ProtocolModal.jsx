@@ -661,6 +661,85 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                             onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
+
+                                    {/* Fallback fields for new top-level protocol (when parentProtocol is null) */}
+                                    {!parentProtocol && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.25rem', padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Detalhes do Novo Protocolo</h4>
+                                            
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                                                    Nº do Protocolo
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={protocolNumber}
+                                                    onChange={e => setProtocolNumber(e.target.value)}
+                                                    placeholder="Ex: 8058025076"
+                                                    style={{
+                                                        width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                        outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
+                                                    }}
+                                                />
+                                            </div>
+                                            
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                                                        Prazo (Dias Úteis)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={deadlineDays}
+                                                        onChange={e => setDeadlineDays(e.target.value)}
+                                                        placeholder="Dias"
+                                                        style={{
+                                                            width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                            outline: 'none', fontSize: '0.9rem', fontWeight: 600, background: 'white'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                                                        Vencimento
+                                                    </label>
+                                                    <div style={{
+                                                        padding: '0.65rem 0.85rem',
+                                                        background: '#f1f5f9',
+                                                        border: '1px solid #cbd5e1',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.9rem',
+                                                        fontWeight: 700,
+                                                        color: '#dc2626',
+                                                        height: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.4rem'
+                                                    }}>
+                                                        <Calendar size={16} />
+                                                        {dueDate ? formatDateBR(dueDate) : 'Inativo (Preencha Nº e Prazo)'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                                                    Descrição da Tratativa
+                                                </label>
+                                                <textarea
+                                                    value={description}
+                                                    onChange={e => setDescription(e.target.value)}
+                                                    placeholder="Insira detalhes da tratativa..."
+                                                    style={{
+                                                        width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                                        outline: 'none', fontSize: '0.9rem', color: '#1e293b', background: 'white',
+                                                        minHeight: '80px', resize: 'vertical'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                     
                                     {/* Sub-protocols Organogram Tree & Fields */}
                                     {parentProtocol && (
@@ -832,7 +911,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                     )}
                                                 </div>
 
-                                                {treeSubProtocols.length > 0 && (
+                                                {(treeSubProtocols.length > 0 || !currentProtocol?.id) && (
                                                     <>
                                                         {/* Spacer with vertical stem line below parent */}
                                                         <div style={{ position: 'relative', height: '1.5rem', width: '100%' }}>
@@ -856,7 +935,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                         }}>
                                                             {treeSubProtocols.map((sub, index) => {
                                                                 const isSelected = currentProtocol?.id === sub.id;
-                                                                const isLast = index === treeSubProtocols.length - 1;
+                                                                const isLast = index === treeSubProtocols.length - 1 && currentProtocol?.id;
                                                                 return (
                                                                     <div 
                                                                         key={sub.id}
@@ -879,8 +958,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                             backgroundColor: '#94a3b8'
                                                                         }} />
 
-                                                                        {/* Bottom-half stem line (if not last) */}
-                                                                        {!isLast && (
+                                                                        {/* Bottom-half stem line (if not last or if new sub protocol is appended below) */}
+                                                                        {(!isLast || !currentProtocol?.id) && (
                                                                             <div style={{
                                                                                 position: 'absolute',
                                                                                 left: '50%',
@@ -1085,6 +1164,160 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                     </div>
                                                                 );
                                                             })}
+
+                                                            {/* Render a draft card for the new sub-protocol if we are creating it */}
+                                                            {!currentProtocol?.id && (
+                                                                <div 
+                                                                    style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        position: 'relative',
+                                                                        width: '100%',
+                                                                        paddingLeft: 'calc(50% + 2rem)',
+                                                                        minHeight: '3.5rem'
+                                                                    }}
+                                                                >
+                                                                    {/* Top-half stem line */}
+                                                                    <div style={{
+                                                                        position: 'absolute',
+                                                                        left: '50%',
+                                                                        top: 0,
+                                                                        bottom: '50%',
+                                                                        width: '2px',
+                                                                        backgroundColor: '#94a3b8'
+                                                                    }} />
+
+                                                                    {/* Horizontal branch line */}
+                                                                    <div style={{
+                                                                        position: 'absolute',
+                                                                        left: '50%',
+                                                                        width: '2rem',
+                                                                        height: '1.5rem',
+                                                                        top: 'calc(50% - 1.5rem)',
+                                                                        borderBottom: '2px solid #94a3b8',
+                                                                        borderLeft: '2px solid #94a3b8',
+                                                                        borderBottomLeftRadius: '8px',
+                                                                        pointerEvents: 'none'
+                                                                    }} />
+
+                                                                    {/* Sub-protocol Card (Active / Editing) */}
+                                                                    <div 
+                                                                        style={{
+                                                                            background: primaryColor,
+                                                                            color: 'white',
+                                                                            border: `2px solid ${primaryColor}`,
+                                                                            borderRadius: '8px',
+                                                                            padding: '0.85rem 1rem',
+                                                                            minWidth: '280px',
+                                                                            maxWidth: '320px',
+                                                                            cursor: 'default',
+                                                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                                            zIndex: 1
+                                                                        }}
+                                                                    >
+                                                                        <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.8)', fontWeight: 800, textTransform: 'uppercase' }}>
+                                                                            Novo Sub Protocolo (Rascunho)
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {title || 'Título provisório'}
+                                                                        </div>
+
+                                                                        {/* Fields inside active New Sub-protocol Card */}
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
+                                                                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '0.5rem' }}>
+                                                                                <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                    Nº do Protocolo
+                                                                                </label>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={protocolNumber}
+                                                                                    onChange={e => setProtocolNumber(e.target.value)}
+                                                                                    placeholder="Ex: 8058025076"
+                                                                                    style={{
+                                                                                        width: '100%',
+                                                                                        padding: '0.3rem 0.5rem',
+                                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '0.75rem',
+                                                                                        fontWeight: 600,
+                                                                                        color: 'white',
+                                                                                        background: 'rgba(255,255,255,0.1)',
+                                                                                        outline: 'none'
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                        Prazo (Dias)
+                                                                                    </label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min="0"
+                                                                                        value={deadlineDays}
+                                                                                        onChange={e => setDeadlineDays(e.target.value)}
+                                                                                        placeholder="Dias"
+                                                                                        style={{
+                                                                                            width: '100%',
+                                                                                            padding: '0.3rem 0.5rem',
+                                                                                            border: '1px solid rgba(255,255,255,0.2)',
+                                                                                            borderRadius: '6px',
+                                                                                            fontSize: '0.75rem',
+                                                                                            fontWeight: 600,
+                                                                                            color: 'white',
+                                                                                            background: 'rgba(255,255,255,0.1)',
+                                                                                            outline: 'none'
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                        Vencimento
+                                                                                    </label>
+                                                                                    <div style={{
+                                                                                        padding: '0.3rem 0.5rem',
+                                                                                        background: 'rgba(255,255,255,0.05)',
+                                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '0.72rem',
+                                                                                        fontWeight: 700,
+                                                                                        color: '#fca5a5',
+                                                                                        height: '25px',
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '0.25rem'
+                                                                                    }}>
+                                                                                        <Calendar size={11} />
+                                                                                        {dueDate ? formatDateBR(dueDate) : 'Inativo'}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label style={{ display: 'block', fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
+                                                                                    Descrição da Tratativa
+                                                                                </label>
+                                                                                <textarea
+                                                                                    value={description}
+                                                                                    onChange={e => setDescription(e.target.value)}
+                                                                                    placeholder="Insira detalhes da tratativa..."
+                                                                                    style={{
+                                                                                        width: '100%',
+                                                                                        padding: '0.35rem 0.5rem',
+                                                                                        border: '1px solid rgba(255,255,255,0.2)',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '0.75rem',
+                                                                                        color: 'white',
+                                                                                        background: 'rgba(255,255,255,0.1)',
+                                                                                        outline: 'none',
+                                                                                        minHeight: '60px',
+                                                                                        resize: 'vertical'
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </>
                                                 )}
