@@ -491,7 +491,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' },
         { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
         { key: 'parcelada', label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3' },
-        { key: 'erro', label: 'Erro', color: '#b91c1c', bg: '#fef2f2' }
+        { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' }
     ];
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
@@ -776,7 +776,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             'pendente': isPastDue 
                 ? { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle }
                 : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
-            'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro', icon: AlertCircle },
+            'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente', icon: AlertCircle },
             'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
             'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
         };
@@ -1582,7 +1582,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 <option value="pago">Paga</option>
                                 <option value="contestada">Contestada</option>
                                 <option value="parcelada">Parcelada</option>
-                                <option value="erro">Erro</option>
+                                <option value="inconsistente">Inconsistente</option>
                             </select>
                         )}
                         <div style={{ width: '1px', height: '16px', background: '#e2e8f0' }}></div>
