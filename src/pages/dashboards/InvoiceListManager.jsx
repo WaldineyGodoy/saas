@@ -2438,7 +2438,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     ) : viewMode === 'energy_kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['a_vencer', 'atrasada', 'pago', 'contestada', 'parcelada', 'erro']
+                                {['a_vencer', 'inconsistente', 'contestada', 'parcelada', 'atrasada', 'pago']
                                     .filter(col => !statusFilter || col === statusFilter)
                                     .map(col => {
                                     const invoicesInCol = filteredInvoices.filter(inv => {
@@ -2459,11 +2459,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                                     const colMap = { 
                                         'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
-                                        'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
-                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }, 
+                                        'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
                                         'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
                                         'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
-                                        'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro' } 
+                                        'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
+                                        'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }
                                     };
                                     const s = colMap[col];
                                     

@@ -1894,10 +1894,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem' }}>
                                                 {[
                                                     { id: 'pendente', label: 'PENDENTE', color: '#2563eb', bg: '#eff6ff' },
-                                                    { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' },
-                                                    { id: 'erro', label: 'ERRO', color: '#dc2626', bg: '#fef2f2' },
+                                                    { id: 'inconsistente', label: 'INCONSISTENTE', color: '#ea580c', bg: '#ffedd5' },
+                                                    { id: 'contestada', label: 'CONTESTADA', color: '#7c3aed', bg: '#f3e8ff' },
                                                     { id: 'parcelada', label: 'PARCELADA', color: '#ca8a04', bg: '#fef9c3' },
-                                                    { id: 'contestada', label: 'CONTESTADA', color: '#7c3aed', bg: '#f3e8ff' }
+                                                    { id: 'pago', label: 'PAGO', color: '#16a34a', bg: '#f0fdf4' }
                                                 ].map(s => (
                                                     <button
                                                         key={s.id}

@@ -869,10 +869,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
                                      return [
                                          pendenteOption,
-                                         { id: 'pago', label: 'Pago', color: '#166534' },
-                                         { id: 'erro', label: 'Erro', color: '#dc2626' },
+                                         { id: 'inconsistente', label: 'Inconsistente', color: '#ea580c' },
+                                         { id: 'contestada', label: 'Contestada', color: '#7c3aed' },
                                          { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
-                                         { id: 'contestada', label: 'Contestada', color: '#7c3aed' }
+                                         { id: 'pago', label: 'Pago', color: '#166534' }
                                      ].map(s => (
                                          <button
                                              key={s.id}

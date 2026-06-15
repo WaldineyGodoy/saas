@@ -460,7 +460,19 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 showAlert('Protocolo criado com sucesso!', 'success');
             }
 
-            if (onUpdated) onUpdated();
+            // Automacao: Se o status for tratativa e estiver vinculado a uma conta de energia, muda o status da conta para contestada
+            if (status === 'tratativa' && linkedEntityType === 'conta_energia' && linkedEntityId) {
+                try {
+                    await supabase
+                        .from('invoices')
+                        .update({ energy_bill_status: 'contestada' })
+                        .eq('id', linkedEntityId);
+                } catch (updateErr) {
+                    console.error('Erro ao atualizar status da conta de energia para contestada:', updateErr);
+                }
+            }
+
+            if (onUpdated) onUpdated(returnedProtocol);
             onClose();
         } catch (err) {
             console.error('Error saving protocol:', err);
