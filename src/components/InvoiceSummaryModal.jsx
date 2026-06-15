@@ -854,15 +854,27 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
-                                 {[
-                                     { id: 'pendente', label: 'A Vencer', color: '#2563eb' },
-                                     { id: 'pago', label: 'Pago', color: '#166534' },
-                                     { id: 'erro', label: 'Erro', color: '#dc2626' },
-                                     { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
-                                     { id: 'contestada', label: 'Contestada', color: '#7c3aed' }
-                                 ].map(s => (
-                                     <button
-                                         key={s.id}
+                                 {(() => {
+                                     const today = new Date();
+                                     today.setHours(0, 0, 0, 0);
+                                     // Parse as local date to avoid timezone issues with YYYY-MM-DD
+                                     const dueDateStr = invoice.vencimento_concessionaria || invoice.vencimento;
+                                     const dueDate = dueDateStr ? new Date(dueDateStr + 'T12:00:00') : null;
+                                     const isPastDue = dueDate && dueDate < today;
+                                     
+                                     const pendenteOption = isPastDue 
+                                         ? { id: 'pendente', label: 'Atrasada', color: '#dc2626' }
+                                         : { id: 'pendente', label: 'A Vencer', color: '#2563eb' };
+
+                                     return [
+                                         pendenteOption,
+                                         { id: 'pago', label: 'Pago', color: '#166534' },
+                                         { id: 'erro', label: 'Erro', color: '#dc2626' },
+                                         { id: 'parcelada', label: 'Parcelada', color: '#ca8a04' },
+                                         { id: 'contestada', label: 'Contestada', color: '#7c3aed' }
+                                     ].map(s => (
+                                         <button
+                                             key={s.id}
                                          onClick={() => handleUpdateEnergyStatus(s.id)}
                                          disabled={updatingStatus}
                                          style={{
@@ -882,7 +894,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      >
                                          {s.label}
                                      </button>
-                                 ))}
+                                 ))})()}
                              </div>
                         </div>
     
