@@ -56,7 +56,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     identification: invoice.linha_digitavel,
                     value: utilityValue,
                     description: `Pagamento Conta Energia - ${consumerUnit?.titular_conta || 'UC'}`,
-                    scheduleDate: null
+                    scheduleDate: null,
+                    dueDate: invoice.vencimento_concessionaria || invoice.vencimento
                 }
             });
 

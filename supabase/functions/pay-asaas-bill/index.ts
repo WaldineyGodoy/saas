@@ -34,12 +34,12 @@ serve(async (req) => {
             .eq('id', user.id)
             .single();
 
-        if (!profile || (profile.role !== 'admin' && profile.role !== 'superadmin')) {
-            throw new Error('Unauthorized: Only admin and superadmin can pay bills.');
+        if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin' && profile.role !== 'superadmin')) {
+            throw new Error(`Unauthorized: Only admin and super_admin can pay bills. Your role is: ${profile?.role}`);
         }
 
         // 2. Parse Request Body
-        const { identification, scheduleDate, description, value } = await req.json()
+        const { identification, scheduleDate, description, value, dueDate } = await req.json()
 
         if (!identification) {
             throw new Error('Missing required field: identification (linha digitável)');
@@ -69,7 +69,8 @@ serve(async (req) => {
             identificationField: identification,
             scheduleDate: scheduleDate || new Date().toISOString().split('T')[0],
             description: description || 'Pagamento de boleto via sistema',
-            value: value ? Number(value) : undefined
+            value: value ? Number(value) : undefined,
+            dueDate: dueDate || undefined
         };
 
         console.log('Sending Bill Payment to Asaas:', billPayload);
