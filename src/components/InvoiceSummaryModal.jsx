@@ -1010,6 +1010,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                         <input type="number" step="0.01" value={editData.outros_lancamentos} onChange={e => handleEditChange('outros_lancamentos', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Outros" />
                                     </div>
                                 </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center', marginTop: '0.5rem' }}>
+                                    <span>Parcelamento:</span>
+                                    <input type="number" step="0.01" value={editData.parcelamento} onChange={e => handleEditChange('parcelamento', e.target.value)} style={{ width: '100px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
+                                </div>
                             </div>
                         ) : (() => {
                             const rawTarifa = Number(consumerUnit?.tarifa_concessionaria) || 0.986;
@@ -1019,6 +1023,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             const valorCompensada = Number(invoice.consumo_reais) || 0;
                             const ip = Number(invoice.iluminacao_publica) || 0;
                             const outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
+                            const parcelamentoVal = Number(invoice.parcelamento) || 0;
+
+                            let calcConcessionariaSum = valorCompensada + ip + outros + parcelamentoVal;
+                            if (consumoCompensadoVal > 0) {
+                                const consumoNaoCompensado = Math.max(0, (Number(invoice.consumo_kwh) || 0) - consumoCompensadoVal);
+                                const custoNaoCompensado = consumoNaoCompensado * rawTarifa;
+                                const estimatedFioB = consumoCompensadoVal * (rawTarifa * 0.215);
+                                calcConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros + parcelamentoVal;
+                            }
 
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
@@ -1057,14 +1070,128 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(outros)}</td>
                                             </tr>
+                                            {parcelamentoVal > 0 && (
+                                                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Parcelamento</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(parcelamentoVal)}</td>
+                                                </tr>
+                                            )}
+                                            <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f8fafc' }}>
+                                                <td style={{ padding: '0.75rem 0 0.75rem 0.5rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: '800', verticalAlign: 'middle' }}>Total de Lançamentos</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                <td style={{ padding: '0.75rem 0.5rem 0.75rem 0', fontSize: '0.9rem', color: '#0f172a', fontWeight: '800', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(calcConcessionariaSum)}</td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                     <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                                        * Valor calculado com base na tarifa cheia da concessionária.
+                                        * Valor de Consumo Total e Energia Compensada é uma estimativa; o Total de Lançamentos utiliza valores lidos e base de Fio B.
                                     </div>
                                 </div>
                             );
                         })()}
+
+                        {/* VALOR DA CONTA DE ENERGIA (ANTIGO TOTAL CONCESSIONÁRIA) */}
+                        <div style={{ 
+                            padding: '1.25rem', 
+                            borderRadius: '16px', 
+                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: '0.75rem',
+                            marginBottom: '1rem'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                {/* Left Side: Label and View Pdf Button */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em' }}>
+                                        VALOR DA CONTA DE ENERGIA
+                                    </span>
+                                    
+                                    {!isEditing && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleViewPdf}
+                                            style={{
+                                                alignSelf: 'flex-start',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.35rem',
+                                                padding: '0.35rem 0.7rem',
+                                                borderRadius: '6px',
+                                                border: '1.5px solid #cbd5e1',
+                                                background: 'white',
+                                                color: '#475569',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}
+                                            onMouseEnter={e => { e.currentTarget.style.borderColor = branding?.primary_color || '#003366'; e.currentTarget.style.color = branding?.primary_color || '#003366'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
+                                        >
+                                            <ExternalLink size={13} /> Visualizar Conta
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Right Side: Value and Pay Button */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
+                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.parcelamento) || 0) + (Number(invoice.consumo_reais) || 0))))}
+                                    </span>
+
+                                    {!isEditing && (
+                                        (() => {
+                                            if (energyStatus === 'pago') {
+                                                return (
+                                                    <span style={{ 
+                                                        display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                                        padding: '0.3rem 0.6rem', borderRadius: '6px',
+                                                        background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
+                                                        fontSize: '0.72rem', fontWeight: 700
+                                                    }}>
+                                                        <CheckCircle2 size={13} /> Pago
+                                                    </span>
+                                                );
+                                            }
+                                            if (invoice.linha_digitavel) {
+                                                return (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={handlePay}
+                                                        disabled={loading || paymentStatus === 'success'}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.35rem',
+                                                            padding: '0.35rem 0.75rem',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
+                                                            color: 'white',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            cursor: loading ? 'not-allowed' : 'pointer',
+                                                            transition: 'all 0.2s',
+                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                                                        }}
+                                                        onMouseEnter={e => { if(!loading) e.currentTarget.style.background = '#059669'; }}
+                                                        onMouseLeave={e => { if(!loading) e.currentTarget.style.background = '#10b981'; }}
+                                                    >
+                                                        {loading ? 'Carregando...' : <><CreditCard size={13} /> Pagar Conta</>}
+                                                    </button>
+                                                );
+                                            }
+                                            return null;
+                                        })()
+                                    )}
+                                </div>
+                            </div>
+                        </div>
 
                         {/* VALOR DO ASSINANTE (BOLETO) */}
                         <div style={{ 
@@ -1221,107 +1348,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     }}>
                                                         <CheckCircle2 size={13} /> Fatura Paga
                                                     </span>
-                                                );
-                                            }
-                                            return null;
-                                        })()
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* TOTAL CONCESSIONÁRIA */}
-                        <div style={{ 
-                            padding: '1.25rem', 
-                            borderRadius: '16px', 
-                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: '0.75rem'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                {/* Left Side: Label and View Pdf Button */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em' }}>
-                                        TOTAL CONCESSIONÁRIA
-                                    </span>
-                                    
-                                    {!isEditing && (
-                                        <button 
-                                            type="button"
-                                            onClick={handleViewPdf}
-                                            style={{
-                                                alignSelf: 'flex-start',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '0.35rem',
-                                                padding: '0.35rem 0.7rem',
-                                                borderRadius: '6px',
-                                                border: '1.5px solid #cbd5e1',
-                                                background: 'white',
-                                                color: '#475569',
-                                                fontSize: '0.75rem',
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.borderColor = branding?.primary_color || '#003366'; e.currentTarget.style.color = branding?.primary_color || '#003366'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
-                                        >
-                                            <ExternalLink size={13} /> Visualizar Conta
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Right Side: Value and Pay Button */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0))))}
-                                    </span>
-
-                                    {!isEditing && (
-                                        (() => {
-                                            if (energyStatus === 'pago') {
-                                                return (
-                                                    <span style={{ 
-                                                        display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
-                                                        padding: '0.3rem 0.6rem', borderRadius: '6px',
-                                                        background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0',
-                                                        fontSize: '0.72rem', fontWeight: 700
-                                                    }}>
-                                                        <CheckCircle2 size={13} /> Pago
-                                                    </span>
-                                                );
-                                            }
-                                            if (invoice.linha_digitavel) {
-                                                return (
-                                                    <button 
-                                                        type="button"
-                                                        onClick={handlePay}
-                                                        disabled={loading || paymentStatus === 'success'}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '0.35rem',
-                                                            padding: '0.35rem 0.75rem',
-                                                            borderRadius: '6px',
-                                                            border: 'none',
-                                                            background: paymentStatus === 'success' ? '#22c55e' : '#10b981',
-                                                            color: 'white',
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 700,
-                                                            cursor: loading ? 'not-allowed' : 'pointer',
-                                                            transition: 'all 0.2s',
-                                                            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
-                                                        }}
-                                                        onMouseEnter={e => { if(!loading) e.currentTarget.style.background = '#059669'; }}
-                                                        onMouseLeave={e => { if(!loading) e.currentTarget.style.background = '#10b981'; }}
-                                                    >
-                                                        {loading ? 'Carregando...' : <><CreditCard size={13} /> Pagar Conta</>}
-                                                    </button>
                                                 );
                                             }
                                             return null;

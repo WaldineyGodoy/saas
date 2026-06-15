@@ -103,6 +103,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         consumo_reais: '',
         iluminacao_publica: '',
         outros_lancamentos: '',
+        parcelamento: '',
         linha_digitavel: '',
         pix_string: '',
         desconto_aplicado: '',
@@ -526,6 +527,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         consumo_reais: parsedData.consumo_reais !== undefined ? formatCurrency(parsedData.consumo_reais) : formatCurrency(parsedData.valorTotal || 0),
                         iluminacao_publica: parsedData.iluminacao_publica ? formatCurrency(parsedData.iluminacao_publica) : '',
                         outros_lancamentos: parsedData.outros_lancamentos ? formatCurrency(parsedData.outros_lancamentos) : '',
+                        parcelamento: parsedData.parcelamento ? formatCurrency(parsedData.parcelamento) : '',
                         linha_digitavel: parsedData.linha_digitavel || '',
                         pix_string: parsedData.pix_string || '',
                         fio_b_vr_unit: parsedData.fio_b_vr_unit !== undefined ? formatCurrency(parsedData.fio_b_vr_unit) : '',
@@ -578,6 +580,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             consumo_reais: '',
             iluminacao_publica: '',
             outros_lancamentos: '',
+            parcelamento: '',
             linha_digitavel: '',
             pix_string: '',
             valor_concessionaria: '',
@@ -685,6 +688,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
         const ip = typeof formData.iluminacao_publica === 'string' ? parseCurrency(formData.iluminacao_publica) : (Number(formData.iluminacao_publica) || 0);
         const outros = typeof formData.outros_lancamentos === 'string' ? parseCurrency(formData.outros_lancamentos) : (Number(formData.outros_lancamentos) || 0);
+        const parcelamentoVal = typeof formData.parcelamento === 'string' ? parseCurrency(formData.parcelamento) : (Number(formData.parcelamento) || 0);
         const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
 
         // Recalcular alertas automáticos para salvar no histórico
@@ -692,12 +696,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         const consumoVal = Number(formData.consumo_kwh) || 0;
         const compensadoVal = Number(formData.consumo_compensado) || 0;
         const tarifaUCVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
-        let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ip + outros;
+        let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ip + outros + parcelamentoVal;
         if (compensadoVal > 0 && selectedUc) {
             const consumoNaoCompensado = Math.max(0, consumoVal - compensadoVal);
             const custoNaoCompensado = consumoNaoCompensado * tarifaUCVal;
             const estimatedFioB = compensadoVal * (tarifaUCVal * 0.215);
-            calcConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros;
+            calcConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros + parcelamentoVal;
         }
         const diffSumVal = Math.abs(calcConcessionariaSum - concessionariaVal);
         const diffSumLimitVal = compensadoVal > 0 ? 5.00 : 0.50;
@@ -745,6 +749,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             iluminacao_publica: ip,
             tarifa_minima: simulation.tarifaMinimaExcedentes,
             outros_lancamentos: outros,
+            parcelamento: parcelamentoVal,
             valor_a_pagar: simulation.valorAPagar,
             valor_concessionaria: concessionariaVal,
             economia_reais: simulation.economiaGerada,

@@ -125,12 +125,20 @@ serve(async (req) => {
         saldo_kwh = parseConsumption(saldoMatch[1]);
     }
 
-    // Outros Lançamentos (Multas, Juros, Parcelamentos)
+    // Outros Lançamentos (Multas, Juros)
     let outros_lancamentos = 0;
-    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Parc\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
+    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria)[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
     const othersMatches = [...fullText.matchAll(othersRegex)];
     for (const match of othersMatches) {
         outros_lancamentos += parseValue(match[1]);
+    }
+
+    // Parcelamentos
+    let parcelamento = 0;
+    const parcelamentoRegex = /(?:Parc\s*\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
+    const parcelamentoMatches = [...fullText.matchAll(parcelamentoRegex)];
+    for (const match of parcelamentoMatches) {
+        parcelamento += parseValue(match[1]);
     }
 
     // Consumo Reais: Pega especificamente o VALOR (R$) que é a 3ª coluna de números após "kWh"
@@ -208,6 +216,7 @@ serve(async (req) => {
         data_leitura_anterior: formatDate(prevReadingMatch ? prevReadingMatch[1] : null),
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: outros_lancamentos,
+        parcelamento: parcelamento,
         linha_digitavel: linha_digitavel,
         energia_injetada: energia_injetada,
         saldo_kwh: saldo_kwh

@@ -32,6 +32,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         iluminacao_publica: '',
         tarifa_minima_excedentes: '',
         outros_lancamentos: '',
+        parcelamento: '',
         data_leitura: '',
         linha_digitavel: '',
         pix_string: '',
@@ -101,6 +102,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 iluminacao_publica: invoice.iluminacao_publica ? formatCurrency(invoice.iluminacao_publica) : '',
                 tarifa_minima_excedentes: invoice.tarifa_minima ? formatCurrency(invoice.tarifa_minima) : '',
                 outros_lancamentos: invoice.outros_lancamentos ? formatCurrency(invoice.outros_lancamentos) : '',
+                parcelamento: invoice.parcelamento ? formatCurrency(invoice.parcelamento) : '',
                 valor_a_pagar: formatCurrency(invoice.valor_a_pagar || 0),
                 economia_reais: formatCurrency(invoice.economia_reais || 0),
                 consumo_reais: invoice.consumo_reais ? formatCurrency(invoice.consumo_reais) : '',
@@ -169,13 +171,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 return;
             }
             try {
-                const { data, error } = await supabase
+                const { data: bills, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, vencimento, consumo_kwh, consumo_compensado, energia_injetada, iluminacao_publica, outros_lancamentos, tarifa_minima_excedentes, valor_concessionaria, data_leitura, linha_digitavel, pix_string, desconto_aplicado')
+                    .select('id, mes_referencia, vencimento, consumo_kwh, consumo_compensado, energia_injetada, iluminacao_publica, outros_lancamentos, parcelamento, tarifa_minima_excedentes, valor_concessionaria, data_leitura, linha_digitavel, pix_string, desconto_aplicado')
                     .eq('uc_id', formData.uc_id)
                     .in('status', ['sem_faturamento', 'ag_emissao_boleto'])
                     .order('mes_referencia', { ascending: false });
-                if (!error) setPendingBills(data || []);
+                if (!error) setPendingBills(bills || []);
             } catch (err) {
                 console.error('Erro ao buscar contas pendentes:', err);
             }
@@ -195,6 +197,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             energia_injetada: bill.energia_injetada ?? prev.energia_injetada,
             iluminacao_publica: bill.iluminacao_publica ? formatCurrency(bill.iluminacao_publica) : prev.iluminacao_publica,
             outros_lancamentos: bill.outros_lancamentos ? formatCurrency(bill.outros_lancamentos) : prev.outros_lancamentos,
+            parcelamento: bill.parcelamento ? formatCurrency(bill.parcelamento) : prev.parcelamento,
             tarifa_minima_excedentes: bill.tarifa_minima_excedentes ? formatCurrency(bill.tarifa_minima_excedentes) : prev.tarifa_minima_excedentes,
             valor_concessionaria: bill.valor_concessionaria ?? prev.valor_concessionaria,
             data_leitura: bill.data_leitura || prev.data_leitura,
@@ -246,9 +249,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
+            const parcelamento = parseCurrency(formData.parcelamento || '0');
 
-            // Total = Energia Compensada + Tarifa Mínima e Excedentes + IP + Outros
-            const total = energiaCompensadaReais + tarifaMinimaExcedentesReais + ip + outros;
+            // Total = Energia Compensada + Tarifa Mínima e Excedentes + IP + Outros + Parcelamento
+            const total = energiaCompensadaReais + tarifaMinimaExcedentesReais + ip + outros + parcelamento;
 
             setFormData(prev => ({
                 ...prev,
@@ -264,6 +268,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         formData.consumo_compensado,
         formData.iluminacao_publica,
         formData.outros_lancamentos,
+        formData.parcelamento,
         formData.desconto_aplicado,
         selectedUc
     ]);
@@ -613,7 +618,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         const ip = Number(inv.iluminacao_publica) || 0;
         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
         const outros = Number(inv.outros_lancamentos) || 0;
-        const outrosTotal = tarifaMinimaExcedentes + outros;
+        const parcelamento = Number(inv.parcelamento) || 0;
+        const outrosTotal = tarifaMinimaExcedentes + outros + parcelamento;
         const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
 
         const formatCurrency = (val) => {
@@ -900,6 +906,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                         if (data.valorTotal) newFormData.valor_concessionaria = data.valorTotal;
                         if (data.iluminacao_publica) newFormData.iluminacao_publica = formatCurrency(data.iluminacao_publica);
                         if (data.outros_lancamentos) newFormData.outros_lancamentos = formatCurrency(data.outros_lancamentos);
+                        if (data.parcelamento) newFormData.parcelamento = formatCurrency(data.parcelamento);
                         if (data.linha_digitavel) newFormData.linha_digitavel = data.linha_digitavel;
                         if (data.pix_string) newFormData.pix_string = data.pix_string;
                         
@@ -1157,7 +1164,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             const economiaReais = rawCompensado * rawTarifa * multiplier;
             const ip = parseCurrency(formData.iluminacao_publica);
             const outros = parseCurrency(formData.outros_lancamentos);
-            const totalToSave = Math.max(0, compensadaLiquida + tarifaMinimaExcedentes + ip + outros);
+            const parcelamento = parseCurrency(formData.parcelamento || '0');
+            const totalToSave = Math.max(0, compensadaLiquida + tarifaMinimaExcedentes + ip + outros + parcelamento);
 
             const payload = {
                 uc_id: formData.uc_id,
@@ -1170,6 +1178,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 iluminacao_publica: ip,
                 tarifa_minima: tarifaMinimaExcedentes,
                 outros_lancamentos: outros,
+                parcelamento: parcelamento,
                 consumo_compensado: Number(formData.consumo_compensado),
 
                 data_leitura: formData.data_leitura || null,
@@ -1815,6 +1824,13 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                         <div style={{ position: 'relative' }}>
                                             <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
                                             <input type="text" value={formData.outros_lancamentos.replace('R$', '').trim()} onChange={e => handleCurrencyChange('outros_lancamentos', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-xl border border-slate-200">
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.6rem', color: '#64748b', fontWeight: 600 }}>Parcelamento (R$)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#94a3b8' }}>R$</span>
+                                            <input type="text" value={(formData.parcelamento || '').replace('R$', '').trim()} onChange={e => handleCurrencyChange('parcelamento', e.target.value)} placeholder="0,00" style={{ width: '100%', padding: '0.85rem 0.85rem 0.85rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '1rem', fontWeight: 'bold' }} />
                                         </div>
                                     </div>
 
