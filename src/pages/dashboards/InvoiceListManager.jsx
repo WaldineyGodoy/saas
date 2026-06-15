@@ -487,11 +487,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     const contasStatuses = [
         { key: 'a_vencer', label: 'A Vencer', color: '#2563eb', bg: '#eff6ff' },
-        { key: 'atrasada', label: 'Atrasada', color: '#dc2626', bg: '#fee2e2' },
-        { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' },
+        { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' },
         { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
         { key: 'parcelada', label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3' },
-        { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' }
+        { key: 'atrasada', label: 'Atrasada', color: '#dc2626', bg: '#fee2e2' },
+        { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' }
     ];
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
