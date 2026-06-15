@@ -811,14 +811,37 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
             if (savedInvoiceId && historicoContent !== '') {
                 try {
+                    // Criar Protocolo automaticamente
+                    const protocolPayload = {
+                        title: 'Auditoria: Inconsistência de Faturamento',
+                        description: historicoContent.trim(),
+                        status: 'gerar',
+                        linked_entity_type: 'conta_energia',
+                        linked_entity_id: savedInvoiceId,
+                        created_by: profile?.id,
+                        created_at: new Date().toISOString()
+                    };
+
+                    const { data: protocolData, error: protocolErr } = await supabase
+                        .from('protocols')
+                        .insert(protocolPayload)
+                        .select()
+                        .single();
+
+                    if (protocolErr) throw protocolErr;
+
+                    // Salvar no histórico do protocolo gerado
                     await supabase.from('crm_history').insert({
-                        entity_type: 'invoice',
-                        entity_id: savedInvoiceId,
-                        content: historicoContent.trim(),
+                        entity_type: 'protocol',
+                        entity_id: protocolData.id,
+                        content: `Protocolo criado automaticamente via Validador SandBox.\n\n${historicoContent.trim()}`,
                         created_by: profile?.id
                     });
+
+                    showAlert(`Protocolo de inconsistência gerado automaticamente!`, 'info');
+
                 } catch (historyErr) {
-                    console.warn('Erro ao salvar observacoes no historico:', historyErr);
+                    console.warn('Erro ao salvar protocolo de auditoria:', historyErr);
                 }
             }
 
