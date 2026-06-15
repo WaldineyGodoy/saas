@@ -350,7 +350,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
                         // 1. Fallback local de Consumo Compensado se necessário
                         if (!extractedCompensado) {
-                            const compensadoMatches = cleanText.match(/G\dComp\..*?\-TE\s+kWh\s+([\d,.]+)-/gi);
+                            const compensadoMatches = cleanText.match(/G\dComp\.{0,40}?\-TE\s+kWh\s+([\d,.]+)-/gi);
                             let totalCompensado = 0;
                             if (compensadoMatches) {
                                 compensadoMatches.forEach(match => {
@@ -358,7 +358,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                     if (valMatch) totalCompensado += parseValue(valMatch[1]);
                                 });
                             } else {
-                                const compensadoMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado).*?([\d,.]+)\s*kWh/i);
+                                const compensadoMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado).{0,40}?([\d,.]+)\s*kWh/i);
                                 if (compensadoMatch) totalCompensado = parseValue(compensadoMatch[1]);
                             }
 
@@ -422,12 +422,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 consumoTusdUnit = parseUnitValue(consumoTusdExato[1]);
                             }
 
-                            const compTusdExato = cleanText.match(/G\dComp.*?\-TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
+                            const compTusdExato = cleanText.match(/G\dComp.{0,40}?\-TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
                             if (compTusdExato) {
                                 qtdCompTusd = parseConsumption(compTusdExato[1]);
                                 compTusdUnit = parseUnitValue(compTusdExato[2]);
                             } else {
-                                const compGdMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP).*?TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
+                                const compGdMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP).{0,40}?TUSD\s+kWh\s+([\d,.]+)\s+([\d,]+)\s+([\d,.]+)-?/i);
                                 if (compGdMatch) {
                                     qtdCompTusd = parseConsumption(compGdMatch[1]);
                                     compTusdUnit = parseUnitValue(compGdMatch[2]);
