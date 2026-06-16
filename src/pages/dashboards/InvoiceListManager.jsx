@@ -5,7 +5,7 @@ import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
-import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer } from 'lucide-react';
+import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -81,6 +81,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
     const [ucModalSection, setUcModalSection] = useState('geral');
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
+    const [dropTarget, setDropTarget] = useState(null);
 
     const handleCalendarCardClick = (uc) => {
         if (uc.matchingInvoice) {
@@ -190,6 +191,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     const filteredInvoices = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
+        if (inv.parent_invoice_id) return false;
         
         if (activeTab === 'faturas') {
             // Permitir 'sem_faturamento' na aba de faturas para auditoria e conferência antes do envio
@@ -766,7 +768,29 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         } catch (error) {
             console.error('Error updating energy bill status:', error);
             showAlert('Erro ao atualizar status: ' + error.message, 'error');
-            setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, energy_bill_status: previousStatus } : i));
+        }
+    };
+
+    const handleInvoiceJoinDrop = async (e, targetInvoiceId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTarget(null);
+        
+        const draggedInvoiceId = e.dataTransfer.getData('invoiceId');
+        if (!draggedInvoiceId || draggedInvoiceId === targetInvoiceId) return;
+
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ parent_invoice_id: targetInvoiceId })
+                .eq('id', draggedInvoiceId);
+            if (error) throw error;
+            
+            showAlert('Conta incorporada com sucesso como parcelamento!', 'success');
+            fetchInvoices();
+        } catch (err) {
+            console.error('Erro ao vincular conta:', err);
+            showAlert('Erro ao vincular conta.', 'error');
         }
     };
 
@@ -1273,8 +1297,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 })}
             </div>
         </div>
-        );
-    };
+    );
+};
 
 
 
@@ -2477,8 +2501,15 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             key={col} 
                                             className="kanban-column" 
                                             style={{ borderTop: `4px solid ${s.color}` }}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={(e) => handleEnergyDrop(e, col)}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                setDropTarget({ type: 'status', label: s.label });
+                                            }}
+                                            onDragLeave={() => setDropTarget(null)}
+                                            onDrop={(e) => {
+                                                setDropTarget(null);
+                                                handleEnergyDrop(e, col);
+                                            }}
                                         >
                                             <div className="kanban-column-header" style={{ color: s.color }}>
                                                 <span style={{ textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 'bold' }}>{s.label}</span>
@@ -2499,7 +2530,27 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             className="kanban-card"
                                                             draggable
                                                             onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
-                                                            style={{ cursor: 'pointer' }}
+                                                            onDragEnd={() => setDropTarget(null)}
+                                                            onDragOver={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setDropTarget({ type: 'join', targetId: inv.id, label: inv.consumer_units?.numero_uc });
+                                                            }}
+                                                            onDragLeave={(e) => {
+                                                                e.stopPropagation();
+                                                                setDropTarget(null);
+                                                            }}
+                                                            onDrop={(e) => {
+                                                                e.stopPropagation();
+                                                                setDropTarget(null);
+                                                                handleInvoiceJoinDrop(e, inv.id);
+                                                            }}
+                                                            style={{ 
+                                                                cursor: 'pointer', 
+                                                                border: dropTarget?.targetId === inv.id ? '2px dashed #3b82f6' : undefined,
+                                                                transform: dropTarget?.targetId === inv.id ? 'scale(1.02)' : 'none',
+                                                                transition: 'all 0.2s'
+                                                            }}
                                                         >
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                                                 <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-dark)' }}>
@@ -2627,6 +2678,34 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         fetchUcs();
                     }}
                 />
+            )}
+
+            {dropTarget && (
+                <div style={{
+                    position: 'fixed', bottom: '40px', left: '50%', transform: 'translateX(-50%)',
+                    background: dropTarget.type === 'join' ? '#eff6ff' : '#f8fafc',
+                    border: `1.5px solid ${dropTarget.type === 'join' ? '#3b82f6' : '#cbd5e1'}`,
+                    padding: '12px 24px', borderRadius: '12px', zIndex: 9999,
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    pointerEvents: 'none'
+                }}>
+                    {dropTarget.type === 'join' ? (
+                        <>
+                            <LinkIcon size={20} color="#3b82f6" />
+                            <span style={{ fontWeight: 600, color: '#1e3a8a', fontSize: '0.95rem' }}>
+                                Vincular como conta filha da UC: {dropTarget.label}
+                            </span>
+                        </>
+                    ) : (
+                        <>
+                            <Info size={20} color="#64748b" />
+                            <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.95rem' }}>
+                                Alterar status da conta para: {dropTarget.label}
+                            </span>
+                        </>
+                    )}
+                </div>
             )}
 
         </div>

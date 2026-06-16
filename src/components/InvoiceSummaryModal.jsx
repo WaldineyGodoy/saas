@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2, Search, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
@@ -26,6 +26,98 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const hiddenRef = React.useRef(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [invoiceToDownload, setInvoiceToDownload] = useState(null);
+
+    const [childInvoices, setChildInvoices] = useState([]);
+    const [loadingChildren, setLoadingChildren] = useState(false);
+    const [searchChild, setSearchChild] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearchingChild, setIsSearchingChild] = useState(false);
+
+    useEffect(() => {
+        if (!invoice) return;
+        const fetchChildren = async () => {
+            setLoadingChildren(true);
+            try {
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .select('id, mes_referencia, vencimento, vencimento_concessionaria, valor_concessionaria, status, energy_bill_status')
+                    .eq('parent_invoice_id', invoice.id);
+                if (error) throw error;
+                setChildInvoices(data || []);
+            } catch (err) {
+                console.error('Error fetching children:', err);
+            } finally {
+                setLoadingChildren(false);
+            }
+        };
+        fetchChildren();
+    }, [invoice]);
+
+    const handleSearchChild = async () => {
+        if (!searchChild.trim()) return;
+        setIsSearchingChild(true);
+        try {
+            let formattedSearch = searchChild.trim();
+            if (formattedSearch.includes('/')) {
+                const [month, year] = formattedSearch.split('/');
+                if (month && year) formattedSearch = `${year}-${month}`;
+            }
+
+            const { data, error } = await supabase
+                .from('invoices')
+                .select('id, mes_referencia, vencimento, vencimento_concessionaria, valor_concessionaria, status, energy_bill_status, parent_invoice_id')
+                .eq('uc_id', invoice.uc_id)
+                .is('parent_invoice_id', null)
+                .neq('id', invoice.id)
+                .like('mes_referencia', `${formattedSearch}%`);
+            
+            if (error) throw error;
+            setSearchResults(data || []);
+            if (data?.length === 0) {
+                showAlert('Nenhuma conta encontrada ou já vinculada.', 'info');
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert('Erro na busca', 'error');
+        } finally {
+            setIsSearchingChild(false);
+        }
+    };
+
+    const handleLinkChild = async (childId) => {
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ parent_invoice_id: invoice.id })
+                .eq('id', childId);
+            if (error) throw error;
+            showAlert('Conta vinculada com sucesso.', 'success');
+            
+            const linkedChild = searchResults.find(c => c.id === childId);
+            setChildInvoices([...childInvoices, linkedChild]);
+            setSearchResults(searchResults.filter(c => c.id !== childId));
+            setSearchChild('');
+        } catch (err) {
+            console.error(err);
+            showAlert('Erro ao vincular', 'error');
+        }
+    };
+
+    const handleUnlinkChild = async (childId) => {
+        if (!await showConfirm('Deseja realmente desvincular esta conta?')) return;
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ parent_invoice_id: null })
+                .eq('id', childId);
+            if (error) throw error;
+            showAlert('Conta desvinculada com sucesso.', 'success');
+            setChildInvoices(childInvoices.filter(c => c.id !== childId));
+        } catch (err) {
+            console.error(err);
+            showAlert('Erro ao desvincular', 'error');
+        }
+    };
 
     if (!invoice) return null;
 
@@ -1356,6 +1448,110 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                             </div>
                         </div>
+
+                        <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
+
+                        {/* Contas Incorporadas / Parcelamento */}
+                        {!isEditing && (
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <CollapsibleSection title="Contas Incorporadas / Parcelamento" icon={LinkIcon} defaultOpen={true} noGrid={true}>
+                                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {/* Validate Parcelamento */}
+                                        {Number(invoice.parcelamento) > 0 && childInvoices.length === 0 && (
+                                            <div style={{ padding: '0.8rem 1rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                <AlertCircle size={20} color="#ea580c" style={{ flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.85rem', color: '#9a3412', fontWeight: '500' }}>
+                                                    Esta fatura possui um lançamento de <strong>Parcelamento (R$ {formatCurrency(invoice.parcelamento)})</strong>, mas nenhuma conta original (conta filha) foi vinculada. Arraste-a no Kanban ou pesquise abaixo.
+                                                </span>
+                                            </div>
+                                        )}
+                                        {Number(invoice.parcelamento) > 0 && childInvoices.length > 0 && (() => {
+                                            const sumChildren = childInvoices.reduce((acc, curr) => acc + (Number(curr.valor_concessionaria) || 0), 0);
+                                            const diff = Math.abs(sumChildren - Number(invoice.parcelamento));
+                                            if (diff > 5.00) { // Tolerância de R$ 5,00 para juros/multas
+                                                return (
+                                                    <div style={{ padding: '0.8rem 1rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                        <AlertCircle size={20} color="#dc2626" style={{ flexShrink: 0 }} />
+                                                        <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: '500' }}>
+                                                            <strong>Atenção:</strong> A soma das contas filhas (R$ {formatCurrency(sumChildren)}) difere do parcelamento cobrado (R$ {formatCurrency(invoice.parcelamento)}). Confirme se os juros justificam a diferença.
+                                                        </span>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+
+                                        {loadingChildren ? (
+                                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Carregando contas vinculadas...</div>
+                                        ) : childInvoices.length > 0 ? (
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                                                {childInvoices.map(child => (
+                                                    <div key={child.id} style={{ padding: '1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', position: 'relative' }}>
+                                                        <button 
+                                                            onClick={() => handleUnlinkChild(child.id)}
+                                                            style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '0.25rem', cursor: 'pointer', color: '#dc2626', display: 'flex' }}
+                                                            title="Desvincular"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600', marginBottom: '0.25rem' }}>REF: {child.mes_referencia ? child.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
+                                                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', marginBottom: '0.5rem' }}>{formatCurrency(child.valor_concessionaria)}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                            <Clock size={12} />
+                                                            Venc: {child.vencimento_concessionaria ? child.vencimento_concessionaria.split('-').reverse().join('/') : (child.vencimento ? child.vencimento.split('-').reverse().join('/') : '-')}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                Nenhuma conta vinculada.
+                                            </div>
+                                        )}
+
+                                        <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flexDirection: 'column' }}>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>Pesquisar e vincular manualmente:</div>
+                                            <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '400px' }}>
+                                                <input 
+                                                    type="text" 
+                                                    value={searchChild} 
+                                                    onChange={e => setSearchChild(e.target.value)} 
+                                                    placeholder="Mês de ref. (ex: 03/2026)" 
+                                                    style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }} 
+                                                    onKeyDown={e => e.key === 'Enter' && handleSearchChild()}
+                                                />
+                                                <button 
+                                                    onClick={handleSearchChild}
+                                                    disabled={isSearchingChild}
+                                                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    {isSearchingChild ? <Loader2 size={18} className="animate-spin" color="#64748b" /> : <Search size={18} color="#64748b" />}
+                                                </button>
+                                            </div>
+
+                                            {searchResults.length > 0 && (
+                                                <div style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', marginTop: '0.5rem', overflow: 'hidden' }}>
+                                                    {searchResults.map(res => (
+                                                        <div key={res.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'white', borderBottom: '1px solid #f1f5f9' }}>
+                                                            <div>
+                                                                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#334155' }}>Ref: {res.mes_referencia ? res.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Valor: {formatCurrency(res.valor_concessionaria)}</div>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleLinkChild(res.id)}
+                                                                style={{ background: '#eff6ff', color: '#2563eb', border: 'none', padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}
+                                                            >
+                                                                Vincular
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CollapsibleSection>
+                            </div>
+                        )}
 
                         <hr style={{ margin: '1.5rem 0', border: 'none', borderTop: '2px solid #f1f5f9' }} />
 
