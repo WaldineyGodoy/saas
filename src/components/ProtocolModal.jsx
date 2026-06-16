@@ -244,8 +244,17 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
         fetchEntityOptions();
     }, [linkedEntityType]);
 
-    // Calculate due date automatically
+    // Calculate due date automatically (only on manual user edits)
     useEffect(() => {
+        const currentProtoNum = currentProtocol?.protocol_number || '';
+        const currentDeadline = currentProtocol?.deadline_days === null || currentProtocol?.deadline_days === undefined 
+            ? '' 
+            : String(currentProtocol.deadline_days);
+
+        if (protocolNumber === currentProtoNum && String(deadlineDays) === currentDeadline) {
+            return;
+        }
+
         if (protocolNumber && deadlineDays) {
             const days = Number(deadlineDays);
             if (!isNaN(days) && days >= 0) {
@@ -257,7 +266,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
         } else {
             setDueDate(null);
         }
-    }, [protocolNumber, deadlineDays]);
+    }, [protocolNumber, deadlineDays, currentProtocol]);
 
     // Load parent and sub-protocols tree
     const loadTreeData = async () => {
