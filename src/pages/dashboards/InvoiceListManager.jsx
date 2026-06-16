@@ -2674,6 +2674,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     consumerUnit={selectedInvoiceForSummary?.consumer_units} 
                     onClose={() => setIsSummaryModalOpen(false)} 
                     onPaymentSuccess={fetchInvoices}
+                    onViewInvoice={(inv) => setSelectedInvoiceForSummary(inv)}
                 />
             )}
             {isAnalysisModalOpen && (

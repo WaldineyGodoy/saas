@@ -11,7 +11,7 @@ import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess }) {
+export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess, onViewInvoice }) {
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
@@ -1486,10 +1486,26 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                         ) : childInvoices.length > 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                                 {/* Parent Node */}
-                                                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '0.85rem 1.25rem', minWidth: '280px', textAlign: 'center', zIndex: 2, position: 'relative', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                                                    <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e3a8a', fontWeight: 700 }}>Conta Principal</div>
-                                                    <div style={{ marginTop: '0.25rem', fontSize: '0.9rem', color: '#1e3a8a', fontWeight: 800 }}>Ref: {invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
-                                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#1e3a8a' }}>{formatCurrency(invoice.valor_concessionaria)}</div>
+                                                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '0.85rem 1.25rem', minWidth: '320px', textAlign: 'center', zIndex: 2, position: 'relative', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                                                        <span style={{ 
+                                                            padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 800,
+                                                            background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`,
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {currentStatus.label}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e3a8a', fontWeight: 700 }}>
+                                                        {invoice.parent_invoice_id ? 'CONTA INCORPORADA (Atual)' : 'CONTA PRINCIPAL'}
+                                                    </div>
+                                                    <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: '#1e3a8a', fontWeight: 700 }}>UC: {consumerUnit?.numero_uc || '-'}</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#1e3a8a', fontWeight: 700 }}>Ref: {invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
+                                                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#1e3a8a', margin: '0.25rem 0' }}>{formatCurrency(invoice.valor_concessionaria)}</div>
+                                                    <div style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: '#1e3a8a' }}>
+                                                        <Clock size={12} />
+                                                        Venc: {invoice.vencimento_concessionaria ? invoice.vencimento_concessionaria.split('-').reverse().join('/') : (invoice.vencimento ? invoice.vencimento.split('-').reverse().join('/') : '-')}
+                                                    </div>
                                                 </div>
 
                                                 {/* Spacer line */}
@@ -1501,6 +1517,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', position: 'relative' }}>
                                                     {childInvoices.map((child, index) => {
                                                         const isLast = index === childInvoices.length - 1;
+                                                        const childStatus = statusColors[child.status] || statusColors.a_vencer;
                                                         return (
                                                             <div key={child.id} style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', paddingLeft: '50%' }}>
                                                                 {/* Elbow line */}
@@ -1511,18 +1528,37 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                                 <div style={{ position: 'absolute', left: '50%', top: 0, height: '50%', width: '2px', backgroundColor: '#94a3b8' }} />
 
                                                                 {/* Sub Node Card */}
-                                                                <div style={{ width: 'calc(100% - 15px)', background: '#0f172a', borderRadius: '12px', padding: '0.85rem 1.25rem', color: 'white', position: 'relative', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                                                                    <button 
-                                                                        onClick={() => handleUnlinkChild(child.id)}
-                                                                        style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.25rem', cursor: 'pointer', color: '#fca5a5', display: 'flex' }}
-                                                                        title="Desvincular"
-                                                                    >
-                                                                        <Trash2 size={16} />
-                                                                    </button>
-                                                                    <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Conta Incorporada</div>
-                                                                    <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 600 }}>Ref: {child.mes_referencia ? child.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
-                                                                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{formatCurrency(child.valor_concessionaria)}</div>
-                                                                    <div style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem', color: '#cbd5e1' }}>
+                                                                <div 
+                                                                    onClick={() => onViewInvoice && onViewInvoice(child)}
+                                                                    style={{ 
+                                                                        width: 'calc(100% - 15px)', background: '#0f172a', borderRadius: '12px', padding: '0.85rem 1.25rem', color: 'white', position: 'relative', boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                                                                        cursor: onViewInvoice ? 'pointer' : 'default', transition: 'transform 0.2s',
+                                                                        display: 'flex', flexDirection: 'column'
+                                                                    }}
+                                                                    onMouseEnter={e => { if(onViewInvoice) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                                                                    onMouseLeave={e => { if(onViewInvoice) e.currentTarget.style.transform = 'none'; }}
+                                                                >
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                        <span style={{ 
+                                                                            padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 800,
+                                                                            background: childStatus.bg, color: childStatus.text, border: `1px solid ${childStatus.text}20`,
+                                                                            textTransform: 'uppercase', marginBottom: '0.5rem'
+                                                                        }}>
+                                                                            {childStatus.label}
+                                                                        </span>
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleUnlinkChild(child.id); }}
+                                                                            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.25rem', cursor: 'pointer', color: '#fca5a5', display: 'flex' }}
+                                                                            title="Desvincular"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CONTA INCORPORADA</div>
+                                                                    <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 600 }}>UC: {consumerUnit?.numero_uc || '-'}</div>
+                                                                    <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Ref: {child.mes_referencia ? child.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '-'}</div>
+                                                                    <div style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0.25rem 0' }}>{formatCurrency(child.valor_concessionaria)}</div>
+                                                                    <div style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#cbd5e1' }}>
                                                                         <Clock size={12} />
                                                                         Venc: {child.vencimento_concessionaria ? child.vencimento_concessionaria.split('-').reverse().join('/') : (child.vencimento ? child.vencimento.split('-').reverse().join('/') : '-')}
                                                                     </div>
