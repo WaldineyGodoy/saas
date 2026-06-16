@@ -11,6 +11,28 @@ import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 
+const energyStatusColors = { 
+    'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
+    'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
+    'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
+    'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelada' }, 
+    'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasada' },
+    'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga' }
+};
+
+const getEnergyStatus = (inv) => {
+    const ebStatus = inv.energy_bill_status || 'pendente';
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
+    const isPastDue = dueDate && dueDate < today;
+
+    if (ebStatus === 'pendente') {
+        return isPastDue ? 'atrasada' : 'a_vencer';
+    }
+    return ebStatus;
+};
+
 export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess, onViewInvoice }) {
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
@@ -1490,10 +1512,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
                                                         <span style={{ 
                                                             padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 800,
-                                                            background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`,
+                                                            background: (energyStatusColors[getEnergyStatus(invoice)] || energyStatusColors.a_vencer).bg, 
+                                                            color: (energyStatusColors[getEnergyStatus(invoice)] || energyStatusColors.a_vencer).color, 
+                                                            border: `1px solid ${(energyStatusColors[getEnergyStatus(invoice)] || energyStatusColors.a_vencer).color}20`,
                                                             textTransform: 'uppercase'
                                                         }}>
-                                                            {currentStatus.label}
+                                                            {(energyStatusColors[getEnergyStatus(invoice)] || energyStatusColors.a_vencer).label}
                                                         </span>
                                                     </div>
                                                     <div style={{ fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e3a8a', fontWeight: 700 }}>
@@ -1517,7 +1541,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', position: 'relative' }}>
                                                     {childInvoices.map((child, index) => {
                                                         const isLast = index === childInvoices.length - 1;
-                                                        const childStatus = statusColors[child.status] || statusColors.a_vencer;
+                                                        const childStatus = energyStatusColors[getEnergyStatus(child)] || energyStatusColors.a_vencer;
                                                         return (
                                                             <div key={child.id} style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', paddingLeft: '50%' }}>
                                                                 {/* Elbow line */}
@@ -1541,7 +1565,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                                         <span style={{ 
                                                                             padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 800,
-                                                                            background: childStatus.bg, color: childStatus.text, border: `1px solid ${childStatus.text}20`,
+                                                                            background: childStatus.bg, color: childStatus.color, border: `1px solid ${childStatus.color}20`,
                                                                             textTransform: 'uppercase', marginBottom: '0.5rem'
                                                                         }}>
                                                                             {childStatus.label}
