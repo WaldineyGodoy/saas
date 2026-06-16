@@ -56,7 +56,8 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 'latest'
+          version: '2.106.0'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy Edge Functions
         run: |
