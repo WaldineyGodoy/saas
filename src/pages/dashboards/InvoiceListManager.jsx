@@ -82,6 +82,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [ucModalSection, setUcModalSection] = useState('geral');
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
     const [dropTarget, setDropTarget] = useState(null);
+    const [draggedInvoice, setDraggedInvoice] = useState(null);
 
     const handleCalendarCardClick = (uc) => {
         if (uc.matchingInvoice) {
@@ -775,9 +776,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         e.preventDefault();
         e.stopPropagation();
         setDropTarget(null);
+        setDraggedInvoice(null);
         
         const draggedInvoiceId = e.dataTransfer.getData('invoiceId');
         if (!draggedInvoiceId || draggedInvoiceId === targetInvoiceId) return;
+
+        const draggedInv = invoices.find(i => i.id === draggedInvoiceId);
+        const targetInv = invoices.find(i => i.id === targetInvoiceId);
+        
+        if (!draggedInv || !targetInv) return;
+        
+        if (draggedInv.uc_id !== targetInv.uc_id) {
+            showAlert('Apenas faturas da mesma Unidade Consumidora podem ser vinculadas.', 'warning');
+            return;
+        }
 
         try {
             const { error } = await supabase
@@ -2529,12 +2541,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             }} 
                                                             className="kanban-card"
                                                             draggable
-                                                            onDragStart={(e) => e.dataTransfer.setData('invoiceId', inv.id)}
-                                                            onDragEnd={() => setDropTarget(null)}
+                                                            onDragStart={(e) => {
+                                                                e.dataTransfer.setData('invoiceId', inv.id);
+                                                                setDraggedInvoice(inv);
+                                                            }}
+                                                            onDragEnd={() => {
+                                                                setDropTarget(null);
+                                                                setDraggedInvoice(null);
+                                                            }}
                                                             onDragOver={(e) => {
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
-                                                                setDropTarget({ type: 'join', targetId: inv.id, label: inv.consumer_units?.numero_uc });
+                                                                if (draggedInvoice && draggedInvoice.uc_id === inv.uc_id && draggedInvoice.id !== inv.id) {
+                                                                    setDropTarget({ type: 'join', targetId: inv.id, label: inv.consumer_units?.numero_uc });
+                                                                }
                                                             }}
                                                             onDragLeave={(e) => {
                                                                 e.stopPropagation();
