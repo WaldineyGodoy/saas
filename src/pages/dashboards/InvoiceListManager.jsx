@@ -192,7 +192,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     const filteredInvoices = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
-        if (inv.parent_invoice_id) return false;
+        if (inv.parent_invoice_id) {
+            if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
+                return false;
+            }
+        }
         
         if (activeTab === 'faturas') {
             // Permitir 'sem_faturamento' na aba de faturas para auditoria e conferência antes do envio
@@ -356,20 +360,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         doc.line(14, 22, pageWidth - 14, 22);
 
         // Resumo financeiro / Filtros aplicados
-        const totalFact = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+        const totalFact = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
         
         const totalAtrasado = sortedInvoices
             .filter(inv => inv.status === 'atrasado')
-            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
         const totalSemFaturamento = sortedInvoices
             .filter(inv => inv.status === 'sem_faturamento')
-            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
         const totalPago = sortedInvoices
             .filter(inv => inv.status === 'pago' || inv.status === 'confirmado')
-            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
         const totalAVencer = sortedInvoices
             .filter(inv => inv.status === 'a_vencer')
-            .reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
+            .reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
 
         let statusSummaryText = `Atrasado: ${formatCurrency(totalAtrasado)}    |    Sem Faturamento: ${formatCurrency(totalSemFaturamento)}    |    Pago: ${formatCurrency(totalPago)}`;
         if (totalAVencer > 0) {
@@ -500,6 +504,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
     const invoicesForTotals = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
+        if (inv.parent_invoice_id) return false;
 
         if (activeTab === 'faturas') {
             // Permitir 'sem_faturamento' no cálculo de totais
@@ -1045,6 +1050,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         
         // Filtra faturas: apenas modalidade Auto Consumo Remoto ou Geração Compartilhada
         const filteredEnergyInvoices = invoices.filter(inv => 
+            !inv.parent_invoice_id &&
             ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) &&
             inv.status !== 'sem_faturamento' &&
             (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
@@ -1986,7 +1992,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
                             <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0)))), 0))}
                             </span>
                         </div>
                     </div>
@@ -2071,8 +2077,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 <>
                     {viewMode === 'list' ? (
                         (() => {
-                            const totalFactValue = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_a_pagar) || 0), 0);
-                            const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0))), 0);
+                            const totalFactValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
+                            const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0)))), 0);
                                             const totalBalance = totalFactValue - totalEnergyBillValue;
 
                             return (
