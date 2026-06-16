@@ -62,7 +62,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             try {
                 const { data, error } = await supabase
                     .from('invoices')
-                    .select('id, mes_referencia, vencimento, vencimento_concessionaria, valor_concessionaria, status, energy_bill_status')
+                    .select('*, consumer_units(*)')
                     .eq('parent_invoice_id', invoice.id);
                 if (error) throw error;
                 setChildInvoices(data || []);
