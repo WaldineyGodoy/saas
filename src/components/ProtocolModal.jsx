@@ -150,6 +150,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [activeTab, setActiveTab] = useState('tratativa');
     const [showReplicaJustification, setShowReplicaJustification] = useState(false);
     const [replicaJustification, setReplicaJustification] = useState('');
+    const [historyRefresh, setHistoryRefresh] = useState(0);
 
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
@@ -1594,6 +1595,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                 isInline={true}
                                                 hideHeader={true}
                                                 compact={false}
+                                                refreshTrigger={historyRefresh}
                                             />
                                         </div>
                                     </div>
@@ -1755,22 +1757,68 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 Cancelar
                             </button>
                             <button
-                                type="button"
-                                onClick={() => {
-                                    if (!replicaJustification.trim()) {
-                                        showAlert('Por favor, informe uma justificativa.', 'warning');
-                                        return;
-                                    }
-                                    setStatus('replica');
-                                    setShowReplicaJustification(false);
-                                }}
-                                style={{
-                                    padding: '0.5rem 1rem', border: 'none', borderRadius: '6px',
-                                    background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer'
-                                }}
-                            >
-                                Confirmar Réplica
-                            </button>
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    if (!replicaJustification.trim()) {
+                                                                        showAlert('Por favor, informe uma justificativa.', 'warning');
+                                                                        return;
+                                                                    }
+                                                                    setStatus('replica');
+                                                                    setShowReplicaJustification(false);
+                                
+                                                                    if (currentProtocol?.id) {
+                                                                        try {
+                                                                            const { data: { user } } = await supabase.auth.getUser();
+                                                                            
+                                                                            // Grava a justificativa no histórico imediatamente
+                                                                            const { error: histError } = await supabase
+                                                                                .from('crm_history')
+                                                                                .insert({
+                                                                                    entity_type: 'protocol',
+                                                                                    entity_id: currentProtocol.id,
+                                                                                    content: `Motivo da Réplica:\n${replicaJustification.trim()}`,
+                                                                                    created_by: user?.id,
+                                                                                    metadata: {
+                                                                                        protocol_id: currentProtocol.id,
+                                                                                        message: `Motivo da Réplica: ${replicaJustification.trim()}`
+                                                                                    }
+                                                                                });
+                                                                                
+                                                                            if (histError) throw histError;
+                                
+                                                                            // Atualiza também o status do protocolo no banco imediatamente
+                                                                            const { error: statusError } = await supabase
+                                                                                .from('protocols')
+                                                                                .update({
+                                                                                    status: 'replica',
+                                                                                    updated_at: new Date().toISOString()
+                                                                                })
+                                                                                .eq('id', currentProtocol.id);
+                                                                            
+                                                                            if (statusError) throw statusError;
+                                
+                                                                            // Limpa a justificativa do state para evitar duplicidade no handleSave
+                                                                            setReplicaJustification('');
+                                                                            
+                                                                            // Atualiza a timeline
+                                                                            setHistoryRefresh(prev => prev + 1);
+                                
+                                                                            // Notifica o componente pai para atualizar a listagem/kanban
+                                                                            if (onUpdated) onUpdated();
+                                                                            showAlert('Réplica registrada com sucesso!', 'success');
+                                                                        } catch (err) {
+                                                                            console.error('Erro ao registrar réplica imediatamente:', err);
+                                                                            showAlert('Erro ao registrar réplica no histórico.', 'error');
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    padding: '0.5rem 1rem', border: 'none', borderRadius: '6px',
+                                                                    background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Confirmar Réplica
+                                                            </button>
                         </div>
                     </div>
                 </div>
