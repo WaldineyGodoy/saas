@@ -148,6 +148,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [activeInvoiceCU, setActiveInvoiceCU] = useState(null);
     const [activeRateio, setActiveRateio] = useState(null);
     const [activeTab, setActiveTab] = useState('tratativa');
+    const [showReplicaJustification, setShowReplicaJustification] = useState(false);
+    const [replicaJustification, setReplicaJustification] = useState('');
 
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
@@ -429,6 +431,23 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .single();
                 if (error) throw error;
                 returnedProtocol = data;
+
+                if (status === 'replica' && replicaJustification.trim()) {
+                    await supabase
+                        .from('crm_history')
+                        .insert({
+                            entity_type: 'protocol',
+                            entity_id: returnedProtocol.id,
+                            content: `Motivo da Réplica:\n${replicaJustification.trim()}`,
+                            created_by: user?.id,
+                            metadata: {
+                                protocol_id: returnedProtocol.id,
+                                message: `Motivo da Réplica: ${replicaJustification.trim()}`
+                            }
+                        });
+                    setReplicaJustification('');
+                }
+
                 showAlert('Protocolo atualizado com sucesso!', 'success');
             } else {
                 // Create new
@@ -442,6 +461,22 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .single();
                 if (error) throw error;
                 returnedProtocol = data;
+
+                if (status === 'replica' && replicaJustification.trim()) {
+                    await supabase
+                        .from('crm_history')
+                        .insert({
+                            entity_type: 'protocol',
+                            entity_id: returnedProtocol.id,
+                            content: `Motivo da Réplica:\n${replicaJustification.trim()}`,
+                            created_by: user?.id,
+                            metadata: {
+                                protocol_id: returnedProtocol.id,
+                                message: `Motivo da Réplica: ${replicaJustification.trim()}`
+                            }
+                        });
+                    setReplicaJustification('');
+                }
 
                 // LOG TO CRM HISTORY OF THE ENTITY
                 if (linkedEntityType && linkedEntityId) {
@@ -569,7 +604,13 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 <button
                                     key={s.id}
                                     type="button"
-                                    onClick={() => setStatus(s.id)}
+                                    onClick={() => {
+                                        if (s.id === 'replica') {
+                                            setShowReplicaJustification(true);
+                                        } else {
+                                            setStatus(s.id);
+                                        }
+                                    }}
                                     style={{
                                         flex: '1 1 auto',
                                         minWidth: '120px',
@@ -597,6 +638,40 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                             );
                         })}
                     </div>
+                    {status === 'replica' && replicaJustification && (
+                        <div style={{
+                            marginTop: '0.5rem',
+                            padding: '0.6rem 1rem',
+                            background: '#f5f3ff',
+                            border: '1px dashed #6d28d9',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            color: '#6d28d9',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                Motivo: "{replicaJustification}"
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setShowReplicaJustification(true)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#6d28d9',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                    padding: 0
+                                }}
+                            >
+                                Editar Motivo
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tabs Navigation */}
@@ -1488,23 +1563,38 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                 </div>
                             )}
 
-                            {activeTab === 'historico' && currentProtocol?.id && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.2s ease-in-out' }}>
-                                    <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                        Linha do Tempo / Histórico da Tratativa
-                                    </h4>
-                                    <div style={{ minHeight: '400px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem' }}>
-                                        <HistoryTimeline
-                                            entityType="protocol"
-                                            entityId={currentProtocol.id}
-                                            entityName={title}
-                                            isInline={true}
-                                            hideHeader={true}
-                                            compact={false}
-                                        />
+                            {activeTab === 'historico' && currentProtocol?.id && (() => {
+                                const allProtocolIds = [];
+                                if (parentProtocol?.id) {
+                                    allProtocolIds.push(parentProtocol.id);
+                                } else if (currentProtocol?.id && !currentProtocol.parent_protocol_id) {
+                                    allProtocolIds.push(currentProtocol.id);
+                                }
+                                treeSubProtocols.forEach(p => {
+                                    if (p.id) allProtocolIds.push(p.id);
+                                });
+                                if (currentProtocol?.id && !allProtocolIds.includes(currentProtocol.id)) {
+                                    allProtocolIds.push(currentProtocol.id);
+                                }
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.2s ease-in-out' }}>
+                                        <h4 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            Linha do Tempo / Histórico da Tratativa (Unificado)
+                                        </h4>
+                                        <div style={{ minHeight: '400px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem' }}>
+                                            <HistoryTimeline
+                                                entityType="protocol"
+                                                entityId={currentProtocol.id}
+                                                entityIds={allProtocolIds}
+                                                entityName={title}
+                                                isInline={true}
+                                                hideHeader={true}
+                                                compact={false}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
 
                         {/* Actions */}
@@ -1593,6 +1683,93 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     rateio={activeRateio}
                     onClose={() => setActiveRateio(null)}
                 />
+            )}
+
+            {/* Justification dialog for replica status */}
+            {showReplicaJustification && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex',
+                    justifyContent: 'center', alignItems: 'center', zIndex: 2000,
+                    backdropFilter: 'blur(4px)'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '12px',
+                        width: '90%',
+                        maxWidth: '500px',
+                        padding: '1.5rem',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1e293b' }}>
+                                Justificativa da Réplica
+                            </h4>
+                            <button 
+                                type="button" 
+                                onClick={() => setShowReplicaJustification(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: 1.4 }}>
+                            Por favor, informe a justificativa ou o motivo para abrir a Réplica. Isso será registrado no histórico da tratativa.
+                        </p>
+                        <textarea
+                            value={replicaJustification}
+                            onChange={(e) => setReplicaJustification(e.target.value)}
+                            placeholder="Descreva o motivo da discordância com a tratativa..."
+                            style={{
+                                width: '100%',
+                                height: '120px',
+                                padding: '0.75rem',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                fontSize: '0.875rem',
+                                outline: 'none',
+                                resize: 'none',
+                                transition: 'border-color 0.2s'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = primaryColor}
+                            onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowReplicaJustification(false);
+                                }}
+                                style={{
+                                    padding: '0.5rem 1rem', border: '1px solid #cbd5e1', borderRadius: '6px',
+                                    background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!replicaJustification.trim()) {
+                                        showAlert('Por favor, informe uma justificativa.', 'warning');
+                                        return;
+                                    }
+                                    setStatus('replica');
+                                    setShowReplicaJustification(false);
+                                }}
+                                style={{
+                                    padding: '0.5rem 1rem', border: 'none', borderRadius: '6px',
+                                    background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer'
+                                }}
+                            >
+                                Confirmar Réplica
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

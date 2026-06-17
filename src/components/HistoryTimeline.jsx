@@ -52,7 +52,7 @@ export const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = 
         </div>
     );
 };
-export default function HistoryTimeline({ entityType, entityId, entityName, onClose, isInline = false, compact = false, hideHeader = false, refreshTrigger }) {
+export default function HistoryTimeline({ entityType, entityId, entityIds, entityName, onClose, isInline = false, compact = false, hideHeader = false, refreshTrigger }) {
     const { profile } = useAuth();
     const { showAlert } = useUI();
     const [history, setHistory] = useState([]);
@@ -65,17 +65,23 @@ export default function HistoryTimeline({ entityType, entityId, entityName, onCl
 
     useEffect(() => {
         fetchHistory();
-    }, [entityId, refreshTrigger]);
+    }, [entityId, JSON.stringify(entityIds), refreshTrigger]);
 
     const fetchHistory = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('v_crm_history')
                 .select('*')
-                .eq('entity_type', entityType)
-                .eq('entity_id', entityId)
-                .order('created_at', { ascending: false });
+                .eq('entity_type', entityType);
+
+            if (entityIds && entityIds.length > 0) {
+                query = query.in('entity_id', entityIds);
+            } else {
+                query = query.eq('entity_id', entityId);
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false });
 
             if (error) throw error;
             setHistory(data || []);
