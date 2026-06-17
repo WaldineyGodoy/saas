@@ -327,6 +327,51 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
         loadTreeData();
     }, [currentProtocol, parentProtocolId]);
 
+    // Listen to 'open-protocol' event inside the modal to navigate between protocols/sub-protocols
+    useEffect(() => {
+        const handleOpenProtocolInModal = async (e) => {
+            const protoId = e.detail?.protocolId;
+            if (!protoId) return;
+
+            // Stop propagation to avoid global triggers if needed, but allow changing the local active card
+            if (parentProtocol?.id === protoId) {
+                setCurrentProtocol(parentProtocol);
+                setActiveTab('tratativa');
+                return;
+            }
+
+            const found = treeSubProtocols.find(p => p.id === protoId);
+            if (found) {
+                setCurrentProtocol(found);
+                setActiveTab('tratativa');
+                return;
+            }
+
+            if (currentProtocol?.id === protoId) {
+                setActiveTab('tratativa');
+                return;
+            }
+
+            // Fallback: Fetch protocol if it belongs to another tree but clicked from this modal's history
+            try {
+                const { data, error } = await supabase
+                    .from('protocols')
+                    .select('*')
+                    .eq('id', protoId)
+                    .single();
+                if (data && !error) {
+                    setCurrentProtocol(data);
+                    setActiveTab('tratativa');
+                }
+            } catch (err) {
+                console.error('Error opening protocol from timeline event:', err);
+            }
+        };
+
+        window.addEventListener('open-protocol', handleOpenProtocolInModal);
+        return () => window.removeEventListener('open-protocol', handleOpenProtocolInModal);
+    }, [parentProtocol, treeSubProtocols, currentProtocol]);
+
     const fetchEntityOptions = async () => {
         setLoadingEntities(true);
         try {
