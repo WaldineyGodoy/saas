@@ -181,7 +181,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     }, [currentProtocol]);
 
     const handleOpenEntityModal = async () => {
-        if (!linkedEntityType || !linkedEntityId) return;
+        if (!linkedEntityType || !linkedEntityId || linkedEntityId === 'undefined' || linkedEntityId === 'null') return;
         setLoadingEntityDetail(true);
         try {
             if (linkedEntityType === 'assinante') {
@@ -1488,7 +1488,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                             </div>
                                         )}
 
-                                        {linkedEntityType && linkedEntityId && (
+                                        {linkedEntityType && linkedEntityId && linkedEntityId !== 'undefined' && linkedEntityId !== 'null' && (
                                             <div style={{ marginTop: '0.5rem' }}>
                                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                                                     Visualizar Entidade Vinculada
