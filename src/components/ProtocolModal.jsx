@@ -208,12 +208,16 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .single();
                 if (invError) throw invError;
                 
-                const { data: cuData, error: cuError } = await supabase
-                    .from('consumer_units')
-                    .select('*')
-                    .eq('id', invoiceData.consumer_unit_id)
-                    .single();
-                if (cuError) throw cuError;
+                let cuData = null;
+                if (invoiceData?.consumer_unit_id && invoiceData.consumer_unit_id !== 'undefined' && invoiceData.consumer_unit_id !== 'null') {
+                    const { data, error: cuError } = await supabase
+                        .from('consumer_units')
+                        .select('*')
+                        .eq('id', invoiceData.consumer_unit_id)
+                        .maybeSingle();
+                    if (cuError) console.error('Error fetching invoice consumer unit:', cuError);
+                    else cuData = data;
+                }
 
                 setActiveInvoice(invoiceData);
                 setActiveInvoiceCU(cuData);
