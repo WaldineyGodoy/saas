@@ -164,7 +164,13 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             setTitle(currentProtocol.title || '');
             setDescription(currentProtocol.description || '');
             setProtocolNumber(currentProtocol.protocol_number || '');
-            setStatus(currentProtocol.status || 'gerar');
+            
+            // Check if overdue
+            const isDelayed = currentProtocol.due_date && 
+                              new Date(currentProtocol.due_date) < new Date() && 
+                              currentProtocol.status !== 'concluida';
+            setStatus(isDelayed ? 'atrasado' : (currentProtocol.status || 'gerar'));
+            
             setDeadlineDays(currentProtocol.deadline_days || '');
             setDueDate(currentProtocol.due_date || null);
             setLinkedEntityType(currentProtocol.linked_entity_type || '');
@@ -1082,6 +1088,13 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                             {treeSubProtocols.map((sub, index) => {
                                                                 const isSelected = currentProtocol?.id === sub.id;
                                                                 const isLast = index === treeSubProtocols.length - 1 && currentProtocol?.id;
+                                                                
+                                                                // Precompute dynamic overdue status to prevent JSX syntax issues
+                                                                const isSubDelayed = sub.due_date && 
+                                                                                    new Date(sub.due_date) < new Date() && 
+                                                                                    sub.status !== 'concluida';
+                                                                const displaySubStatus = isSubDelayed ? 'atrasado' : sub.status;
+
                                                                 return (
                                                                     <div 
                                                                         key={sub.id}
@@ -1262,7 +1275,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                             background: 'rgba(255,255,255,0.2)',
                                                                                             color: 'white'
                                                                                         }}>
-                                                                                            {status === 'em_tratativa' ? 'Em Tratativa' : status === 'replica' ? 'Réplica' : status === 'concluida' ? 'Concluída' : status}
+                                                                                            {status === 'em_tratativa' ? 'Em Tratativa' : status === 'replica' ? 'Réplica' : status === 'concluida' ? 'Concluída' : status === 'atrasado' ? 'Atrasado' : status}
                                                                                         </span>
                                                                                     </div>
                                                                                 </div>
@@ -1277,10 +1290,10 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                                                             fontWeight: 700,
                                                                                             padding: '0.1rem 0.35rem',
                                                                                             borderRadius: '99px',
-                                                                                            background: sub.status === 'concluida' ? '#dcfce7' : sub.status === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
-                                                                                            color: sub.status === 'concluida' ? '#166534' : sub.status === 'em_tratativa' ? '#b45309' : '#1d4ed8'
+                                                                                            background: displaySubStatus === 'concluida' ? '#dcfce7' : displaySubStatus === 'atrasado' ? '#fee2e2' : displaySubStatus === 'em_tratativa' ? '#fef3c7' : '#eff6ff',
+                                                                                            color: displaySubStatus === 'concluida' ? '#166534' : displaySubStatus === 'atrasado' ? '#991b1b' : displaySubStatus === 'em_tratativa' ? '#b45309' : '#1d4ed8'
                                                                                         }}>
-                                                                                            {sub.status === 'em_tratativa' ? 'Em Tratativa' : sub.status === 'replica' ? 'Réplica' : sub.status === 'concluida' ? 'Concluída' : sub.status}
+                                                                                            {displaySubStatus === 'em_tratativa' ? 'Em Tratativa' : displaySubStatus === 'replica' ? 'Réplica' : displaySubStatus === 'concluida' ? 'Concluída' : displaySubStatus === 'atrasado' ? 'Atrasado' : displaySubStatus}
                                                                                         </span>
                                                                                     </div>
                                                                                     {(sub.deadline_days || sub.due_date) && (
