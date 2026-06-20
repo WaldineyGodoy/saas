@@ -1888,28 +1888,16 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Concessionária</label>
-                                            <select
-                                                value={formData.concessionaria}
-                                                onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
-                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                            >
-                                                <option value="">Selecione...</option>
-                                                {concessionariaOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Modalidade</label>
-                                            <select
-                                                value={formData.modalidade}
-                                                onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                            >
-                                                {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                            </select>
-                                        </div>
+                                    <div style={{ marginBottom: '1.25rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Concessionária</label>
+                                        <select
+                                            value={formData.concessionaria}
+                                            onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
+                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {concessionariaOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
                                     </div>
 
                                 </div>

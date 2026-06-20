@@ -318,9 +318,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     ];
 
     const modalidadeOptions = [
-        { value: 'gd1', label: 'GD I' },
-        { value: 'gd2', label: 'GD II' },
-        { value: 'gd3', label: 'GD III' }
+        { value: 'auto_consumo_remoto', label: 'Auto Consumo Remoto' },
+        { value: 'geracao_distribuida', label: 'Geração Distribuída' }
     ];
 
     const serviceOptions = [
@@ -347,7 +346,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         supplier_id: '',
         name: '',
         status: 'em_conexao',
-        modalidade: 'gd1',
+        modalidade: 'geracao_distribuida',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
         potencia_modulos_w: '',
@@ -524,7 +523,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 supplier_id: usina.supplier_id || '',
                 name: usina.name || '',
                 status: usina.status || 'em_conexao',
-                modalidade: usina.modalidade || 'gd1',
+                modalidade: ['gd1', 'gd2', 'gd3'].includes(usina.modalidade) ? 'geracao_distribuida' : (usina.modalidade || 'geracao_distribuida'),
                 valor_investido: usina.valor_investido ? formatCurrency(usina.valor_investido) : '',
                 qtd_modulos: usina.qtd_modulos || '',
                 potencia_modulos_w: usina.potencia_modulos_w || '',
@@ -3022,9 +3021,135 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 <SlidersHorizontal size={18} color={branding?.primary_color || '#3b82f6'} />
                                                 <span style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Regra de Distribuição de Rateio</span>
                                             </div>
-                                            <span style={{ fontSize: '0.72rem', color: branding?.primary_color || '#3b82f6', fontWeight: 700, background: `${branding?.primary_color || '#3b82f6'}15`, padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
-                                                {formData.rateio_type === 'prioridade' ? 'Modo Prioridade' : 'Modo Porcentagem'}
-                                            </span>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.72rem', color: '#0f766e', fontWeight: 700, background: '#f0fdf4', padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
+                                                    {formData.modalidade === 'auto_consumo_remoto' ? 'Auto Consumo Remoto' : 'Geração Distribuída'}
+                                                </span>
+                                                <span style={{ fontSize: '0.72rem', color: branding?.primary_color || '#3b82f6', fontWeight: 700, background: `${branding?.primary_color || '#3b82f6'}15`, padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
+                                                    {formData.rateio_type === 'prioridade' ? 'Modo Prioridade' : 'Modo Porcentagem'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Modalidade Selector */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1.25rem' }}>
+                                            {/* Auto Consumo Remoto */}
+                                            <div 
+                                                onClick={() => setFormData({...formData, modalidade: 'auto_consumo_remoto'})}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    padding: '1.25rem',
+                                                    borderRadius: '16px',
+                                                    border: `2px solid ${formData.modalidade === 'auto_consumo_remoto' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
+                                                    background: formData.modalidade === 'auto_consumo_remoto' ? 'white' : 'transparent',
+                                                    boxShadow: formData.modalidade === 'auto_consumo_remoto' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {formData.modalidade === 'auto_consumo_remoto' && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        right: 0,
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        background: branding?.primary_color || '#3b82f6',
+                                                        borderBottomLeftRadius: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white'
+                                                    }}>
+                                                        <Check size={12} strokeWidth={3} />
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{
+                                                        width: '36px',
+                                                        height: '36px',
+                                                        borderRadius: '10px',
+                                                        background: formData.modalidade === 'auto_consumo_remoto' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
+                                                        color: formData.modalidade === 'auto_consumo_remoto' ? (branding?.primary_color || '#3b82f6') : '#64748b',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}>
+                                                        <User size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.modalidade === 'auto_consumo_remoto' ? '#0f172a' : '#475569', fontWeight: 800 }}>Auto Consumo Remoto</h5>
+                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Mesmo Titular</span>
+                                                    </div>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4', fontWeight: 500 }}>
+                                                    As contas de energia devem ser do mesmo titular
+                                                </p>
+                                            </div>
+
+                                            {/* Geração Distribuída */}
+                                            <div 
+                                                onClick={() => setFormData({...formData, modalidade: 'geracao_distribuida'})}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '0.75rem',
+                                                    padding: '1.25rem',
+                                                    borderRadius: '16px',
+                                                    border: `2px solid ${formData.modalidade === 'geracao_distribuida' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
+                                                    background: formData.modalidade === 'geracao_distribuida' ? 'white' : 'transparent',
+                                                    boxShadow: formData.modalidade === 'geracao_distribuida' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {formData.modalidade === 'geracao_distribuida' && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        right: 0,
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        background: branding?.primary_color || '#3b82f6',
+                                                        borderBottomLeftRadius: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'white'
+                                                    }}>
+                                                        <Check size={12} strokeWidth={3} />
+                                                    </div>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{
+                                                        width: '36px',
+                                                        height: '36px',
+                                                        borderRadius: '10px',
+                                                        background: formData.modalidade === 'geracao_distribuida' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
+                                                        color: formData.modalidade === 'geracao_distribuida' ? (branding?.primary_color || '#3b82f6') : '#64748b',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.2s'
+                                                    }}>
+                                                        <Users size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.modalidade === 'geracao_distribuida' ? '#0f172a' : '#475569', fontWeight: 800 }}>Geração Distribuída</h5>
+                                                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Múltiplos Titulares</span>
+                                                    </div>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4', fontWeight: 500 }}>
+                                                    As contas de energia podem ser de titularidade diferente
+                                                </p>
+                                            </div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
