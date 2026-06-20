@@ -1322,7 +1322,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
                                                 {/* Titular da Fatura Field */}
                                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Titular da Fatura (Assinante B2W Titular)</label>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Titular da Conta de Energia ( concessionária )</label>
                                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                         <div style={{ position: 'relative', flex: 1 }}>
                                                             <input
