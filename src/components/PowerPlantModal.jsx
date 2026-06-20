@@ -245,9 +245,9 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                         <Users size={12} /> Assinante: {mainSubscriber.name}
                     </div>
                 )}
-                {subscriber && subscriber.id !== mainSubscriber?.id && (
+                {subscriber && (
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <Users size={12} /> Faturamento: {subscriber.name}
+                        <Users size={12} /> Titular da Conta ( concessionaria ): {subscriber.name}
                     </div>
                 )}
             </div>
