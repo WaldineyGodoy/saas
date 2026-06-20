@@ -95,7 +95,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
     const { branding } = useBranding();
     const isDisconnected = uc.status === 'desconectado' || uc.status === 'cancelado';
     const percentage = (geracaoEstimada > 0 && !isDisconnected) ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : (isDisconnected ? '0.00' : null);
-    const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id || s.id === uc.subscriber_id);
+    const subscriber = (uc.titular_fatura_id ? subscribers?.find(s => s.id === uc.titular_fatura_id) : null) || subscribers?.find(s => s.id === uc.subscriber_id);
     const mainSubscriber = subscribers?.find(s => s.id === uc.subscriber_id);
     
     const getStatusStyle = (status) => {
