@@ -319,7 +319,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const modalidadeOptions = [
         { value: 'auto_consumo_remoto', label: 'Auto Consumo Remoto' },
-        { value: 'geracao_distribuida', label: 'Geração Distribuída' }
+        { value: 'geracao_compartilhada', label: 'Geração Compartilhada' }
     ];
 
     const serviceOptions = [
@@ -346,7 +346,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         supplier_id: '',
         name: '',
         status: 'em_conexao',
-        modalidade: 'geracao_distribuida',
+        modalidade: 'geracao_compartilhada',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
         potencia_modulos_w: '',
@@ -523,7 +523,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 supplier_id: usina.supplier_id || '',
                 name: usina.name || '',
                 status: usina.status || 'em_conexao',
-                modalidade: ['gd1', 'gd2', 'gd3'].includes(usina.modalidade) ? 'geracao_distribuida' : (usina.modalidade || 'geracao_distribuida'),
+                modalidade: ['gd1', 'gd2', 'gd3', 'geracao_distribuida'].includes(usina.modalidade) ? 'geracao_compartilhada' : (usina.modalidade || 'geracao_compartilhada'),
                 valor_investido: usina.valor_investido ? formatCurrency(usina.valor_investido) : '',
                 qtd_modulos: usina.qtd_modulos || '',
                 potencia_modulos_w: usina.potencia_modulos_w || '',
@@ -1145,6 +1145,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         if (isActiveAvailable && isOverLinked) {
             const activeUc = activeItemAvailable;
             if (activeUc) {
+                // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
+                if (formData.modalidade === 'auto_consumo_remoto') {
+                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                    if (geradoraUC && activeUc.subscriber_id !== geradoraUC.subscriber_id) {
+                        showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
+                        return;
+                    }
+                }
+
                 // Safety Pop-up
                 const confirm = await showConfirm(
                     'Confirmar Vínculo',
@@ -1619,6 +1628,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 setShowPreviewModal(true);
                                             }}
                                             onToggle={async (checked) => {
+                                                // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
+                                                if (formData.modalidade === 'auto_consumo_remoto') {
+                                                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                                                    if (geradoraUC && uc.subscriber_id !== geradoraUC.subscriber_id) {
+                                                        showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
+                                                        return;
+                                                    }
+                                                }
+
                                                 // checked -> bind link
                                                 const confirm = await showConfirm(
                                                     'Confirmar Vínculo',
@@ -3023,7 +3041,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                 <span style={{ fontSize: '0.72rem', color: '#0f766e', fontWeight: 700, background: '#f0fdf4', padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
-                                                    {formData.modalidade === 'auto_consumo_remoto' ? 'Auto Consumo Remoto' : 'Geração Distribuída'}
+                                                    {formData.modalidade === 'auto_consumo_remoto' ? 'Auto Consumo Remoto' : 'Geração Compartilhada'}
                                                 </span>
                                                 <span style={{ fontSize: '0.72rem', color: branding?.primary_color || '#3b82f6', fontWeight: 700, background: `${branding?.primary_color || '#3b82f6'}15`, padding: '0.2rem 0.6rem', borderRadius: '20px' }}>
                                                     {formData.rateio_type === 'prioridade' ? 'Modo Prioridade' : 'Modo Porcentagem'}
@@ -3035,7 +3053,29 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1.25rem' }}>
                                             {/* Auto Consumo Remoto */}
                                             <div 
-                                                onClick={() => setFormData({...formData, modalidade: 'auto_consumo_remoto'})}
+                                                onClick={async () => {
+                                                    if (formData.modalidade === 'auto_consumo_remoto') return;
+                                                    
+                                                    // Validate UCs titularity before changing
+                                                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                                                    if (geradoraUC) {
+                                                        const hasDifferentTitular = selectedUCs.some(uc => uc.subscriber_id !== geradoraUC.subscriber_id);
+                                                        if (hasDifferentTitular) {
+                                                            showAlert('Não é possível alterar para Auto Consumo Remoto pois existem UCs vinculadas com titularidade diferente da Unidade Geradora.', 'warning');
+                                                            return;
+                                                        }
+                                                    }
+
+                                                    const confirm = await showConfirm(
+                                                        'Alterar Modalidade',
+                                                        'Deseja alterar a modalidade da usina para Auto Consumo Remoto? As contas de energia deverão ser do mesmo titular.',
+                                                        'Sim, Alterar',
+                                                        'Cancelar'
+                                                    );
+                                                    if (confirm) {
+                                                        setFormData({...formData, modalidade: 'auto_consumo_remoto'});
+                                                    }
+                                                }}
                                                 style={{
                                                     display: 'flex',
                                                     flexDirection: 'column',
@@ -3092,25 +3132,36 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 </p>
                                             </div>
 
-                                            {/* Geração Distribuída */}
+                                            {/* Geração Compartilhada */}
                                             <div 
-                                                onClick={() => setFormData({...formData, modalidade: 'geracao_distribuida'})}
+                                                onClick={async () => {
+                                                    if (formData.modalidade === 'geracao_compartilhada') return;
+                                                    const confirm = await showConfirm(
+                                                        'Alterar Modalidade',
+                                                        'Deseja alterar a modalidade da usina para Geração Compartilhada? As contas de energia poderão ser de titularidade diferente.',
+                                                        'Sim, Alterar',
+                                                        'Cancelar'
+                                                    );
+                                                    if (confirm) {
+                                                        setFormData({...formData, modalidade: 'geracao_compartilhada'});
+                                                    }
+                                                }}
                                                 style={{
                                                     display: 'flex',
                                                     flexDirection: 'column',
                                                     gap: '0.75rem',
                                                     padding: '1.25rem',
                                                     borderRadius: '16px',
-                                                    border: `2px solid ${formData.modalidade === 'geracao_distribuida' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
-                                                    background: formData.modalidade === 'geracao_distribuida' ? 'white' : 'transparent',
-                                                    boxShadow: formData.modalidade === 'geracao_distribuida' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
+                                                    border: `2px solid ${formData.modalidade === 'geracao_compartilhada' ? (branding?.primary_color || '#3b82f6') : '#e2e8f0'}`,
+                                                    background: formData.modalidade === 'geracao_compartilhada' ? 'white' : 'transparent',
+                                                    boxShadow: formData.modalidade === 'geracao_compartilhada' ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
                                                     cursor: 'pointer',
                                                     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                                     position: 'relative',
                                                     overflow: 'hidden'
                                                 }}
                                             >
-                                                {formData.modalidade === 'geracao_distribuida' && (
+                                                {formData.modalidade === 'geracao_compartilhada' && (
                                                     <div style={{
                                                         position: 'absolute',
                                                         top: 0,
@@ -3132,8 +3183,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         width: '36px',
                                                         height: '36px',
                                                         borderRadius: '10px',
-                                                        background: formData.modalidade === 'geracao_distribuida' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
-                                                        color: formData.modalidade === 'geracao_distribuida' ? (branding?.primary_color || '#3b82f6') : '#64748b',
+                                                        background: formData.modalidade === 'geracao_compartilhada' ? `${branding?.primary_color || '#3b82f6'}15` : '#f1f5f9',
+                                                        color: formData.modalidade === 'geracao_compartilhada' ? (branding?.primary_color || '#3b82f6') : '#64748b',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
@@ -3142,7 +3193,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                         <Users size={18} />
                                                     </div>
                                                     <div>
-                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.modalidade === 'geracao_distribuida' ? '#0f172a' : '#475569', fontWeight: 800 }}>Geração Distribuída</h5>
+                                                        <h5 style={{ margin: 0, fontSize: '0.9rem', color: formData.modalidade === 'geracao_compartilhada' ? '#0f172a' : '#475569', fontWeight: 800 }}>Geração Compartilhada</h5>
                                                         <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Múltiplos Titulares</span>
                                                     </div>
                                                 </div>
@@ -3155,7 +3206,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
                                             {/* Option 1: Prioridade */}
                                             <div 
-                                                onClick={() => setFormData({...formData, rateio_type: 'prioridade'})}
+                                                onClick={async () => {
+                                                    if (formData.rateio_type === 'prioridade') return;
+                                                    const confirm = await showConfirm(
+                                                        'Alterar Regra de Rateio',
+                                                        'Deseja alterar a regra de rateio para Prioridade? Os créditos abastecerão as UCs na ordem da lista.',
+                                                        'Sim, Alterar',
+                                                        'Cancelar'
+                                                    );
+                                                    if (confirm) {
+                                                        setFormData({...formData, rateio_type: 'prioridade'});
+                                                    }
+                                                }}
                                                 style={{
                                                     display: 'flex',
                                                     flexDirection: 'column',
@@ -3214,7 +3276,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                                             {/* Option 2: Porcentagem */}
                                             <div 
-                                                onClick={() => setFormData({...formData, rateio_type: 'porcentagem'})}
+                                                onClick={async () => {
+                                                    if (formData.rateio_type === 'porcentagem') return;
+                                                    const confirm = await showConfirm(
+                                                        'Alterar Regra de Rateio',
+                                                        'Deseja alterar a regra de rateio para Porcentagem? Cada UC receberá uma fatia fixa da geração.',
+                                                        'Sim, Alterar',
+                                                        'Cancelar'
+                                                    );
+                                                    if (confirm) {
+                                                        setFormData({...formData, rateio_type: 'porcentagem'});
+                                                    }
+                                                }}
                                                 style={{
                                                     display: 'flex',
                                                     flexDirection: 'column',
