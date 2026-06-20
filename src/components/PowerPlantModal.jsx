@@ -96,6 +96,7 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
     const isDisconnected = uc.status === 'desconectado' || uc.status === 'cancelado';
     const percentage = (geracaoEstimada > 0 && !isDisconnected) ? ((uc.franquia / geracaoEstimada) * 100).toFixed(2) : (isDisconnected ? '0.00' : null);
     const subscriber = subscribers?.find(s => s.id === uc.titular_fatura_id || s.id === uc.subscriber_id);
+    const mainSubscriber = subscribers?.find(s => s.id === uc.subscriber_id);
     
     const getStatusStyle = (status) => {
         const map = {
@@ -239,9 +240,14 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                 <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
                     {uc.titular_conta}
                 </div>
-                {subscriber && (
+                {mainSubscriber && (
+                    <div style={{ fontSize: '0.75rem', color: '#0f766e', marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 700 }}>
+                        <Users size={12} /> Assinante: {mainSubscriber.name}
+                    </div>
+                )}
+                {subscriber && subscriber.id !== mainSubscriber?.id && (
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <Users size={12} /> {subscriber.name}
+                        <Users size={12} /> Faturamento: {subscriber.name}
                     </div>
                 )}
             </div>
