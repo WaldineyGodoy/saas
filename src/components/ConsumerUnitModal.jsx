@@ -22,6 +22,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
     const [subscribers, setSubscribers] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
@@ -145,6 +146,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     const [formData, setFormData] = useState({
         subscriber_id: '',
+        supplier_id: '',
         usina_id: '',
         status: 'em_ativacao',
         numero_uc: '',
@@ -179,6 +181,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     useEffect(() => {
         fetchSubscribers();
         fetchUsinas();
+        fetchSuppliers();
     }, []);
 
     // Assinatura Realtime para a UC específica
@@ -332,6 +335,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         if (consumerUnit) {
             setFormData({
                 subscriber_id: consumerUnit.subscriber_id || '',
+                supplier_id: consumerUnit.supplier_id || '',
                 usina_id: consumerUnit.usina_id || '',
                 status: consumerUnit.status || 'em_ativacao',
                 numero_uc: consumerUnit.numero_uc || '',
@@ -373,7 +377,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 last_scraping_error: consumerUnit.last_scraping_error || null
             });
         }
-    }, [consumerUnit?.id, consumerUnit?.subscriber_id]); // Stable dependencies
+    }, [consumerUnit?.id, consumerUnit?.subscriber_id, consumerUnit?.supplier_id]); // Stable dependencies
 
     // Calculate Tarifa Minima automatically
     useEffect(() => {
@@ -394,6 +398,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const fetchSubscribers = async () => {
         const { data } = await supabase.from('subscribers').select('*').order('name');
         setSubscribers(data || []);
+    };
+
+    const fetchSuppliers = async () => {
+        const { data } = await supabase.from('suppliers').select('*').order('name');
+        setSuppliers(data || []);
     };
 
     const fetchUsinas = async () => {
@@ -544,6 +553,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         try {
             const payload = {
                 subscriber_id: formData.subscriber_id || null,
+                supplier_id: formData.supplier_id || null,
                 usina_id: formData.usina_id || null,
                 status: formData.status,
                 numero_uc: formData.numero_uc,
@@ -576,7 +586,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 saldo_remanescente: formData.saldo_remanescente
             };
 
-            if (!payload.subscriber_id) throw new Error('Assinante é obrigatório.');
+            if (!payload.subscriber_id && !payload.supplier_id) throw new Error('Assinante ou Fornecedor é obrigatório.');
 
             let result;
             if (consumerUnit?.id) {
@@ -1119,7 +1129,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                 <div style={{ position: 'relative' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante Vinculado</label>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Assinante ou Fornecedor Vinculado</label>
                                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                         <div style={{ position: 'relative', flex: 1 }}>
                                                             <input
@@ -1133,8 +1143,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                 }}
                                                                 placeholder={
                                                                     formData.subscriber_id 
-                                                                        ? subscribers.find(s => s.id === formData.subscriber_id)?.name || "Buscar para trocar assinante..." 
-                                                                        : "Buscar assinante por nome, CPF/CNPJ..."
+                                                                        ? subscribers.find(s => s.id === formData.subscriber_id)?.name || "Buscar para trocar..." 
+                                                                        : formData.supplier_id
+                                                                            ? suppliers.find(s => s.id === formData.supplier_id)?.name || "Buscar para trocar..."
+                                                                            : "Buscar assinante ou fornecedor por nome, CPF/CNPJ..."
                                                                 }
                                                                 style={{ 
                                                                     width: '100%', 
@@ -1151,11 +1163,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                 <FileSearch size={18} />
                                                             </div>
                                                         </div>
-                                                        {formData.subscriber_id && (
+                                                        {(formData.subscriber_id || formData.supplier_id) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setFormData(prev => ({ ...prev, subscriber_id: '' }));
+                                                                    setFormData(prev => ({ ...prev, subscriber_id: '', supplier_id: '' }));
                                                                     setSubscriberSearchTerm('');
                                                                 }}
                                                                 style={{
@@ -1194,22 +1206,34 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                             zIndex: 100,
                                                             marginTop: '4px'
                                                         }}>
-                                                            {subscribers
-                                                                .filter(s => {
+                                                            {[
+                                                                ...subscribers.map(s => ({ ...s, type: 'subscriber' })),
+                                                                ...suppliers.map(s => ({ ...s, type: 'supplier', cpf_cnpj: s.cnpj }))
+                                                            ]
+                                                                .filter(item => {
                                                                     const term = subscriberSearchTerm.toLowerCase().trim();
                                                                     if (!term) return true;
                                                                     return (
-                                                                        s.name?.toLowerCase().includes(term) ||
-                                                                        s.cpf_cnpj?.toLowerCase().includes(term) ||
-                                                                        s.email?.toLowerCase().includes(term) ||
-                                                                        s.phone?.toLowerCase().includes(term)
+                                                                        item.name?.toLowerCase().includes(term) ||
+                                                                        item.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                        item.email?.toLowerCase().includes(term) ||
+                                                                        item.phone?.toLowerCase().includes(term)
                                                                     );
                                                                 })
-                                                                .map(s => (
+                                                                .map(item => (
                                                                     <div
-                                                                        key={s.id}
+                                                                        key={`${item.type}-${item.id}`}
                                                                         onMouseDown={() => {
-                                                                            handleSubscriberChange(s.id);
+                                                                            if (item.type === 'subscriber') {
+                                                                                handleSubscriberChange(item.id);
+                                                                                setFormData(prev => ({ ...prev, supplier_id: '' }));
+                                                                            } else {
+                                                                                setFormData(prev => ({ 
+                                                                                    ...prev, 
+                                                                                    supplier_id: item.id, 
+                                                                                    subscriber_id: ''
+                                                                                }));
+                                                                            }
                                                                             setSubscriberSearchTerm('');
                                                                             setShowSubscriberDropdown(false);
                                                                         }}
@@ -1222,102 +1246,181 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                         onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                                                                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                                                     >
-                                                                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{s.name}</div>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.875rem' }}>{item.name}</div>
+                                                                            <span style={{
+                                                                                fontSize: '0.65rem',
+                                                                                fontWeight: 700,
+                                                                                padding: '0.1rem 0.4rem',
+                                                                                borderRadius: '4px',
+                                                                                background: item.type === 'subscriber' ? '#eff6ff' : '#fef3c7',
+                                                                                color: item.type === 'subscriber' ? '#1d4ed8' : '#b45309'
+                                                                            }}>
+                                                                                {item.type === 'subscriber' ? 'Assinante' : 'Fornecedor'}
+                                                                            </span>
+                                                                        </div>
                                                                         <div style={{ display: 'flex', gap: '1rem', color: '#64748b', fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                                                                            <span>CPF/CNPJ: {s.cpf_cnpj}</span>
-                                                                            {s.email && <span>E-mail: {s.email}</span>}
+                                                                            <span>CPF/CNPJ: {item.cpf_cnpj}</span>
+                                                                            {item.email && <span>E-mail: {item.email}</span>}
                                                                         </div>
                                                                     </div>
                                                                 ))
                                                             }
-                                                            {subscribers.filter(s => {
+                                                            {[
+                                                                ...subscribers.map(s => ({ ...s, type: 'subscriber' })),
+                                                                ...suppliers.map(s => ({ ...s, type: 'supplier', cpf_cnpj: s.cnpj }))
+                                                            ].filter(item => {
                                                                 const term = subscriberSearchTerm.toLowerCase().trim();
                                                                 if (!term) return true;
                                                                 return (
-                                                                    s.name?.toLowerCase().includes(term) ||
-                                                                    s.cpf_cnpj?.toLowerCase().includes(term) ||
-                                                                    s.email?.toLowerCase().includes(term) ||
-                                                                    s.phone?.toLowerCase().includes(term)
+                                                                    item.name?.toLowerCase().includes(term) ||
+                                                                    item.cpf_cnpj?.toLowerCase().includes(term) ||
+                                                                    item.email?.toLowerCase().includes(term) ||
+                                                                    item.phone?.toLowerCase().includes(term)
                                                                 );
                                                             }).length === 0 && (
                                                                 <div style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
-                                                                    Nenhum assinante encontrado.
+                                                                    Nenhum assinante ou fornecedor encontrado.
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                {/* Card do Assinante Vinculado */}
+                                                {/* Card do Assinante ou Fornecedor Vinculado */}
                                                 {(() => {
-                                                    const sub = subscribers.find(s => s.id === formData.subscriber_id);
-                                                    if (!sub) return null;
-                                                    return (
-                                                        <div 
-                                                            onClick={() => setActiveSubscriberForModal(sub)}
-                                                            style={{
-                                                                background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
-                                                                border: '1.5px solid #bfdbfe',
-                                                                borderRadius: '12px',
-                                                                padding: '1rem',
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
-                                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                gap: '0.75rem',
-                                                                position: 'relative',
-                                                                overflow: 'hidden'
-                                                            }}
-                                                            onMouseEnter={e => {
-                                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                                e.currentTarget.style.borderColor = 'var(--color-blue)';
-                                                                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(37, 99, 235, 0.1), 0 4px 6px -4px rgba(37, 99, 235, 0.1)';
-                                                            }}
-                                                            onMouseLeave={e => {
-                                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                                e.currentTarget.style.borderColor = '#bfdbfe';
-                                                                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
-                                                            }}
-                                                        >
-                                                            {/* Background accent line */}
-                                                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--color-blue)' }}></div>
-                                                            
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <User size={18} color="var(--color-blue)" style={{ minWidth: '18px' }} />
-                                                                    <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{sub.name}</h5>
+                                                    if (formData.subscriber_id) {
+                                                        const sub = subscribers.find(s => s.id === formData.subscriber_id);
+                                                        if (!sub) return null;
+                                                        return (
+                                                            <div 
+                                                                onClick={() => setActiveSubscriberForModal(sub)}
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+                                                                    border: '1.5px solid #bfdbfe',
+                                                                    borderRadius: '12px',
+                                                                    padding: '1rem',
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    gap: '0.75rem',
+                                                                    position: 'relative',
+                                                                    overflow: 'hidden'
+                                                                }}
+                                                                onMouseEnter={e => {
+                                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                    e.currentTarget.style.borderColor = 'var(--color-blue)';
+                                                                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(37, 99, 235, 0.1), 0 4px 6px -4px rgba(37, 99, 235, 0.1)';
+                                                                }}
+                                                                onMouseLeave={e => {
+                                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                                    e.currentTarget.style.borderColor = '#bfdbfe';
+                                                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
+                                                                }}
+                                                            >
+                                                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--color-blue)' }}></div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <User size={18} color="var(--color-blue)" style={{ minWidth: '18px' }} />
+                                                                        <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{sub.name}</h5>
+                                                                    </div>
+                                                                    <span style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 600,
+                                                                        background: '#dbeafe',
+                                                                        color: 'var(--color-blue)',
+                                                                        padding: '0.2rem 0.6rem',
+                                                                        borderRadius: '20px',
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.05em'
+                                                                    }}>
+                                                                        Ver Cadastro
+                                                                    </span>
                                                                 </div>
-                                                                <span style={{
-                                                                    fontSize: '0.7rem',
-                                                                    fontWeight: 600,
-                                                                    background: '#dbeafe',
-                                                                    color: 'var(--color-blue)',
-                                                                    padding: '0.2rem 0.6rem',
-                                                                    borderRadius: '20px',
-                                                                    textTransform: 'uppercase',
-                                                                    letterSpacing: '0.05em'
-                                                                }}>
-                                                                    Ver Cadastro
-                                                                </span>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                        <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span style={{ fontWeight: 500 }}>{sub.cpf_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                        <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span>{sub.phone || 'Sem Telefone'}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', gridColumn: 'span 2' }}>
+                                                                        <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{sub.email || 'Sem E-mail'}</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                                    <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
-                                                                    <span style={{ fontWeight: 500 }}>{sub.cpf_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                        );
+                                                    } else if (formData.supplier_id) {
+                                                        const sup = suppliers.find(s => s.id === formData.supplier_id);
+                                                        if (!sup) return null;
+                                                        return (
+                                                            <div 
+                                                                style={{
+                                                                    background: 'linear-gradient(135deg, #fdf4ff 0%, #ffffff 100%)',
+                                                                    border: '1.5px solid #f5d0fe',
+                                                                    borderRadius: '12px',
+                                                                    padding: '1rem',
+                                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                                                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    gap: '0.75rem',
+                                                                    position: 'relative',
+                                                                    overflow: 'hidden'
+                                                                }}
+                                                                onMouseEnter={e => {
+                                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                    e.currentTarget.style.borderColor = '#d946ef';
+                                                                    e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(217, 70, 239, 0.1), 0 4px 6px -4px rgba(217, 70, 239, 0.1)';
+                                                                }}
+                                                                onMouseLeave={e => {
+                                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                                    e.currentTarget.style.borderColor = '#f5d0fe';
+                                                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)';
+                                                                }}
+                                                            >
+                                                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: '#d946ef' }}></div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <User size={18} color="#d946ef" style={{ minWidth: '18px' }} />
+                                                                        <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{sup.name}</h5>
+                                                                    </div>
+                                                                    <span style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 600,
+                                                                        background: '#fae8ff',
+                                                                        color: '#d946ef',
+                                                                        padding: '0.2rem 0.6rem',
+                                                                        borderRadius: '20px',
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.05em'
+                                                                    }}>
+                                                                        Fornecedor
+                                                                    </span>
                                                                 </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                                    <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
-                                                                    <span>{sub.phone || 'Sem Telefone'}</span>
-                                                                </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', gridColumn: 'span 2' }}>
-                                                                    <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
-                                                                    <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{sub.email || 'Sem E-mail'}</span>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px dashed #e2e8f0', paddingTop: '0.75rem' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                        <CreditCard size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span style={{ fontWeight: 500 }}>{sup.cnpj || 'Sem CNPJ'}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                        <Smartphone size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span>{sup.phone || 'Sem Telefone'}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', gridColumn: 'span 2' }}>
+                                                                        <Mail size={14} color="#64748b" style={{ minWidth: '14px' }} />
+                                                                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{sup.email || 'Sem E-mail'}</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    );
+                                                        );
+                                                    }
+                                                    return null;
                                                 })()}
 
                                                 {/* Titular da Fatura Field */}

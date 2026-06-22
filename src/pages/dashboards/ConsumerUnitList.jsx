@@ -222,7 +222,8 @@ export default function ConsumerUnitList() {
                 .select(`
                     *,
                     subscriber:subscriber_id (name, cpf_cnpj, portal_credentials),
-                    titular_fatura:titular_fatura_id (name, portal_credentials)
+                    titular_fatura:titular_fatura_id (name, portal_credentials),
+                    supplier:supplier_id (name, cnpj, email, phone)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -403,7 +404,7 @@ export default function ConsumerUnitList() {
                                             <tr>
                                                 <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>UC</th>
                                                 <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Concessionária</th>
-                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Assinante</th>
+                                                <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Assinante ou Fornecedor</th>
                                                 <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Identificação na Fatura</th>
                                                 <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Franquia</th>
                                                 <th style={{ background: '#f8fafc', padding: '12px 16px', fontSize: '0.75rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Status</th>
@@ -437,8 +438,19 @@ export default function ConsumerUnitList() {
                                                         </td>
                                                         <td style={{ padding: '14px 16px', color: '#475569', fontWeight: '500', verticalAlign: 'middle' }}>{uc.concessionaria || '-'}</td>
                                                         <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                                                            <div style={{ fontWeight: '700', color: '#1e293b' }}>{uc.subscriber?.name || '-'}</div>
-                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{uc.subscriber?.cpf_cnpj}</div>
+                                                             {uc.subscriber ? (
+                                                                 <>
+                                                                     <div style={{ fontWeight: '700', color: '#1e293b' }}>{uc.subscriber.name}</div>
+                                                                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{uc.subscriber.cpf_cnpj}</div>
+                                                                 </>
+                                                             ) : uc.supplier ? (
+                                                                 <>
+                                                                     <div style={{ fontWeight: '700', color: '#d946ef' }}>{uc.supplier.name} <span style={{ fontSize: '0.65rem', background: '#fae8ff', color: '#d946ef', padding: '1px 5px', borderRadius: '4px', marginLeft: '4px', display: 'inline-block', fontWeight: '700' }}>Fornecedor</span></div>
+                                                                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{uc.supplier.cnpj}</div>
+                                                                 </>
+                                                             ) : (
+                                                                 <div style={{ color: '#94a3b8' }}>-</div>
+                                                             )}
                                                         </td>
                                                         <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: '600', verticalAlign: 'middle' }}>
                                                             {uc.titular_conta || '-'}
