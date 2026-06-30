@@ -1263,7 +1263,20 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {/* Right Side: Value and Pay Button */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || 0))}
+                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (() => {
+                                            const valDb = Number(invoice.valor_concessionaria) || 0;
+                                            const consumoReais = Number(invoice.consumo_reais) || 0;
+                                            const ip = Number(invoice.iluminacao_publica) || 0;
+                                            const outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
+                                            const compKwh = Number(invoice.consumo_compensado) || 0;
+                                            const grossValue = consumoReais + ip + outros + (Number(invoice.parcelamento) || 0);
+                                            // Se não houve compensação (0 kWh) e o valor no BD for estranhamente menor que o consumo bruto,
+                                            // corrige a exibição forçando o Valor Bruto (já que a concessionária cobrou o total sem descontos).
+                                            if (compKwh === 0 && valDb < consumoReais) {
+                                                return grossValue;
+                                            }
+                                            return valDb;
+                                        })())}
                                     </span>
 
                                     {!isEditing && (
