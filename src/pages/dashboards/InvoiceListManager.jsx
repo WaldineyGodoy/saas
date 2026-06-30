@@ -243,7 +243,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 }
             }
             if (statusFaturaFilter) {
-                if (inv.status !== statusFaturaFilter) return false;
+                const effectiveStatus = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
+                if (effectiveStatus !== statusFaturaFilter) return false;
             }
         }
 
