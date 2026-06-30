@@ -1439,7 +1439,7 @@ Associado`;
                                         </tr>
                                         <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '8px 0' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Outros</div>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Multas / Juros / Bandeiras / Outros</div>
                                             </td>
                                             <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
                                             <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
