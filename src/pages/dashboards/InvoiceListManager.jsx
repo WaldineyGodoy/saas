@@ -2438,7 +2438,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 {['sem_faturamento', 'a_vencer', 'atrasado', 'confirmado', 'pago']
                                     .filter(status => !statusFilter || status === statusFilter)
                                     .map(status => {
-                                        const invoicesInStatus = filteredInvoices.filter(inv => inv.status === status);
+                                        const invoicesInStatus = filteredInvoices.filter(inv => {
+                                            const effectiveStatus = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
+                                            return effectiveStatus === status;
+                                        });
                                         const statusMap = { 
                                             'sem_faturamento': { color: '#2563eb', bg: '#eff6ff', label: 'Sem Faturamento' },
                                             'confirmado': { color: '#0891b2', bg: '#ecfeff', label: 'Confirmado' },
