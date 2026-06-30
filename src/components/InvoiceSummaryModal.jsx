@@ -1432,6 +1432,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
                                                 const consumoKwh = Number(invoice.consumo_kwh) || 0;
                                                 const consumoReais = Number(invoice.consumo_reais) || 0;
+                                                const ip = Number(invoice.iluminacao_publica) || 0;
                                                 const parcelamentoVal = Number(invoice.parcelamento) || 0;
                                                 const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
                                                 let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
