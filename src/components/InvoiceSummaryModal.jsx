@@ -877,7 +877,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         pago: { bg: '#dcfce7', text: '#166534', label: 'PAGO' },
         a_vencer: { bg: '#eff6ff', text: '#1d4ed8', label: 'A VENCER' },
         atrasado: { bg: '#fee2e2', text: '#991b1b', label: 'ATRASADO' },
-        cancelado: { bg: '#f1f5f9', text: '#475569', label: 'CANCELADO' }
+        cancelado: { bg: '#f1f5f9', text: '#475569', label: 'CANCELADO' },
+        sem_faturamento: { bg: '#f3f4f6', text: '#6b7280', label: 'SEM FATURAMENTO' }
     };
 
         const getUtilityDueDate = () => {
