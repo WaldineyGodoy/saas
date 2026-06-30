@@ -42,7 +42,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
             if (error) throw error;
             setCurrentStatus(newStatus);
             showAlert('success', 'Status atualizado com sucesso!');
-            if (onStatusUpdated) onStatusUpdated();
+            if (onStatusUpdated) onStatusUpdated(newStatus);
         } catch (err) {
             console.error('Error updating status:', err);
             showAlert('error', 'Erro ao atualizar status.');

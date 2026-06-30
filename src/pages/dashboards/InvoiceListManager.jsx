@@ -2707,7 +2707,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 onOpenAnalysis={(selectedUc) => {
                     setIsAnalysisModalOpen(true);
                 }}
-                onStatusUpdated={fetchInvoices}
+                onStatusUpdated={(newStatus) => {
+                    setUcs(prev => prev.map(u => u.id === selectedUcForReadingModal?.id ? { ...u, last_scraping_status: newStatus } : u));
+                }}
             />
             {isUcModalOpen && (
                 <ConsumerUnitModal
