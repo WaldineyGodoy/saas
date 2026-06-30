@@ -2801,6 +2801,10 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             }
         } else if (unit.last_scraping_status === 'processing') {
             status = 'processing';
+        } else if (unit.last_scraping_status === 'success') {
+            status = 'success';
+        } else if (unit.last_scraping_status === 'pending') {
+            status = 'pending';
         } else {
             const isFuture = (filterYear > currentYearNum) || 
                            (filterYear === currentYearNum && filterMonth > currentMonthNum) || 

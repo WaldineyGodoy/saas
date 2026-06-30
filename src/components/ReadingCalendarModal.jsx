@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Calendar, User, UserCheck, Zap, Settings, ArrowRight, Play, Loader2, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
@@ -10,7 +10,11 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
     const [isUpdating, setIsUpdating] = useState(false);
 
     // Determines current status based on calendar displayStatus or last_scraping_status
-    const currentStatus = uc.last_scraping_status || 'pending';
+    const [currentStatus, setCurrentStatus] = useState(uc.last_scraping_status || 'pending');
+
+    useEffect(() => {
+        setCurrentStatus(uc.last_scraping_status || 'pending');
+    }, [uc.last_scraping_status]);
 
     const getStatusConfig = (status) => {
         switch (status) {
@@ -36,9 +40,9 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
                 .eq('id', uc.id);
 
             if (error) throw error;
+            setCurrentStatus(newStatus);
             showAlert('success', 'Status atualizado com sucesso!');
             if (onStatusUpdated) onStatusUpdated();
-            onClose();
         } catch (err) {
             console.error('Error updating status:', err);
             showAlert('error', 'Erro ao atualizar status.');
@@ -168,6 +172,26 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
                             </div>
                             <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem', wordBreak: 'break-word' }}>
                                 {uc.titular_conta || uc.titular_fatura?.name || 'Não informado'}
+                            </div>
+                        </div>
+
+                        <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#64748b' }}>
+                                <Calendar size={16} />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Dia da Leitura</span>
+                            </div>
+                            <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '1rem' }}>
+                                {uc.dia_leitura ? `Dia ${uc.dia_leitura}` : 'N/A'}
+                            </div>
+                        </div>
+
+                        <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#64748b' }}>
+                                <Zap size={16} />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Concessionária</span>
+                            </div>
+                            <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem' }}>
+                                {uc.concessionaria || 'N/A'}
                             </div>
                         </div>
 
