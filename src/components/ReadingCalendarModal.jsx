@@ -17,7 +17,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
             case 'success':
                 return { label: 'Sucesso', color: '#16a34a', bg: '#dcfce7', icon: CheckCircle };
             case 'error':
-                return { label: 'Erro', color: '#dc2626', bg: '#fee2e2', icon: AlertCircle };
+                return { label: 'Indisponivel', color: '#dc2626', bg: '#fee2e2', icon: AlertCircle };
             case 'processing':
                 return { label: 'Processando', color: '#2563eb', bg: '#dbeafe', icon: Loader2 };
             case 'pending':
@@ -101,7 +101,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
                             Alterar Status da Leitura
                         </h3>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {['pending', 'processing', 'success', 'error'].map(statusOption => {
+                            {['pending', 'error', 'processing', 'success'].map(statusOption => {
                                 const optionConfig = getStatusConfig(statusOption);
                                 const OptionIcon = optionConfig.icon;
                                 const isSelected = currentStatus === statusOption;
