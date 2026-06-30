@@ -1278,7 +1278,24 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {/* Right Side: Value and Pay Button */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (() => {
+                                        {isEditing ? (
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                value={editData.valor_concessionaria} 
+                                                onChange={e => handleEditChange('valor_concessionaria', e.target.value)} 
+                                                style={{ 
+                                                    width: '120px', 
+                                                    border: '1px solid #cbd5e1', 
+                                                    borderRadius: '6px', 
+                                                    textAlign: 'right', 
+                                                    padding: '0.4rem',
+                                                    fontSize: '1.1rem',
+                                                    fontWeight: 'bold',
+                                                    color: branding?.primary_color || '#003366'
+                                                }} 
+                                            />
+                                        ) : formatCurrency((() => {
                                             const valDb = Number(invoice.valor_concessionaria) || 0;
                                             const consumoReais = Number(invoice.consumo_reais) || 0;
                                             const ip = Number(invoice.iluminacao_publica) || 0;
