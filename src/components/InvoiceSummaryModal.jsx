@@ -54,9 +54,25 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const [searchChild, setSearchChild] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearchingChild, setIsSearchingChild] = useState(false);
+    const [subscriberBillingMode, setSubscriberBillingMode] = useState('individualizada');
 
     useEffect(() => {
         if (!invoice) return;
+        
+        const fetchBillingMode = async () => {
+            if (consumerUnit?.subscriber_id) {
+                const { data } = await supabase
+                    .from('subscribers')
+                    .select('billing_mode')
+                    .eq('id', consumerUnit.subscriber_id)
+                    .single();
+                if (data?.billing_mode) {
+                    setSubscriberBillingMode(data.billing_mode);
+                }
+            }
+        };
+        fetchBillingMode();
+
         const fetchChildren = async () => {
             setLoadingChildren(true);
             try {
@@ -1495,7 +1511,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
                                     {!isEditing && (
                                         (() => {
-                                            if (invoice.status === 'sem_faturamento') {
+                                            if (invoice.status === 'sem_faturamento' || invoice.status === 'cancelado') {
+                                                if (subscriberBillingMode === 'consolidada') {
+                                                    return (
+                                                        <div style={{ fontSize: '0.75rem', color: '#ea580c', fontWeight: 600, background: '#ffedd5', padding: '0.35rem 0.75rem', borderRadius: '6px', textAlign: 'right' }}>
+                                                            Assinante de Fatura Consolidada.<br/>
+                                                            <span style={{ fontSize: '0.65rem', fontWeight: 400 }}>Gere o boleto pelo menu do Assinante.</span>
+                                                        </div>
+                                                    );
+                                                }
                                                 return (
                                                     <button 
                                                         type="button"
