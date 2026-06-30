@@ -787,13 +787,33 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
                                             <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
                                         </tr>
-                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '8px 0' }}>
-                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Multas / Juros / Bandeiras / Outros</div>
-                                            </td>
-                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
-                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outrosTotal)}</td>
-                                        </tr>
+                                        {(tarifaMinimaExcedentes > 0 || (tarifaMinimaExcedentes === 0 && outros === 0 && parcelamento === 0)) && (
+                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '8px 0' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Excedentes</div>
+                                                </td>
+                                                <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                                <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(tarifaMinimaExcedentes)}</td>
+                                            </tr>
+                                        )}
+                                        {outros > 0 && (
+                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '8px 0' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Multas / Juros / Bandeiras / Outros</div>
+                                                </td>
+                                                <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                                <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outros)}</td>
+                                            </tr>
+                                        )}
+                                        {parcelamento > 0 && (
+                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '8px 0' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Parcelamento</div>
+                                                </td>
+                                                <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                                <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(parcelamento)}</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontStyle: 'italic', marginTop: '6px', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>

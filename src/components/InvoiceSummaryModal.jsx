@@ -60,15 +60,33 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         if (!invoice) return;
         
         const fetchBillingMode = async () => {
-            if (consumerUnit?.subscriber_id) {
-                const { data } = await supabase
-                    .from('subscribers')
-                    .select('billing_mode')
-                    .eq('id', consumerUnit.subscriber_id)
-                    .single();
-                if (data?.billing_mode) {
-                    setSubscriberBillingMode(data.billing_mode);
+            try {
+                let subId = consumerUnit?.subscriber_id;
+                
+                // Fallback: fetch subscriber_id if not present in the prop
+                if (!subId && invoice?.uc_id) {
+                    const { data: ucData } = await supabase
+                        .from('consumer_units')
+                        .select('subscriber_id')
+                        .eq('id', invoice.uc_id)
+                        .single();
+                    if (ucData?.subscriber_id) {
+                        subId = ucData.subscriber_id;
+                    }
                 }
+                
+                if (subId) {
+                    const { data } = await supabase
+                        .from('subscribers')
+                        .select('billing_mode')
+                        .eq('id', subId)
+                        .single();
+                    if (data?.billing_mode) {
+                        setSubscriberBillingMode(data.billing_mode);
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching billing mode:', err);
             }
         };
         fetchBillingMode();
@@ -1191,11 +1209,19 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
                             const parcelamentoVal = Number(invoice.parcelamento) || 0;
                             
+                            const tarifaMinimaVal = Number(invoice.tarifa_minima) || 0;
+                            const outrosVal = Number(invoice.outros_lancamentos) || 0;
+                            
                             // "Outros": se valor_concessionaria for maior que consumo+IP, a diferença é algum encargo extra (ex: Bandeira).
-                            // Se for menor, a diferença negativa é a Energia Injetada, então "outros" real vem do banco ou é 0.
-                            let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
-                            if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
-
+                            // Se for menor, a diferença negativa é a Energia Injetada, então usamos os valores reais do banco.
+                            let calcOutros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
+                            let finalTarifaMinima = tarifaMinimaVal;
+                            let finalOutros = outrosVal;
+                            
+                            if (calcOutros > 0 && tarifaMinimaVal === 0 && outrosVal === 0) {
+                                // Backward compatibility if db doesn't have them split
+                                finalOutros = calcOutros;
+                            }
                             // O assinante deve receber desconto ESTRITAMENTE sobre a energia compensada informada.
                             // Se a concessionária não compensou por erro, a B2W deve editar a fatura manualmente e informar o valor.
                             const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
@@ -1205,7 +1231,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             const valorDesconto = valorCompensadaReais * (discount / 100);
 
                             // O Boleto Unificado é o Valor Bruto da conta (Consumo + IP + Encargos) MENOS o desconto da energia.
-                            const calcConcessionariaSum = (consumoReais - valorDesconto) + ip + outros + parcelamentoVal;
+                            const calcConcessionariaSum = (consumoReais - valorDesconto) + ip + finalTarifaMinima + finalOutros + parcelamentoVal;
 
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
@@ -1239,11 +1265,20 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(ip)}</td>
                                             </tr>
-                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Multas / Juros / Bandeiras / Outros</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(outros)}</td>
-                                            </tr>
+                                            {(finalTarifaMinima > 0 || (finalTarifaMinima === 0 && finalOutros === 0)) && (
+                                                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Excedentes</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalTarifaMinima)}</td>
+                                                </tr>
+                                            )}
+                                            {(finalOutros > 0) && (
+                                                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Multas / Juros / Bandeiras / Outros</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                    <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalOutros)}</td>
+                                                </tr>
+                                            )}
                                             {parcelamentoVal > 0 && (
                                                 <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                     <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Parcelamento</td>
@@ -1517,15 +1552,21 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 const consumoReais = Number(invoice.consumo_reais) || 0;
                                                 const ip = Number(invoice.iluminacao_publica) || 0;
                                                 const parcelamentoVal = Number(invoice.parcelamento) || 0;
+                                                const tarifaMinimaVal = Number(invoice.tarifa_minima) || 0;
+                                                const outrosVal = Number(invoice.outros_lancamentos) || 0;
                                                 const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
-                                                let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
-                                                if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
-
+                                                let calcOutros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
+                                                
+                                                let finalTarifaMinima = tarifaMinimaVal;
+                                                let finalOutros = outrosVal;
+                                                if (calcOutros > 0 && tarifaMinimaVal === 0 && outrosVal === 0) {
+                                                    finalOutros = calcOutros;
+                                                }
                                                 const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
                                                 const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
                                                 const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
                                                 
-                                                return (consumoReais - valorDesconto) + ip + outros + parcelamentoVal;
+                                                return (consumoReais - valorDesconto) + ip + finalTarifaMinima + finalOutros + parcelamentoVal;
                                             })())}
                                         </span>
                                     )}
