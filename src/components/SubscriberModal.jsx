@@ -1437,24 +1437,20 @@ Associado`;
                                             <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
                                             <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(ip)}</td>
                                         </tr>
-                                        {(tarifaMinimaExcedentes > 0 || (tarifaMinimaExcedentes === 0 && outros === 0 && parcelamento === 0)) && (
-                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '8px 0' }}>
-                                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Excedentes</div>
-                                                </td>
-                                                <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
-                                                <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(tarifaMinimaExcedentes)}</td>
-                                            </tr>
-                                        )}
-                                        {outros > 0 && (
-                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '8px 0' }}>
-                                                    <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Multas / Juros / Bandeiras / Outros</div>
-                                                </td>
-                                                <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
-                                                <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outros)}</td>
-                                            </tr>
-                                        )}
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Tarifa Mínima / Excedentes</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(tarifaMinimaExcedentes)}</td>
+                                        </tr>
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 0' }}>
+                                                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>Multas / Juros / Bandeiras / Outros</div>
+                                            </td>
+                                            <td style={{ padding: '8px 0', textAlign: 'center', color: '#64748b' }}>—</td>
+                                            <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#1e293b' }}>{formatCurrency(outros)}</td>
+                                        </tr>
                                         {parcelamento > 0 && (
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '8px 0' }}>
