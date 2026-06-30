@@ -1130,22 +1130,27 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 </div>
                             </div>
                         ) : (() => {
-                            const rawTarifa = Number(consumerUnit?.tarifa_concessionaria) || 0.986;
                             const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
-                            const consumoTotalVal = (Number(invoice.consumo_kwh) || 0) * rawTarifa;
-                            const consumoCompensadoVal = Number(invoice.consumo_compensado) || Number(invoice.consumo_kwh) || 0;
-                            const valorCompensada = Number(invoice.consumo_reais) || 0;
+                            
+                            const consumoKwh = Number(invoice.consumo_kwh) || 0;
+                            const consumoReais = Number(invoice.consumo_reais) || 0;
                             const ip = Number(invoice.iluminacao_publica) || 0;
-                            const outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
+                            const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
                             const parcelamentoVal = Number(invoice.parcelamento) || 0;
+                            
+                            // Calcula "Outros" como a diferença para o total da concessionária, caso algum item como Bandeira tenha ficado de fora
+                            let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
+                            if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
 
-                            let calcConcessionariaSum = valorCompensada + ip + outros + parcelamentoVal;
-                            if (consumoCompensadoVal > 0) {
-                                const consumoNaoCompensado = Math.max(0, (Number(invoice.consumo_kwh) || 0) - consumoCompensadoVal);
-                                const custoNaoCompensado = consumoNaoCompensado * rawTarifa;
-                                const estimatedFioB = consumoCompensadoVal * (rawTarifa * 0.215);
-                                calcConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros + parcelamentoVal;
-                            }
+                            // Se consumo_compensado for 0 ou null, e não for explicitamente 0 (no PDF), assume o consumo_kwh
+                            const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
+                            
+                            // O desconto é aplicado apenas sobre a parcela compensada
+                            const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
+                            const valorCompensadaReais = consumoReais * proportionCompensated;
+                            const valorDesconto = valorCompensadaReais * (discount / 100);
+
+                            const calcConcessionariaSum = valorConcessionaria - valorDesconto;
 
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
@@ -1161,18 +1166,18 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>
                                                     <div>
-                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span> <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>({invoice.consumo_kwh} * R$ {rawTarifa.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })} *)</span>
+                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{invoice.consumo_kwh} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoKwh} kwh</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>
-                                                    {formatCurrency(consumoTotalVal)}
+                                                    {formatCurrency(consumoReais)}
                                                 </td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Energia Compensada Desc. {discount}% -</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>- {consumoCompensadoVal} kwh</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(valorCompensada)}</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>- {consumoCompensadoKwh} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>- {formatCurrency(valorDesconto)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Iluminação Pública</td>
@@ -1199,7 +1204,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                         </tbody>
                                     </table>
                                     <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                                        * Valor de Consumo Total e Energia Compensada é uma estimativa; o Total de Lançamentos utiliza valores lidos e base de Fio B.
+                                        * A composição reflete o desconto de {discount}% aplicado sobre a energia compensada.
                                     </div>
                                 </div>
                             );
@@ -1220,8 +1225,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                                 {/* Left Side: Label and View Pdf Button */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em' }}>
-                                        VALOR DA CONTA DE ENERGIA
+                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: branding?.primary_color || '#003366', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                        VALOR DO ASSINANTE (BOLETO)
                                     </span>
                                     
                                     {!isEditing && (
@@ -1255,7 +1260,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {/* Right Side: Value and Pay Button */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.parcelamento) || 0) + (Number(invoice.consumo_reais) || 0))))}
+                                        {formatCurrency(isEditing ? editData.valor_concessionaria : calcConcessionariaSum)}
                                     </span>
 
                                     {!isEditing && (
