@@ -2792,30 +2792,22 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         );
         const hasInvoice = !!matchingInvoice;
 
-        let status = 'pending';
-        if (hasInvoice) {
-            if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro') {
-                status = 'error';
+        let status = unit.last_scraping_status || 'pending';
+        
+        if (status === 'pending') {
+            if (hasInvoice) {
+                if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro') {
+                    status = 'error';
+                } else {
+                    status = 'success';
+                }
             } else {
-                status = 'success';
-            }
-        } else if (unit.last_scraping_status === 'processing') {
-            status = 'processing';
-        } else if (unit.last_scraping_status === 'success') {
-            status = 'success';
-        } else if (unit.last_scraping_status === 'pending') {
-            status = 'pending';
-        } else {
-            const isFuture = (filterYear > currentYearNum) || 
-                           (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
-                           (isCurrentMonth && day > currentDayNum);
-
-            if (isFuture) {
-                status = 'not_available';
-            } else if (unit.last_scraping_status === 'error') {
-                status = 'error';
-            } else {
-                status = 'pending';
+                const isFuture = (filterYear > currentYearNum) || 
+                               (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
+                               (isCurrentMonth && day > currentDayNum);
+                if (isFuture) {
+                    status = 'not_available';
+                }
             }
         }
 
