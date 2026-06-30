@@ -1143,9 +1143,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
                             if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
 
-                            // O assinante deve receber desconto sobre a energia compensada.
-                            // Se a concessionária não compensou por erro, a B2W simula a compensação completa (consumoKwh).
-                            const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
+                            // O assinante deve receber desconto ESTRITAMENTE sobre a energia compensada informada.
+                            // Se a concessionária não compensou por erro, a B2W deve editar a fatura manualmente e informar o valor.
+                            const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
                             
                             const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
                             const valorCompensadaReais = consumoReais * proportionCompensated;
@@ -1437,7 +1437,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
                                                 if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
 
-                                                const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
+                                                const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
                                                 const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
                                                 const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
                                                 
