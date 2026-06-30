@@ -598,7 +598,9 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         const statusColorsPdf = {
             pago: { color: '#27ae60', label: 'PAGO' },
             a_vencer: { color: '#2563eb', label: 'A VENCER' },
-            sem_faturamento: { color: '#2563eb', label: 'A VENCER' },
+            sem_faturamento: { color: '#64748b', label: 'SEM FATURAMENTO' },
+            ag_emissao_boleto: { color: '#64748b', label: 'SEM FATURAMENTO' },
+            aguardando: { color: '#64748b', label: 'SEM FATURAMENTO' },
             atrasado: { color: '#dc2626', label: 'ATRASADO' },
             cancelado: { color: '#64748b', label: 'CANCELADO' }
         };

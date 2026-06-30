@@ -712,7 +712,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         const statusColorsPdf = {
             pago: { color: '#27ae60', label: 'PAGO' },
             a_vencer: { color: '#2563eb', label: 'A VENCER' },
-            sem_faturamento: { color: '#2563eb', label: 'A VENCER' },
+            sem_faturamento: { color: '#64748b', label: 'SEM FATURAMENTO' },
+            ag_emissao_boleto: { color: '#64748b', label: 'SEM FATURAMENTO' },
+            aguardando: { color: '#64748b', label: 'SEM FATURAMENTO' },
             atrasado: { color: '#dc2626', label: 'ATRASADO' },
             cancelado: { color: '#64748b', label: 'CANCELADO' }
         };
@@ -948,7 +950,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         a_vencer: { bg: '#eff6ff', text: '#1d4ed8', label: 'A VENCER' },
         atrasado: { bg: '#fee2e2', text: '#991b1b', label: 'ATRASADO' },
         cancelado: { bg: '#f1f5f9', text: '#475569', label: 'CANCELADO' },
-        sem_faturamento: { bg: '#f3f4f6', text: '#6b7280', label: 'SEM FATURAMENTO' }
+        sem_faturamento: { bg: '#f3f4f6', text: '#6b7280', label: 'SEM FATURAMENTO' },
+        ag_emissao_boleto: { bg: '#f3f4f6', text: '#6b7280', label: 'SEM FATURAMENTO' },
+        aguardando: { bg: '#f3f4f6', text: '#6b7280', label: 'SEM FATURAMENTO' }
     };
 
         const getUtilityDueDate = () => {
@@ -1447,7 +1451,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     </span>
                                     
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                        {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'pago' && (
+                                        {!isEditing && invoice.asaas_boleto_url && !['sem_faturamento', 'ag_emissao_boleto', 'aguardando'].includes(invoice.status) && invoice.status !== 'pago' && (
                                             <a 
                                                 href={invoice.asaas_boleto_url}
                                                 target="_blank"
@@ -1475,7 +1479,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             </a>
                                         )}
 
-                                        {!isEditing && invoice.asaas_boleto_url && invoice.status !== 'sem_faturamento' && (
+                                        {!isEditing && invoice.asaas_boleto_url && !['sem_faturamento', 'ag_emissao_boleto', 'aguardando'].includes(invoice.status) && (
                                             <button 
                                                 type="button"
                                                 onClick={async () => {
@@ -1540,7 +1544,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     ) : (
                                         <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--color-blue)' }}>
                                             {formatCurrency(isEditing ? editData.valor_a_pagar : (() => {
-                                                if (invoice.status !== 'sem_faturamento' && Number(invoice.valor_a_pagar) !== Number(invoice.valor_concessionaria) && Number(invoice.valor_a_pagar) > 0) {
+                                                if (!['sem_faturamento', 'ag_emissao_boleto', 'aguardando'].includes(invoice.status) && Number(invoice.valor_a_pagar) !== Number(invoice.valor_concessionaria) && Number(invoice.valor_a_pagar) > 0) {
                                                     return invoice.valor_a_pagar;
                                                 }
                                                 const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
