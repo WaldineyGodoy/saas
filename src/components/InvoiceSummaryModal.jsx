@@ -1260,7 +1260,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {/* Right Side: Value and Pay Button */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '1.4rem', fontWeight: 900, color: branding?.primary_color || '#003366' }}>
-                                        {formatCurrency(isEditing ? editData.valor_concessionaria : calcConcessionariaSum)}
+                                        {formatCurrency(isEditing ? editData.valor_concessionaria : (() => {
+                                            const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
+                                            const consumoKwh = Number(invoice.consumo_kwh) || 0;
+                                            const consumoReais = Number(invoice.consumo_reais) || 0;
+                                            const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
+                                            const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
+                                            const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
+                                            return (Number(invoice.valor_concessionaria) || 0) - valorDesconto;
+                                        })())}
                                     </span>
 
                                     {!isEditing && (
