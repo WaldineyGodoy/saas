@@ -551,10 +551,25 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
         setLoading(true);
         try {
+            const numericFields = [
+                'consumo_kwh', 'energia_injetada', 'consumo_compensado', 
+                'consumo_reais', 'iluminacao_publica', 'tarifa_minima', 
+                'outros_lancamentos', 'valor_concessionaria', 'valor_a_pagar'
+            ];
+            
+            const sanitizedData = { ...editData };
+            for (const field of numericFields) {
+                if (sanitizedData[field] === '') {
+                    sanitizedData[field] = null;
+                } else if (sanitizedData[field] !== null) {
+                    sanitizedData[field] = Number(sanitizedData[field]);
+                }
+            }
+
             const payload = {
-                ...editData,
+                ...sanitizedData,
                 // Garantir que mes_referencia tenha o dia 01 se for apenas YYYY-MM
-                mes_referencia: editData.mes_referencia.length === 7 ? `${editData.mes_referencia}-01` : editData.mes_referencia
+                mes_referencia: sanitizedData.mes_referencia?.length === 7 ? `${sanitizedData.mes_referencia}-01` : sanitizedData.mes_referencia
             };
 
             const { error } = await supabase
