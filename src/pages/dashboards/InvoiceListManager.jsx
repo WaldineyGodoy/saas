@@ -4,6 +4,7 @@ import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
+import ReadingCalendarModal from '../../components/ReadingCalendarModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
 import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
@@ -79,12 +80,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [readingStatusFilter, setReadingStatusFilter] = useState(() => savedState.readingStatusFilter || '');
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
+    const [isReadingCalendarModalOpen, setIsReadingCalendarModalOpen] = useState(false);
+    const [selectedUcForReadingModal, setSelectedUcForReadingModal] = useState(null);
     const [ucModalSection, setUcModalSection] = useState('geral');
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
     const [dropTarget, setDropTarget] = useState(null);
     const [draggedInvoice, setDraggedInvoice] = useState(null);
 
     const handleCalendarCardClick = (uc) => {
+        if (viewMode === 'energy_reading_calendar') {
+            setSelectedUcForReadingModal(uc);
+            setIsReadingCalendarModalOpen(true);
+            return;
+        }
+
         if (uc.matchingInvoice) {
             setSelectedInvoiceForSummary(uc.matchingInvoice);
             setIsSummaryModalOpen(true);
@@ -2691,6 +2700,15 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     onSave={fetchInvoices} 
                 />
             )}
+            <ReadingCalendarModal
+                isOpen={isReadingCalendarModalOpen}
+                onClose={() => setIsReadingCalendarModalOpen(false)}
+                uc={selectedUcForReadingModal}
+                onOpenAnalysis={(selectedUc) => {
+                    setIsAnalysisModalOpen(true);
+                }}
+                onStatusUpdated={fetchInvoices}
+            />
             {isUcModalOpen && (
                 <ConsumerUnitModal
                     consumerUnit={selectedUcForModal}
