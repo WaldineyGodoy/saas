@@ -548,12 +548,33 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
         
         // Recalcular Total Concessionária se algum valor financeiro mudar
-        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos'].includes(field)) {
+        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos', 'parcelamento'].includes(field)) {
             newData.valor_concessionaria = 
                 (Number(newData.consumo_reais) || 0) + 
                 (Number(newData.iluminacao_publica) || 0) + 
                 (Number(newData.tarifa_minima) || 0) + 
-                (Number(newData.outros_lancamentos) || 0);
+                (Number(newData.outros_lancamentos) || 0) +
+                (Number(newData.parcelamento) || 0);
+        }
+
+        // Recalcular Valor do Assinante (Boleto)
+        if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos', 'parcelamento', 'consumo_compensado', 'valor_concessionaria', 'consumo_kwh'].includes(field)) {
+            const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
+            const consumoReais = Number(newData.consumo_reais) || 0;
+            const consumoKwh = Number(newData.consumo_kwh) || 0;
+            const consumoCompensadoKwh = Number(newData.consumo_compensado) || 0;
+            const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : (consumoCompensadoKwh > 0 ? 1 : 0);
+            const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
+            
+            const grossValue = 
+                consumoReais + 
+                (Number(newData.iluminacao_publica) || 0) + 
+                (Number(newData.tarifa_minima) || 0) + 
+                (Number(newData.outros_lancamentos) || 0) + 
+                (Number(newData.parcelamento) || 0);
+            
+            const baseValue = Math.max(grossValue, Number(newData.valor_concessionaria) || 0);
+            newData.valor_a_pagar = Math.max(0, baseValue - valorDesconto).toFixed(2);
         }
         
         setEditData(newData);
@@ -570,7 +591,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             const numericFields = [
                 'consumo_kwh', 'energia_injetada', 'consumo_compensado', 
                 'consumo_reais', 'iluminacao_publica', 'tarifa_minima', 
-                'outros_lancamentos', 'valor_concessionaria', 'valor_a_pagar'
+                'outros_lancamentos', 'parcelamento', 'valor_concessionaria', 'valor_a_pagar'
             ];
             
             const sanitizedData = { ...editData };
@@ -1150,10 +1171,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <input type="number" step="0.01" value={editData.iluminacao_publica} onChange={e => handleEditChange('iluminacao_publica', e.target.value)} style={{ width: '100px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>
-                                    <span>Tarifa Mínima/Outros:</span>
+                                    <span>Tarifa Mínima / Multas / Juros / Bandeiras / Outros:</span>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <input type="number" step="0.01" value={editData.tarifa_minima} onChange={e => handleEditChange('tarifa_minima', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Min" />
-                                        <input type="number" step="0.01" value={editData.outros_lancamentos} onChange={e => handleEditChange('outros_lancamentos', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Outros" />
+                                        <input type="number" step="0.01" value={editData.tarifa_minima} onChange={e => handleEditChange('tarifa_minima', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Min" title="Tarifa Mínima" />
+                                        <input type="number" step="0.01" value={editData.outros_lancamentos} onChange={e => handleEditChange('outros_lancamentos', e.target.value)} style={{ width: '80px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'right', padding: '0.2rem' }} placeholder="Outros" title="Outros Lançamentos (Multas, Juros, Bandeiras)" />
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center', marginTop: '0.5rem' }}>
@@ -1219,7 +1240,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(ip)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Outros</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Multas / Juros / Bandeiras / Outros</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(outros)}</td>
                                             </tr>
