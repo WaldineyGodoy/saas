@@ -1138,19 +1138,21 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
                             const parcelamentoVal = Number(invoice.parcelamento) || 0;
                             
-                            // Calcula "Outros" como a diferença para o total da concessionária, caso algum item como Bandeira tenha ficado de fora
+                            // "Outros": se valor_concessionaria for maior que consumo+IP, a diferença é algum encargo extra (ex: Bandeira).
+                            // Se for menor, a diferença negativa é a Energia Injetada, então "outros" real vem do banco ou é 0.
                             let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
                             if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
 
-                            // Se consumo_compensado for 0 ou null, e não for explicitamente 0 (no PDF), assume o consumo_kwh
+                            // O assinante deve receber desconto sobre a energia compensada.
+                            // Se a concessionária não compensou por erro, a B2W simula a compensação completa (consumoKwh).
                             const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
                             
-                            // O desconto é aplicado apenas sobre a parcela compensada
                             const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
                             const valorCompensadaReais = consumoReais * proportionCompensated;
                             const valorDesconto = valorCompensadaReais * (discount / 100);
 
-                            const calcConcessionariaSum = valorConcessionaria - valorDesconto;
+                            // O Boleto Unificado é o Valor Bruto da conta (Consumo + IP + Encargos) MENOS o desconto da energia.
+                            const calcConcessionariaSum = (consumoReais - valorDesconto) + ip + outros + parcelamentoVal;
 
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
@@ -1430,10 +1432,16 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
                                                 const consumoKwh = Number(invoice.consumo_kwh) || 0;
                                                 const consumoReais = Number(invoice.consumo_reais) || 0;
+                                                const parcelamentoVal = Number(invoice.parcelamento) || 0;
+                                                const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
+                                                let outros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
+                                                if (outros < 0 || isNaN(outros)) outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
+
                                                 const consumoCompensadoKwh = Number(invoice.consumo_compensado) || consumoKwh;
                                                 const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
                                                 const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
-                                                return (Number(invoice.valor_concessionaria) || 0) - valorDesconto;
+                                                
+                                                return (consumoReais - valorDesconto) + ip + outros + parcelamentoVal;
                                             })())}
                                         </span>
                                     )}
