@@ -351,16 +351,20 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
                         // 1. Fallback local de Consumo Compensado se necessário
                         if (!extractedCompensado) {
-                            const compensadoMatches = cleanText.match(/G\dComp\.{0,40}?\-TE\s+kWh\s+([\d,.]+)-/gi);
                             let totalCompensado = 0;
-                            if (compensadoMatches) {
-                                compensadoMatches.forEach(match => {
-                                    const valMatch = match.match(/([\d,.]+)-/);
-                                    if (valMatch) totalCompensado += parseValue(valMatch[1]);
-                                });
+                            const teMatch = cleanText.match(/G\dComp\.{0,40}?\-TE\s+kWh\s+([\d,.]+)/i);
+                            if (teMatch) {
+                                totalCompensado = parseValue(teMatch[1]);
                             } else {
-                                const compensadoMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado).{0,40}?([\d,.]+)\s*kWh/i);
-                                if (compensadoMatch) totalCompensado = parseValue(compensadoMatch[1]);
+                                const compensadoMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado|G\dComp[^ ]*).{0,40}?(?:kWh|KWH)\s+([\d,.]+)/i);
+                                if (compensadoMatch) {
+                                    totalCompensado = parseValue(compensadoMatch[1]);
+                                } else {
+                                    const reversedMatch = cleanText.match(/(?:Energia\sCompensada|GX\sCOMP|GXCOMP|Consumo\sCompensado|G\dComp[^ ]*).{0,40}?([\d,.]+)\s*kWh/i);
+                                    if (reversedMatch) {
+                                        totalCompensado = parseValue(reversedMatch[1]);
+                                    }
+                                }
                             }
 
                             if (totalCompensado > 0) {
