@@ -447,6 +447,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                         } catch (fioBErr) {
                             console.warn('Erro ao calcular Fio B localmente:', fioBErr);
                         }
+
+                        // 5. Fallback local de TOTAL A PAGAR (Corrige casos onde o OCR corta o primeiro dígito)
+                        try {
+                            const totalAPagarMatch = cleanText.match(/TOTAL\s+A\s+PAGAR\s*(?:\(R\$\)|R\$)?\s*([\d.,]+)/i);
+                            if (totalAPagarMatch) {
+                                const localTotal = parseValue(totalAPagarMatch[1]);
+                                const currentTotal = parsedData.valor_a_pagar || parsedData.valorTotal || 0;
+                                // Se o valor local extraído for maior que o extraído pela IA (ex: 2478.15 > 478.15), assume o erro do OCR e substitui
+                                if (localTotal > currentTotal && localTotal > 0) {
+                                    parsedData.valor_a_pagar = localTotal;
+                                    parsedData.valorTotal = localTotal;
+                                }
+                            }
+                        } catch (totalErr) {
+                            console.warn('Erro ao extrair TOTAL A PAGAR localmente:', totalErr);
+                        }
                     } catch (fallbackErr) {
                         console.warn('Erro ao rodar o fallback local:', fallbackErr);
                     }
