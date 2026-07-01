@@ -737,7 +737,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         const tarifaMinimaExcedentes = Math.max(0, (rawConsumo - rawCompensado) * rawTarifa);
         const outros = Number(inv.outros_lancamentos) || 0;
         const outrosTotal = tarifaMinimaExcedentes + outros;
-        const totalCalculado = energiaCompensadaReais + ip + outrosTotal;
+        const dbValorA_PagarPdf = Number(inv.valor_a_pagar) || 0;
+        const totalCalculado = (dbValorA_PagarPdf > 0 && dbValorA_PagarPdf !== Number(inv.valor_concessionaria)) 
+            ? dbValorA_PagarPdf 
+            : energiaCompensadaReais + ip + outrosTotal;
 
         const formatCurrency = (val) => {
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
@@ -1544,8 +1547,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     ) : (
                                         <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--color-blue)' }}>
                                             {formatCurrency(isEditing ? editData.valor_a_pagar : (() => {
-                                                if (!['sem_faturamento', 'ag_emissao_boleto', 'aguardando'].includes(invoice.status) && Number(invoice.valor_a_pagar) !== Number(invoice.valor_concessionaria) && Number(invoice.valor_a_pagar) > 0) {
-                                                    return invoice.valor_a_pagar;
+                                                const dbValorA_Pagar = Number(invoice.valor_a_pagar) || 0;
+                                                // Se o valor salvo no banco de dados for diferente do valor concessionária e maior que 0, assumimos que é o valor final (pode ter sido sobrescrito manualmente pelo usuário)
+                                                if (dbValorA_Pagar !== Number(invoice.valor_concessionaria) && dbValorA_Pagar > 0) {
+                                                    return dbValorA_Pagar;
                                                 }
                                                 const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
                                                 const consumoKwh = Number(invoice.consumo_kwh) || 0;
