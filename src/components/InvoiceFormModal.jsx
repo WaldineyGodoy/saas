@@ -9,7 +9,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useRef } from 'react';
 import './InvoicesModal.css';
-import { Download, Loader2, Info, Clock } from 'lucide-react';
+import { Download, Loader2, Info, Clock, RefreshCw } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
