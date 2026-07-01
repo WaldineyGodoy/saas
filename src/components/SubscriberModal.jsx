@@ -640,6 +640,7 @@ Associado`;
                               consolidated.asaas_pdf_storage_url?.includes('invoiceUrl') ||
                               consolidated.asaas_pdf_storage_url?.includes('asaas.com');
 
+            /* 
             if (consolidated.asaas_pdf_storage_url && !isRawAsaas) {
                 console.log("Obtendo URL assinada para PDF consolidado...");
                 const { data: signedData, error: signedError } = await supabase.storage
@@ -659,6 +660,7 @@ Associado`;
                 }
                 console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
             }
+            */
 
             // Fallback: Gerar novo
             const { data: invs, error } = await supabase
@@ -686,32 +688,23 @@ Associado`;
                 throw new Error("Elemento de captura consolidado não encontrado no DOM.");
             }
 
-            const canvas = await html2canvas(element, {
-                scale: 1.2,
-                useCORS: true,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: "#f8fafc"
-            });
-
-            const imgData = canvas.toDataURL('image/jpeg', 0.8);
+            const pages = element.querySelectorAll('.consolidated-pdf-page');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgWidth = 210;
+            const pageWidth = 210;
             const pageHeight = 297;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
 
-            // Page 1
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-            heightLeft -= pageHeight;
-
-            // Subsequent pages if height exceeds A4
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-                heightLeft -= pageHeight;
+            for (let i = 0; i < pages.length; i++) {
+                if (i > 0) pdf.addPage();
+                const pageEl = pages[i];
+                const canvas = await html2canvas(pageEl, {
+                    scale: 1.5,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    backgroundColor: "#ffffff"
+                });
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
             }
 
             const summaryBase64 = pdf.output('datauristring').split(',')[1];
@@ -722,7 +715,7 @@ Associado`;
                 .map(i => i.concessionaria_pdf_url)
                 .filter(url => !!url))];
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, energyBillUrls, consolidated.asaas_pdf_storage_url);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, energyBillUrls, null);
             
             // Browser Download
             const blobUrl = window.URL.createObjectURL(mergedBlob);
@@ -1065,6 +1058,24 @@ Associado`;
 
         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
         
+        // Helper to get discount/economy dynamically
+        const getEconomiaValue = (inv) => {
+            if (Number(inv.economia_reais) > 0) {
+                return Number(inv.economia_reais);
+            }
+            const consumoKwh = Number(inv.consumo_kwh) || 0;
+            const consumoCompensado = Number(inv.consumo_compensado) || 0;
+            const consumoReais = Number(inv.consumo_reais) || 0;
+            const desconto = Number(inv.desconto_aplicado) || Number(inv.desconto_assinante) || 0;
+            
+            if (consumoKwh > 0 && consumoReais > 0 && consumoCompensado > 0 && desconto > 0) {
+                const custoKwh = consumoReais / consumoKwh;
+                const valorCompensado = custoKwh * consumoCompensado;
+                return valorCompensado * (desconto / 100);
+            }
+            return 0;
+        };
+
         // Obter mês de referência do primeiro item
         const refMonthRaw = data.items?.[0]?.mes_referencia || '';
         let formattedRefMonth = 'N/A';
@@ -1073,160 +1084,242 @@ Associado`;
             formattedRefMonth = `${month}/${year}`;
         }
 
+        // Chunk items: 6 for page 1, 9 for page 2+
+        const page1Limit = 6;
+        const subsequentLimit = 9;
+        const totalConsumoReais = (data.items || []).reduce((sum, inv) => sum + (Number(inv.consumo_reais) || 0), 0);
+        const totalEconomiaReais = (data.items || []).reduce((sum, inv) => sum + getEconomiaValue(inv), 0);
+
+        const items = data.items || [];
+        const pagesChunks = [];
+        if (items.length <= page1Limit) {
+            pagesChunks.push(items);
+        } else {
+            pagesChunks.push(items.slice(0, page1Limit));
+            let remaining = items.slice(page1Limit);
+            while (remaining.length > 0) {
+                pagesChunks.push(remaining.slice(0, subsequentLimit));
+                remaining = remaining.slice(subsequentLimit);
+            }
+        }
+
         return (
             <div className="pdf-capture-wrapper consolidated" style={{ width: '210mm', backgroundColor: 'white', position: 'relative' }}>
-                <main className="flex flex-col bg-white" style={{ minHeight: '297mm' }}>
-                    {/* Header Section */}
-                    <header className="bg-white">
-                        <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">
-                            <div className="flex items-center gap-2">
-                                {branding?.logo_url ? (
-                                    <img 
-                                        src={branding.logo_url} 
-                                        alt={branding.company_name} 
-                                        className="w-10 h-10 object-contain" 
-                                    />
-                                ) : (
-                                    <FileText size={24} color="#003366" />
-                                )}
-                                <span className="text-xl font-extrabold text-[#003366] uppercase tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                    {branding?.company_name || 'B2W Energia por assinatura'}
-                                </span>
-                            </div>
-                            <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full flex items-center justify-center">
-                                <span className="text-[10px] font-bold text-[#fd9000] uppercase tracking-widest text-center">Consolidado Mensal</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-[#003366] text-white px-8 py-3 flex justify-between items-center">
-                            <div className="flex items-center justify-center gap-3 w-full">
-                                <div className="flex items-center gap-3">
-                                    <Info size={18} className="text-[#fd9000]" />
-                                    <span className="text-sm font-semibold" style={{ fontFamily: 'Manrope, sans-serif' }}>Detalhamento da Fatura</span>
-                                </div>
-                            </div>
-                            <div className="bg-[#fd9000] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center min-w-[80px]">
-                                {(data.status || 'a_vencer').replace(/_/g, ' ')}
-                            </div>
-                        </div>
-
-                        <div className="p-8 grid grid-cols-12 gap-6 bg-slate-50/50">
-                            <div className="col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assinante</p>
-                                <h1 className="text-[18px] font-extrabold text-[#003366] mb-4 uppercase truncate" style={{ fontFamily: 'Manrope, sans-serif' }} title={subscriber?.name}>
-                                    {subscriber?.name}
-                                </h1>
-                                <div className="flex gap-8">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Mês Referência</p>
-                                        <p className="text-lg font-bold text-[#003366]">{formattedRefMonth}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Vencimento</p>
-                                        <p className="text-lg font-bold text-red-600">
-                                            {new Date(data.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-span-5 bg-[#5ead5c]/5 border-2 border-[#fd9000] rounded-xl p-6 flex flex-col justify-center items-end shadow-sm overflow-hidden">
-                                <p className="text-[10px] font-bold text-[#5ead5c] uppercase tracking-widest mb-1 text-right">Total a Pagar</p>
-                                <p className="text-3xl font-black text-[#003366] tracking-tighter text-right" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                    {formatCurrency(data.total_value)}
-                                </p>
-                            </div>
-                        </div>
-                    </header>
-
-                    {/* Content Section */}
-                    <div className="flex-1 px-8 py-4">
-                        <div className="flex flex-wrap gap-4">
-                            {(data.items || []).map(inv => (
-                                <div key={inv.id} className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col shadow-sm" style={{ width: 'calc(33.333% - 11px)', minWidth: '200px' }}>
-                                    <div>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex-1 flex flex-col justify-center h-full">
-                                                <p className="text-[7px] font-bold text-slate-400 uppercase leading-none mb-0.5">Endereço da Unidade:</p>
-                                                <p className="text-[9px] font-bold text-[#003366] leading-tight mb-1" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                                                    {inv.consumer_units?.address ? 
-                                                        `${inv.consumer_units.address.rua || ''}${inv.consumer_units.address.numero ? `, ${inv.consumer_units.address.numero}` : ''} - ${inv.consumer_units.address.bairro || ''}` : 
-                                                        (inv.consumer_units?.identification || inv.consumer_units?.numero_uc)
-                                                    }
-                                                </p>
-                                                <p className="text-[8px] text-slate-500 font-medium tracking-tight">UC: {inv.consumer_units?.numero_uc}</p>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-2 gap-2 mb-3">
-                                            <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                                                <p className="text-[7px] font-bold text-slate-400 uppercase">Valor a Pagar</p>
-                                                <p className="text-[11px] font-black text-[#003366]">{formatCurrency(inv.valor_a_pagar)}</p>
-                                            </div>
-                                            <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
-                                                <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
-                                                <p className="font-extrabold text-[#5ead5c] leading-none" style={{ fontSize: '9px' }}>{formatCurrency(inv.economia_reais)}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1.5 border-t border-dashed border-slate-100 pt-2">
-                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
-                                                <span>Consumo Total (kWh)</span>
-                                                <span className="font-bold text-[#003366]">{inv.consumo_kwh} kWh</span>
-                                            </div>
-                                            {inv.energia_injetada > 0 && (
-                                                <div className="flex justify-between text-[8px] font-medium text-[#0284c7]">
-                                                    <span>Energia Injetada</span>
-                                                    <span className="font-bold">{inv.energia_injetada} kWh</span>
-                                                </div>
+                {pagesChunks.map((chunk, pageIndex) => {
+                    const isFirstPage = pageIndex === 0;
+                    return (
+                        <div 
+                            key={pageIndex} 
+                            className="consolidated-pdf-page" 
+                            style={{ 
+                                width: '210mm', 
+                                height: '297mm', 
+                                backgroundColor: 'white', 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                boxSizing: 'border-box',
+                                overflow: 'hidden',
+                                pageBreakAfter: 'always',
+                                position: 'relative'
+                            }}
+                        >
+                            {/* Page Header */}
+                            {isFirstPage ? (
+                                <header className="bg-white">
+                                    <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            {branding?.logo_url ? (
+                                                <img 
+                                                    src={branding.logo_url} 
+                                                    alt={branding.company_name} 
+                                                    className="w-10 h-10 object-contain" 
+                                                />
+                                            ) : (
+                                                <FileText size={24} color="#003366" />
                                             )}
-                                            <div className="flex justify-between text-[8px] font-medium text-[#5ead5c]">
-                                                <span>Energia Compensada</span>
-                                                <span className="font-bold">- {inv.consumo_compensado || 0} kWh</span>
+                                            <span className="text-xl font-extrabold text-[#003366] uppercase tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                {branding?.company_name || 'B2W Energia por assinatura'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-[#fd9000]/10 px-3 py-1 rounded-full flex items-center justify-center">
+                                            <span className="text-[10px] font-bold text-[#fd9000] uppercase tracking-widest text-center">Consolidado Mensal</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-[#003366] text-white px-8 py-3 flex justify-between items-center">
+                                        <div className="flex items-center justify-center gap-3 w-full">
+                                            <div className="flex items-center gap-3">
+                                                <Info size={18} className="text-[#fd9000]" />
+                                                <span className="text-sm font-semibold" style={{ fontFamily: 'Manrope, sans-serif' }}>Detalhamento da Fatura</span>
                                             </div>
-                                            <div className="flex justify-between text-[8px] font-medium text-slate-600 pt-1">
-                                                <span>Custos da Unidade</span>
-                                                <span className="font-bold">{formatCurrency(inv.consumo_reais)}</span>
+                                        </div>
+                                        <div className="bg-[#fd9000] px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center justify-center min-w-[80px]">
+                                            {(data.status || 'a_vencer').replace(/_/g, ' ')}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-8 grid grid-cols-12 gap-6 bg-slate-50/50">
+                                        <div className="col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assinante</p>
+                                            <h1 className="text-[18px] font-extrabold text-[#003366] mb-4 uppercase" style={{ fontFamily: 'Manrope, sans-serif', lineHeight: '1.3', paddingBottom: '4px' }} title={subscriber?.name}>
+                                                {subscriber?.name}
+                                            </h1>
+                                            <div className="flex gap-8">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Mês Referência</p>
+                                                    <p className="text-lg font-bold text-[#003366]">{formattedRefMonth}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Vencimento</p>
+                                                    <p className="text-lg font-bold text-red-600">
+                                                        {new Date(data.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
-                                                <span>Iluminação Pública</span>
-                                                <span className="font-bold">{formatCurrency(inv.iluminacao_publica)}</span>
+                                        </div>
+                                        <div className="col-span-5 bg-[#5ead5c]/5 border-2 border-[#fd9000] rounded-xl p-5 flex flex-col justify-between shadow-sm overflow-hidden" style={{ minHeight: '130px' }}>
+                                            <div className="space-y-1.5 w-full">
+                                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                                    <span>Consumo Total</span>
+                                                    <span className="text-[#003366] text-[12px] font-extrabold">{formatCurrency(totalConsumoReais)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[10px] font-bold text-[#5ead5c]">
+                                                    <span>Economia Total</span>
+                                                    <span className="text-[#5ead5c] text-[12px] font-extrabold">{formatCurrency(totalEconomiaReais)}</span>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
-                                                <span>Taxas e Outros</span>
-                                                <span className="font-bold">{formatCurrency((Number(inv.tarifa_minima) || 0) + (Number(inv.outros_lancamentos) || 0))}</span>
+                                            <div className="border-t border-dashed border-[#fd9000]/40 mt-3 pt-2 w-full text-right">
+                                                <p className="text-[9px] font-black text-[#5ead5c] uppercase tracking-widest mb-0.5">Total a Pagar</p>
+                                                <p className="text-3xl font-black text-[#003366] tracking-tighter leading-none" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                    {formatCurrency(data.total_value)}
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                                </header>
+                            ) : (
+                                <header className="bg-white">
+                                    <div className="px-8 py-4 flex justify-between items-center border-b border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            {branding?.logo_url ? (
+                                                <img src={branding.logo_url} alt={branding.company_name} className="w-8 h-8 object-contain" />
+                                            ) : (
+                                                <FileText size={20} color="#003366" />
+                                            )}
+                                            <span className="text-md font-extrabold text-[#003366] uppercase tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                {branding?.company_name || 'B2W Energia por assinatura'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-[#003366] text-white px-4 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                                            Detalhamento da Fatura - Página {pageIndex + 1}
+                                        </div>
+                                    </div>
+                                </header>
+                            )}
 
-                    {/* Footer Support Area */}
-                    <footer className="mt-auto px-8 py-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-[#003366]/5 flex items-center justify-center">
-                                <Zap size={20} className="text-[#003366]" />
+                            {/* Content Section */}
+                            <div className="flex-1 px-8 py-4 bg-white">
+                                <div className="grid grid-cols-3 gap-3">
+                                    {chunk.map(inv => {
+                                        const economiaReais = getEconomiaValue(inv);
+                                        return (
+                                            <div key={inv.id} className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col shadow-sm" style={{ width: '100%' }}>
+                                                <div className="flex-1 flex flex-col justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="flex-1 flex flex-col justify-center h-full">
+                                                                <p className="text-[10px] font-extrabold text-[#003366] uppercase tracking-wider mb-1" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                                    UC: {inv.consumer_units?.numero_uc || '-'}
+                                                                </p>
+                                                                <p className="text-[7px] font-bold text-slate-400 uppercase leading-none mb-1">Endereço da Unidade:</p>
+                                                                {inv.consumer_units?.address ? (
+                                                                    <div className="text-[9px] font-bold text-[#003366] leading-snug" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                                        <div>
+                                                                            {inv.consumer_units.address.rua || '-'}{inv.consumer_units.address.numero ? `, ${inv.consumer_units.address.numero}` : ''}{inv.consumer_units.address.complemento ? ` - ${inv.consumer_units.address.complemento}` : ''}
+                                                                        </div>
+                                                                        <div className="text-slate-500 font-medium">
+                                                                            {inv.consumer_units.address.bairro || '-'}
+                                                                        </div>
+                                                                        <div className="text-slate-500 font-medium">
+                                                                            {inv.consumer_units.address.cidade || '-'}{inv.consumer_units.address.uf ? ` - ${inv.consumer_units.address.uf}` : ''}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-[9px] font-bold text-[#003366] leading-tight mb-1" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                                                                        {inv.consumer_units?.identification || '-'}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-1.5 border-t border-dashed border-slate-100 pt-2">
+                                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                                <span>Consumo Total (kWh)</span>
+                                                                <span className="font-bold text-[#003366]">
+                                                                    {inv.consumo_kwh} kWh ({formatCurrency(inv.consumo_reais)})
+                                                                </span>
+                                                            </div>
+                                                            {inv.energia_injetada > 0 && (
+                                                                <div className="flex justify-between text-[8px] font-medium text-[#0284c7]">
+                                                                    <span>Energia Injetada</span>
+                                                                    <span className="font-bold">{inv.energia_injetada} kWh</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="flex justify-between text-[8px] font-medium text-[#5ead5c]">
+                                                                <span>Energia Compensada</span>
+                                                                <span className="font-bold">
+                                                                    - {inv.consumo_compensado || 0} kWh ({formatCurrency(economiaReais)})
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                                <span>Iluminação Pública</span>
+                                                                <span className="font-bold">{formatCurrency(inv.iluminacao_publica)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-[8px] font-medium text-slate-600">
+                                                                <span>Taxas e Outros</span>
+                                                                <span className="font-bold">{formatCurrency((Number(inv.tarifa_minima) || 0) + (Number(inv.outros_lancamentos) || 0))}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-dashed border-slate-100">
+                                                        <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
+                                                            <p className="text-[7px] font-bold text-slate-400 uppercase">Valor a Pagar</p>
+                                                            <p className="text-[11px] font-black text-[#003366]">{formatCurrency(inv.valor_a_pagar)}</p>
+                                                        </div>
+                                                        <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
+                                                            <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
+                                                            <p className="font-extrabold text-[#5ead5c] leading-none" style={{ fontSize: '9px' }}>{formatCurrency(economiaReais)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-[#003366] uppercase tracking-wider">Suporte Especializado B2W Energia</p>
-                                <p className="text-[9px] text-slate-500">atendimento@b2wenergia.com.br • www.b2wenergia.com.br</p>
-                            </div>
+
+                            {/* Footer Support Area */}
+                            <footer className="mt-auto px-8 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 h-8 rounded-full bg-[#003366]/5 flex items-center justify-center">
+                                        <Zap size={16} className="text-[#003366]" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-bold text-[#003366] uppercase tracking-wider">Suporte Especializado B2W Energia</p>
+                                        <p className="text-[8px] text-slate-500">atendimento@b2wenergia.com.br • www.b2wenergia.com.br</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[7px] font-bold text-slate-400 uppercase tracking-[0.2em]">Eficiência Energética Nível A+</p>
+                                </div>
+                            </footer>
+                            
+                            {/* Decorative Edge */}
+                            <div className="w-full h-1 bg-gradient-to-r from-[#003366] via-[#fd9000] to-[#5ead5c]"></div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">Eficiência Energética Nível A+</p>
-                            <div className="flex gap-0.5 justify-end mt-1">
-                                <div className="w-1.5 h-3 bg-[#5ead5c]/20 rounded-full"></div>
-                                <div className="w-1.5 h-3 bg-[#5ead5c]/40 rounded-full"></div>
-                                <div className="w-1.5 h-3 bg-[#5ead5c]/60 rounded-full"></div>
-                                <div className="w-1.5 h-3 bg-[#5ead5c] rounded-full"></div>
-                            </div>
-                        </div>
-                    </footer>
-                    
-                    {/* Decorative Edge */}
-                    <div className="w-full h-1.5 bg-gradient-to-r from-[#003366] via-[#fd9000] to-[#5ead5c]"></div>
-                </main>
+                    );
+                })}
             </div>
         );
     };
