@@ -2180,19 +2180,35 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
                                                 {(invoice?.id || localInvoiceId) && (
                                                     localBoletoUrl ? (
-                                                        <a 
-                                                            href={localBoletoUrl} 
-                                                            target="_blank" 
-                                                            rel="noopener noreferrer"
-                                                            style={{ 
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                                                                padding: '0.85rem', background: '#2563eb', color: 'white', fontWeight: 700,
-                                                                borderRadius: '10px', textDecoration: 'none', fontSize: '0.9rem',
-                                                                boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
-                                                            }}
-                                                        >
-                                                            <CreditCard size={18} /> Pagar Boleto
-                                                        </a>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
+                                                            <a 
+                                                                href={localBoletoUrl} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                style={{ 
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                                    padding: '0.85rem', background: '#2563eb', color: 'white', fontWeight: 700,
+                                                                    borderRadius: '10px', textDecoration: 'none', fontSize: '0.9rem',
+                                                                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+                                                                }}
+                                                            >
+                                                                <CreditCard size={18} /> Pagar Boleto
+                                                            </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleEmission}
+                                                                disabled={generating}
+                                                                style={{
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                                                                    padding: '0.4rem', background: '#f1f5f9', color: '#475569', fontWeight: 700,
+                                                                    border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.75rem',
+                                                                    cursor: generating ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                                                                    width: '100%'
+                                                                }}
+                                                            >
+                                                                {generating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Reemitir Boleto (Produção)
+                                                            </button>
+                                                        </div>
                                                     ) : (
                                                         <button 
                                                             type="button"
