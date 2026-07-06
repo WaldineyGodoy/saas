@@ -8,6 +8,7 @@ import SubscriberModal from './SubscriberModal';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 import RateioListModal from './RateioListModal';
+import PowerPlantModal from './PowerPlantModal';
 
 // Helper to calculate business days (skips Saturday and Sunday)
 function calculateBusinessDays(startDate, numDays) {
@@ -147,6 +148,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [activeInvoice, setActiveInvoice] = useState(null);
     const [activeInvoiceCU, setActiveInvoiceCU] = useState(null);
     const [activeRateio, setActiveRateio] = useState(null);
+    const [activeUsina, setActiveUsina] = useState(null);
     const [activeTab, setActiveTab] = useState('tratativa');
     const [showReplicaJustification, setShowReplicaJustification] = useState(false);
     const [replicaJustification, setReplicaJustification] = useState('');
@@ -236,6 +238,14 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .single();
                 if (error) throw error;
                 setActiveRateio(data);
+            } else if (linkedEntityType === 'usina') {
+                const { data, error } = await supabase
+                    .from('usinas')
+                    .select('*')
+                    .eq('id', linkedEntityId)
+                    .single();
+                if (error) throw error;
+                setActiveUsina(data);
             }
         } catch (err) {
             console.error('Error fetching entity details:', err);
@@ -403,6 +413,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     .order('mes_referencia', { ascending: false }));
             } else if (linkedEntityType === 'rateio_list') {
                 ({ data, error } = await supabase.from('rateio_lists').select('id, usina_name, created_at').order('created_at', { ascending: false }));
+            } else if (linkedEntityType === 'usina') {
+                ({ data, error } = await supabase.from('usinas').select('id, name').order('name'));
             }
 
             if (error) throw error;
@@ -431,6 +443,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     return { id: item.id, label: `Fatura Ref: ${item.mes_referencia ? item.mes_referencia.substring(0,7) : ''}${ucInfo} - Valor: R$ ${Number(item.valor_a_pagar).toFixed(2)}` };
                 } else if (linkedEntityType === 'rateio_list') {
                     return { id: item.id, label: `${item.usina_name} - Criada: ${formatDateBR(item.created_at)}` };
+                } else if (linkedEntityType === 'usina') {
+                    return { id: item.id, label: item.name };
                 }
                 return { id: item.id, label: item.id };
             });
@@ -541,6 +555,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     else if (linkedEntityType === 'unidade_consumidora') crmEntityType = 'uc';
                     else if (linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') crmEntityType = 'invoice';
                     else if (linkedEntityType === 'rateio_list') crmEntityType = 'rateio_list';
+                    else if (linkedEntityType === 'usina') crmEntityType = 'usina';
 
                     if (crmEntityType) {
                         const contentLog = `Novo protocolo criado: "${title}" ${protocolNumber ? `(Nº: ${protocolNumber})` : ''}`;
@@ -1535,6 +1550,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                 <option value="conta_energia">Conta de Energia (Concessionária)</option>
                                                 <option value="fatura">Fatura (Assinante)</option>
                                                 <option value="rateio_list">Lista de Rateio</option>
+                                                <option value="usina">Usina</option>
                                             </select>
                                         </div>
 
@@ -1598,17 +1614,20 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                             {linkedEntityType === 'unidade_consumidora' && <Zap size={18} />}
                                                             {(linkedEntityType === 'conta_energia' || linkedEntityType === 'fatura') && <FileText size={18} />}
                                                             {linkedEntityType === 'rateio_list' && <Layers size={18} />}
+                                                            {linkedEntityType === 'usina' && <Zap size={18} />}
                                                         </div>
                                                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b' }}>
                                                                 {entityOptions.find(opt => opt.id === linkedEntityId)?.label || 'Carregando...'}
+                                                                {linkedEntityId && linkedEntityType === 'usina' && entityOptions.length === 0 && 'Carregando usina...'}
                                                             </div>
-                                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 500 }}>
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
                                                                 {linkedEntityType === 'assinante' && 'Assinante'}
                                                                 {linkedEntityType === 'unidade_consumidora' && 'Unidade Consumidora'}
                                                                 {linkedEntityType === 'conta_energia' && 'Conta de Energia (Concessionária)'}
                                                                 {linkedEntityType === 'fatura' && 'Fatura (Assinante)'}
                                                                 {linkedEntityType === 'rateio_list' && 'Lista de Rateio'}
+                                                                {linkedEntityType === 'usina' && 'Usina'}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1746,6 +1765,14 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 <RateioListModal
                     rateio={activeRateio}
                     onClose={() => setActiveRateio(null)}
+                />
+            )}
+
+            {activeUsina && (
+                <PowerPlantModal
+                    usina={activeUsina}
+                    onClose={() => setActiveUsina(null)}
+                    onSave={() => {}}
                 />
             )}
 
