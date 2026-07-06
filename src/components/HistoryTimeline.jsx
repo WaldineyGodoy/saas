@@ -108,6 +108,10 @@ export default function HistoryTimeline({ entityType, entityId, entityIds, entit
     const handleAddComment = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (!newComment.trim()) return;
+        if (!entityId) {
+            showAlert('Não é possível adicionar comentários para um registro que ainda não foi salvo.', 'warning');
+            return;
+        }
 
         setSubmitting(true);
         try {
@@ -117,7 +121,7 @@ export default function HistoryTimeline({ entityType, entityId, entityIds, entit
                     entity_type: entityType,
                     entity_id: entityId,
                     content: newComment.trim(),
-                    created_by: profile.id
+                    created_by: profile?.id || null
                 });
 
             if (error) throw error;
@@ -127,7 +131,7 @@ export default function HistoryTimeline({ entityType, entityId, entityIds, entit
             showAlert('Comentário adicionado!', 'success');
         } catch (error) {
             console.error('Error adding comment:', error);
-            showAlert('Erro ao adicionar comentário', 'error');
+            showAlert('Erro ao adicionar comentário: ' + (error.message || error), 'error');
         } finally {
             setSubmitting(false);
         }
@@ -387,12 +391,12 @@ export default function HistoryTimeline({ entityType, entityId, entityIds, entit
                         <button
                             type="button"
                             onClick={() => handleAddComment()}
-                            disabled={submitting || !newComment.trim()}
+                            disabled={submitting || !newComment.trim() || !entityId}
                             style={{
                                 background: 'var(--color-blue)', color: 'white', border: 'none',
-                                borderRadius: '8px', padding: '0 1.25rem', cursor: submitting ? 'not-allowed' : 'pointer',
+                                borderRadius: '8px', padding: '0 1.25rem', cursor: (submitting || !entityId) ? 'not-allowed' : 'pointer',
                                 display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600,
-                                opacity: !newComment.trim() ? 0.5 : 1,
+                                opacity: (!newComment.trim() || !entityId) ? 0.5 : 1,
                                 transition: 'transform 0.1s'
                             }}
                             onMouseDown={(e) => !submitting && (e.currentTarget.style.transform = 'scale(0.95)')}
