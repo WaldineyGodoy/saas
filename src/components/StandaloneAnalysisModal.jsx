@@ -268,7 +268,17 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                 valorAPagar = concessionariaVal;
             }
 
-            const valorCorretoConcessionaria = tarifaMinimaExcedentes + ip + outros;
+            // --- Custo de Disponibilidade (Tarifa Mínima) ---
+            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
+            const custoDisponibilidade = custoDispKwh * tarifaFinal;
+
+            // --- Encargos da Concessionária (Fio B + Excedente) ---
+            const fioB = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
+            const encargosEnergia = tarifaMinimaExcedentes + fioB; // tarifaMinimaExcedentes = (consumo - compensado) * tarifaFinal
+            const valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
+
+            const valorCorretoConcessionaria = valorEnergiaCobrado + ip + outros;
             const erroFaturamento = concessionariaVal - valorCorretoConcessionaria;
 
             setSimulation({
