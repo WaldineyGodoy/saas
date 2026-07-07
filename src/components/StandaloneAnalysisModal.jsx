@@ -268,12 +268,17 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                 valorAPagar = concessionariaVal;
             }
 
+            const valorCorretoConcessionaria = tarifaMinimaExcedentes + ip + outros;
+            const erroFaturamento = concessionariaVal - valorCorretoConcessionaria;
+
             setSimulation({
                 tarifaEfetiva,
                 economiaGerada,
                 tarifaMinimaExcedentes,
                 energiaCompensadaReais,
-                valorAPagar
+                valorAPagar,
+                valorCorretoConcessionaria,
+                erroFaturamento
             });
         }
     }, [
@@ -2053,6 +2058,25 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                                 />
                                             </div>
                                         </div>
+
+                                        {simulation.erroFaturamento > 5 && (
+                                            <div style={{ padding: '0.75rem', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '10px', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#b91c1c', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                                                    <AlertCircle size={16} /> Erro de Faturamento na Concessionária!
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', color: '#991b1b' }}>
+                                                    Valor cobrado a mais. A concessionária deveria ter cobrado <strong>{formatCurrency(simulation.valorCorretoConcessionaria)}</strong> (Tusd + IP + Outros).<br/>
+                                                    Valor sugerido para contestar: <strong>{formatCurrency(simulation.erroFaturamento)}</strong>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData(prev => ({ ...prev, valor_concessionaria: formatCurrency(simulation.valorCorretoConcessionaria) }))}
+                                                    style={{ padding: '0.5rem', background: '#b91c1c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', marginTop: '0.25rem' }}
+                                                >
+                                                    Aplicar Valor Correto (Blindar Fornecedor)
+                                                </button>
+                                            </div>
+                                        )}
 
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '1rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
