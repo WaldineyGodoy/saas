@@ -18,15 +18,15 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
     const getStatusConfig = (status) => {
         switch (status) {
             case 'success':
-                return { label: 'Sucesso', color: '#16a34a', bg: '#dcfce7', icon: CheckCircle };
+                return { label: 'Sucesso', color: '#22c55e', bg: '#f0fdf4', icon: CheckCircle };
             case 'error':
-                return { label: 'Indisponivel', color: '#dc2626', bg: '#fee2e2', icon: AlertCircle };
+                return { label: 'Indisponível', color: '#ef4444', bg: '#fef2f2', icon: AlertCircle };
             case 'processing':
-                return { label: 'Processando', color: '#2563eb', bg: '#dbeafe', icon: Loader2 };
+                return { label: 'Processando', color: '#3b82f6', bg: '#eff6ff', icon: Loader2 };
             case 'pending':
-                return { label: 'Pendente', color: '#ca8a04', bg: '#fef9c3', icon: Clock };
+                return { label: 'Pendente', color: '#f97316', bg: '#fff7ed', icon: Clock };
             default:
-                return { label: 'Desconhecido', color: '#475569', bg: '#f1f5f9', icon: Clock };
+                return { label: 'Desconhecido', color: '#cbd5e1', bg: '#f8fafc', icon: Clock };
         }
     };
 
@@ -158,9 +158,9 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
 
                     {/* Current Status Display */}
                     <div style={{ 
-                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', 
+                        background: statusConfig.bg, border: `1px solid ${statusConfig.color}`, borderRadius: '12px', 
                         padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center',
-                        justifyContent: 'space-between'
+                        justifyContent: 'space-between', transition: 'all 0.2s ease-in-out'
                     }}>
                         <div>
                             <span style={{ fontSize: '0.875rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Status Atual</span>
