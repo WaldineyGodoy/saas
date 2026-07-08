@@ -130,7 +130,7 @@ serve(async (req) => {
 
     // Outros Lançamentos (Multas, Juros)
     let outros_lancamentos = 0;
-    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Comp\.DIC[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2}-?)/gi;
+    const othersRegex = /(?:Juros[\s\S]{0,15}?Mora|Multa[\s\S]{0,15}?Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}?Monet[áa]ria|Comp\.DIC)[\s\S]{0,40}?(\d{1,4},\d{2}-?)/gi;
     const othersMatches = [...fullText.matchAll(othersRegex)];
     for (const match of othersMatches) {
         outros_lancamentos += parseValue(match[1]);
