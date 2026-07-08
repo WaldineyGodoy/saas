@@ -2809,8 +2809,10 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         if (hasInvoice) {
             if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro' || matchingInvoice.status === 'error') {
                 status = 'error';
-            } else if (matchingInvoice.status === 'processing') {
+            } else if (matchingInvoice.status === 'processing' || matchingInvoice.energy_bill_status === 'processing') {
                 status = 'processing';
+            } else if (matchingInvoice.energy_bill_status === 'pending') {
+                status = 'pending';
             } else {
                 status = 'success';
             }

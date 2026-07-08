@@ -33,13 +33,12 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
     const handleUpdateStatus = async (newStatus) => {
         setIsUpdating(true);
         try {
-            let invoiceStatus = newStatus === 'error' ? 'erro' : newStatus;
             let energyStatus = newStatus === 'error' ? 'erro' : newStatus;
 
             if (uc.matchingInvoice) {
                 const { error } = await supabase
                     .from('invoices')
-                    .update({ status: invoiceStatus, energy_bill_status: energyStatus })
+                    .update({ energy_bill_status: energyStatus })
                     .eq('id', uc.matchingInvoice.id);
                 if (error) throw error;
             } else {
@@ -53,7 +52,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                     .insert({
                         uc_id: uc.id,
                         mes_referencia: refMonth,
-                        status: invoiceStatus,
+                        status: 'sem_faturamento',
                         energy_bill_status: energyStatus,
                         valor_a_pagar: 0,
                         valor_concessionaria: 0
