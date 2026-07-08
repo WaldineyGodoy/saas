@@ -3,18 +3,17 @@ import { X, Calendar, User, UserCheck, Zap, Settings, ArrowRight, Play, Loader2,
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 
-export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalysis, onStatusUpdated }) {
+export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter, onOpenAnalysis, onStatusUpdated }) {
     if (!isOpen || !uc) return null;
 
     const { showAlert } = useUI();
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // Determines current status based on calendar displayStatus or last_scraping_status
-    const [currentStatus, setCurrentStatus] = useState(uc.last_scraping_status || 'pending');
+    const [currentStatus, setCurrentStatus] = useState(uc.displayStatus || 'pending');
 
     useEffect(() => {
-        setCurrentStatus(uc.last_scraping_status || 'pending');
-    }, [uc.last_scraping_status]);
+        setCurrentStatus(uc.displayStatus || 'pending');
+    }, [uc.displayStatus, uc]);
 
     const getStatusConfig = (status) => {
         switch (status) {
@@ -34,18 +33,40 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, onOpenAnalys
     const handleUpdateStatus = async (newStatus) => {
         setIsUpdating(true);
         try {
-            const { error } = await supabase
-                .from('consumer_units')
-                .update({ last_scraping_status: newStatus })
-                .eq('id', uc.id);
+            let invoiceStatus = newStatus === 'error' ? 'erro' : newStatus;
+            let energyStatus = newStatus === 'error' ? 'erro' : newStatus;
 
-            if (error) throw error;
+            if (uc.matchingInvoice) {
+                const { error } = await supabase
+                    .from('invoices')
+                    .update({ status: invoiceStatus, energy_bill_status: energyStatus })
+                    .eq('id', uc.matchingInvoice.id);
+                if (error) throw error;
+            } else {
+                const today = new Date();
+                const refMonth = (monthFilter && monthFilter !== 'all') 
+                    ? `${monthFilter}-01` 
+                    : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+                
+                const { error } = await supabase
+                    .from('invoices')
+                    .insert({
+                        uc_id: uc.id,
+                        mes_referencia: refMonth,
+                        status: invoiceStatus,
+                        energy_bill_status: energyStatus,
+                        valor_a_pagar: 0,
+                        valor_concessionaria: 0
+                    });
+                if (error) throw error;
+            }
+
             setCurrentStatus(newStatus);
-            showAlert('success', 'Status atualizado com sucesso!');
+            showAlert('success', 'Status do mês atualizado com sucesso!');
             if (onStatusUpdated) onStatusUpdated(newStatus);
         } catch (err) {
             console.error('Error updating status:', err);
-            showAlert('error', 'Erro ao atualizar status.');
+            showAlert('error', 'Erro ao atualizar status do mês.');
         } finally {
             setIsUpdating(false);
         }

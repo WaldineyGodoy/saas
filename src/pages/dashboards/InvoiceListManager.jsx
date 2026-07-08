@@ -2708,11 +2708,13 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 isOpen={isReadingCalendarModalOpen}
                 onClose={() => setIsReadingCalendarModalOpen(false)}
                 uc={selectedUcForReadingModal}
+                monthFilter={monthFilter}
                 onOpenAnalysis={(selectedUc) => {
                     setIsAnalysisModalOpen(true);
                 }}
                 onStatusUpdated={(newStatus) => {
-                    setUcs(prev => prev.map(u => u.id === selectedUcForReadingModal?.id ? { ...u, last_scraping_status: newStatus } : u));
+                    fetchInvoices();
+                    fetchUcs();
                 }}
             />
             {isUcModalOpen && (
@@ -2798,22 +2800,28 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         );
         const hasInvoice = !!matchingInvoice;
 
-        let status = unit.last_scraping_status || 'pending';
-        
-        if (status === 'pending') {
-            if (hasInvoice) {
-                if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro') {
-                    status = 'error';
-                } else {
-                    status = 'success';
-                }
+        let status = 'pending';
+
+        const isFuture = (filterYear > currentYearNum) || 
+                       (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
+                       (isCurrentMonth && day > currentDayNum);
+
+        if (hasInvoice) {
+            if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro' || matchingInvoice.status === 'error') {
+                status = 'error';
+            } else if (matchingInvoice.status === 'processing') {
+                status = 'processing';
             } else {
-                const isFuture = (filterYear > currentYearNum) || 
-                               (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
-                               (isCurrentMonth && day > currentDayNum);
-                if (isFuture) {
-                    status = 'not_available';
-                }
+                status = 'success';
+            }
+        } else if (isFuture) {
+            status = 'not_available';
+        } else {
+            // Se for o mês atual, usa o status do scraper como fallback
+            if (isCurrentMonth && unit.last_scraping_status && unit.last_scraping_status !== 'success') {
+                status = unit.last_scraping_status;
+            } else {
+                status = 'pending';
             }
         }
 
