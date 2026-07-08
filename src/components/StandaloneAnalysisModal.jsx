@@ -438,8 +438,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                             };
 
                             const consumoTusdMatches = [
-                                cleanText.match(/Consumo\s+(?:Energia\s+)?TUSD\s+kWh\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i),
-                                cleanText.match(/Consumo\s+TUSD\s+[\s\S]{1,30}?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i)
+                                cleanText.match(/Consumo[\s-]*(?:Energia[\s-]+)?TUSD[\s-]*kWh\s+([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i),
+                                cleanText.match(/(?:Consumo[\s-]*(?:Energia[\s-]+)?TUSD|Uso[\s-]+Sist\.?[\s-]+Distr\.?).{0,20}?(?:kWh)?\s*([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i)
                             ];
                             const consumoTusdExato = consumoTusdMatches.find(m => m);
                             if (consumoTusdExato) {
@@ -447,8 +447,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                             }
 
                             const compGdMatches = [
-                                cleanText.match(/(?:Energia\s+Compensada|Energia\s+Injetada|GX\sCOMP|GXCOMP|G\dComp).{0,40}?TUSD\s+kWh\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)-?/i),
-                                cleanText.match(/(?:Energia\s+Compensada|Energia\s+Injetada).{0,40}?TUSD\s+[\s\S]{1,30}?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)-?/i)
+                                cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp).{0,40}?(?:TUSD)?\s*kWh\s+([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i),
+                                cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp).{0,40}?(?:TUSD)?\s+[\s\S]{1,30}?([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i)
                             ];
                             const compGdMatch = compGdMatches.find(m => m);
                             
@@ -457,11 +457,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
                                 compTusdUnit = parseUnitValue(compGdMatch[2]);
                             }
 
+                            console.log("--- DEBUG FIO B ---");
+                            console.log("Texto OCR (parcial):", cleanText.substring(0, 1000));
+                            console.log("consumoTusdMatches:", consumoTusdMatches.map(m => m ? m.slice(0,4) : null));
+                            console.log("compGdMatches:", compGdMatches.map(m => m ? m.slice(0,4) : null));
+                            console.log("consumoTusdUnit:", consumoTusdUnit, "compTusdUnit:", compTusdUnit);
+                            console.log("-------------------");
+
                             if (consumoTusdUnit > 0 && compTusdUnit > 0) {
                                 const diff = consumoTusdUnit - compTusdUnit;
                                 if (diff > 0.01 && diff < 0.50) { 
                                     parsedData.fio_b_vr_unit = diff;
-                                    const qtyFinal = qtdCompTusd > 0 ? qtdCompTusd : (extractedCompensado || 0);
+                                    const qtyFinal = extractedCompensado > 0 ? extractedCompensado : (qtdCompTusd || 0);
                                     parsedData.fio_b_total = diff * qtyFinal;
                                 }
                             }
@@ -740,9 +747,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ip + outros + parcelamentoVal;
         if (compensadoVal > 0 && selectedUc) {
             const consumoNaoCompensado = Math.max(0, consumoVal - compensadoVal);
-            const custoNaoCompensado = consumoNaoCompensado * tarifaUCVal;
-            const estimatedFioB = compensadoVal * (tarifaUCVal * 0.215);
-            calcConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros + parcelamentoVal;
+            
+            const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
+            const tarifaEfetiva = consumoVal > 0 ? (consumoReaisVal / consumoVal) : 0;
+            const tarifaFinal = tarifaEfetiva > 0 ? tarifaEfetiva : tarifaUCVal;
+
+            const custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
+            const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
+            
+            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
+            const custoDisponibilidade = custoDispKwh * tarifaFinal;
+
+            const encargosEnergia = custoNaoCompensado + fioB_real;
+            const valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
+
+            calcConcessionariaSum = valorEnergiaCobrado + ip + outros + parcelamentoVal;
         }
         const diffSumVal = Math.abs(calcConcessionariaSum - concessionariaVal);
         const diffSumLimitVal = compensadoVal > 0 ? 5.00 : 0.50;
@@ -1371,16 +1391,27 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         const compensado = Number(formData.consumo_compensado) || 0;
         const tarifaUC = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
 
-        // Se houver compensação de energia (GD), estimamos o custo líquido esperado cobrado
-        // pela concessionária (Fio B não compensado + IP + consumo não compensado)
-        let calculatedConcessionariaSum = consumoReaisVal + ip + outros;
+        const parcelamentoVal = typeof formData.parcelamento === 'string' ? parseCurrency(formData.parcelamento) : (Number(formData.parcelamento) || 0);
+        let calculatedConcessionariaSum = consumoReaisVal + ip + outros + parcelamentoVal;
+        
+        let custoDisponibilidade = 0;
+        let encargosEnergia = 0;
+        let valorEnergiaCobrado = 0;
+
         if (compensado > 0 && selectedUc) {
             const consumoNaoCompensado = Math.max(0, consumo - compensado);
-            const custoNaoCompensado = consumoNaoCompensado * tarifaUC;
+            const tarifaFinal = simulation.tarifaEfetiva > 0 ? simulation.tarifaEfetiva : tarifaUC;
+            const custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
+            const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
             
-            // Fio B retido (TUSD não compensado) é tipicamente em torno de 21% a 23% da tarifa cheia da UC
-            const estimatedFioB = compensado * (tarifaUC * 0.215);
-            calculatedConcessionariaSum = custoNaoCompensado + estimatedFioB + ip + outros;
+            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
+            
+            custoDisponibilidade = custoDispKwh * tarifaFinal;
+            encargosEnergia = custoNaoCompensado + fioB_real;
+            valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
+
+            calculatedConcessionariaSum = valorEnergiaCobrado + ip + outros + parcelamentoVal;
         }
 
         const diffSum = Math.abs(calculatedConcessionariaSum - totalFaturaVal);
@@ -1414,7 +1445,42 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
         if (totalFaturaVal > 0 && diffSum > diffSumLimit) {
             alerts.push({
                 type: 'sum',
-                message: `Divergência de Totais: O valor total informado na fatura (${formatCurrency(totalFaturaVal)}) diverge da soma dos lançamentos (Consumo Estimado Líquido + IP + Outros = ${formatCurrency(calculatedConcessionariaSum)}).`
+                message: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '4px' }}>
+                        <span>A matemática dos valores não está batendo: o total extraído é <strong>{formatCurrency(totalFaturaVal)}</strong>, mas o sistema calculou <strong>{formatCurrency(calculatedConcessionariaSum)}</strong>.</span>
+                        <div style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid #d97706', padding: '10px', borderRadius: '6px', fontSize: '0.8rem', color: '#1f2937' }}>
+                            <strong style={{ display: 'block', marginBottom: '8px', color: '#92400e', textTransform: 'uppercase', fontSize: '0.75rem' }}>Detalhamento da Soma do Sistema:</strong>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '6px', alignItems: 'center' }}>
+                                <span>Encargos de Energia (Fio B + Excedente):</span> <span style={{ textAlign: 'right' }}>{formatCurrency(compensado > 0 ? encargosEnergia : consumoReaisVal)}</span>
+                                {compensado > 0 && (
+                                    <>
+                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>↳ Tarifa Mínima da UC (Disponibilidade):</span> <span style={{ color: '#6b7280', textAlign: 'right', fontSize: '0.75rem' }}>{formatCurrency(custoDisponibilidade)}</span>
+                                        <span style={{ color: '#b45309', fontWeight: 600 }}>↳ Energia Cobrada (Maior Valor Acima):</span> <span style={{ color: '#b45309', fontWeight: 600, textAlign: 'right' }}>{formatCurrency(valorEnergiaCobrado)}</span>
+                                    </>
+                                )}
+                                <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px' }}>Iluminação Pública (IP):</span> <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px', textAlign: 'right' }}>{formatCurrency(ip)}</span>
+                                <span>Parcelamentos:</span> <span style={{ textAlign: 'right' }}>{formatCurrency(parcelamentoVal)}</span>
+                                <span>Outros Lançamentos:</span> <span style={{ textAlign: 'right' }}>{formatCurrency(outros)}</span>
+                                <strong style={{ borderTop: '2px solid #d97706', paddingTop: '6px', marginTop: '2px' }}>Total Calculado pelo Sistema:</strong> <strong style={{ borderTop: '2px solid #d97706', paddingTop: '6px', marginTop: '2px', textAlign: 'right' }}>{formatCurrency(calculatedConcessionariaSum)}</strong>
+                            </div>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', fontStyle: 'italic', color: '#92400e' }}>Dica: Faltou informar algum desconto no campo "Outros"? Verifique se você não esqueceu de colocar o sinal negativo (-).</span>
+                    </div>
+                )
+            });
+        }
+
+        if (parcelamentoVal > 0) {
+            alerts.push({
+                type: 'warning',
+                message: `Parcelamento Identificado: Foi detectada uma cobrança de parcelamento no valor de ${formatCurrency(parcelamentoVal)}. Este é um custo excepcional e não reflete o consumo regular da UC.`
+            });
+        }
+
+        if (Math.abs(outros) > 0) {
+            alerts.push({
+                type: 'warning',
+                message: `Lançamentos Extraordinários: Constam lançamentos extras (multas, juros, devoluções ou créditos DIC) totalizando ${formatCurrency(outros)}. Verifique a fatura, pois valores atípicos distorcem a economia gerada.`
             });
         }
 

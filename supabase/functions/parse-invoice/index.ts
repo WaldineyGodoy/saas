@@ -54,10 +54,13 @@ serve(async (req) => {
     const parseValue = (raw: string | null) => {
         if (!raw) return 0;
         let val = raw;
+        const isNegative = val.includes('-');
+        val = val.replace('-', '');
         if (val.includes(',') && val.includes('.')) val = val.replace(/\./g, '').replace(',', '.');
         else if (val.includes(',')) val = val.replace(',', '.');
         const parsed = parseFloat(val);
-        return isNaN(parsed) ? 0 : parsed;
+        if (isNaN(parsed)) return 0;
+        return isNegative ? -Math.abs(parsed) : parsed;
     };
 
     const parseConsumption = (raw: string | null) => {
@@ -127,7 +130,7 @@ serve(async (req) => {
 
     // Outros Lançamentos (Multas, Juros)
     let outros_lancamentos = 0;
-    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria)[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
+    const othersRegex = /(?:Juros[\s\S]{0,15}Mora|Multa[\s\S]{0,15}Atraso|Atualiza[çc][ãa]o[\s\S]{0,15}Monet[áa]ria|Comp\.DIC[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2}-?)/gi;
     const othersMatches = [...fullText.matchAll(othersRegex)];
     for (const match of othersMatches) {
         outros_lancamentos += parseValue(match[1]);
@@ -135,7 +138,7 @@ serve(async (req) => {
 
     // Parcelamentos
     let parcelamento = 0;
-    const parcelamentoRegex = /(?:Parc\s*\d*\/\d*[\s\S]{0,20}|Parcelamento[\s\S]{0,20})[\s\S]{0,40}?(\d{1,4},\d{2})/gi;
+    const parcelamentoRegex = /(?:Parc\s*\d*\/\d*|Parcelamento)[\s\S]{0,30}?(\d{1,4},\d{2}-?)/gi;
     const parcelamentoMatches = [...fullText.matchAll(parcelamentoRegex)];
     for (const match of parcelamentoMatches) {
         parcelamento += parseValue(match[1]);
