@@ -2938,19 +2938,16 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                 dayUnits.map(uc => (
                                     <div key={uc.id} onClick={() => onCardClick(uc)} style={{
                                         padding: '0.6rem', borderRadius: '8px',
-                                        background: uc.status === 'desconectado' ? '#f5f3ff' :
-                                                    uc.displayStatus === 'success' ? '#f0fdf4' : 
+                                        background: uc.displayStatus === 'success' ? '#f0fdf4' : 
                                                     uc.displayStatus === 'processing' ? '#eff6ff' :
                                                     uc.displayStatus === 'pending' ? '#fff7ed' :
                                                     uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
                                         borderLeft: `5px solid ${
-                                            uc.status === 'desconectado' ? '#8b5cf6' :
                                             uc.displayStatus === 'success' ? '#22c55e' : 
                                             uc.displayStatus === 'processing' ? '#3b82f6' :
                                             uc.displayStatus === 'pending' ? '#f97316' :
                                             uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
                                         }`,
-                                        opacity: uc.status === 'desconectado' ? 0.7 : 1,
                                         cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                     }}>
                                         <div style={{ 
