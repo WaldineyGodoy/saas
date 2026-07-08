@@ -1442,29 +1442,35 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             });
         }
 
-        if (totalFaturaVal > 0 && diffSum > diffSumLimit) {
+        if (totalFaturaVal > 0) {
+            const hasError = diffSum > diffSumLimit;
             alerts.push({
-                type: 'sum',
+                type: hasError ? 'error' : 'success',
                 message: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '4px' }}>
-                        <span>A matemática dos valores não está batendo: o total extraído é <strong>{formatCurrency(totalFaturaVal)}</strong>, mas o sistema calculou <strong>{formatCurrency(calculatedConcessionariaSum)}</strong>.</span>
-                        <div style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid #d97706', padding: '10px', borderRadius: '6px', fontSize: '0.8rem', color: '#1f2937' }}>
-                            <strong style={{ display: 'block', marginBottom: '8px', color: '#92400e', textTransform: 'uppercase', fontSize: '0.75rem' }}>Detalhamento da Soma do Sistema:</strong>
+                        <span>
+                            {hasError 
+                                ? <>A matemática dos valores não está batendo: o total extraído é <strong>{formatCurrency(totalFaturaVal)}</strong>, mas o sistema calculou <strong>{formatCurrency(calculatedConcessionariaSum)}</strong>.</>
+                                : <>Matemática validada com perfeição: a soma do sistema bate exatamente com o total da fatura (<strong>{formatCurrency(totalFaturaVal)}</strong>).</>
+                            }
+                        </span>
+                        <div style={{ background: hasError ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.7)', border: `1px solid ${hasError ? '#d97706' : '#22c55e'}`, padding: '10px', borderRadius: '6px', fontSize: '0.8rem', color: '#1f2937' }}>
+                            <strong style={{ display: 'block', marginBottom: '8px', color: hasError ? '#92400e' : '#166534', textTransform: 'uppercase', fontSize: '0.75rem' }}>Detalhamento da Soma do Sistema:</strong>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '6px', alignItems: 'center' }}>
                                 <span>Encargos de Energia (Fio B + Excedente):</span> <span style={{ textAlign: 'right' }}>{formatCurrency(compensado > 0 ? encargosEnergia : consumoReaisVal)}</span>
                                 {compensado > 0 && (
                                     <>
                                         <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>↳ Tarifa Mínima da UC (Disponibilidade):</span> <span style={{ color: '#6b7280', textAlign: 'right', fontSize: '0.75rem' }}>{formatCurrency(custoDisponibilidade)}</span>
-                                        <span style={{ color: '#b45309', fontWeight: 600 }}>↳ Energia Cobrada (Maior Valor Acima):</span> <span style={{ color: '#b45309', fontWeight: 600, textAlign: 'right' }}>{formatCurrency(valorEnergiaCobrado)}</span>
+                                        <span style={{ color: hasError ? '#b45309' : '#15803d', fontWeight: 600 }}>↳ Energia Cobrada (Maior Valor Acima):</span> <span style={{ color: hasError ? '#b45309' : '#15803d', fontWeight: 600, textAlign: 'right' }}>{formatCurrency(valorEnergiaCobrado)}</span>
                                     </>
                                 )}
                                 <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px' }}>Iluminação Pública (IP):</span> <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px', textAlign: 'right' }}>{formatCurrency(ip)}</span>
                                 <span>Parcelamentos:</span> <span style={{ textAlign: 'right' }}>{formatCurrency(parcelamentoVal)}</span>
                                 <span>Outros Lançamentos:</span> <span style={{ textAlign: 'right' }}>{formatCurrency(outros)}</span>
-                                <strong style={{ borderTop: '2px solid #d97706', paddingTop: '6px', marginTop: '2px' }}>Total Calculado pelo Sistema:</strong> <strong style={{ borderTop: '2px solid #d97706', paddingTop: '6px', marginTop: '2px', textAlign: 'right' }}>{formatCurrency(calculatedConcessionariaSum)}</strong>
+                                <strong style={{ borderTop: `2px solid ${hasError ? '#d97706' : '#22c55e'}`, paddingTop: '6px', marginTop: '2px' }}>Total Calculado pelo Sistema:</strong> <strong style={{ borderTop: `2px solid ${hasError ? '#d97706' : '#22c55e'}`, paddingTop: '6px', marginTop: '2px', textAlign: 'right' }}>{formatCurrency(calculatedConcessionariaSum)}</strong>
                             </div>
                         </div>
-                        <span style={{ fontSize: '0.8rem', fontStyle: 'italic', color: '#92400e' }}>Dica: Faltou informar algum desconto no campo "Outros"? Verifique se você não esqueceu de colocar o sinal negativo (-).</span>
+                        {hasError && <span style={{ fontSize: '0.8rem', fontStyle: 'italic', color: '#92400e' }}>Dica: Faltou informar algum desconto no campo "Outros"? Verifique se você não esqueceu de colocar o sinal negativo (-).</span>}
                     </div>
                 )
             });
@@ -1486,17 +1492,28 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
 
         if (alerts.length === 0) return null;
 
+        const hasAnyError = alerts.some(a => a.type !== 'success');
+        const boxBg = hasAnyError ? '#fffbeb' : '#f0fdf4';
+        const boxBorder = hasAnyError ? '#fef3c7' : '#dcfce7';
+        const boxTitleColor = hasAnyError ? '#b45309' : '#166534';
+        const Icon = hasAnyError ? AlertCircle : CheckCircle;
+
         return (
-            <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '1rem', borderRadius: '12px', marginTop: '1rem' }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#b45309', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                    <AlertCircle size={16} /> Validador Inteligente (Alertas Sandbox)
+            <div style={{ background: boxBg, border: `1px solid ${boxBorder}`, padding: '1rem', borderRadius: '12px', marginTop: '1rem', transition: 'all 0.3s ease' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: boxTitleColor, fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.8rem' }}>
+                    <Icon size={18} /> Auditoria do Validador
                 </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    {alerts.map((al, idx) => (
-                        <div key={idx} style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 500, lineHeight: 1.4 }}>
-                            • {al.message}
-                        </div>
-                    ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {alerts.map((al, idx) => {
+                        const isSuccess = al.type === 'success';
+                        const itemColor = isSuccess ? '#15803d' : '#b45309';
+                        return (
+                            <div key={idx} style={{ fontSize: '0.85rem', color: itemColor, fontWeight: 500, lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                                <span style={{marginTop: '2px'}}>{isSuccess ? <CheckCircle size={14} /> : '•'}</span>
+                                <div style={{flex: 1}}>{al.message}</div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         );
