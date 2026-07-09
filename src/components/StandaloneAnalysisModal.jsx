@@ -309,7 +309,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             }
 
             // --- Custo de Disponibilidade (Tarifa Mínima) ---
-            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            let tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            if (!tipoLigacao && typeof pdfData !== 'undefined' && pdfData?.text) {
+                const ligacaoMatch = pdfData.text.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                if (ligacaoMatch) tipoLigacao = ligacaoMatch[1].toLowerCase();
+            }
             const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
             const custoDisponibilidade = custoDispKwh * tarifaFinal;
 
@@ -709,7 +713,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
             const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
             
-            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            let tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            if (!tipoLigacao && typeof pdfData !== 'undefined' && pdfData?.text) {
+                const ligacaoMatch = pdfData.text.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                if (ligacaoMatch) tipoLigacao = ligacaoMatch[1].toLowerCase();
+            }
             const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
             const custoDisponibilidade = custoDispKwh * tarifaFinal;
 
@@ -1492,7 +1500,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             const custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
             const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
             
-            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            let tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            if (!tipoLigacao && typeof pdfData !== 'undefined' && pdfData?.text) {
+                const ligacaoMatch = pdfData.text.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                if (ligacaoMatch) tipoLigacao = ligacaoMatch[1].toLowerCase();
+            }
             const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
             
             custoDisponibilidade = custoDispKwh * tarifaFinal;
