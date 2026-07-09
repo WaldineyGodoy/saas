@@ -1566,6 +1566,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 type: 'compensation',
                 message: `Compensação Parcial: A energia compensada (${compensado} kWh) é menor que o consumo total (${consumo} kWh).`
             });
+        } else if (compensado < consumo && isAjusteDisponibilidade) {
+            const naoCompensadoKwh = Math.max(0, consumo - compensado);
+            alerts.push({
+                type: 'info',
+                message: `Ajuste de Custo de Disponibilidade: A concessionária reteve ${naoCompensadoKwh.toFixed(1)} kWh da compensação (o equivalente a ${formatCurrency(custoDisponibilidade)}) para atingir a taxa mínima da instalação da UC.`
+            });
         }
 
         if (selectedUc && percentDiff > 0.01) {
@@ -1625,7 +1631,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
         if (alerts.length === 0) return null;
 
-        const hasAnyError = alerts.some(a => a.type !== 'success');
+        const hasAnyError = alerts.some(al => al.type !== 'success' && al.type !== 'info');
         const boxBg = hasAnyError ? '#fffbeb' : '#f0fdf4';
         const boxBorder = hasAnyError ? '#fef3c7' : '#dcfce7';
         const boxTitleColor = hasAnyError ? '#b45309' : '#166534';
@@ -1639,10 +1645,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                     {alerts.map((al, idx) => {
                         const isSuccess = al.type === 'success';
-                        const itemColor = isSuccess ? '#15803d' : '#b45309';
+                        const isInfo = al.type === 'info';
+                        let itemColor = '#b45309';
+                        if (isSuccess) itemColor = '#15803d';
+                        else if (isInfo) itemColor = '#1d4ed8'; // blue
                         return (
                             <div key={idx} style={{ fontSize: '0.85rem', color: itemColor, fontWeight: 500, lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                                <span style={{marginTop: '2px'}}>{isSuccess ? <CheckCircle size={14} /> : '•'}</span>
+                                <span style={{marginTop: '2px'}}>{isSuccess ? <CheckCircle size={14} /> : isInfo ? <AlertCircle size={14} /> : '•'}</span>
                                 <div style={{flex: 1}}>{al.message}</div>
                             </div>
                         );
