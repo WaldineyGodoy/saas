@@ -6,12 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { parseInvoice, createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`;
 
 export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, initialUcId = '', initialMesReferencia = '' }) {
     if (!isOpen) return null;
