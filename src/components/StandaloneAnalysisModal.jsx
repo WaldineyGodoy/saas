@@ -672,7 +672,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
 
         let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ipVal + outrosVal + parcelamentoVal;
-        
+        let isAjusteDisponibilidade = false;
+
         if (compensadoVal > 0 && selectedUc) {
             const consumoNaoCompensado = Math.max(0, consumoVal - compensadoVal);
             const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
@@ -688,6 +689,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             const encargosEnergia = (consumoNaoCompensado * tarifaFinal) + fioB_real;
             const valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
 
+            // Verifica se a compensação parcial foi feita apenas para atingir o Custo de Disponibilidade
+            if (compensadoVal < consumoVal) {
+                if (Math.abs(encargosEnergia - custoDisponibilidade) < 5.00) {
+                    isAjusteDisponibilidade = true;
+                }
+            }
+
             calcConcessionariaSum = valorEnergiaCobrado + ipVal + outrosVal + parcelamentoVal;
         }
 
@@ -699,7 +707,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
         if (compensadoVal === 0) {
             autoAlerts.push(`Ausência de Compensação: A fatura não apresenta energia compensada.`);
-        } else if (compensadoVal < consumoVal) {
+        } else if (compensadoVal < consumoVal && !isAjusteDisponibilidade) {
             autoAlerts.push(`Compensação Parcial: A energia compensada (${compensadoVal} kWh) é menor que o consumo total (${consumoVal} kWh).`);
         }
         if (selectedUc && percentDiffVal > 0.01) {
