@@ -1549,12 +1549,19 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
         const alerts = [];
 
+        let isAjusteDisponibilidade = false;
+        if (compensado > 0 && compensado < consumo) {
+            if (Math.abs(encargosEnergia - custoDisponibilidade) < 5.00) {
+                isAjusteDisponibilidade = true;
+            }
+        }
+
         if (compensado === 0) {
             alerts.push({
                 type: 'compensation',
                 message: `Ausência de Compensação: A fatura não apresenta energia compensada. O boleto do assinante será gerado com o valor integral da concessionária.`
             });
-        } else if (compensado < consumo) {
+        } else if (compensado < consumo && !isAjusteDisponibilidade) {
             alerts.push({
                 type: 'compensation',
                 message: `Compensação Parcial: A energia compensada (${compensado} kWh) é menor que o consumo total (${consumo} kWh).`
