@@ -368,6 +368,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         cnpj_cpf: '',
         dia_leitura: '',
         rateio_type: 'prioridade',
+        grupo_tarifario: 'B1 Residencial',
         portal_credentials: { url: '', login: '', password: '' }
     });
 
@@ -506,6 +507,74 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const geracaoDisponivel = Math.max(0, (Number(formData.geracao_estimada_kwh) || 0) - totalFranquiaVinculada);
 
+    const [concessionariaTarifas, setConcessionariaTarifas] = useState(null);
+
+    useEffect(() => {
+        const fetchTarifas = async () => {
+            if (!formData.concessionaria) {
+                setConcessionariaTarifas(null);
+                return;
+            }
+            try {
+                const { data, error } = await supabase
+                    .from('Concessionaria')
+                    .select('*')
+                    .eq('Concessionaria', formData.concessionaria)
+                    .limit(1)
+                    .maybeSingle();
+
+                if (error) throw error;
+                setConcessionariaTarifas(data);
+            } catch (err) {
+                console.error('Erro ao buscar tarifas da concessionária:', err);
+            }
+        };
+        fetchTarifas();
+    }, [formData.concessionaria]);
+
+    const getTariffValues = () => {
+        if (!concessionariaTarifas) return null;
+        
+        const grupo = formData.grupo_tarifario || 'B1 Residencial';
+        let tarifa = 0;
+        let descontoPercent = 0;
+        let fioB = 0;
+
+        if (grupo === 'B1 Residencial') {
+            tarifa = Number(concessionariaTarifas['Tarifa Concessionaria']) || 0;
+            descontoPercent = Number(concessionariaTarifas['Desconto Assinante']) || 0;
+            fioB = Number(concessionariaTarifas['Fio B']) || 0;
+        } else if (grupo === 'B2 Rural') {
+            tarifa = Number(concessionariaTarifas['Tarifa Concessionaria_B2']) || 0;
+            descontoPercent = Number(concessionariaTarifas['Desconto Assinante_B2']) || 0;
+            fioB = Number(concessionariaTarifas['Fio B_B2']) || 0;
+        } else if (grupo === 'B3 Comercial') {
+            tarifa = Number(concessionariaTarifas['Tarifa Concessionaria_B3']) || 0;
+            descontoPercent = Number(concessionariaTarifas['Desconto Assinante_B3']) || 0;
+            fioB = Number(concessionariaTarifas['Fio B_B3']) || 0;
+        } else if (grupo === 'Grupo A') {
+            tarifa = Number(concessionariaTarifas['Tarifa Concessionaria_A']) || 0;
+            descontoPercent = Number(concessionariaTarifas['Desconto Assinante_A']) || 0;
+            fioB = Number(concessionariaTarifas['Fio B_A']) || 0;
+        }
+
+        const descontoReais = tarifa * (descontoPercent / 100);
+        const gestaoPercent = Number(formData.gestao_percentual) || 0;
+        const baseGestao = tarifa - descontoReais - fioB;
+        const gestaoReais = baseGestao * (gestaoPercent / 100);
+        const tarifaLiquida = tarifa - descontoReais - fioB - gestaoReais;
+
+        return {
+            tarifa,
+            descontoPercent,
+            descontoReais,
+            fioB,
+            gestaoPercent,
+            gestaoReais,
+            tarifaLiquida
+        };
+    };
+
     useEffect(() => {
         const mods = Number(formData.qtd_modulos) || 0;
         const potW = Number(formData.potencia_modulos_w) || 0;
@@ -545,6 +614,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 cnpj_cpf: usina.cnpj_cpf || '',
                 dia_leitura: usina.dia_leitura || '',
                 rateio_type: usina.rateio_type || 'prioridade',
+                grupo_tarifario: usina.grupo_tarifario || 'B1 Residencial',
                 portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' }
             });
             fetchLinkedUCs(usina.id);
@@ -1743,6 +1813,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 unidade_geradora: formData.unidade_geradora,
                 cnpj_cpf: formData.cnpj_cpf,
                 rateio_type: formData.rateio_type,
+                grupo_tarifario: formData.grupo_tarifario,
                 portal_credentials: formData.portal_credentials,
                 address: {
                     cep: formData.cep,
@@ -2499,8 +2570,104 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         />
                                     </div>
                                 </div>
-
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Classificação Tarifária</label>
+                                    <select
+                                        value={formData.grupo_tarifario || 'B1 Residencial'}
+                                        onChange={e => setFormData({ ...formData, grupo_tarifario: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none', fontWeight: 700, color: '#1e293b', background: 'white' }}
+                                    >
+                                        <option value="B1 Residencial">B1 Residencial</option>
+                                        <option value="B2 Rural">B2 Rural</option>
+                                        <option value="B3 Comercial">B3 Comercial</option>
+                                        <option value="Grupo A">Grupo A</option>
+                                    </select>
+                                </div>
                             </div>
+
+                            {/* Concessionaire Tariff Block */}
+                            {formData.concessionaria && (
+                                <div style={{
+                                    marginTop: '1.5rem',
+                                    background: '#f8fafc',
+                                    padding: '1.5rem',
+                                    borderRadius: '16px',
+                                    border: '1px solid #e2e8f0',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '1rem',
+                                    animation: 'slideDown 0.3s ease-out'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                                        <div style={{ padding: '0.5rem', background: '#eff6ff', borderRadius: '10px', color: '#2563eb' }}>
+                                            <Building2 size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e3a8a', fontWeight: 700 }}>
+                                                Detalhamento de Tarifas: {formData.concessionaria}
+                                            </h4>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                                                Classe selecionada: {formData.grupo_tarifario || 'B1 Residencial'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {concessionariaTarifas ? (() => {
+                                        const values = getTariffValues();
+                                        if (!values) return null;
+                                        return (
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>TARIFA CONCESSIONÁRIA</span>
+                                                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                                                        {values.tarifa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>DESCONTO CLIENTE ({values.descontoPercent}%)</span>
+                                                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>
+                                                        -{values.descontoReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>FIO B</span>
+                                                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>
+                                                        {values.fioB.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>GESTÃO ({values.gestaoPercent}%)</span>
+                                                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>
+                                                        {values.gestaoReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                    </span>
+                                                </div>
+
+                                                <div style={{ gridColumn: '1 / -1', background: '#eff6ff', padding: '1rem 1.25rem', borderRadius: '12px', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fórmula da Gestão</span>
+                                                        <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>
+                                                            ({values.tarifa.toFixed(4)} - {values.descontoReais.toFixed(4)} - {values.fioB.toFixed(4)}) × {values.gestaoPercent}% = {values.gestaoReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: '#1d4ed8', fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TARIFA LÍQUIDA</span>
+                                                        <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1e3a8a' }}>
+                                                            {values.tarifaLiquida.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })() : (
+                                        <div style={{ color: '#64748b', fontSize: '0.9rem', fontStyle: 'italic', padding: '0.5rem 0' }}>
+                                            Carregando tarifas ou nenhuma tarifa configurada para esta concessionária.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Exclusive Gestão Block */}
                             <div style={{ 

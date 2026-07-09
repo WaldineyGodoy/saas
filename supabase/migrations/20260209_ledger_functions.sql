@@ -129,12 +129,9 @@ BEGIN
             VALUES (v_transaction_id, v_account_gestao, -v_valor_b2w_gestao, 'Receita Gestão B2W (Líquida)', 'invoice', NEW.id);
         END IF;
         
-
-
-        IF v_valor_investidor > 0 THEN
-            INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
-            VALUES (v_transaction_id, v_account_investidor, -v_valor_investidor, 'Crédito Repasse Investidor', 'supplier', v_supplier_id);
-        END IF;
+        -- Always insert investor repasse even if negative (debit) or zero (visibility)
+        INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
+        VALUES (v_transaction_id, v_account_investidor, -v_valor_investidor, 'Crédito Repasse Investidor', 'supplier', v_supplier_id);
 
     END IF;
     RETURN NEW;
