@@ -2382,44 +2382,30 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
 
 
-                                <div className="sandbox-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', padding: '0.6rem 1rem', background: forceConsistent ? '#f0fdf4' : '#fef2f2', border: `1px solid ${forceConsistent ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }} onClick={() => setForceConsistent(!isForceConsistent)}>
-                                        <input 
-                                            type="checkbox" 
-                                            id="forceConsistent" 
-                                            checked={forceConsistent} 
-                                            onChange={(e) => setForceConsistent(e.target.checked)} 
-                                            style={{ width: '18px', height: '18px', accentColor: forceConsistent ? '#16a34a' : '#ef4444', marginRight: '10px', pointerEvents: 'none' }}
-                                        />
-                                        <label htmlFor="forceConsistent" style={{ fontSize: '0.9rem', color: forceConsistent ? '#166534' : '#991b1b', margin: 0, pointerEvents: 'none', fontWeight: 500 }}>
-                                            <strong>Ignorar Auditoria:</strong> Forçar aprovação da fatura (ignorar alertas de divergência e não abrir protocolo)
-                                        </label>
-                                    </div>
-                                    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <button 
-                                            onClick={handleReset} 
-                                            disabled={isSubmitting}
-                                            className="sandbox-btn sandbox-btn-discard"
-                                        >
-                                            <X size={16} /> Descartar Análise
-                                        </button>
+                                <div className="sandbox-footer">
+                                    <button 
+                                        onClick={handleReset} 
+                                        disabled={isSubmitting}
+                                        className="sandbox-btn sandbox-btn-discard"
+                                    >
+                                        <X size={16} /> Descartar Análise
+                                    </button>
 
-                                        <div className="sandbox-footer-right">
-                                            <button 
-                                                onClick={() => saveInvoice('sem_faturamento')}
-                                                disabled={isSubmitting}
-                                                className="sandbox-btn sandbox-btn-secondary"
-                                            >
-                                                <Ban size={16} /> Registrar Operacional (Sem Faturamento)
-                                            </button>
-                                            <button 
-                                                onClick={() => saveInvoice('a_vencer')}
-                                                disabled={isSubmitting}
-                                                className="sandbox-btn sandbox-btn-accent"
-                                            >
-                                                <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
-                                            </button>
-                                        </div>
+                                    <div className="sandbox-footer-right">
+                                        <button 
+                                            onClick={() => handleSaveClick('sem_faturamento')}
+                                            disabled={isSubmitting}
+                                            className="sandbox-btn sandbox-btn-secondary"
+                                        >
+                                            <Ban size={16} /> Registrar Operacional (Sem Faturamento)
+                                        </button>
+                                        <button 
+                                            onClick={() => handleSaveClick('a_vencer')}
+                                            disabled={isSubmitting}
+                                            className="sandbox-btn sandbox-btn-accent"
+                                        >
+                                            <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
+                                        </button>
                                     </div>
                                 </div>
                             </div>
