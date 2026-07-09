@@ -2443,6 +2443,58 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                     </div>
                 </div>
             )}
+
+            {inconsistencyPopup.isOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s' }}>
+                    <div style={{ background: 'white', borderRadius: '16px', padding: '32px', maxWidth: '550px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                        <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#0f172a', fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AlertCircle color="#f59e0b" size={28} />
+                            Inconsistências Detectadas
+                        </h3>
+                        <p style={{ color: '#475569', fontSize: '0.95rem', marginBottom: '16px' }}>
+                            A auditoria encontrou os seguintes alertas de faturamento nesta conta:
+                        </p>
+                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', fontSize: '0.9rem', color: '#334155', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto', marginBottom: '24px', border: '1px solid #e2e8f0' }}>
+                            {inconsistencyPopup.historicoContent}
+                        </div>
+                        <p style={{ fontSize: '1rem', color: '#1e293b', marginBottom: '24px', fontWeight: 600 }}>
+                            Como você deseja classificar esta conta?
+                        </p>
+                        <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end' }}>
+                            <button 
+                                style={{ padding: '12px 24px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.3)' }}
+                                onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                onMouseOut={e => e.currentTarget.style.filter = 'none'}
+                                onClick={() => {
+                                    setInconsistencyPopup({ isOpen: false, saveType: null, historicoContent: '' });
+                                    executeSave(inconsistencyPopup.saveType, true); // forceConsistent = true
+                                }}
+                            >
+                                <X size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }} />
+                                Não Contestar
+                            </button>
+                            <button 
+                                style={{ padding: '12px 24px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(34, 197, 94, 0.3)' }}
+                                onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                onMouseOut={e => e.currentTarget.style.filter = 'none'}
+                                onClick={() => {
+                                    setInconsistencyPopup({ isOpen: false, saveType: null, historicoContent: '' });
+                                    executeSave(inconsistencyPopup.saveType, false); // forceConsistent = false
+                                }}
+                            >
+                                <CheckCircle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }} />
+                                Contestar (Gerar Protocolo)
+                            </button>
+                        </div>
+                        <button 
+                            style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            onClick={() => setInconsistencyPopup({ isOpen: false, saveType: null, historicoContent: '' })}
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
