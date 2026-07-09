@@ -588,10 +588,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     }, []);
 
     useEffect(() => {
-        if (activeFinanceTab === 'lancamentos' && usina?.id) {
+        if (activeTab === 'financeiro' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeFinanceTab, referenceMonth, usina?.id]);
+    }, [activeTab, activeFinanceTab, referenceMonth, usina?.id]);
 
     useEffect(() => {
         if (activeTab === 'ucs' && usina?.id) {
@@ -775,11 +775,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             }
 
             let injectedEnergy = 0;
+            let ugInvoiceValue = 0;
             if (ugId) {
                 try {
                     const { data: ugInvoice } = await supabase
                         .from('invoices')
-                        .select('energia_injetada')
+                        .select('energia_injetada, valor_concessionaria')
                         .eq('uc_id', ugId)
                         .eq('mes_referencia', firstDay)
                         .neq('status', 'cancelado')
@@ -789,9 +790,24 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         injectedEnergy = Number(ugInvoice.energia_injetada);
                         console.log(`Energia injetada encontrada para a UG (${formData.unidade_geradora}):`, injectedEnergy);
                     }
+                    if (ugInvoice?.valor_concessionaria) {
+                        ugInvoiceValue = Number(ugInvoice.valor_concessionaria);
+                        console.log(`Valor da fatura (Energia) encontrado para a UG (${formData.unidade_geradora}):`, ugInvoiceValue);
+                    }
                 } catch (invoiceErr) {
                     console.error('Erro ao buscar fatura da UG:', invoiceErr);
                 }
+            }
+
+            // Automatically update global service_values for 'Energia' if it is selected as a service
+            if (formData.servicos_contratados?.includes('Energia') && ugInvoiceValue > 0) {
+                setFormData(prev => ({
+                    ...prev,
+                    service_values: {
+                        ...(prev.service_values || {}),
+                        'Energia': ugInvoiceValue
+                    }
+                }));
             }
 
             // 2. Get prediction for the specific month from chart data
@@ -805,9 +821,27 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             }
             
             if (prodData) {
+                const existingDetails = prodData.service_details || {};
+                const finalDetails = { ...existingDetails };
+                
+                // Overwrite/update 'Energia' with the fetched ugInvoiceValue if selected
+                if (formData.servicos_contratados?.includes('Energia')) {
+                    finalDetails['Energia'] = ugInvoiceValue > 0 ? ugInvoiceValue : (Number(existingDetails['Energia']) || 0);
+                }
+
+                // Sync other selected services
+                (formData.servicos_contratados || []).forEach(s => {
+                    if (!['Gestão', 'Manutenção', 'Arrendamento'].includes(s)) {
+                        if (finalDetails[s] === undefined) {
+                            const val = formData.service_values?.[s];
+                            finalDetails[s] = typeof val === 'number' ? val : parseCurrency(val);
+                        }
+                    }
+                });
+
                 setMonthlyDetails({
                     ...prodData,
-                    details: prodData.service_details || {},
+                    details: finalDetails,
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
                     energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
                     faturamento_mensal: totalFaturamento,
@@ -816,11 +850,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
                     custo_disponibilidade: totalContasEnergia,
+                    servicos: Object.values(finalDetails).reduce((acc, curr) => acc + curr, 0),
                     geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
                 });
             } else {
                 // Initialize placeholder from defaults
                 const getVal = (key) => {
+                    if (key === 'Energia' && ugInvoiceValue > 0) {
+                        return ugInvoiceValue;
+                    }
                     const val = formData.service_values?.[key];
                     return typeof val === 'number' ? val : parseCurrency(val);
                 };
