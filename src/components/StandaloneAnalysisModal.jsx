@@ -105,7 +105,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
     const [isParsing, setIsParsing] = useState(false);
     const [loaderMessage, setLoaderMessage] = useState('Processando PDF...');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [forceConsistent, setForceConsistent] = useState(false);
+    const [inconsistencyPopup, setInconsistencyPopup] = useState({ isOpen: false, saveType: null, historicoContent: '' });
 
     // Form data no Sandbox (Auditada)
     const [formData, setFormData] = useState({
@@ -660,7 +660,75 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
     }
 
     // Persistência no Banco
-    const saveInvoice = async (saveStatus) => {
+    const getHistoricoContent = () => {
+        const autoAlerts = [];
+        const consumoVal = Number(formData.consumo_kwh) || 0;
+        const compensadoVal = Number(formData.consumo_compensado) || 0;
+        const tarifaUCVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+        
+        const ipVal = typeof formData.iluminacao_publica === 'string' ? parseCurrency(formData.iluminacao_publica) : (Number(formData.iluminacao_publica) || 0);
+        const outrosVal = typeof formData.outros_lancamentos === 'string' ? parseCurrency(formData.outros_lancamentos) : (Number(formData.outros_lancamentos) || 0);
+        const parcelamentoVal = typeof formData.parcelamento === 'string' ? parseCurrency(formData.parcelamento) : (Number(formData.parcelamento) || 0);
+        const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
+
+        let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ipVal + outrosVal + parcelamentoVal;
+        
+        if (compensadoVal > 0 && selectedUc) {
+            const consumoNaoCompensado = Math.max(0, consumoVal - compensadoVal);
+            const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
+            const tarifaEfetiva = consumoVal > 0 ? (consumoReaisVal / consumoVal) : 0;
+            const tarifaFinal = tarifaEfetiva > 0 ? tarifaEfetiva : tarifaUCVal;
+
+            const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
+            
+            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
+            const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
+            const custoDisponibilidade = custoDispKwh * tarifaFinal;
+
+            const encargosEnergia = (consumoNaoCompensado * tarifaFinal) + fioB_real;
+            const valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
+
+            calcConcessionariaSum = valorEnergiaCobrado + ipVal + outrosVal + parcelamentoVal;
+        }
+
+        const diffSumVal = Math.abs(calcConcessionariaSum - concessionariaVal);
+        const diffSumLimitVal = compensadoVal > 0 ? 5.00 : 0.50;
+        const baseTariffVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+        const diffTariffVal = selectedUc ? Math.abs(simulation.tarifaEfetiva - baseTariffVal) : 0;
+        const percentDiffVal = baseTariffVal > 0 ? (diffTariffVal / baseTariffVal) : 0;
+
+        if (compensadoVal === 0) {
+            autoAlerts.push(`Ausência de Compensação: A fatura não apresenta energia compensada.`);
+        } else if (compensadoVal < consumoVal) {
+            autoAlerts.push(`Compensação Parcial: A energia compensada (${compensadoVal} kWh) é menor que o consumo total (${consumoVal} kWh).`);
+        }
+        if (selectedUc && percentDiffVal > 0.01) {
+            autoAlerts.push(`Divergência de Tarifa: Difere em ${(percentDiffVal * 100).toFixed(2)}%.`);
+        }
+        if (concessionariaVal > 0 && diffSumVal > diffSumLimitVal) {
+            autoAlerts.push(`Divergência de Totais: Valores divergem do esperado.`);
+        }
+
+        let historicoContent = '';
+        if (autoAlerts.length > 0) {
+            historicoContent += `Alertas Automáticos do Validador:\n- ${autoAlerts.join('\n- ')}\n\n`;
+        }
+        if (formData.observacoes_auditoria && formData.observacoes_auditoria.trim() !== '') {
+            historicoContent += `Observações Manuais:\n${formData.observacoes_auditoria.trim()}`;
+        }
+        return historicoContent;
+    };
+
+    const handleSaveClick = (saveType) => {
+        const historico = getHistoricoContent();
+        if (historico !== '') {
+            setInconsistencyPopup({ isOpen: true, saveType, historicoContent: historico });
+        } else {
+            executeSave(saveType, false);
+        }
+    };
+
+    const executeSave = async (saveStatus, isForceConsistent) => {
         if (isSubmitting) return;
         setIsSubmitting(true);
 
@@ -759,61 +827,11 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const parcelamentoVal = typeof formData.parcelamento === 'string' ? parseCurrency(formData.parcelamento) : (Number(formData.parcelamento) || 0);
         const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
 
-        // Recalcular alertas automáticos para salvar no histórico
-        const autoAlerts = [];
-        const consumoVal = Number(formData.consumo_kwh) || 0;
-        const compensadoVal = Number(formData.consumo_compensado) || 0;
-        const tarifaUCVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
-        let calcConcessionariaSum = (typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0)) + ip + outros + parcelamentoVal;
-        if (compensadoVal > 0 && selectedUc) {
-            const consumoNaoCompensado = Math.max(0, consumoVal - compensadoVal);
-            
-            const consumoReaisVal = typeof formData.consumo_reais === 'string' ? parseCurrency(formData.consumo_reais) : (Number(formData.consumo_reais) || 0);
-            const tarifaEfetiva = consumoVal > 0 ? (consumoReaisVal / consumoVal) : 0;
-            const tarifaFinal = tarifaEfetiva > 0 ? tarifaEfetiva : tarifaUCVal;
-
-            const custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
-            const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
-            
-            const tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
-            const custoDispKwh = tipoLigacao.includes('tri') ? 100 : tipoLigacao.includes('bi') ? 50 : 30;
-            const custoDisponibilidade = custoDispKwh * tarifaFinal;
-
-            const encargosEnergia = custoNaoCompensado + fioB_real;
-            const valorEnergiaCobrado = Math.max(encargosEnergia, custoDisponibilidade);
-
-            calcConcessionariaSum = valorEnergiaCobrado + ip + outros + parcelamentoVal;
-        }
-        const diffSumVal = Math.abs(calcConcessionariaSum - concessionariaVal);
-        const diffSumLimitVal = compensadoVal > 0 ? 5.00 : 0.50;
-        const baseTariffVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
-        const diffTariffVal = selectedUc ? Math.abs(simulation.tarifaEfetiva - baseTariffVal) : 0;
-        const percentDiffVal = baseTariffVal > 0 ? (diffTariffVal / baseTariffVal) : 0;
-
-        if (compensadoVal === 0) {
-            autoAlerts.push(`Ausência de Compensação: A fatura não apresenta energia compensada.`);
-        } else if (compensadoVal < consumoVal) {
-            autoAlerts.push(`Compensação Parcial: A energia compensada (${compensadoVal} kWh) é menor que o consumo total (${consumoVal} kWh).`);
-        }
-        if (selectedUc && percentDiffVal > 0.01) {
-            autoAlerts.push(`Divergência de Tarifa: Difere em ${(percentDiffVal * 100).toFixed(2)}%.`);
-        }
-        if (concessionariaVal > 0 && diffSumVal > diffSumLimitVal) {
-            autoAlerts.push(`Divergência de Totais: Valores divergem do esperado.`);
-        }
-
-        let historicoContent = '';
-        if (autoAlerts.length > 0) {
-            historicoContent += `Alertas Automáticos do Validador:\n- ${autoAlerts.join('\n- ')}\n\n`;
-        }
-        if (formData.observacoes_auditoria && formData.observacoes_auditoria.trim() !== '') {
-            historicoContent += `Observações Manuais:\n${formData.observacoes_auditoria.trim()}`;
-        }
-
-        let finalEnergyBillStatus = formData.energy_bill_status || 'pendente';
-        if (historicoContent !== '' && !forceConsistent) {
+        const historicoContent = getHistoricoContent();
+                let finalEnergyBillStatus = formData.energy_bill_status || 'pendente';
+        if (historicoContent !== '' && !isForceConsistent) {
             finalEnergyBillStatus = 'inconsistente';
-        } else if (forceConsistent) {
+        } else if (isForceConsistent) {
             finalEnergyBillStatus = 'consistente';
         }
 
@@ -873,7 +891,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                         // Salvar Observações de Auditoria no Histórico se existirem
                         const savedInvoiceId = upsertData?.id;
-                        if (savedInvoiceId && historicoContent !== '' && !forceConsistent) {
+                        if (savedInvoiceId && historicoContent !== '' && !isForceConsistent) {
                             try {
                                 const protocolPayload = {
                                     title: 'Auditoria: Inconsistência de Faturamento',
@@ -926,7 +944,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
             // Salvar Observações de Auditoria no Histórico se existirem
             const savedInvoiceId = data?.id;
-            if (savedInvoiceId && historicoContent !== '' && !forceConsistent) {
+            if (savedInvoiceId && historicoContent !== '' && !isForceConsistent) {
                 try {
                     // Criar Protocolo automaticamente
                     const protocolPayload = {
@@ -2365,7 +2383,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
 
                                 <div className="sandbox-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', padding: '0.6rem 1rem', background: forceConsistent ? '#f0fdf4' : '#fef2f2', border: `1px solid ${forceConsistent ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }} onClick={() => setForceConsistent(!forceConsistent)}>
+                                    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', padding: '0.6rem 1rem', background: forceConsistent ? '#f0fdf4' : '#fef2f2', border: `1px solid ${forceConsistent ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }} onClick={() => setForceConsistent(!isForceConsistent)}>
                                         <input 
                                             type="checkbox" 
                                             id="forceConsistent" 
