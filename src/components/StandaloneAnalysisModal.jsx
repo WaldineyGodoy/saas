@@ -595,10 +595,36 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                     setSelectedUc(matched);
                                     setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
                                     showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
-                                } else {
-                                    throw new Error(`Nenhuma Unidade Consumidora encontrada para o número extraído: ${cleanUcNum}. Selecione a UC manualmente.`);
                                 }
                             }
+                            
+                            // Tenta consertar o tipo de ligação no banco de dados se a UC não tiver
+                            const checkAndPatchUcTipoLigacao = async (ucObj) => {
+                                if (ucObj && !ucObj.tipo_ligacao) {
+                                    const ligacaoMatch = cleanText.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                                    if (ligacaoMatch) {
+                                        const foundLigacao = ligacaoMatch[1].toLowerCase();
+                                        ucObj.tipo_ligacao = foundLigacao;
+                                        setSelectedUc({ ...ucObj }); // Atualiza state
+                                        try {
+                                            await supabase
+                                                .from('consumer_units')
+                                                .update({ tipo_ligacao: foundLigacao })
+                                                .eq('id', ucObj.id);
+                                            console.log(`[OCR] UC ${ucObj.numero_uc} não tinha tipo de ligação. OCR encontrou e atualizou no banco para: ${foundLigacao}`);
+                                        } catch (err) {
+                                            console.warn('Erro ao fazer patch do tipo de ligação no DB:', err);
+                                        }
+                                    }
+                                }
+                            };
+                            
+                            if (currentUcId === matchedUc?.id) {
+                                await checkAndPatchUcTipoLigacao(matchedUc);
+                            } else if (currentUcId && typeof matchedUcPartial !== 'undefined' && matchedUcPartial && matchedUcPartial.length > 0) {
+                                await checkAndPatchUcTipoLigacao(matchedUcPartial[0]);
+                            }
+
                         } else {
                             throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
                         }
