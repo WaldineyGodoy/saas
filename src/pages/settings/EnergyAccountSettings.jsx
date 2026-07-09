@@ -17,12 +17,12 @@ export default function EnergyAccountSettings() {
     const [filterUF, setFilterUF] = useState('');
     const [selectedCons, setSelectedCons] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('B1 Residencial');
     const [modalData, setModalData] = useState({
-        te: 0,
-        tusd: 0,
-        fio_b: 0,
-        tarifa_concessionaria: 0,
-        desconto_assinante: 0
+        'B1 Residencial': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
+        'B2 Rural': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
+        'B3 Comercial': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
+        'Grupo A': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 }
     });
 
     useEffect(() => {
@@ -87,11 +87,15 @@ export default function EnergyAccountSettings() {
 
     const handleModalInputChange = (field, value) => {
         setModalData(prev => {
-            const newData = { ...prev, [field]: value };
+            const currentTabData = prev[activeTab];
+            const newTabData = { ...currentTabData, [field]: value };
             if (field === 'te' || field === 'tusd') {
-                newData.tarifa_concessionaria = Number((newData.te + newData.tusd).toFixed(4));
+                newTabData.tarifa_concessionaria = Number((newTabData.te + newTabData.tusd).toFixed(4));
             }
-            return newData;
+            return {
+                ...prev,
+                [activeTab]: newTabData
+            };
         });
     };
 
@@ -108,12 +112,36 @@ export default function EnergyAccountSettings() {
 
     const openEditModal = (cons) => {
         setSelectedCons(cons);
+        setActiveTab('B1 Residencial');
         setModalData({
-            te: cons.TE || 0,
-            tusd: cons.TUSD || 0,
-            fio_b: cons["Fio B"] || 0,
-            tarifa_concessionaria: cons["Tarifa Concessionaria"] || 0,
-            desconto_assinante: cons["Desconto Assinante"] || 0
+            'B1 Residencial': {
+                te: cons.TE || 0,
+                tusd: cons.TUSD || 0,
+                fio_b: cons["Fio B"] || 0,
+                tarifa_concessionaria: cons["Tarifa Concessionaria"] || 0,
+                desconto_assinante: cons["Desconto Assinante"] || 0
+            },
+            'B2 Rural': {
+                te: cons.TE_B2 || 0,
+                tusd: cons.TUSD_B2 || 0,
+                fio_b: cons["Fio B_B2"] || 0,
+                tarifa_concessionaria: cons["Tarifa Concessionaria_B2"] || 0,
+                desconto_assinante: cons["Desconto Assinante_B2"] || 0
+            },
+            'B3 Comercial': {
+                te: cons.TE_B3 || 0,
+                tusd: cons.TUSD_B3 || 0,
+                fio_b: cons["Fio B_B3"] || 0,
+                tarifa_concessionaria: cons["Tarifa Concessionaria_B3"] || 0,
+                desconto_assinante: cons["Desconto Assinante_B3"] || 0
+            },
+            'Grupo A': {
+                te: cons.TE_A || 0,
+                tusd: cons.TUSD_A || 0,
+                fio_b: cons["Fio B_A"] || 0,
+                tarifa_concessionaria: cons["Tarifa Concessionaria_A"] || 0,
+                desconto_assinante: cons["Desconto Assinante_A"] || 0
+            }
         });
         setIsModalOpen(true);
     };
@@ -124,11 +152,26 @@ export default function EnergyAccountSettings() {
             const { error } = await supabase
                 .from('Concessionaria')
                 .update({
-                    "TE": modalData.te,
-                    "TUSD": modalData.tusd,
-                    "Fio B": modalData.fio_b,
-                    "Tarifa Concessionaria": modalData.tarifa_concessionaria,
-                    "Desconto Assinante": modalData.desconto_assinante
+                    "TE": modalData['B1 Residencial'].te,
+                    "TUSD": modalData['B1 Residencial'].tusd,
+                    "Fio B": modalData['B1 Residencial'].fio_b,
+                    "Tarifa Concessionaria": modalData['B1 Residencial'].tarifa_concessionaria,
+                    "Desconto Assinante": modalData['B1 Residencial'].desconto_assinante,
+                    "TE_B2": modalData['B2 Rural'].te,
+                    "TUSD_B2": modalData['B2 Rural'].tusd,
+                    "Fio B_B2": modalData['B2 Rural'].fio_b,
+                    "Tarifa Concessionaria_B2": modalData['B2 Rural'].tarifa_concessionaria,
+                    "Desconto Assinante_B2": modalData['B2 Rural'].desconto_assinante,
+                    "TE_B3": modalData['B3 Comercial'].te,
+                    "TUSD_B3": modalData['B3 Comercial'].tusd,
+                    "Fio B_B3": modalData['B3 Comercial'].fio_b,
+                    "Tarifa Concessionaria_B3": modalData['B3 Comercial'].tarifa_concessionaria,
+                    "Desconto Assinante_B3": modalData['B3 Comercial'].desconto_assinante,
+                    "TE_A": modalData['Grupo A'].te,
+                    "TUSD_A": modalData['Grupo A'].tusd,
+                    "Fio B_A": modalData['Grupo A'].fio_b,
+                    "Tarifa Concessionaria_A": modalData['Grupo A'].tarifa_concessionaria,
+                    "Desconto Assinante_A": modalData['Grupo A'].desconto_assinante
                 })
                 .eq('Concessionaria', selectedCons.Concessionaria)
                 .eq('UF', selectedCons.UF);
@@ -368,6 +411,37 @@ export default function EnergyAccountSettings() {
                         </div>
 
                         <div style={{ padding: '2rem' }}>
+                            {/* Menu Horizontal de Classificação */}
+                            <div style={{ 
+                                display: 'flex', 
+                                gap: '1rem', 
+                                marginBottom: '2rem', 
+                                borderBottom: '2px solid #f1f5f9',
+                                overflowX: 'auto',
+                                paddingBottom: '0.5rem'
+                            }}>
+                                {['B1 Residencial', 'B2 Rural', 'B3 Comercial', 'Grupo A'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            background: 'none',
+                                            border: 'none',
+                                            borderBottom: activeTab === tab ? '3px solid #3b82f6' : '3px solid transparent',
+                                            color: activeTab === tab ? '#3b82f6' : '#64748b',
+                                            fontWeight: activeTab === tab ? 800 : 600,
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap',
+                                            transition: 'all 0.2s ease',
+                                            marginBottom: '-0.65rem'
+                                        }}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem' }}>T.E. (Tarifa de Energia)</label>
@@ -376,7 +450,7 @@ export default function EnergyAccountSettings() {
                                         <input 
                                             type="number"
                                             step="0.0001"
-                                            value={modalData.te}
+                                            value={modalData[activeTab].te}
                                             onChange={e => handleModalInputChange('te', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
@@ -389,7 +463,7 @@ export default function EnergyAccountSettings() {
                                         <input 
                                             type="number"
                                             step="0.0001"
-                                            value={modalData.tusd}
+                                            value={modalData[activeTab].tusd}
                                             onChange={e => handleModalInputChange('tusd', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
@@ -402,7 +476,7 @@ export default function EnergyAccountSettings() {
                                         <input 
                                             type="number"
                                             step="0.0001"
-                                            value={modalData.fio_b}
+                                            value={modalData[activeTab].fio_b}
                                             onChange={e => handleModalInputChange('fio_b', parseFloat(e.target.value) || 0)}
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
                                         />
@@ -415,7 +489,7 @@ export default function EnergyAccountSettings() {
                                         <input 
                                             type="number"
                                             step="0.0001"
-                                            value={modalData.tarifa_concessionaria}
+                                            value={modalData[activeTab].tarifa_concessionaria}
                                             readOnly
                                             style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 800, outline: 'none', background: '#f1f5f9', color: '#1e293b' }}
                                         />
@@ -429,8 +503,8 @@ export default function EnergyAccountSettings() {
                                     <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#166534', fontWeight: 800 }}><Percent size={20} /></div>
                                     <input 
                                         type="number"
-                                        value={modalData.desconto_assinante}
-                                        onChange={e => setModalData({...modalData, desconto_assinante: parseFloat(e.target.value)})}
+                                        value={modalData[activeTab].desconto_assinante}
+                                        onChange={e => handleModalInputChange('desconto_assinante', parseFloat(e.target.value) || 0)}
                                         style={{ width: '100%', padding: '1rem 3rem 1rem 1.2rem', borderRadius: '15px', border: '2px solid #bbf7d0', fontSize: '1.2rem', fontWeight: 800, color: '#166534', outline: 'none' }}
                                     />
                                 </div>
