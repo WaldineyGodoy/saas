@@ -105,6 +105,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
     const [isParsing, setIsParsing] = useState(false);
     const [loaderMessage, setLoaderMessage] = useState('Processando PDF...');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [forceConsistent, setForceConsistent] = useState(false);
 
     // Form data no Sandbox (Auditada)
     const [formData, setFormData] = useState({
@@ -125,7 +126,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         desconto_aplicado: '',
         energy_bill_status: 'pendente',
         fio_b_vr_unit: '',
-        fio_b_total: ''
+        fio_b_total: '',
+        observacoes_auditoria: ''
     });
 
     // Simulações Calculadas
@@ -134,7 +136,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         economiaGerada: 0,
         tarifaMinimaExcedentes: 0,
         energiaCompensadaReais: 0,
-        valorAPagar: 0
+        valorAPagar: 0,
+        valorCorretoConcessionaria: 0,
+        erroFaturamento: 0
     });
 
     // Helpers de Formatação
@@ -807,8 +811,10 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         }
 
         let finalEnergyBillStatus = formData.energy_bill_status || 'pendente';
-        if (historicoContent !== '') {
+        if (historicoContent !== '' && !forceConsistent) {
             finalEnergyBillStatus = 'inconsistente';
+        } else if (forceConsistent) {
+            finalEnergyBillStatus = 'consistente';
         }
 
         const payload = {
@@ -867,7 +873,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                         // Salvar Observações de Auditoria no Histórico se existirem
                         const savedInvoiceId = upsertData?.id;
-                        if (savedInvoiceId && historicoContent !== '') {
+                        if (savedInvoiceId && historicoContent !== '' && !forceConsistent) {
                             try {
                                 const protocolPayload = {
                                     title: 'Auditoria: Inconsistência de Faturamento',
@@ -920,7 +926,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
             // Salvar Observações de Auditoria no Histórico se existirem
             const savedInvoiceId = data?.id;
-            if (savedInvoiceId && historicoContent !== '') {
+            if (savedInvoiceId && historicoContent !== '' && !forceConsistent) {
                 try {
                     // Criar Protocolo automaticamente
                     const protocolPayload = {
@@ -2358,30 +2364,44 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
 
 
-                                <div className="sandbox-footer">
-                                    <button 
-                                        onClick={handleReset} 
-                                        disabled={isSubmitting}
-                                        className="sandbox-btn sandbox-btn-discard"
-                                    >
-                                        <X size={16} /> Descartar Análise
-                                    </button>
+                                <div className="sandbox-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', padding: '0.6rem 1rem', background: forceConsistent ? '#f0fdf4' : '#fef2f2', border: `1px solid ${forceConsistent ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }} onClick={() => setForceConsistent(!forceConsistent)}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="forceConsistent" 
+                                            checked={forceConsistent} 
+                                            onChange={(e) => setForceConsistent(e.target.checked)} 
+                                            style={{ width: '18px', height: '18px', accentColor: forceConsistent ? '#16a34a' : '#ef4444', marginRight: '10px', pointerEvents: 'none' }}
+                                        />
+                                        <label htmlFor="forceConsistent" style={{ fontSize: '0.9rem', color: forceConsistent ? '#166534' : '#991b1b', margin: 0, pointerEvents: 'none', fontWeight: 500 }}>
+                                            <strong>Ignorar Auditoria:</strong> Forçar aprovação da fatura (ignorar alertas de divergência e não abrir protocolo)
+                                        </label>
+                                    </div>
+                                    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <button 
+                                            onClick={handleReset} 
+                                            disabled={isSubmitting}
+                                            className="sandbox-btn sandbox-btn-discard"
+                                        >
+                                            <X size={16} /> Descartar Análise
+                                        </button>
 
-                                    <div className="sandbox-footer-right">
-                                        <button 
-                                            onClick={() => saveInvoice('sem_faturamento')}
-                                            disabled={isSubmitting}
-                                            className="sandbox-btn sandbox-btn-secondary"
-                                        >
-                                            <Ban size={16} /> Registrar Operacional (Sem Faturamento)
-                                        </button>
-                                        <button 
-                                            onClick={() => saveInvoice('a_vencer')}
-                                            disabled={isSubmitting}
-                                            className="sandbox-btn sandbox-btn-accent"
-                                        >
-                                            <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
-                                        </button>
+                                        <div className="sandbox-footer-right">
+                                            <button 
+                                                onClick={() => saveInvoice('sem_faturamento')}
+                                                disabled={isSubmitting}
+                                                className="sandbox-btn sandbox-btn-secondary"
+                                            >
+                                                <Ban size={16} /> Registrar Operacional (Sem Faturamento)
+                                            </button>
+                                            <button 
+                                                onClick={() => saveInvoice('a_vencer')}
+                                                disabled={isSubmitting}
+                                                className="sandbox-btn sandbox-btn-accent"
+                                            >
+                                                <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
