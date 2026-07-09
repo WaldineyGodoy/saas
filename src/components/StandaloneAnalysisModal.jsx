@@ -1570,7 +1570,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             const naoCompensadoKwh = Math.max(0, consumo - compensado);
             alerts.push({
                 type: 'info',
-                message: `Ajuste de Custo de Disponibilidade: A concessionária reteve ${naoCompensadoKwh.toFixed(1)} kWh da compensação (o equivalente a ${formatCurrency(custoDisponibilidade)}) para atingir a taxa mínima da instalação da UC.`
+                message: `Ajuste de Custo de Disponibilidade: A concessionária faturou ${naoCompensadoKwh.toFixed(1)} kWh da compensação para atingir a taxa mínima da instalação da UC (o equivalente a ${formatCurrency(custoDisponibilidade)}).`
             });
         }
 
