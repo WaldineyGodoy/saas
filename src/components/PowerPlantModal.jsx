@@ -9,7 +9,7 @@ import {
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
     Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard,
-    Percent, SlidersHorizontal, ArrowUpDown, Check
+    Percent, SlidersHorizontal, ArrowUpDown, Check, Building2
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import { useAuth } from '../contexts/AuthContext';
