@@ -468,7 +468,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                             const compGdMatches = [
                                 cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp).{0,40}?(?:TUSD)?\s*kWh\s+([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i),
-                                cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp).{0,40}?(?:TUSD)?\s+[\s\S]{1,30}?([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i)
+                                cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp)(?:(?!(?:LINHA|NOME|CNPJ)).){1,60}?([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/is)
                             ];
                             const compGdMatch = compGdMatches.find(m => m);
                             
