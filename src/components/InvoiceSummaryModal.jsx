@@ -33,7 +33,7 @@ const getEnergyStatus = (inv) => {
     return ebStatus;
 };
 
-export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess, onViewInvoice }) {
+export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess, onViewInvoice, onOpenSandbox }) {
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
@@ -1037,7 +1037,38 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     backgroundColor: 'white', borderRadius: '20px', width: '90%', maxWidth: '900px',
                     maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
                 }}>
-                    <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem', zIndex: 10 }}>
+                    <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem', zIndex: 10, alignItems: 'center' }}>
+                        {onOpenSandbox && (
+                            <button 
+                                onClick={() => onOpenSandbox(invoice.uc_id, invoice.mes_referencia)}
+                                title="Fazer Leitura OCR (Sandbox)"
+                                style={{ 
+                                    background: '#f0fdf4', 
+                                    border: '1.5px solid #bbf7d0', 
+                                    borderRadius: '8px', 
+                                    padding: '0.5rem 0.75rem', 
+                                    cursor: 'pointer', 
+                                    color: '#16a34a', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.4rem', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '0.85rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#dcfce7';
+                                    e.currentTarget.style.borderColor = '#86efac';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#f0fdf4';
+                                    e.currentTarget.style.borderColor = '#bbf7d0';
+                                }}
+                            >
+                                <FileText size={18} />
+                                Fazer Leitura OCR
+                            </button>
+                        )}
                         <button 
                             onClick={handleDelete}
                             title="Excluir Fatura"

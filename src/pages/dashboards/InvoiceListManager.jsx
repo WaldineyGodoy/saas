@@ -86,6 +86,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
     const [dropTarget, setDropTarget] = useState(null);
     const [draggedInvoice, setDraggedInvoice] = useState(null);
+    
+    // Estados para pre-selecionar UC e Mês no Sandbox a partir do Resumo
+    const [sandboxPreselectedUcId, setSandboxPreselectedUcId] = useState('');
+    const [sandboxPreselectedMesRef, setSandboxPreselectedMesRef] = useState('');
 
     const handleCalendarCardClick = (uc) => {
         if (viewMode === 'energy_reading_calendar') {
@@ -2694,14 +2698,30 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     onClose={() => setIsSummaryModalOpen(false)} 
                     onPaymentSuccess={fetchInvoices}
                     onViewInvoice={(inv) => setSelectedInvoiceForSummary(inv)}
+                    onOpenSandbox={(ucId, mesRef) => {
+                        setSandboxPreselectedUcId(ucId);
+                        setSandboxPreselectedMesRef(mesRef);
+                        setIsSummaryModalOpen(false);
+                        setIsAnalysisModalOpen(true);
+                    }}
                 />
             )}
             {isAnalysisModalOpen && (
                 <StandaloneAnalysisModal 
                     isOpen={isAnalysisModalOpen} 
                     ucs={ucs} 
-                    onClose={() => setIsAnalysisModalOpen(false)} 
-                    onSave={fetchInvoices} 
+                    onClose={() => {
+                        setIsAnalysisModalOpen(false);
+                        setSandboxPreselectedUcId('');
+                        setSandboxPreselectedMesRef('');
+                    }} 
+                    onSave={() => {
+                        fetchInvoices();
+                        setSandboxPreselectedUcId('');
+                        setSandboxPreselectedMesRef('');
+                    }} 
+                    initialUcId={sandboxPreselectedUcId}
+                    initialMesReferencia={sandboxPreselectedMesRef}
                 />
             )}
             <ReadingCalendarModal

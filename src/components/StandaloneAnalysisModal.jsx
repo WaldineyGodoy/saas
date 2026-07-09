@@ -13,7 +13,7 @@ import html2canvas from 'html2canvas';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }) {
+export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, initialUcId = '', initialMesReferencia = '' }) {
     if (!isOpen) return null;
 
     const { profile } = useAuth();
@@ -66,6 +66,23 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave }
             fetchAllUcs();
         }
     }, [isOpen, ucs]);
+
+    // Efeito para tratar pre-seleção de UC e mês de referência via props
+    useEffect(() => {
+        if (isOpen && initialUcId && allUcs.length > 0) {
+            const uc = allUcs.find(u => u.id === initialUcId);
+            if (uc) {
+                setSelectedUcId(initialUcId);
+                setSelectedUc(uc);
+                setSearchTerm(`UC: ${uc.numero_uc} - ${uc.titular_conta}`);
+                setFormData(prev => ({
+                    ...prev,
+                    desconto_aplicado: uc.desconto_assinante || 0,
+                    mes_referencia: initialMesReferencia ? initialMesReferencia.substring(0, 7) : prev.mes_referencia
+                }));
+            }
+        }
+    }, [isOpen, initialUcId, allUcs, initialMesReferencia]);
 
     // Fecha o dropdown ao clicar fora
     useEffect(() => {
