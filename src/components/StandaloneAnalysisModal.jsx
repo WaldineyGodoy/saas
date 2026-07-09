@@ -141,6 +141,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         erroFaturamento: 0
     });
 
+    const [globalTariffs, setGlobalTariffs] = useState(null);
+    const [invoiceClassification, setInvoiceClassification] = useState('B1');
+
     // Helpers de Formatação
     const formatCurrency = (val) => {
         if (!val && val !== 0) return 'R$ 0,00';
@@ -223,9 +226,26 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         ...prev,
                         desconto_aplicado: uc.desconto_assinante || 0
                     }));
+                    
+                    // Fetch global tariffs for this concessionaria
+                    if (uc.concessionaria) {
+                        try {
+                            const { data: tariffData } = await supabase
+                                .from('Concessionaria')
+                                .select('*')
+                                .eq('Concessionaria', uc.concessionaria)
+                                .single();
+                            if (tariffData) {
+                                setGlobalTariffs(tariffData);
+                            }
+                        } catch (err) {
+                            console.warn("Could not fetch global tariffs:", err);
+                        }
+                    }
                 }
             } else {
                 setSelectedUc(null);
+                setGlobalTariffs(null);
             }
         };
         fetchUcDataAndAddress();
@@ -602,6 +622,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : ''
                     }));
 
+                    const classMatch = cleanText.match(/(?:CLASSIFICA(?:Ç|C)(?:Ã|A)O|Classe)[\s:]*(B[123]|Grupo A)/i);
+                    if (classMatch) {
+                        setInvoiceClassification(classMatch[1].toUpperCase());
+                    } else {
+                        setInvoiceClassification('B1'); // Fallback default
+                    }
+
                     showAlert('Conta processada com sucesso!', 'success');
                     setStep('sandbox');
                 } catch (err) {
@@ -701,7 +728,20 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
         const diffSumVal = Math.abs(calcConcessionariaSum - concessionariaVal);
         const diffSumLimitVal = compensadoVal > 0 ? 5.00 : 0.50;
-        const baseTariffVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+        let baseTariffVal = selectedUc ? Number(selectedUc.tarifa_concessionaria) : 0;
+        
+        if (globalTariffs) {
+            if (invoiceClassification.includes('B2') || invoiceClassification.includes('RURAL')) {
+                baseTariffVal = Number(globalTariffs['Tarifa Concessionaria_B2']) || baseTariffVal;
+            } else if (invoiceClassification.includes('B3') || invoiceClassification.includes('COMERCIAL')) {
+                baseTariffVal = Number(globalTariffs['Tarifa Concessionaria_B3']) || baseTariffVal;
+            } else if (invoiceClassification.includes('A') || invoiceClassification.includes('GRUPO A')) {
+                baseTariffVal = Number(globalTariffs['Tarifa Concessionaria_A']) || baseTariffVal;
+            } else {
+                baseTariffVal = Number(globalTariffs['Tarifa Concessionaria']) || baseTariffVal;
+            }
+        }
+
         const diffTariffVal = selectedUc ? Math.abs(simulation.tarifaEfetiva - baseTariffVal) : 0;
         const percentDiffVal = baseTariffVal > 0 ? (diffTariffVal / baseTariffVal) : 0;
 
