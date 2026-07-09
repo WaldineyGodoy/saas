@@ -1990,57 +1990,143 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                     {/* Floating Summary Card (Técnico e Financeiro) */}
                     {['tecnico', 'financeiro'].includes(activeTab) && (
-                        <div style={{ 
-                            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
-                            padding: '1.25rem', 
-                            borderRadius: '16px', 
-                            marginBottom: '2rem', 
-                            border: '1px solid #bbf7d0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                            animation: 'slideDown 0.3s ease-out'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ padding: '0.6rem', background: 'white', borderRadius: '10px', color: '#166534', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                    <Zap size={20} />
-                                </div>
-                                <div>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geração Média Mensal</span>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#14532d' }}>
-                                        {formData.geracao_estimada_kwh ? `${Number(formData.geracao_estimada_kwh).toLocaleString()} kWh/mês` : 'Calcule na aba Técnico'}
+                        <>
+                            <div style={{ 
+                                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', 
+                                padding: '1.25rem', 
+                                borderRadius: '16px', 
+                                marginBottom: '2rem', 
+                                border: '1px solid #bbf7d0',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                                animation: 'slideDown 0.3s ease-out'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <div style={{ padding: '0.6rem', background: 'white', borderRadius: '10px', color: '#166534', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                        <Zap size={20} />
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geração Média Mensal</span>
+                                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#14532d' }}>
+                                            {formData.geracao_estimada_kwh ? `${Number(formData.geracao_estimada_kwh).toLocaleString()} kWh/mês` : 'Calcule na aba Técnico'}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                <div>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Potência Instalada</span>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#14532d' }}>{potenciaKwp} kWp</div>
+                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                    <div>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Potência Instalada</span>
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#14532d' }}>{potenciaKwp} kWp</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                                        style={{
+                                            background: 'white',
+                                            border: '1px solid #bbf7d0',
+                                            borderRadius: '50%',
+                                            width: '40px',
+                                            height: '40px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#166534',
+                                            cursor: 'pointer',
+                                            transition: '0.2s',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                        }}
+                                        title={showTechnicalDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
+                                    >
+                                        {showTechnicalDetails ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-                                    style={{
-                                        background: 'white',
-                                        border: '1px solid #bbf7d0',
-                                        borderRadius: '50%',
-                                        width: '40px',
-                                        height: '40px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#166534',
-                                        cursor: 'pointer',
-                                        transition: '0.2s',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                                    }}
-                                    title={showTechnicalDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
-                                >
-                                    {showTechnicalDetails ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                                </button>
                             </div>
-                        </div>
+
+                            {showTechnicalDetails && (
+                                <div style={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                                    gap: '1.5rem',
+                                    animation: 'slideDown 0.3s ease-out',
+                                    marginBottom: '2rem',
+                                    padding: '1.5rem',
+                                    background: '#f8fafc',
+                                    borderRadius: '16px',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
+                                        <select
+                                            value={formData.status}
+                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                        >
+                                            {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Modalidade</label>
+                                        <select
+                                            value={formData.modalidade}
+                                            onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                        >
+                                            {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div style={{ height: '1px', background: '#f1f5f9', margin: '0.5rem 0', gridColumn: '1 / -1' }}></div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Qtd. Módulos</label>
+                                        <input
+                                            type="number"
+                                            value={formData.qtd_modulos}
+                                            onChange={e => setFormData({ ...formData, qtd_modulos: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Módulo (W)</label>
+                                        <select
+                                            value={formData.potencia_modulos_w}
+                                            onChange={e => setFormData({ ...formData, potencia_modulos_w: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {modulePowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fabricante Inversor</label>
+                                        <select
+                                            value={formData.fabricante_inversor}
+                                            onChange={e => setFormData({ ...formData, fabricante_inversor: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {inverterBrands.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Inversor (W)</label>
+                                        <select
+                                            value={formData.potencia_inversor_w}
+                                            onChange={e => setFormData({ ...formData, potencia_inversor_w: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {/* Tab Content: Geral */}
@@ -2453,89 +2539,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {/* Tab Content: Técnico */}
                     {activeTab === 'tecnico' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            {showTechnicalDetails && (
-                                <div style={{ 
-                                    display: 'grid', 
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-                                    gap: '1.5rem',
-                                    animation: 'slideDown 0.3s ease-out',
-                                    marginBottom: '2rem',
-                                    padding: '1.5rem',
-                                    background: '#f8fafc',
-                                    borderRadius: '16px',
-                                    border: '1px solid #e2e8f0'
-                                }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Status Operacional</label>
-                                    <select
-                                        value={formData.status}
-                                        onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Modalidade</label>
-                                    <select
-                                        value={formData.modalidade}
-                                        onChange={e => setFormData({ ...formData, modalidade: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        {modalidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-
-                                <div style={{ height: '1px', background: '#f1f5f9', margin: '0.5rem 0', gridColumn: '1 / -1' }}></div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Qtd. Módulos</label>
-                                    <input
-                                        type="number"
-                                        value={formData.qtd_modulos}
-                                        onChange={e => setFormData({ ...formData, qtd_modulos: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Módulo (W)</label>
-                                    <select
-                                        value={formData.potencia_modulos_w}
-                                        onChange={e => setFormData({ ...formData, potencia_modulos_w: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {modulePowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Fabricante Inversor</label>
-                                    <select
-                                        value={formData.fabricante_inversor}
-                                        onChange={e => setFormData({ ...formData, fabricante_inversor: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {inverterBrands.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Potência Inversor (W)</label>
-                                    <select
-                                        value={formData.potencia_inversor_w}
-                                        onChange={e => setFormData({ ...formData, potencia_inversor_w: e.target.value })}
-                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none' }}
-                                    >
-                                        <option value="">Selecione...</option>
-                                        {inverterPowerOptions.map(v => <option key={v} value={v}>{v} W</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        )}
 
                             <div style={{ gridColumn: '1 / -1', marginTop: '1.5rem', border: '1px solid #f1f5f9', borderRadius: '16px', padding: '1.5rem', background: '#fff' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#166534', fontWeight: 700, marginBottom: '1rem' }}>
