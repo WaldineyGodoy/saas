@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2, AlertCircle, Info, MessageSquare } from 'lucide-react';
+import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2, AlertCircle, Info, MessageSquare, Trash2 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import SubscriberModal from './SubscriberModal';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -153,6 +153,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [showReplicaJustification, setShowReplicaJustification] = useState(false);
     const [replicaJustification, setReplicaJustification] = useState('');
     const [historyRefresh, setHistoryRefresh] = useState(0);
+    const [deleting, setDeleting] = useState(false);
 
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
@@ -461,6 +462,28 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             showAlert('Erro ao buscar entidades vinculadas.', 'error');
         } finally {
             setLoadingEntities(false);
+        }
+    };
+
+    const handleDeleteProtocol = async () => {
+        if (!currentProtocol?.id) return;
+        if (!window.confirm('Tem certeza que deseja excluir este protocolo? Esta ação não pode ser desfeita e excluirá também todos os históricos vinculados a ele.')) return;
+        
+        setDeleting(true);
+        try {
+            const { error } = await supabase
+                .from('protocols')
+                .eq('id', currentProtocol.id)
+                .delete();
+            if (error) throw error;
+            showAlert('Protocolo excluído com sucesso.', 'success');
+            if (onUpdated) onUpdated();
+            onClose();
+        } catch (err) {
+            console.error('Error deleting protocol:', err);
+            showAlert('Erro ao excluir protocolo: ' + err.message, 'error');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -1681,35 +1704,54 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                         </div>
 
                         {/* Actions */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1.25rem 2rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '18px', borderBottomRightRadius: '18px' }}>
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                style={{
-                                    padding: '0.6rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
-                                    background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                style={{
-                                    padding: '0.6rem 1.5rem', border: 'none', borderRadius: '8px',
-                                    background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.85rem',
-                                    cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
-                                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
-                            >
-                                <Save size={16} />
-                                {saving ? 'Salvando...' : (currentProtocol?.parent_protocol_id ? 'Salvar Sub-protocolo' : 'Salvar Protocolo')}
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: currentProtocol?.id ? 'space-between' : 'flex-end', alignItems: 'center', gap: '0.75rem', padding: '1.25rem 2rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '18px', borderBottomRightRadius: '18px' }}>
+                            {currentProtocol?.id && (
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteProtocol}
+                                    disabled={deleting || saving}
+                                    style={{
+                                        padding: '0.6rem 1.25rem', border: '1px solid #fee2e2', borderRadius: '8px',
+                                        background: '#fef2f2', color: '#dc2626', fontWeight: 600, fontSize: '0.85rem', cursor: (deleting || saving) ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                    }}
+                                    onMouseEnter={e => { if (!deleting && !saving) e.currentTarget.style.backgroundColor = '#fee2e2'; }}
+                                    onMouseLeave={e => { if (!deleting && !saving) e.currentTarget.style.backgroundColor = '#fef2f2'; }}
+                                >
+                                    <Trash2 size={16} />
+                                    {deleting ? 'Excluindo...' : 'Excluir Protocolo'}
+                                </button>
+                            )}
+                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    style={{
+                                        padding: '0.6rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                        background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    style={{
+                                        padding: '0.6rem 1.5rem', border: 'none', borderRadius: '8px',
+                                        background: primaryColor, color: 'white', fontWeight: 600, fontSize: '0.85rem',
+                                        cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                    onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                                >
+                                    <Save size={16} />
+                                    {saving ? 'Salvando...' : (currentProtocol?.parent_protocol_id ? 'Salvar Sub-protocolo' : 'Salvar Protocolo')}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
