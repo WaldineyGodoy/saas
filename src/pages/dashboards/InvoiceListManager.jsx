@@ -518,7 +518,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
     const invoicesForTotals = invoices.filter(inv => {
         if (inv.status === 'cancelado') return false;
-        if (inv.parent_invoice_id) return false;
+        if (inv.parent_invoice_id) {
+            if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
+                return false;
+            }
+        }
 
         if (activeTab === 'faturas') {
             // Permitir 'sem_faturamento' no cálculo de totais
@@ -2006,7 +2010,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
                             <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0)))), 0))}
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
                             </span>
                         </div>
                     </div>
