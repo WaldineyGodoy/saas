@@ -37,6 +37,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
+
+    // Resolve robustly the full UUID of the UC to prevent truncated ID query crashes
+    const resolvedUcId = (invoice?.uc_id && invoice.uc_id.length === 36)
+        ? invoice.uc_id
+        : (consumerUnit?.id || invoice?.uc_id || '');
+
     const [loading, setLoading] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
@@ -64,11 +70,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 let subId = consumerUnit?.subscriber_id;
                 
                 // Fallback: fetch subscriber_id if not present in the prop
-                if (!subId && invoice?.uc_id) {
+                if (!subId && resolvedUcId) {
                     const { data: ucData } = await supabase
                         .from('consumer_units')
                         .select('subscriber_id')
-                        .eq('id', invoice.uc_id)
+                        .eq('id', resolvedUcId)
                         .single();
                     if (ucData?.subscriber_id) {
                         subId = ucData.subscriber_id;
@@ -122,7 +128,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             const { data, error } = await supabase
                 .from('invoices')
                 .select('id, mes_referencia, vencimento, vencimento_concessionaria, valor_concessionaria, status, energy_bill_status, parent_invoice_id')
-                .eq('uc_id', invoice.uc_id)
+                .eq('uc_id', resolvedUcId)
                 .is('parent_invoice_id', null)
                 .neq('id', invoice.id)
                 .like('mes_referencia', `${formattedSearch}%`);
@@ -472,7 +478,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     const { data: ucData } = await supabase
                         .from('consumer_units')
                         .select('id, subscriber_id, subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone)')
-                        .eq('id', invoice.uc_id || consumerUnit?.id)
+                        .eq('id', resolvedUcId)
                         .single();
                     
                     if (ucData?.subscribers) {
@@ -513,7 +519,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     pdfBlob: pdfBlob,
                     fileName: fileName,
                     subscriberId: subId,
-                    ucId: invoice.uc_id,
+                    ucId: resolvedUcId,
                     profileId: profile?.id
                 });
                 showAlert('Faturamento gerado, PDF combinado mesclado e notificações enviadas com sucesso!', 'success');
@@ -1040,7 +1046,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.75rem', zIndex: 10, alignItems: 'center' }}>
                         {onOpenSandbox && (
                             <button 
-                                onClick={() => onOpenSandbox(invoice.uc_id, invoice.mes_referencia)}
+                                onClick={() => onOpenSandbox(resolvedUcId, invoice.mes_referencia)}
                                 title="Fazer Leitura OCR (Sandbox)"
                                 style={{ 
                                     background: '#f0fdf4', 
