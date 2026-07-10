@@ -122,16 +122,34 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             let formattedSearch = searchChild.trim();
             if (formattedSearch.includes('/')) {
                 const [month, year] = formattedSearch.split('/');
-                if (month && year) formattedSearch = `${year}-${month}`;
+                if (month && year) {
+                    formattedSearch = `${year.trim()}-${month.trim().padStart(2, '0')}`;
+                }
             }
 
-            const { data, error } = await supabase
+            const isYearMonth = /^\d{4}-\d{2}$/.test(formattedSearch);
+            let query = supabase
                 .from('invoices')
                 .select('id, mes_referencia, vencimento, vencimento_concessionaria, valor_concessionaria, status, energy_bill_status, parent_invoice_id')
                 .eq('uc_id', resolvedUcId)
                 .is('parent_invoice_id', null)
-                .neq('id', invoice.id)
-                .like('mes_referencia', `${formattedSearch}%`);
+                .neq('id', invoice.id);
+
+            if (isYearMonth) {
+                const [year, month] = formattedSearch.split('-').map(Number);
+                const lastDay = new Date(year, month, 0).getDate();
+                const startDate = `${formattedSearch}-01`;
+                const endDate = `${formattedSearch}-${String(lastDay).padStart(2, '0')}`;
+                query = query.gte('mes_referencia', startDate).lte('mes_referencia', endDate);
+            } else if (/^\d{4}$/.test(formattedSearch)) {
+                query = query.gte('mes_referencia', `${formattedSearch}-01-01`).lte('mes_referencia', `${formattedSearch}-12-31`);
+            } else {
+                showAlert('Formato inválido. Use MM/AAAA (ex: 03/2026)', 'warning');
+                setIsSearchingChild(false);
+                return;
+            }
+
+            const { data, error } = await query;
             
             if (error) throw error;
             setSearchResults(data || []);
