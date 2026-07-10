@@ -65,10 +65,15 @@ serve(async (req) => {
         }
 
         // 4. Prepare Bill Payment Payload
+        let cleanDescription = description || 'Pagamento de boleto via sistema';
+        if (cleanDescription.length > 50) {
+            cleanDescription = cleanDescription.substring(0, 47) + '...';
+        }
+
         const billPayload = {
             identificationField: identification,
             scheduleDate: scheduleDate || new Date().toISOString().split('T')[0],
-            description: description || 'Pagamento de boleto via sistema',
+            description: cleanDescription,
             value: value ? Number(value) : undefined,
             dueDate: dueDate || undefined
         };
