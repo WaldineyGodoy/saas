@@ -130,7 +130,7 @@ serve(async (req) => {
 
     // Outros Lançamentos (Multas, Juros, IPCA, Acréscimos de Bandeira)
     let outros_lancamentos = 0;
-    const othersRegex = /(?:Juros|Multa|Atualiza[çc][ãa]o|Comp\.DIC|IPCA|Acr[ée]s\.\s*Band\.)[\s\S]{0,50}?(\d{1,4},\d{2}-?)/gi;
+    const othersRegex = /(?:Juros|Multa|Atualiza[çc][ãa]o|Comp\.DIC|IPCA|Acr[ée]s\.?\s*(?:Band|Bd)\.?)[\s\S]{0,50}?(\d{1,4},\d{2}-?)/gi;
     const othersMatches = [...fullText.matchAll(othersRegex)];
     for (const match of othersMatches) {
         outros_lancamentos += parseValue(match[1]);
