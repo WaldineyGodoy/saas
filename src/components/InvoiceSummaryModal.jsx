@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import html2canvas from 'html2canvas';
+import ProtocolModal from './ProtocolModal';
 import { jsPDF } from 'jspdf';
 import './InvoicesModal.css';
 
@@ -62,6 +63,10 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const [isSearchingChild, setIsSearchingChild] = useState(false);
     const [subscriberBillingMode, setSubscriberBillingMode] = useState('individualizada');
 
+    const [linkedProtocol, setLinkedProtocol] = useState(null);
+    const [loadingProtocol, setLoadingProtocol] = useState(false);
+    const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
+
     useEffect(() => {
         if (!invoice) return;
         
@@ -113,6 +118,31 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             }
         };
         fetchChildren();
+
+        const fetchLinkedProtocol = async () => {
+            if (!invoice?.id) return;
+            setLoadingProtocol(true);
+            try {
+                const { data, error } = await supabase
+                    .from('protocols')
+                    .select('*')
+                    .eq('linked_entity_type', 'conta_energia')
+                    .eq('linked_entity_id', invoice.id)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    setLinkedProtocol(data[0]);
+                } else {
+                    setLinkedProtocol(null);
+                }
+            } catch (err) {
+                console.error('Error fetching linked protocol:', err);
+            } finally {
+                setLoadingProtocol(false);
+            }
+        };
+        fetchLinkedProtocol();
     }, [invoice]);
 
     const handleSearchChild = async () => {
@@ -320,6 +350,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             .single();
 
                         if (protoError) throw protoError;
+                        setLinkedProtocol(returnedProtocol);
 
                         const contentLog = `Novo protocolo de contestação criado automaticamente: "${title}"`;
                         await supabase.from('crm_history').insert({
@@ -1254,6 +1285,41 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      </button>
                                  ))})()}
                              </div>
+                             {energyStatus === 'inconsistente' && linkedProtocol && (
+                                 <div style={{ marginTop: '0.85rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.85rem', display: 'flex', justifyContent: 'center' }}>
+                                     <button
+                                         onClick={() => setIsProtocolModalOpen(true)}
+                                         style={{
+                                             display: 'inline-flex',
+                                             alignItems: 'center',
+                                             gap: '0.5rem',
+                                             background: '#fff7ed',
+                                             border: '1px solid #fed7aa',
+                                             borderRadius: '8px',
+                                             padding: '0.5rem 1rem',
+                                             color: '#ea580c',
+                                             fontSize: '0.8rem',
+                                             fontWeight: 'bold',
+                                             cursor: 'pointer',
+                                             boxShadow: '0 2px 4px rgba(234, 88, 12, 0.05)',
+                                             transition: 'all 0.2s',
+                                             width: '100%',
+                                             justifyContent: 'center'
+                                         }}
+                                         onMouseEnter={e => {
+                                             e.currentTarget.style.background = '#ffedd5';
+                                             e.currentTarget.style.borderColor = '#fdba74';
+                                         }}
+                                         onMouseLeave={e => {
+                                             e.currentTarget.style.background = '#fff7ed';
+                                             e.currentTarget.style.borderColor = '#fed7aa';
+                                         }}
+                                     >
+                                         <ExternalLink size={14} />
+                                         Validar e Complementar Informações
+                                     </button>
+                                 </div>
+                             )}
                         </div>
     
                         {/* Grid de Valores */}
@@ -2061,6 +2127,21 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             <p style={{ marginTop: '1rem', fontWeight: 600, fontSize: '1.1rem' }}>Gerando PDF combinado...</p>
                             <p style={{ fontSize: '0.875rem', opacity: 0.8 }}>Mesclando Detalhamento com Boleto Asaas.</p>
                         </div>
+                    )}
+
+                    {isProtocolModalOpen && linkedProtocol && (
+                        <ProtocolModal
+                            protocol={linkedProtocol}
+                            onClose={() => setIsProtocolModalOpen(false)}
+                            onUpdated={(updatedProto) => {
+                                if (!updatedProto) {
+                                    setLinkedProtocol(null);
+                                } else {
+                                    setLinkedProtocol(updatedProto);
+                                }
+                                if (onPaymentSuccess) onPaymentSuccess();
+                            }}
+                        />
                     )}
 
                     <style>{`
