@@ -30,6 +30,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentAmount, setPaymentAmount] = useState(0);
     const [isPartial, setIsPartial] = useState(false);
+    const [pendingBalance, setPendingBalance] = useState(0);
 
     // Extrato Filters
     const [extratoStartDate, setExtratoStartDate] = useState('');
@@ -109,6 +110,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             if (error) throw error;
             setLedgerEntries(data || []);
+
+            // Fetch pending transfers to display/retain balance
+            const { data: pendingData, error: pendingError } = await supabase
+                .from('financial_transfers')
+                .select('amount')
+                .eq('destination_type', 'supplier')
+                .eq('destination_id', supplier.id)
+                .eq('status', 'pending');
+
+            if (!pendingError && pendingData) {
+                const pendingSum = pendingData.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+                setPendingBalance(pendingSum);
+            } else {
+                setPendingBalance(0);
+            }
 
             // Pre-fetch subscriber names for repasse entries
             const repasseTxs = (data || [])
@@ -214,12 +230,17 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
+        if (availableBalance <= 0) {
+            showAlert('Não há saldo disponível para realizar pagamentos (o saldo atual é negativo ou está totalmente retido em transferências pendentes).', 'warning');
+            return;
+        }
+
         if (!formData.pix_key || !formData.pix_key_type) {
             showAlert('Chave PIX não cadastrada para este fornecedor.', 'warning');
             return;
         }
 
-        setPaymentAmount(Math.abs(displayBalance));
+        setPaymentAmount(Math.abs(availableBalance));
         setIsPartial(false);
         setShowPaymentModal(true);
     };
@@ -232,15 +253,25 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
+        if (amountToPay > availableBalance) {
+            showAlert('O valor do pagamento não pode ser superior ao saldo disponível.', 'warning');
+            return;
+        }
+
         setPaying(true);
         setShowPaymentModal(false);
         
         try {
             const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
                 body: {
+                    amount: amountToPay,
                     value: amountToPay,
+                    pixKey: formData.pix_key,
                     pix_key: formData.pix_key,
+                    pixKeyType: formData.pix_key_type,
                     pix_key_type: formData.pix_key_type,
+                    supplierId: supplier.id,
+                    destinationType: 'supplier',
                     description: `Pagamento Fornecedor: ${formData.name}`,
                     operationType: 'PIX'
                 }
@@ -577,6 +608,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const rawBalance = ledgerEntries.reduce((acc, curr) => acc + (curr.amount || 0), 0);
     const ledgerBalance = Math.round(rawBalance * 100) / 100;
     const displayBalance = -ledgerBalance;
+    const availableBalance = displayBalance - pendingBalance;
 
     const filteredLedgerEntries = ledgerEntries.filter(entry => {
         let isValid = true;
@@ -1209,6 +1241,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <div style={{ fontSize: '1.75rem', fontWeight: '900', color: displayBalance >= 0 ? '#00FF00' : '#FF0000', marginTop: '0.25rem' }}>
                                             {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
                                         </div>
+                                        {pendingBalance > 0 && (
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                                Disponível: {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                            </div>
+                                        )}
                                     </div>
                                     <button 
                                         type="button"
@@ -1258,6 +1295,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <div style={{ flex: '1 1 250px' }}>
                                             <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
                                             <div style={{ fontSize: '2.5rem', fontWeight: 900, color: displayBalance > 0 ? '#00FF00' : displayBalance < 0 ? '#FF0000' : 'white' }}>{displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}</div>
+                                            {pendingBalance > 0 && (
+                                                <div style={{ fontSize: '0.85rem', color: '#ffea80', marginTop: '0.25rem', fontWeight: 'bold' }}>
+                                                    Saldo Retido (Pendente): {formatCurrency(pendingBalance)} | Disponível: {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Filters inside Header to save space */}
@@ -1310,7 +1352,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <button 
                                             type="button"
                                             onClick={handlePayPix}
-                                            disabled={paying}
+                                            disabled={paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))}
                                             style={{ 
                                                 background: 'white', 
                                                 padding: '1rem 2rem', 
@@ -1319,16 +1361,16 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 color: '#1d4ed8',
                                                 fontWeight: '800',
                                                 fontSize: '1rem',
-                                                cursor: paying ? 'not-allowed' : 'pointer',
+                                                cursor: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
                                                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '0.75rem',
-                                                opacity: paying ? 0.7 : 1,
+                                                opacity: (paying || availableBalance <= 0 || !(['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
                                                 transition: 'transform 0.2s'
                                             }}
                                             onMouseEnter={(e) => { 
-                                                if (!paying) {
+                                                if (!paying && availableBalance > 0 && ['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role)) {
                                                     e.currentTarget.style.transform = 'scale(1.05)'; 
                                                 }
                                             }}
