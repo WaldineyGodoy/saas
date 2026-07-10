@@ -154,6 +154,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [replicaJustification, setReplicaJustification] = useState('');
     const [historyRefresh, setHistoryRefresh] = useState(0);
     const [deleting, setDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
@@ -467,14 +468,13 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
 
     const handleDeleteProtocol = async () => {
         if (!currentProtocol?.id) return;
-        if (!window.confirm('Tem certeza que deseja excluir este protocolo? Esta ação não pode ser desfeita e excluirá também todos os históricos vinculados a ele.')) return;
         
         setDeleting(true);
         try {
             const { error } = await supabase
                 .from('protocols')
-                .eq('id', currentProtocol.id)
-                .delete();
+                .delete()
+                .eq('id', currentProtocol.id);
             if (error) throw error;
             showAlert('Protocolo excluído com sucesso.', 'success');
             if (onUpdated) onUpdated();
@@ -484,6 +484,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             showAlert('Erro ao excluir protocolo: ' + err.message, 'error');
         } finally {
             setDeleting(false);
+            setShowDeleteConfirm(false);
         }
     };
 
@@ -1708,7 +1709,7 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                             {currentProtocol?.id && (
                                 <button
                                     type="button"
-                                    onClick={handleDeleteProtocol}
+                                    onClick={() => setShowDeleteConfirm(true)}
                                     disabled={deleting || saving}
                                     style={{
                                         padding: '0.6rem 1.25rem', border: '1px solid #fee2e2', borderRadius: '8px',
@@ -1946,6 +1947,100 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                                                             >
                                                                 Confirmar Réplica
                                                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex',
+                    justifyContent: 'center', alignItems: 'center', zIndex: 3000,
+                    backdropFilter: 'blur(6px)', animation: 'fadeIn 0.2s ease-in-out'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '440px',
+                        padding: '2rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        gap: '1.25rem',
+                        position: 'relative'
+                    }}>
+                        <div style={{
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '50%',
+                            backgroundColor: '#fee2e2',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            color: '#dc2626',
+                            marginBottom: '0.25rem'
+                        }}>
+                            <AlertCircle size={28} />
+                        </div>
+                        
+                        <div>
+                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+                                Excluir Protocolo
+                            </h3>
+                            <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b', lineHeight: 1.6 }}>
+                                Tem certeza que deseja excluir o protocolo <strong>"{title}"</strong>?<br/>
+                                Esta ação <strong>não pode ser desfeita</strong> e todos os históricos e sub-protocolos vinculados serão excluídos permanentemente.
+                            </p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={deleting}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '10px',
+                                    background: 'white',
+                                    color: '#475569',
+                                    fontWeight: 700,
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteProtocol}
+                                disabled={deleting}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    background: '#dc2626',
+                                    color: 'white',
+                                    fontWeight: 700,
+                                    fontSize: '0.9rem',
+                                    cursor: deleting ? 'wait' : 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.15)'}
+                                onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                            >
+                                {deleting ? 'Excluindo...' : 'Sim, Excluir'}
+                            </button>
                         </div>
                     </div>
                 </div>
