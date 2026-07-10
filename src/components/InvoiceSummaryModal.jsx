@@ -291,7 +291,60 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             if (error) throw error;
             setEnergyStatus(newStatus);
             if (onPaymentSuccess) onPaymentSuccess();
-            showAlert('Status da conta atualizado com sucesso!', 'success');
+
+            let protoCreated = false;
+            if (newStatus === 'inconsistente') {
+                const wantProtocol = await showConfirm(
+                    'Deseja abrir um protocolo de contestação para esta conta de energia?',
+                    'Criar Protocolo de Contestação'
+                );
+                if (wantProtocol) {
+                    try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const refMonthFormatted = invoice.mes_referencia ? invoice.mes_referencia.substring(0, 7).split('-').reverse().join('/') : '';
+                        const ucNumber = consumerUnit?.numero_uc || invoice.consumer_units?.numero_uc || '';
+                        const title = `Contestação UC ${ucNumber} - Ref ${refMonthFormatted}`;
+
+                        const { data: returnedProtocol, error: protoError } = await supabase
+                            .from('protocols')
+                            .insert({
+                                title: title,
+                                status: 'gerar',
+                                linked_entity_type: 'conta_energia',
+                                linked_entity_id: invoice.id,
+                                created_by: user?.id,
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString()
+                            })
+                            .select()
+                            .single();
+
+                        if (protoError) throw protoError;
+
+                        const contentLog = `Novo protocolo de contestação criado automaticamente: "${title}"`;
+                        await supabase.from('crm_history').insert({
+                            entity_type: 'invoice',
+                            entity_id: invoice.id,
+                            content: contentLog,
+                            created_by: user?.id,
+                            metadata: {
+                                protocol_id: returnedProtocol.id,
+                                message: contentLog
+                            }
+                        });
+                        protoCreated = true;
+                    } catch (protoErr) {
+                        console.error('Erro ao criar protocolo automático:', protoErr);
+                        showAlert('Status atualizado, mas houve um erro ao criar o protocolo.', 'warning');
+                    }
+                }
+            }
+
+            if (protoCreated) {
+                showAlert('Status atualizado e protocolo de contestação gerado!', 'success');
+            } else {
+                showAlert('Status da conta atualizado com sucesso!', 'success');
+            }
         } catch (error) {
             console.error('Erro ao atualizar status da conta:', error);
             showAlert('Erro ao atualizar status: ' + error.message, 'error');
