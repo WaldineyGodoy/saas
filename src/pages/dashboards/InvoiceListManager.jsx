@@ -488,6 +488,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         if (ebStatus === 'erro') return 'erro';
         if (ebStatus === 'parcelada') return 'parcelada';
         if (ebStatus === 'contestada') return 'contestada';
+        if (ebStatus === 'inconsistente') return 'inconsistente';
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
