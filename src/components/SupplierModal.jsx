@@ -208,7 +208,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const handlePayPix = async () => {
         if (!supplier?.id) return;
         
-        const canPay = ['superadmin', 'admin', 'gerente'].includes(profile?.role);
+        const canPay = ['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role);
         if (!canPay) {
             showAlert('Você não tem permissão para realizar pagamentos.', 'error');
             return;
