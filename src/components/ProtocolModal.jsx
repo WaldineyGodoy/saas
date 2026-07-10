@@ -599,8 +599,8 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 showAlert('Protocolo criado com sucesso!', 'success');
             }
 
-            // Automacao: Se o status for tratativa e estiver vinculado a uma conta de energia, muda o status da conta para contestada
-            if (status === 'tratativa' && linkedEntityType === 'conta_energia' && linkedEntityId) {
+            // Automacao: Se o status for em_tratativa / tratativa e estiver vinculado a uma conta de energia, muda o status da conta para contestada
+            if ((status === 'em_tratativa' || status === 'tratativa') && linkedEntityType === 'conta_energia' && linkedEntityId) {
                 try {
                     await supabase
                         .from('invoices')
