@@ -1519,12 +1519,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         let custoDisponibilidade = 0;
         let encargosEnergia = 0;
         let valorEnergiaCobrado = 0;
+        let consumoNaoCompensado = 0;
+        let tarifaFinal = 0;
+        let custoNaoCompensado = 0;
+        let fioB_real = 0;
+        let fio_b_vr_unit = 0;
 
         if (compensado > 0 && selectedUc) {
-            const consumoNaoCompensado = Math.max(0, consumo - compensado);
-            const tarifaFinal = simulation.tarifaEfetiva > 0 ? simulation.tarifaEfetiva : tarifaUC;
-            const custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
-            const fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
+            consumoNaoCompensado = Math.max(0, consumo - compensado);
+            tarifaFinal = simulation.tarifaEfetiva > 0 ? simulation.tarifaEfetiva : tarifaUC;
+            custoNaoCompensado = consumoNaoCompensado * tarifaFinal;
+            fioB_real = typeof formData.fio_b_total === 'string' ? parseCurrency(formData.fio_b_total) : (Number(formData.fio_b_total) || 0);
+            fio_b_vr_unit = typeof formData.fio_b_vr_unit === 'string' ? parseCurrency(formData.fio_b_vr_unit) : (Number(formData.fio_b_vr_unit) || 0);
             
             let tipoLigacao = selectedUc?.tipo_ligacao?.toLowerCase() || '';
             if (!tipoLigacao && typeof pdfData !== 'undefined' && pdfData?.text) {
@@ -1567,10 +1573,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 message: `Compensação Parcial: A energia compensada (${compensado} kWh) é menor que o consumo total (${consumo} kWh).`
             });
         } else if (compensado < consumo && isAjusteDisponibilidade) {
-            const naoCompensadoKwh = Math.max(0, consumo - compensado);
             alerts.push({
                 type: 'info',
-                message: `Ajuste de Custo de Disponibilidade: A concessionária faturou ${naoCompensadoKwh.toFixed(1)} kWh da compensação para atingir a taxa mínima da instalação da UC (o equivalente a ${formatCurrency(custoDisponibilidade)}).`
+                message: `Ajuste de Custo de Disponibilidade: A concessionária faturou ${consumoNaoCompensado.toFixed(1)} kWh da compensação para atingir a taxa mínima da instalação da UC (o equivalente a ${formatCurrency(custoDisponibilidade)}).`
             });
         }
 
@@ -1599,8 +1604,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                 <span>Encargos de Energia (Fio B + Excedente):</span> <span style={{ textAlign: 'right' }}>{formatCurrency(compensado > 0 ? encargosEnergia : consumoReaisVal)}</span>
                                 {compensado > 0 && (
                                     <>
-                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>↳ Tarifa Mínima da UC (Disponibilidade):</span> <span style={{ color: '#6b7280', textAlign: 'right', fontSize: '0.75rem' }}>{formatCurrency(custoDisponibilidade)}</span>
-                                        <span style={{ color: hasError ? '#b45309' : '#15803d', fontWeight: 600 }}>↳ Energia Cobrada (Maior Valor Acima):</span> <span style={{ color: hasError ? '#b45309' : '#15803d', fontWeight: 600, textAlign: 'right' }}>{formatCurrency(valorEnergiaCobrado)}</span>
+                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>↳ {isAjusteDisponibilidade ? 'Ajuste de CD' : 'Consumo Excedente'} {consumoNaoCompensado.toFixed(1)} kWh x {formatCurrency(tarifaFinal)}:</span> <span style={{ color: '#6b7280', textAlign: 'right', fontSize: '0.75rem' }}>{formatCurrency(custoNaoCompensado)}</span>
+                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>↳ Fio B {compensado.toFixed(1)} kWh compensado x {formatCurrency(fio_b_vr_unit)}:</span> <span style={{ color: '#6b7280', textAlign: 'right', fontSize: '0.75rem' }}>{formatCurrency(fioB_real)}</span>
                                     </>
                                 )}
                                 <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px' }}>Iluminação Pública (IP):</span> <span style={{ borderTop: '1px dashed #e5e7eb', paddingTop: '4px', textAlign: 'right' }}>{formatCurrency(ip)}</span>
