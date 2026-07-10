@@ -214,34 +214,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             return;
         }
 
-        // Only enable if we owe money (ledgerBalance < 0 in passivo account 2.1.1)
-        if (ledgerBalance >= 0) {
-            showAlert('Não há saldo devedor para este fornecedor.', 'info');
-            return;
-        }
-
         if (!formData.pix_key || !formData.pix_key_type) {
             showAlert('Chave PIX não cadastrada para este fornecedor.', 'warning');
             return;
         }
 
-        const absBalance = Math.abs(ledgerBalance);
-        setPaymentAmount(absBalance);
+        setPaymentAmount(Math.abs(displayBalance));
         setIsPartial(false);
         setShowPaymentModal(true);
     };
 
     const confirmPixPayment = async () => {
         const amountToPay = Number(paymentAmount);
-        const absBalance = Math.abs(ledgerBalance);
 
         if (amountToPay <= 0) {
             showAlert('O valor do pagamento deve ser maior que zero.', 'warning');
-            return;
-        }
-
-        if (amountToPay > absBalance) {
-            showAlert('O valor do pagamento não pode ser superior ao saldo devedor.', 'warning');
             return;
         }
 
@@ -589,6 +576,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
     const rawBalance = ledgerEntries.reduce((acc, curr) => acc + (curr.amount || 0), 0);
     const ledgerBalance = Math.round(rawBalance * 100) / 100;
+    const displayBalance = -ledgerBalance;
 
     const filteredLedgerEntries = ledgerEntries.filter(entry => {
         let isValid = true;
@@ -630,8 +618,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             pdf.text(`${periodStr}   |   ${typeStr}`, 40, 75);
             
             pdf.setFont('helvetica', 'bold');
-            pdf.setTextColor(ledgerBalance >= 0 ? '#166534' : '#991b1b');
-            pdf.text(`Saldo Acumulado: ${formatCurrency(ledgerBalance)}`, 40, 90);
+            pdf.setTextColor(displayBalance >= 0 ? '#166534' : '#991b1b');
+            pdf.text(`Saldo Acumulado: ${displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}${formatCurrency(displayBalance)}`, 40, 90);
             pdf.setTextColor(0, 0, 0);
 
             // Table
@@ -794,7 +782,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 display: 'inline-block'
                             }}>
                                 <strong style={{ fontSize: '1.1rem', color: '#166534' }}>
-                                    Saldo Acumulado: {formatCurrency(ledgerBalance)}
+                                    Saldo Acumulado: {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
                                 </strong>
                             </div>
                         </div>
@@ -1218,8 +1206,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 }}>
                                     <div>
                                         <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Saldo Acumulado</div>
-                                        <div style={{ fontSize: '1.75rem', fontWeight: '900', color: ledgerBalance >= 0 ? '#10b981' : '#ef4444', marginTop: '0.25rem' }}>
-                                            {formatCurrency(ledgerBalance)}
+                                        <div style={{ fontSize: '1.75rem', fontWeight: '900', color: displayBalance >= 0 ? '#00FF00' : '#FF0000', marginTop: '0.25rem' }}>
+                                            {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}
                                         </div>
                                     </div>
                                     <button 
@@ -1269,7 +1257,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     }}>
                                         <div style={{ flex: '1 1 250px' }}>
                                             <div style={{ fontSize: '0.9rem', opacity: 0.9, fontWeight: '500' }}>Saldo Acumulado</div>
-                                            <div style={{ fontSize: '2.5rem', fontWeight: 900 }}>{formatCurrency(ledgerBalance)}</div>
+                                            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: displayBalance > 0 ? '#00FF00' : displayBalance < 0 ? '#FF0000' : 'white' }}>{displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}</div>
                                         </div>
 
                                         {/* Filters inside Header to save space */}
@@ -1322,7 +1310,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <button 
                                             type="button"
                                             onClick={handlePayPix}
-                                            disabled={paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))}
+                                            disabled={paying}
                                             style={{ 
                                                 background: 'white', 
                                                 padding: '1rem 2rem', 
@@ -1331,16 +1319,16 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 color: '#1d4ed8',
                                                 fontWeight: '800',
                                                 fontSize: '1rem',
-                                                cursor: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 'not-allowed' : 'pointer',
+                                                cursor: paying ? 'not-allowed' : 'pointer',
                                                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '0.75rem',
-                                                opacity: (paying || ledgerBalance >= 0 || !(['superadmin', 'admin', 'gerente'].includes(profile?.role))) ? 0.7 : 1,
+                                                opacity: paying ? 0.7 : 1,
                                                 transition: 'transform 0.2s'
                                             }}
                                             onMouseEnter={(e) => { 
-                                                if (!paying && ledgerBalance < 0 && ['superadmin', 'admin', 'gerente'].includes(profile?.role)) {
+                                                if (!paying) {
                                                     e.currentTarget.style.transform = 'scale(1.05)'; 
                                                 }
                                             }}
@@ -1463,7 +1451,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     <div><strong>Tipo:</strong> {extratoType === 'all' ? 'Todos' : extratoType === 'credit' ? 'Créditos' : 'Débitos'}</div>
                                                 </div>
                                                 <div>
-                                                    <strong style={{ fontSize: '1.1rem' }}>Saldo Acumulado: {formatCurrency(ledgerBalance)}</strong>
+                                                    <strong style={{ fontSize: '1.1rem' }}>Saldo Acumulado: {displayBalance > 0 ? '+' : displayBalance < 0 ? '-' : ''}{formatCurrency(displayBalance)}</strong>
                                                 </div>
                                             </div>
                                         </div>
@@ -1785,7 +1773,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                     />
                                 </div>
                                 <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem', textAlign: 'left' }}>
-                                    Limite máximo: {formatCurrency(Math.abs(ledgerBalance))}
+                                    Limite máximo: {formatCurrency(Math.abs(displayBalance))}
                                 </p>
                             </div>
                         )}

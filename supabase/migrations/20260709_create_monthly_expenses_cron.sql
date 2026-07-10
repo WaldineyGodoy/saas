@@ -42,7 +42,7 @@ BEGIN
     SELECT id INTO v_account_despesas_op FROM public.ledger_accounts WHERE code = '2.1.4';
 
     -- Loop through active usinas
-    FOR v_usina IN (SELECT id, supplier_id, name, service_values FROM public.usinas WHERE status = 'active' OR status = 'Ativo') LOOP
+    FOR v_usina IN (SELECT id, supplier_id, name, service_values FROM public.usinas WHERE status IN ('gerando', 'manutencao')) LOOP
         
         -- Parse service values
         v_manutencao := COALESCE((v_usina.service_values->>'Manutenção')::numeric, 0);
