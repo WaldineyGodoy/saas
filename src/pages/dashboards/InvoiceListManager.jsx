@@ -481,7 +481,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         if (ebStatus === 'pendente' || ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
+            const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
             if (dueDate && dueDate < today) {
                 return 'atrasada';
             }
@@ -595,7 +595,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const { data, error } = await query.order('vencimento', { ascending: true });
             if (error) throw error;
             const processedData = (data || []).map(inv => {
-                if (inv.status === 'a_vencer') {
+                if (inv.status === 'a_vencer' || inv.status === 'pendente' || inv.status === 'ag_emissao_boleto') {
                     if (inv.vencimento) {
                         const [y, m, d] = inv.vencimento.split('-');
                         const dueDate = new Date(Number(y), Number(m) - 1, Number(d));
@@ -2501,7 +2501,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         const ebStatus = inv.energy_bill_status || 'pendente';
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
-                                        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
+                                        const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
                                         const isPastDue = dueDate && dueDate < today;
 
                                         if (col === 'a_vencer') {
