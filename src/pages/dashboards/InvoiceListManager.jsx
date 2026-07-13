@@ -232,19 +232,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             // if (inv.status === 'sem_faturamento') return false;
 
             if (statusFilter) {
-                const ebStatus = inv.energy_bill_status || 'pendente';
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
-                const isPastDue = dueDate && dueDate < today;
-
-                if (statusFilter === 'atrasada') {
-                    if (ebStatus !== 'pendente' || !isPastDue) return false;
-                } else if (statusFilter === 'a_vencer') {
-                    if (ebStatus !== 'pendente' || isPastDue) return false;
-                } else {
-                    if (ebStatus !== statusFilter) return false;
-                }
+                const resolvedStatus = resolveEnergyStatus(inv);
+                if (resolvedStatus !== statusFilter) return false;
             }
             if (statusFaturaFilter) {
                 const effectiveStatus = inv.status === 'ag_emissao_boleto' ? 'sem_faturamento' : inv.status;
@@ -483,20 +472,23 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const resolveEnergyStatus = (inv) => {
-        const ebStatus = inv.energy_bill_status || 'pendente';
-        if (ebStatus === 'pago') return 'pago';
-        if (ebStatus === 'erro') return 'erro';
-        if (ebStatus === 'parcelada') return 'parcelada';
-        if (ebStatus === 'contestada') return 'contestada';
-        if (ebStatus === 'inconsistente') return 'inconsistente';
+        let ebStatus = inv.energy_bill_status || 'pendente';
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
-        if (dueDate && dueDate < today) {
-            return 'atrasada';
+        if (['pago', 'erro', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
+            return ebStatus;
         }
-        return 'a_vencer';
+        
+        if (ebStatus === 'pendente' || ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
+            if (dueDate && dueDate < today) {
+                return 'atrasada';
+            }
+            return 'a_vencer';
+        }
+        
+        return ebStatus;
     };
 
     const faturasStatuses = [
