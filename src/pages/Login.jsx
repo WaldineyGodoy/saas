@@ -65,7 +65,9 @@ export default function Login() {
                 alert(error.message);
             }
         } else {
-            navigate('/dashboard');
+            const searchParams = new URLSearchParams(window.location.search);
+            const redirectUrl = searchParams.get('redirect') || '/dashboard';
+            navigate(redirectUrl);
         }
         setLoading(false);
     };

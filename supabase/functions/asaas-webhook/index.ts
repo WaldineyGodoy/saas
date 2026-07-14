@@ -33,8 +33,11 @@ serve(async (req) => {
         const headers = Object.fromEntries(req.headers.entries());
         const receivedToken = req.headers.get('asaas-access-token');
 
-        // Security Check: Validate Asaas Webhook Token
-        const isAuthorized = !finConfig.secret_key || receivedToken === finConfig.secret_key;
+        // Security Check: Validate Asaas Webhook Token (Aceita tanto o token de produção quanto o de sandbox)
+        const isAuthorized = 
+            (!finConfig.secret_key && !finConfig.sandbox_secret_key) || 
+            (receivedToken === finConfig.secret_key) || 
+            (receivedToken === finConfig.sandbox_secret_key);
 
         // Log to database
         await supabase.from('webhook_logs').insert({
@@ -79,6 +82,32 @@ serve(async (req) => {
 
         if (!payment || !payment.id) {
             return new Response(JSON.stringify({ received: true, status: 'no_payment' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // 1.5 Check if it's a Token Recharge Transaction
+        const { data: tokenTx } = await supabase
+            .from('token_transactions')
+            .select('*')
+            .eq('asaas_payment_id', payment.id)
+            .maybeSingle();
+
+        if (tokenTx) {
+            console.log(`[Asaas Webhook] Pagamento de tokens identificado: ${tokenTx.id}`);
+            if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event) && tokenTx.status !== 'completed') {
+                // Update transaction status
+                await supabase.from('token_transactions').update({ status: 'completed' }).eq('id', tokenTx.id);
+
+                // Increment user tokens (Using RPC is best, but doing a select and update since we are in admin context)
+                const { data: profile } = await supabase.from('profiles').select('tokens').eq('id', tokenTx.profile_id).single();
+                if (profile) {
+                    const newTokens = (profile.tokens || 0) + tokenTx.amount;
+                    await supabase.from('profiles').update({ tokens: newTokens }).eq('id', tokenTx.profile_id);
+                    console.log(`[Asaas Webhook] Tokens adicionados com sucesso ao profile ${tokenTx.profile_id}. Novo saldo: ${newTokens}`);
+                }
+            } else if (['PAYMENT_OVERDUE', 'PAYMENT_DELETED'].includes(event)) {
+                await supabase.from('token_transactions').update({ status: 'failed' }).eq('id', tokenTx.id);
+            }
+            return new Response(JSON.stringify({ received: true, status: 'token_processed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // 2. Identify Invoice Type (Individual or Consolidated)

@@ -1080,3 +1080,13 @@ textarea {
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
 }
+
+/* Hide arrows in number inputs for power calculation fields */
+.hide-number-spin::-webkit-inner-spin-button,
+.hide-number-spin::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.hide-number-spin {
+  -moz-appearance: textfield;
+}

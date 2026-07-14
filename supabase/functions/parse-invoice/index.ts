@@ -121,6 +121,15 @@ serve(async (req) => {
         }
     }
 
+    // Consumo Compensado (GD1 / GD2)
+    let consumo_compensado = 0;
+    // Ex: G1Comp.mUC-nM-TUSD kWh 150.00
+    const compMatch = fullText.match(/G[12]Comp\.[mo]UC-[no]M-(?:TUSD|TE)[^\d]*([\d.,]+)/i) || 
+                      fullText.match(/Energia\s+Compensada[^\d]*([\d.,]+)/i);
+    if (compMatch) {
+        consumo_compensado = parseConsumption(compMatch[1]);
+    }
+
     // Saldo atualizado de créditos (kWh)
     let saldo_kwh = 0;
     const saldoMatch = fullText.match(/Saldo\s+atualizado\s+de\s+cr[eé]ditos\s*=\s*([\d.,]+)/i);
@@ -138,10 +147,12 @@ serve(async (req) => {
 
     // Parcelamentos
     let parcelamento = 0;
-    const parcelamentoRegex = /(?:Parc\s*\d*\/\d*|Parcelamento)[\s\S]{0,30}?(\d{1,4},\d{2}-?)/gi;
+    let parcelamento_descricao = '';
+    const parcelamentoRegex = /(Parc\s*\d+\/\d+\s*\*?\d*|Parcelamento)[\s\S]{0,30}?(\d{1,4},\d{2}-?)/gi;
     const parcelamentoMatches = [...fullText.matchAll(parcelamentoRegex)];
     for (const match of parcelamentoMatches) {
-        parcelamento += parseValue(match[1]);
+        if (!parcelamento_descricao) parcelamento_descricao = match[1].trim();
+        parcelamento += parseValue(match[2]);
     }
 
     // Consumo Reais: Pega especificamente o VALOR (R$) que é a 3ª coluna de números após "kWh"
@@ -220,8 +231,10 @@ serve(async (req) => {
         data_leitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
         outros_lancamentos: outros_lancamentos,
         parcelamento: parcelamento,
+        parcelamento_descricao: parcelamento_descricao,
         linha_digitavel: linha_digitavel,
         energia_injetada: energia_injetada,
+        consumo_compensado: consumo_compensado,
         saldo_kwh: saldo_kwh
     };
 
