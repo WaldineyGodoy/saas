@@ -2045,6 +2045,89 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                     </div>
                 </div>
             )}
+
+            {/* Modal para incorporar protocolo existente */}
+            {showIncorporateModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex',
+                    justifyContent: 'center', alignItems: 'center', zIndex: 3000,
+                    backdropFilter: 'blur(6px)', animation: 'fadeIn 0.2s ease-in-out'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        padding: '1.75rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1.25rem'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Layers size={20} style={{ color: primaryColor }} />
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                                    Incorporar Protocolo Existente
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowIncorporateModal(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                            Selecione um protocolo existente para ser incorporado a este chamado como sub-protocolo:
+                        </p>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                                Selecionar Protocolo
+                            </label>
+                            <SearchableSelect
+                                options={looseProtocols.map(p => ({
+                                    id: p.id,
+                                    label: `#${p.protocol_number || p.id.substring(0,8)} - ${p.title}`
+                                }))}
+                                value={selectedLooseId}
+                                onChange={setSelectedLooseId}
+                                placeholder={loadingLoose ? 'Carregando protocolos...' : 'Buscar protocolo...'}
+                                loading={loadingLoose}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowIncorporateModal(false)}
+                                style={{
+                                    padding: '0.6rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                                    background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleIncorporateSelected}
+                                disabled={!selectedLooseId}
+                                style={{
+                                    padding: '0.6rem 1.25rem', border: 'none', borderRadius: '8px',
+                                    background: selectedLooseId ? primaryColor : '#cbd5e1', color: 'white',
+                                    fontWeight: 700, fontSize: '0.85rem', cursor: selectedLooseId ? 'pointer' : 'not-allowed'
+                                }}
+                            >
+                                Confirmar Incorporação
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

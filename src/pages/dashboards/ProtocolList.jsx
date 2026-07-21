@@ -3,8 +3,9 @@ import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
 import { useBranding } from '../../contexts/BrandingContext';
 import ProtocolModal from '../../components/ProtocolModal';
+import UnificationModal from '../../components/UnificationModal';
 import {
-    FileText, Clock, CheckCircle, AlertTriangle, List, Columns, Search, RefreshCw, Trash2, Plus, Calendar, Hash, Tag, Link as LinkIcon
+    FileText, Clock, CheckCircle, AlertTriangle, List, Columns, Search, RefreshCw, Trash2, Plus, Calendar, Hash, Tag, Link as LinkIcon, Layers
 } from 'lucide-react';
 import {
     DndContext, PointerSensor, useSensor, useSensors,
@@ -139,6 +140,19 @@ function KanbanCard({ protocol, onClick, onDelete, isOverlay }) {
                         );
                     })()}
                 </div>
+
+                {protocol.sub_protocols_count > 0 && (
+                    <div style={{ marginBottom: '0.4rem' }}>
+                        <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                            fontSize: '0.65rem', fontWeight: 800,
+                            background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                            padding: '0.15rem 0.5rem', borderRadius: '6px'
+                        }}>
+                            <Layers size={11} /> {protocol.sub_protocols_count} {protocol.sub_protocols_count === 1 ? 'Caso Unificado' : 'Casos Unificados'}
+                        </span>
+                    </div>
+                )}
 
                 {/* 2 - Nome da entidade */}
                 <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -293,6 +307,9 @@ export default function ProtocolList() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [activeId, setActiveId] = useState(null);
     const [sortBy, setSortBy] = useState('created_at_desc');
+    const [unifyingSource, setUnifyingSource] = useState(null);
+    const [unifyingTarget, setUnifyingTarget] = useState(null);
+    const [showUnificationModal, setShowUnificationModal] = useState(false);
 
     const getSortedKanbanProtocols = (statusId, items) => {
         const list = items.filter(p => p.status === statusId);
@@ -506,6 +523,13 @@ export default function ProtocolList() {
         let newStatus = over.id;
         if (!isTargetStatus) {
             const targetProto = protocols.find(p => p.id === over.id);
+            if (targetProto && targetProto.id !== activeProto?.id) {
+                // Card dropped onto another card -> Trigger Protocol Unification!
+                setUnifyingSource(activeProto);
+                setUnifyingTarget(targetProto);
+                setShowUnificationModal(true);
+                return;
+            }
             newStatus = targetProto?.status;
         }
 
@@ -860,6 +884,24 @@ export default function ProtocolList() {
                     onClose={() => setShowCreateModal(false)}
                     onUpdated={() => {
                         setShowCreateModal(false);
+                        fetchProtocols();
+                    }}
+                />
+            )}
+
+            {showUnificationModal && unifyingSource && unifyingTarget && (
+                <UnificationModal
+                    sourceProtocol={unifyingSource}
+                    targetProtocol={unifyingTarget}
+                    onClose={() => {
+                        setShowUnificationModal(false);
+                        setUnifyingSource(null);
+                        setUnifyingTarget(null);
+                    }}
+                    onSuccess={() => {
+                        setShowUnificationModal(false);
+                        setUnifyingSource(null);
+                        setUnifyingTarget(null);
                         fetchProtocols();
                     }}
                 />
