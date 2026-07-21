@@ -15,11 +15,15 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
     const [submitting, setSubmitting] = useState(false);
 
     const handleConfirm = async () => {
-        if (!sourceProtocol?.id || !targetProtocol?.id) return;
+        if (!sourceProtocol?.id || !targetProtocol?.id) {
+            showAlert('Erro: Protocolos selecionados não são válidos.', 'error');
+            return;
+        }
 
         setSubmitting(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
+            const userId = user?.id || null;
 
             if (mode === 'direct') {
                 // Incorporate sourceProtocol under targetProtocol as its sub-protocol
@@ -37,22 +41,26 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                 const sourceLog = `Protocolo incorporado como sub-protocolo ao Protocolo #${targetProtocol.protocol_number || targetProtocol.id.substring(0,8)}.`;
                 const targetLog = `Protocolo #${sourceProtocol.protocol_number || sourceProtocol.id.substring(0,8)} ("${sourceProtocol.title}") foi incorporado a este chamado.`;
 
-                await supabase.from('crm_history').insert([
-                    {
-                        entity_type: 'protocol',
-                        entity_id: sourceProtocol.id,
-                        content: sourceLog,
-                        created_by: user?.id,
-                        metadata: { target_protocol_id: targetProtocol.id }
-                    },
-                    {
-                        entity_type: 'protocol',
-                        entity_id: targetProtocol.id,
-                        content: targetLog,
-                        created_by: user?.id,
-                        metadata: { source_protocol_id: sourceProtocol.id }
-                    }
-                ]);
+                try {
+                    await supabase.from('crm_history').insert([
+                        {
+                            entity_type: 'protocol',
+                            entity_id: sourceProtocol.id,
+                            content: sourceLog,
+                            created_by: userId,
+                            metadata: { target_protocol_id: targetProtocol.id }
+                        },
+                        {
+                            entity_type: 'protocol',
+                            entity_id: targetProtocol.id,
+                            content: targetLog,
+                            created_by: userId,
+                            metadata: { source_protocol_id: sourceProtocol.id }
+                        }
+                    ]);
+                } catch (histErr) {
+                    console.error('Erro ao gravar histórico:', histErr);
+                }
 
                 showAlert(`Protocolos unificados com sucesso! #${sourceProtocol.protocol_number || ''} foi incorporado a #${targetProtocol.protocol_number || ''}.`, 'success');
             } else {
@@ -60,6 +68,12 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                 const daysNum = parseInt(deadlineDays) || 5;
                 const dueDate = new Date();
                 dueDate.setDate(dueDate.getDate() + daysNum);
+
+                const rawEntityType = targetProtocol?.linked_entity_type || sourceProtocol?.linked_entity_type;
+                const linkedEntityType = (rawEntityType && typeof rawEntityType === 'string' && rawEntityType.trim() !== '') ? rawEntityType.trim() : null;
+
+                const rawEntityId = targetProtocol?.linked_entity_id || sourceProtocol?.linked_entity_id;
+                const linkedEntityId = (rawEntityId && typeof rawEntityId === 'string' && rawEntityId.trim() !== '' && rawEntityId !== 'undefined' && rawEntityId !== 'null') ? rawEntityId : null;
 
                 const { data: newMaster, error: masterError } = await supabase
                     .from('protocols')
@@ -69,9 +83,9 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                         status: 'gerar',
                         deadline_days: daysNum,
                         due_date: dueDate.toISOString(),
-                        linked_entity_type: targetProtocol.linked_entity_type || sourceProtocol.linked_entity_type || null,
-                        linked_entity_id: targetProtocol.linked_entity_id || sourceProtocol.linked_entity_id || null,
-                        created_by: user?.id,
+                        linked_entity_type: linkedEntityType,
+                        linked_entity_id: linkedEntityId,
+                        created_by: userId,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
@@ -93,28 +107,32 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
 
                 // Register history logs
                 const escLog = `Escalonado para esfera ${escalationCategory} no chamado Master #${newMaster.protocol_number || newMaster.id.substring(0,8)}.`;
-                await supabase.from('crm_history').insert([
-                    {
-                        entity_type: 'protocol',
-                        entity_id: newMaster.id,
-                        content: `Chamado unificado de ${escalationCategory} criado. Incorporou os protocolos #${sourceProtocol.protocol_number || ''} e #${targetProtocol.protocol_number || ''}.`,
-                        created_by: user?.id
-                    },
-                    {
-                        entity_type: 'protocol',
-                        entity_id: sourceProtocol.id,
-                        content: escLog,
-                        created_by: user?.id,
-                        metadata: { master_protocol_id: newMaster.id }
-                    },
-                    {
-                        entity_type: 'protocol',
-                        entity_id: targetProtocol.id,
-                        content: escLog,
-                        created_by: user?.id,
-                        metadata: { master_protocol_id: newMaster.id }
-                    }
-                ]);
+                try {
+                    await supabase.from('crm_history').insert([
+                        {
+                            entity_type: 'protocol',
+                            entity_id: newMaster.id,
+                            content: `Chamado unificado de ${escalationCategory} criado. Incorporou os protocolos #${sourceProtocol.protocol_number || ''} e #${targetProtocol.protocol_number || ''}.`,
+                            created_by: userId
+                        },
+                        {
+                            entity_type: 'protocol',
+                            entity_id: sourceProtocol.id,
+                            content: escLog,
+                            created_by: userId,
+                            metadata: { master_protocol_id: newMaster.id }
+                        },
+                        {
+                            entity_type: 'protocol',
+                            entity_id: targetProtocol.id,
+                            content: escLog,
+                            created_by: userId,
+                            metadata: { master_protocol_id: newMaster.id }
+                        }
+                    ]);
+                } catch (histErr) {
+                    console.error('Erro ao gravar histórico de escalonamento:', histErr);
+                }
 
                 showAlert(`Novo chamado de ${escalationCategory} criado e protocolos incorporados com sucesso!`, 'success');
             }
