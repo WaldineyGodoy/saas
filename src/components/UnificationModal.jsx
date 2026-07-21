@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { X, Layers, ShieldAlert, ArrowRight, CheckCircle, Loader2 } from 'lucide-react';
+import { X, Layers, ShieldAlert, ArrowRight, CheckCircle, Loader2, Save } from 'lucide-react';
 
 export default function UnificationModal({ sourceProtocol, targetProtocol, onClose, onSuccess }) {
     const { primaryColor } = useBranding();
@@ -141,14 +141,17 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                 borderRadius: '16px',
                 width: '90%',
                 maxWidth: '540px',
-                padding: '2rem',
+                maxHeight: '90vh',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '1.25rem'
+                overflow: 'hidden'
             }}>
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9'
+                }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <div style={{
                             width: '38px', height: '38px', borderRadius: '10px',
@@ -158,10 +161,10 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                             <Layers size={22} />
                         </div>
                         <div>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
                                 Unificação de Protocolos
                             </h3>
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
                                 Reunir tratativas para escalonamento ou resolução conjunta
                             </p>
                         </div>
@@ -174,138 +177,147 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                     </button>
                 </div>
 
-                {/* Cards comparison */}
+                {/* Body (Scrollable) */}
                 <div style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    background: '#f8fafc', padding: '0.85rem', borderRadius: '10px',
-                    border: '1px solid #e2e8f0', fontSize: '0.825rem'
+                    padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1,
+                    display: 'flex', flexDirection: 'column', gap: '1.25rem'
                 }}>
-                    <div style={{ flex: 1, background: 'white', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>PROTOCOL AINDA SOLTO</div>
-                        <div style={{ fontWeight: 700, color: '#1e293b' }}>#{sourceProtocol?.protocol_number || sourceProtocol?.id?.substring(0,8)}</div>
-                        <div style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sourceProtocol?.title}</div>
+                    {/* Cards comparison */}
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        background: '#f8fafc', padding: '0.85rem', borderRadius: '10px',
+                        border: '1px solid #e2e8f0', fontSize: '0.825rem'
+                    }}>
+                        <div style={{ flex: 1, background: 'white', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>PROTOCOLO AINDA SOLTO</div>
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>#{sourceProtocol?.protocol_number || sourceProtocol?.id?.substring(0,8)}</div>
+                            <div style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sourceProtocol?.title}</div>
+                        </div>
+                        <ArrowRight size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                        <div style={{ flex: 1, background: 'white', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: primaryColor }}>PROTOCOLO DESTINO</div>
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>#{targetProtocol?.protocol_number || targetProtocol?.id?.substring(0,8)}</div>
+                            <div style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{targetProtocol?.title}</div>
+                        </div>
                     </div>
-                    <ArrowRight size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
-                    <div style={{ flex: 1, background: 'white', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: primaryColor }}>PROTOCOLO DESTINO</div>
-                        <div style={{ fontWeight: 700, color: '#1e293b' }}>#{targetProtocol?.protocol_number || targetProtocol?.id?.substring(0,8)}</div>
-                        <div style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{targetProtocol?.title}</div>
+
+                    {/* Mode Selector */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>
+                            Como deseja unificar estes chamados?
+                        </label>
+
+                        <div
+                            onClick={() => setMode('direct')}
+                            style={{
+                                padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
+                                border: `2px solid ${mode === 'direct' ? primaryColor : '#e2e8f0'}`,
+                                background: mode === 'direct' ? '#f0f9ff' : 'white',
+                                display: 'flex', alignItems: 'flex-start', gap: '0.75rem', transition: 'all 0.2s'
+                            }}
+                        >
+                            <div style={{ marginTop: '2px', color: mode === 'direct' ? primaryColor : '#94a3b8' }}>
+                                <CheckCircle size={18} />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
+                                    Incorporar como Sub-protocolo direto
+                                </div>
+                                <div style={{ fontSize: '0.775rem', color: '#64748b', marginTop: '2px' }}>
+                                    O protocolo #{sourceProtocol?.protocol_number || 'A'} passa a ser uma ramificação/sub-tarefa de #{targetProtocol?.protocol_number || 'B'}.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            onClick={() => {
+                                setMode('escalate');
+                                setMasterTitle(`Escalonamento ${escalationCategory}: ${targetProtocol?.title || ''}`);
+                            }}
+                            style={{
+                                padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
+                                border: `2px solid ${mode === 'escalate' ? primaryColor : '#e2e8f0'}`,
+                                background: mode === 'escalate' ? '#f0f9ff' : 'white',
+                                display: 'flex', alignItems: 'flex-start', gap: '0.75rem', transition: 'all 0.2s'
+                            }}
+                        >
+                            <div style={{ marginTop: '2px', color: mode === 'escalate' ? primaryColor : '#94a3b8' }}>
+                                <ShieldAlert size={18} />
+                            </div>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
+                                    Escalonar para Esfera Superior (Ouvidoria / PROCON)
+                                </div>
+                                <div style={{ fontSize: '0.775rem', color: '#64748b', marginTop: '2px' }}>
+                                    Cria um novo chamado Master e incorpora ambos os protocolos sob a tratativa unificada.
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Additional Form when 'escalate' is selected */}
+                    {mode === 'escalate' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
+                                    Esfera / Categoria de Escalonamento:
+                                </label>
+                                <select
+                                    value={escalationCategory}
+                                    onChange={e => {
+                                        setEscalationCategory(e.target.value);
+                                        setMasterTitle(`Escalonamento ${e.target.value}: ${targetProtocol?.title || ''}`);
+                                    }}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                                >
+                                    <option value="Ouvidoria">Ouvidoria</option>
+                                    <option value="PROCON">PROCON</option>
+                                    <option value="Agência Reguladora">Agência Reguladora (ANEEL / Concessionária)</option>
+                                    <option value="Judicial / Jurídico">Judicial / Jurídico</option>
+                                    <option value="Tratativa Especial">Tratativa Especial</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
+                                    Título do Novo Chamado Master:
+                                </label>
+                                <input
+                                    type="text"
+                                    value={masterTitle}
+                                    onChange={e => setMasterTitle(e.target.value)}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
+                                    Prazo do Novo Chamado (dias úteis):
+                                </label>
+                                <input
+                                    type="number"
+                                    value={deadlineDays}
+                                    onChange={e => setDeadlineDays(e.target.value)}
+                                    min="1"
+                                    max="60"
+                                    style={{ width: '100px', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Mode Selector */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>
-                        Como deseja unificar estes chamados?
-                    </label>
-
-                    <div
-                        onClick={() => setMode('direct')}
-                        style={{
-                            padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
-                            border: `2px solid ${mode === 'direct' ? primaryColor : '#e2e8f0'}`,
-                            background: mode === 'direct' ? '#f0f9ff' : 'white',
-                            display: 'flex', alignItems: 'flex-start', gap: '0.75rem', transition: 'all 0.2s'
-                        }}
-                    >
-                        <div style={{ marginTop: '2px', color: mode === 'direct' ? primaryColor : '#94a3b8' }}>
-                            <CheckCircle size={18} />
-                        </div>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
-                                Incorporar como Sub-protocolo direto
-                            </div>
-                            <div style={{ fontSize: '0.775rem', color: '#64748b', marginTop: '2px' }}>
-                                O protocolo #{sourceProtocol?.protocol_number || 'A'} passa a ser uma ramificação/sub-tarefa de #{targetProtocol?.protocol_number || 'B'}.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div
-                        onClick={() => {
-                            setMode('escalate');
-                            setMasterTitle(`Escalonamento ${escalationCategory}: ${targetProtocol?.title || ''}`);
-                        }}
-                        style={{
-                            padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer',
-                            border: `2px solid ${mode === 'escalate' ? primaryColor : '#e2e8f0'}`,
-                            background: mode === 'escalate' ? '#f0f9ff' : 'white',
-                            display: 'flex', alignItems: 'flex-start', gap: '0.75rem', transition: 'all 0.2s'
-                        }}
-                    >
-                        <div style={{ marginTop: '2px', color: mode === 'escalate' ? primaryColor : '#94a3b8' }}>
-                            <ShieldAlert size={18} />
-                        </div>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
-                                Escalonar para Esfera Superior (Ouvidoria / PROCON)
-                            </div>
-                            <div style={{ fontSize: '0.775rem', color: '#64748b', marginTop: '2px' }}>
-                                Cria um novo chamado Master e incorpora ambos os protocolos sob a tratativa unificada.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Additional Form when 'escalate' is selected */}
-                {mode === 'escalate' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
-                                Esfera / Categoria de Escalonamento:
-                            </label>
-                            <select
-                                value={escalationCategory}
-                                onChange={e => {
-                                    setEscalationCategory(e.target.value);
-                                    setMasterTitle(`Escalonamento ${e.target.value}: ${targetProtocol?.title || ''}`);
-                                }}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
-                            >
-                                <option value="Ouvidoria">Ouvidoria</option>
-                                <option value="PROCON">PROCON</option>
-                                <option value="Agência Reguladora">Agência Reguladora (ANEEL / Concessionária)</option>
-                                <option value="Judicial / Jurídico">Judicial / Jurídico</option>
-                                <option value="Tratativa Especial">Tratativa Especial</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
-                                Título do Novo Chamado Master:
-                            </label>
-                            <input
-                                type="text"
-                                value={masterTitle}
-                                onChange={e => setMasterTitle(e.target.value)}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                            />
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
-                                Prazo do Novo Chamado (dias úteis):
-                            </label>
-                            <input
-                                type="number"
-                                value={deadlineDays}
-                                onChange={e => setDeadlineDays(e.target.value)}
-                                min="1"
-                                max="60"
-                                style={{ width: '100px', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Footer Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {/* Fixed Footer Actions */}
+                <div style={{
+                    display: 'flex', justifyContent: 'flex-end', gap: '0.75rem',
+                    padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0'
+                }}>
                     <button
                         type="button"
                         onClick={onClose}
                         disabled={submitting}
                         style={{
-                            padding: '0.6rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
+                            padding: '0.65rem 1.25rem', border: '1px solid #cbd5e1', borderRadius: '8px',
                             background: 'white', color: '#475569', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer'
                         }}
                     >
@@ -316,13 +328,13 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                         onClick={handleConfirm}
                         disabled={submitting}
                         style={{
-                            padding: '0.6rem 1.5rem', border: 'none', borderRadius: '8px',
+                            padding: '0.65rem 1.5rem', border: 'none', borderRadius: '8px',
                             background: primaryColor, color: 'white', fontWeight: 700, fontSize: '0.85rem',
                             cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
                         }}
                     >
-                        {submitting ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Layers size={16} />}
-                        {submitting ? 'Unificando...' : 'Confirmar Unificação'}
+                        {submitting ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={16} />}
+                        {submitting ? 'Salvando Unificação...' : 'Salvar Unificação'}
                     </button>
                 </div>
             </div>
