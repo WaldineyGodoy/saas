@@ -5,7 +5,8 @@ import { useBranding } from '../contexts/BrandingContext';
 import { X, Layers, ShieldAlert, ArrowRight, CheckCircle, Loader2, Save } from 'lucide-react';
 
 export default function UnificationModal({ sourceProtocol, targetProtocol, onClose, onSuccess }) {
-    const { primaryColor } = useBranding();
+    const { branding } = useBranding();
+    const primaryColor = branding?.primary_color || '#003366';
     const { showAlert } = useUI();
 
     const [mode, setMode] = useState('direct'); // 'direct' (b under a) or 'escalate' (new master)
@@ -347,8 +348,9 @@ export default function UnificationModal({ sourceProtocol, targetProtocol, onClo
                         disabled={submitting}
                         style={{
                             padding: '0.65rem 1.5rem', border: 'none', borderRadius: '8px',
-                            background: primaryColor, color: 'white', fontWeight: 700, fontSize: '0.85rem',
-                            cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+                            backgroundColor: '#003366', color: '#ffffff', fontWeight: 700, fontSize: '0.85rem',
+                            cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}
                     >
                         {submitting ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={16} />}
