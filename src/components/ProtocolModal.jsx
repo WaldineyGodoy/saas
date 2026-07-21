@@ -155,6 +155,10 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
     const [historyRefresh, setHistoryRefresh] = useState(0);
     const [deleting, setDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [showIncorporateModal, setShowIncorporateModal] = useState(false);
+    const [looseProtocols, setLooseProtocols] = useState([]);
+    const [loadingLoose, setLoadingLoose] = useState(false);
+    const [selectedLooseId, setSelectedLooseId] = useState('');
 
     // Keep currentProtocol in sync with prop if it changes externally
     useEffect(() => {
@@ -338,6 +342,55 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             }
         } catch (err) {
             console.error('Error loading tree data:', err);
+        }
+    };
+
+    const fetchLooseProtocols = async () => {
+        setLoadingLoose(true);
+        try {
+            const rootId = parentProtocol?.id || currentProtocol?.id;
+            const { data, error } = await supabase
+                .from('protocols')
+                .select('id, protocol_number, title, created_at')
+                .is('parent_protocol_id', null)
+                .neq('id', rootId || '')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setLooseProtocols(data || []);
+        } catch (err) {
+            console.error('Error fetching loose protocols:', err);
+        } finally {
+            setLoadingLoose(false);
+        }
+    };
+
+    const handleIncorporateSelected = async () => {
+        if (!selectedLooseId) return;
+        const rootId = parentProtocol?.id || currentProtocol?.id;
+        if (!rootId) return;
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const { error } = await supabase
+                .from('protocols')
+                .update({ parent_protocol_id: rootId, updated_at: new Date().toISOString() })
+                .eq('id', selectedLooseId);
+            if (error) throw error;
+
+            await supabase.from('crm_history').insert({
+                entity_type: 'protocol',
+                entity_id: rootId,
+                content: `Protocolo incorporado como sub-protocolo a este chamado.`,
+                created_by: user?.id
+            });
+
+            showAlert('Protocolo incorporado com sucesso!', 'success');
+            setShowIncorporateModal(false);
+            setSelectedLooseId('');
+            loadTreeData();
+            if (onUpdated) onUpdated();
+        } catch (err) {
+            showAlert('Erro ao incorporar protocolo: ' + err.message, 'error');
         }
     };
 
