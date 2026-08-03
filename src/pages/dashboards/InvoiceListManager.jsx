@@ -2829,6 +2829,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const PROCESSING_SET = new Set(['processing', 'processando']);
         const PENDING_SET    = new Set(['pending', 'pendente', 'aguardando']);
         const SUCCESS_SET    = new Set(['success', 'sucesso', 'pago', 'parcelada', 'contestada', 'consistente']);
+        // status terminais de pagamento: vencem um energy_bill_status 'pendente'
+        const PAID_SET       = new Set(['pago', 'parcelada', 'contestada']);
 
         if (hasInvoice) {
             const s  = norm(matchingInvoice.status);
@@ -2838,8 +2840,14 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
             const isGhost = !Number(matchingInvoice.valor_concessionaria)
                          && !matchingInvoice.concessionaria_pdf_url;
 
+            // leitura comprovada: fatura com valor E PDF baixado da concessionária
+            const hasRealBill = Number(matchingInvoice.valor_concessionaria) > 0
+                             && !!matchingInvoice.concessionaria_pdf_url;
+
             if (ERROR_SET.has(s) || ERROR_SET.has(eb))            status = 'error';
             else if (PROCESSING_SET.has(s) || PROCESSING_SET.has(eb)) status = 'processing';
+            else if (PAID_SET.has(s))                             status = 'success';   // pago vence eb 'pendente'
+            else if (hasRealBill)                                 status = 'success';   // leitura funcionou
             else if (PENDING_SET.has(s) || PENDING_SET.has(eb))   status = 'pending';
             else if (isGhost)                                     status = 'pending';   // nunca verde
             else if (SUCCESS_SET.has(s) || SUCCESS_SET.has(eb))   status = 'success';
