@@ -2823,16 +2823,27 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                        (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
                        (isCurrentMonth && day > currentDayNum);
 
+        const norm = s => (s ?? '').toString().trim().toLowerCase();
+
+        const ERROR_SET      = new Set(['erro', 'error', 'indisponivel', 'indisponível']);
+        const PROCESSING_SET = new Set(['processing', 'processando']);
+        const PENDING_SET    = new Set(['pending', 'pendente', 'aguardando']);
+        const SUCCESS_SET    = new Set(['success', 'sucesso', 'pago', 'parcelada', 'contestada', 'consistente']);
+
         if (hasInvoice) {
-            if (matchingInvoice.status === 'erro' || matchingInvoice.energy_bill_status === 'erro' || matchingInvoice.status === 'error') {
-                status = 'error';
-            } else if (matchingInvoice.status === 'processing' || matchingInvoice.energy_bill_status === 'processing') {
-                status = 'processing';
-            } else if (matchingInvoice.energy_bill_status === 'pending') {
-                status = 'pending';
-            } else {
-                status = 'success';
-            }
+            const s  = norm(matchingInvoice.status);
+            const eb = norm(matchingInvoice.energy_bill_status);
+
+            // fatura fantasma: sem valor E sem PDF => não é sucesso
+            const isGhost = !Number(matchingInvoice.valor_concessionaria)
+                         && !matchingInvoice.concessionaria_pdf_url;
+
+            if (ERROR_SET.has(s) || ERROR_SET.has(eb))            status = 'error';
+            else if (PROCESSING_SET.has(s) || PROCESSING_SET.has(eb)) status = 'processing';
+            else if (PENDING_SET.has(s) || PENDING_SET.has(eb))   status = 'pending';
+            else if (isGhost)                                     status = 'pending';   // nunca verde
+            else if (SUCCESS_SET.has(s) || SUCCESS_SET.has(eb))   status = 'success';
+            else                                                  status = 'pending';   // default seguro
         } else if (isFuture) {
             status = 'not_available';
         } else {

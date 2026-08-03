@@ -1851,7 +1851,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
         // Trigger simulated scraping check
         const { error } = await supabase
           .from('consumer_units')
-          .update({ last_scraping_status: 'pendente' })
+          .update({ last_scraping_status: 'pending' })
           .eq('id', inc.uc_id);
         
         if (error) throw error;
