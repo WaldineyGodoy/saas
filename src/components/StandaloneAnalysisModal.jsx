@@ -124,7 +124,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         linha_digitavel: '',
         pix_string: '',
         desconto_aplicado: '',
-        energy_bill_status: 'pendente',
+        energy_bill_status: 'a_vencer',
         fio_b_vr_unit: '',
         fio_b_total: '',
         observacoes_auditoria: ''
@@ -143,6 +143,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
     const [globalTariffs, setGlobalTariffs] = useState(null);
     const [invoiceClassification, setInvoiceClassification] = useState('B1');
+    const [statusManuallyChanged, setStatusManuallyChanged] = useState(false);
 
     // Helpers de Formatação
     const formatCurrency = (val) => {
@@ -270,6 +271,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             }
         }
     }, [formData.mes_referencia, selectedUc]);
+
+    // Auto-update status based on vencimento date
+    useEffect(() => {
+        if (!statusManuallyChanged && formData.vencimento) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            // Fix timezone parsing issue by appending time
+            const dueDate = new Date(formData.vencimento + 'T12:00:00');
+            dueDate.setHours(0, 0, 0, 0);
+            
+            const newStatus = dueDate < today ? 'atrasada' : 'a_vencer';
+            if (formData.energy_bill_status !== newStatus) {
+                setFormData(prev => ({ ...prev, energy_bill_status: newStatus }));
+            }
+        }
+    }, [formData.vencimento, statusManuallyChanged]);
 
     // Recálculo dinâmico da simulação
     useEffect(() => {
@@ -2445,15 +2462,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                     <h5 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Status de Pagamento (Concessionária)</h5>
                                     <div>
                                         <select 
-                                            value={formData.energy_bill_status || 'pendente'}
-                                            onChange={e => setFormData({ ...formData, energy_bill_status: e.target.value })}
+                                            value={formData.energy_bill_status || 'a_vencer'}
+                                            onChange={e => {
+                                                setStatusManuallyChanged(true);
+                                                setFormData({ ...formData, energy_bill_status: e.target.value });
+                                            }}
                                             className="sandbox-input"
                                             style={{ cursor: 'pointer', fontWeight: 600, color: '#0f172a' }}
                                         >
-                                            <option value="pendente">Pendente</option>
+                                            <option value="a_vencer">A Vencer</option>
+                                            <option value="atrasada">Atrasada</option>
                                             <option value="inconsistente">Inconsistente</option>
                                             <option value="pago">Pago</option>
-                                            <option value="vencida">Vencida</option>
                                             <option value="parcelada">Parcelada</option>
                                             <option value="contestada">Contestada</option>
                                         </select>
