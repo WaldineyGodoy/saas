@@ -927,11 +927,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const concessionariaVal = typeof formData.valor_concessionaria === 'string' ? parseCurrency(formData.valor_concessionaria) : (Number(formData.valor_concessionaria) || Number(formData.consumo_reais) || 0);
 
         const historicoContent = getHistoricoContent();
-                let finalEnergyBillStatus = formData.energy_bill_status || 'pendente';
+                let finalEnergyBillStatus = formData.energy_bill_status || 'a_vencer';
         if (historicoContent !== '' && !isForceConsistent) {
             finalEnergyBillStatus = 'inconsistente';
-        } else if (isForceConsistent) {
-            finalEnergyBillStatus = 'consistente';
         }
 
         const payload = {
