@@ -47,6 +47,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const [loading, setLoading] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
+    
+    const [updatingFaturaStatus, setUpdatingFaturaStatus] = useState(false);
+    const [faturaStatus, setFaturaStatus] = useState(invoice?.status === 'ag_emissao_boleto' ? 'sem_faturamento' : (invoice?.status || 'sem_faturamento'));
 
     const [paymentStatus, setPaymentStatus] = useState(null); // 'success' | 'error'
     const [isEditing, setIsEditing] = useState(false);
@@ -306,6 +309,26 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             showAlert(`Falha no pagamento: ${error.message}`, 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdateFaturaStatus = async (newStatus) => {
+        if (updatingFaturaStatus) return;
+        setUpdatingFaturaStatus(true);
+        try {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ status: newStatus })
+                .eq('id', invoice.id);
+
+            if (error) throw error;
+            setFaturaStatus(newStatus);
+            if (onPaymentSuccess) onPaymentSuccess();
+        } catch (error) {
+            console.error('Erro ao atualizar status da fatura:', error);
+            showAlert('Falha ao atualizar status da fatura.', 'error');
+        } finally {
+            setUpdatingFaturaStatus(false);
         }
     };
 
@@ -1131,10 +1154,6 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR');
         };
 
-        const currentStatus = invoice.status === 'cancelado' 
-            ? statusColors.cancelado 
-            : statusColors[invoice.status] || statusColors.a_vencer;
-
         return (
             <div className="modal-overlay" style={{
                 position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -1211,23 +1230,54 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                         </div>
 
-                        {/* Status e Identificação (Assinante / Fatura do Assinante) */}
+                        {/* Status da Fatura do Assinante - Editável */}
                         <div style={{ 
-                            background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', 
-                            marginBottom: '1.5rem', border: '1px solid #e2e8f0',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                            background: '#f8fafc', 
+                            padding: '1rem', 
+                            borderRadius: '16px', 
+                            marginBottom: '1.5rem',
+                            border: '1px solid #e2e8f0'
                         }}>
-                            <div>
-                                <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Status da Fatura do Assinante</div>
-                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
-                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Fatura do Assinante</span>
+                                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginTop: '0.2rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
+                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
+                                </div>
+                                {updatingFaturaStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
-                            <span style={{ 
-                                padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800,
-                                background: currentStatus.bg, color: currentStatus.text, border: `1px solid ${currentStatus.text}20`
-                            }}>
-                                {currentStatus.label}
-                            </span>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
+                                {[
+                                    { id: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb' },
+                                    { id: 'a_vencer', label: 'A Vencer', color: '#854d0e' },
+                                    { id: 'atrasado', label: 'Atrasado', color: '#dc2626' },
+                                    { id: 'confirmado', label: 'Confirmado', color: '#0891b2' },
+                                    { id: 'pago', label: 'Pago', color: '#166534' }
+                                ].map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => handleUpdateFaturaStatus(s.id)}
+                                        disabled={updatingFaturaStatus}
+                                        style={{
+                                            padding: '0.5rem 0.1rem',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            fontSize: '0.75rem',
+                                            fontWeight: faturaStatus === s.id ? '800' : '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            background: faturaStatus === s.id ? s.color : 'transparent',
+                                            color: faturaStatus === s.id ? 'white' : '#64748b',
+                                            boxShadow: faturaStatus === s.id ? `0 4px 12px ${s.color}40` : 'none',
+                                            whiteSpace: 'nowrap',
+                                            textAlign: 'center'
+                                        }}
+                                    >
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Energy Bill Status Toggle - Manual Override */}
