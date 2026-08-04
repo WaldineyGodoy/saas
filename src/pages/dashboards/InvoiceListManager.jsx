@@ -38,6 +38,52 @@ let pageSessionState = {
     activeTab: null
 };
 
+export const resolveEnergyStatus = (inv) => {
+    let ebStatus = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
+    
+    if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ebStatus)) return 'indisponivel';
+    if (['processing', 'processando', 'baixada'].includes(ebStatus)) return 'baixada';
+    if (['pending', 'pendente', 'aguardando'].includes(ebStatus)) return 'pendente';
+    if (['success', 'sucesso', 'processada'].includes(ebStatus)) return 'processada';
+    
+    if (['pago', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
+        return ebStatus;
+    }
+    
+    if (ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
+        if (dueDate && dueDate < today) {
+            return 'atrasada';
+        }
+        return 'a_vencer';
+    }
+    
+    return ebStatus;
+};
+
+export const faturasStatuses = [
+    { key: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb', bg: '#eff6ff' },
+    { key: 'a_vencer', label: 'A Vencer', color: '#ca8a04', bg: '#fef9c3' },
+    { key: 'atrasado', label: 'Atrasado', color: '#dc2626', bg: '#fee2e2' },
+    { key: 'confirmado', label: 'Confirmado', color: '#0891b2', bg: '#ecfeff' },
+    { key: 'pago', label: 'Pago', color: '#166534', bg: '#dcfce7' }
+];
+
+export const contasStatuses = [
+    { key: 'pendente', label: 'Pendente', color: '#f97316', bg: '#fff7ed' },
+    { key: 'indisponivel', label: 'Indisponível', color: '#ef4444', bg: '#fef2f2' },
+    { key: 'baixada', label: 'Baixada', color: '#3b82f6', bg: '#eff6ff' },
+    { key: 'processada', label: 'Processada', color: '#22c55e', bg: '#f0fdf4' },
+    { key: 'a_vencer', label: 'A Vencer', color: '#2563eb', bg: '#eff6ff' },
+    { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' },
+    { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
+    { key: 'parcelada', label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3' },
+    { key: 'atrasada', label: 'Atrasada', color: '#dc2626', bg: '#fee2e2' },
+    { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' }
+];
+
 export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
@@ -470,52 +516,6 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         doc.save(`Extrato_Faturas_${new Date().toISOString().substring(0, 10)}.pdf`);
         showAlert('Extrato gerado com sucesso!', 'success');
     };
-
-    const resolveEnergyStatus = (inv) => {
-        let ebStatus = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
-        
-        if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ebStatus)) return 'indisponivel';
-        if (['processing', 'processando', 'baixada'].includes(ebStatus)) return 'baixada';
-        if (['pending', 'pendente', 'aguardando'].includes(ebStatus)) return 'pendente';
-        if (['success', 'sucesso', 'processada'].includes(ebStatus)) return 'processada';
-        
-        if (['pago', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
-            return ebStatus;
-        }
-        
-        if (ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
-            if (dueDate && dueDate < today) {
-                return 'atrasada';
-            }
-            return 'a_vencer';
-        }
-        
-        return ebStatus;
-    };
-
-    const faturasStatuses = [
-        { key: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb', bg: '#eff6ff' },
-        { key: 'a_vencer', label: 'A Vencer', color: '#ca8a04', bg: '#fef9c3' },
-        { key: 'atrasado', label: 'Atrasado', color: '#dc2626', bg: '#fee2e2' },
-        { key: 'confirmado', label: 'Confirmado', color: '#0891b2', bg: '#ecfeff' },
-        { key: 'pago', label: 'Pago', color: '#166534', bg: '#dcfce7' }
-    ];
-
-    const contasStatuses = [
-        { key: 'pendente', label: 'Pendente', color: '#f97316', bg: '#fff7ed' },
-        { key: 'indisponivel', label: 'Indisponível', color: '#ef4444', bg: '#fef2f2' },
-        { key: 'baixada', label: 'Baixada', color: '#3b82f6', bg: '#eff6ff' },
-        { key: 'processada', label: 'Processada', color: '#22c55e', bg: '#f0fdf4' },
-        { key: 'a_vencer', label: 'A Vencer', color: '#2563eb', bg: '#eff6ff' },
-        { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' },
-        { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
-        { key: 'parcelada', label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3' },
-        { key: 'atrasada', label: 'Atrasada', color: '#dc2626', bg: '#fee2e2' },
-        { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' }
-    ];
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
     const invoicesForTotals = invoices.filter(inv => {
