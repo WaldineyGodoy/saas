@@ -18,13 +18,31 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
     const getStatusConfig = (status) => {
         switch (status) {
             case 'success':
-                return { label: 'Sucesso', color: '#22c55e', bg: '#f0fdf4', icon: CheckCircle };
+            case 'processada':
+                return { label: 'Processada', color: '#22c55e', bg: '#f0fdf4', icon: CheckCircle };
             case 'error':
+            case 'indisponivel':
                 return { label: 'Indisponível', color: '#ef4444', bg: '#fef2f2', icon: AlertCircle };
             case 'processing':
-                return { label: 'Processando', color: '#3b82f6', bg: '#eff6ff', icon: Loader2 };
+            case 'baixada':
+                return { label: 'Baixada', color: '#3b82f6', bg: '#eff6ff', icon: Loader2 };
             case 'pending':
+            case 'pendente':
                 return { label: 'Pendente', color: '#f97316', bg: '#fff7ed', icon: Clock };
+            case 'not_available':
+                return { label: 'Não Disponível', color: '#475569', bg: '#f1f5f9', icon: Clock };
+            case 'a_vencer':
+                return { label: 'A Vencer', color: '#2563eb', bg: '#eff6ff', icon: CheckCircle };
+            case 'inconsistente':
+                return { label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5', icon: AlertCircle };
+            case 'contestada':
+                return { label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff', icon: AlertCircle };
+            case 'parcelada':
+                return { label: 'Parcelada', color: '#ca8a04', bg: '#fef9c3', icon: CheckCircle };
+            case 'atrasada':
+                return { label: 'Atrasada', color: '#dc2626', bg: '#fee2e2', icon: AlertCircle };
+            case 'pago':
+                return { label: 'Paga', color: '#166534', bg: '#dcfce7', icon: CheckCircle };
             default:
                 return { label: 'Desconhecido', color: '#cbd5e1', bg: '#f8fafc', icon: Clock };
         }
@@ -125,7 +143,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                             Alterar Status da Leitura
                         </h3>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {['pending', 'error', 'processing', 'success'].map(statusOption => {
+                            {['pendente', 'indisponivel', 'baixada', 'processada'].map(statusOption => {
                                 const optionConfig = getStatusConfig(statusOption);
                                 const OptionIcon = optionConfig.icon;
                                 const isSelected = currentStatus === statusOption;

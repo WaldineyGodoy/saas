@@ -472,13 +472,18 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const resolveEnergyStatus = (inv) => {
-        let ebStatus = inv.energy_bill_status || 'pendente';
+        let ebStatus = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
         
-        if (['pago', 'erro', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
+        if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ebStatus)) return 'indisponivel';
+        if (['processing', 'processando', 'baixada'].includes(ebStatus)) return 'baixada';
+        if (['pending', 'pendente', 'aguardando'].includes(ebStatus)) return 'pendente';
+        if (['success', 'sucesso', 'processada'].includes(ebStatus)) return 'processada';
+        
+        if (['pago', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
             return ebStatus;
         }
         
-        if (ebStatus === 'pendente' || ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
+        if (ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
@@ -500,6 +505,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     ];
 
     const contasStatuses = [
+        { key: 'pendente', label: 'Pendente', color: '#f97316', bg: '#fff7ed' },
+        { key: 'indisponivel', label: 'Indisponível', color: '#ef4444', bg: '#fef2f2' },
+        { key: 'baixada', label: 'Baixada', color: '#3b82f6', bg: '#eff6ff' },
+        { key: 'processada', label: 'Processada', color: '#22c55e', bg: '#f0fdf4' },
         { key: 'a_vencer', label: 'A Vencer', color: '#2563eb', bg: '#eff6ff' },
         { key: 'inconsistente', label: 'Inconsistente', color: '#ea580c', bg: '#ffedd5' },
         { key: 'contestada', label: 'Contestada', color: '#7c3aed', bg: '#f3e8ff' },
@@ -2494,26 +2503,21 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     ) : viewMode === 'energy_kanban' ? (
                         <div className="kanban-box">
                             <div className="kanban-board">
-                                {['a_vencer', 'inconsistente', 'contestada', 'parcelada', 'atrasada', 'pago']
+                                {['pendente', 'indisponivel', 'baixada', 'processada', 'a_vencer', 'inconsistente', 'contestada', 'parcelada', 'atrasada', 'pago']
                                     .filter(col => !statusFilter || col === statusFilter)
                                     .map(col => {
                                     const invoicesInCol = filteredInvoices.filter(inv => {
-                                        const ebStatus = inv.energy_bill_status || 'pendente';
-                                        const today = new Date();
-                                        today.setHours(0,0,0,0);
-                                        const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
-                                        const isPastDue = dueDate && dueDate < today;
-
-                                        if (col === 'a_vencer') {
-                                            return ebStatus === 'pendente' && !isPastDue;
-                                        } else if (col === 'atrasada') {
-                                            return ebStatus === 'pendente' && isPastDue;
-                                        } else {
-                                            return ebStatus === col;
-                                        }
+                                        return resolveEnergyStatus(inv) === col;
                                     });
 
+                                    // Filter out columns with no cards
+                                    if (invoicesInCol.length === 0) return null;
+
                                     const colMap = { 
+                                        'pendente': { color: '#f97316', bg: '#fff7ed', label: 'Pendente' },
+                                        'indisponivel': { color: '#ef4444', bg: '#fef2f2', label: 'Indisponível' },
+                                        'baixada': { color: '#3b82f6', bg: '#eff6ff', label: 'Baixada' },
+                                        'processada': { color: '#22c55e', bg: '#f0fdf4', label: 'Processada' },
                                         'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
                                         'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente' },
                                         'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestada' },
@@ -2817,49 +2821,24 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         );
         const hasInvoice = !!matchingInvoice;
 
-        let status = 'pending';
+        let status = 'pendente';
 
         const isFuture = (filterYear > currentYearNum) || 
                        (filterYear === currentYearNum && filterMonth > currentMonthNum) || 
                        (isCurrentMonth && day > currentDayNum);
 
-        const norm = s => (s ?? '').toString().trim().toLowerCase();
-
-        const ERROR_SET      = new Set(['erro', 'error', 'indisponivel', 'indisponível']);
-        const PROCESSING_SET = new Set(['processing', 'processando']);
-        const PENDING_SET    = new Set(['pending', 'pendente', 'aguardando']);
-        const SUCCESS_SET    = new Set(['success', 'sucesso', 'pago', 'parcelada', 'contestada', 'consistente']);
-        // status terminais de pagamento: vencem um energy_bill_status 'pendente'
-        const PAID_SET       = new Set(['pago', 'parcelada', 'contestada']);
-
         if (hasInvoice) {
-            const s  = norm(matchingInvoice.status);
-            const eb = norm(matchingInvoice.energy_bill_status);
-
-            // fatura fantasma: sem valor E sem PDF => não é sucesso
-            const isGhost = !Number(matchingInvoice.valor_concessionaria)
-                         && !matchingInvoice.concessionaria_pdf_url;
-
-            // leitura comprovada: fatura com valor E PDF baixado da concessionária
-            const hasRealBill = Number(matchingInvoice.valor_concessionaria) > 0
-                             && !!matchingInvoice.concessionaria_pdf_url;
-
-            if (ERROR_SET.has(s) || ERROR_SET.has(eb))            status = 'error';
-            else if (PROCESSING_SET.has(s) || PROCESSING_SET.has(eb)) status = 'processing';
-            else if (PAID_SET.has(s))                             status = 'success';   // pago vence eb 'pendente'
-            else if (hasRealBill)                                 status = 'success';   // leitura funcionou
-            else if (PENDING_SET.has(s) || PENDING_SET.has(eb))   status = 'pending';
-            else if (isGhost)                                     status = 'pending';   // nunca verde
-            else if (SUCCESS_SET.has(s) || SUCCESS_SET.has(eb))   status = 'success';
-            else                                                  status = 'pending';   // default seguro
+            status = resolveEnergyStatus(matchingInvoice);
         } else if (isFuture) {
             status = 'not_available';
         } else {
-            // Se for o mês atual, usa o status do scraper como fallback
             if (isCurrentMonth && unit.last_scraping_status && unit.last_scraping_status !== 'success') {
-                status = unit.last_scraping_status;
+                const ls = unit.last_scraping_status.toLowerCase().trim();
+                if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ls)) status = 'indisponivel';
+                else if (['processing', 'processando', 'baixada'].includes(ls)) status = 'baixada';
+                else status = 'pendente';
             } else {
-                status = 'pending';
+                status = 'pendente';
             }
         }
 
@@ -2946,13 +2925,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                 <span style={{ fontWeight: 800, color: 'var(--color-blue)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>Leit. {day}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                                {[
-                                    { key: 'success', bg: '#dcfce7', color: '#166534' },
-                                    { key: 'pending', bg: '#fff7ed', color: '#c2410c' },
-                                    { key: 'error', bg: '#fee2e2', color: '#991b1b' },
-                                    { key: 'processing', bg: '#eff6ff', color: '#1d4ed8' },
-                                    { key: 'not_available', bg: '#f1f5f9', color: '#475569' }
-                                ].map(status => {
+                                {contasStatuses.concat([{ key: 'not_available', label: 'Não Disponível', bg: '#f1f5f9', color: '#475569' }]).map(status => {
                                     const count = dayUnits.filter(u => u.displayStatus === status.key).length;
                                     if (count === 0) return null;
                                     return (
@@ -2971,19 +2944,13 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                             {dayUnits.length === 0 ? (
                                 <div style={{ fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center', marginTop: '2rem', fontStyle: 'italic', opacity: 0.6 }}>Sem leituras</div>
                             ) : (
-                                dayUnits.map(uc => (
+                                dayUnits.map(uc => {
+                                    const stConf = contasStatuses.find(s => s.key === uc.displayStatus) || { bg: '#f1f5f9', color: '#cbd5e1' };
+                                    return (
                                     <div key={uc.id} onClick={() => onCardClick(uc)} style={{
                                         padding: '0.6rem', borderRadius: '8px',
-                                        background: uc.displayStatus === 'success' ? '#f0fdf4' : 
-                                                    uc.displayStatus === 'processing' ? '#eff6ff' :
-                                                    uc.displayStatus === 'pending' ? '#fff7ed' :
-                                                    uc.displayStatus === 'error' ? '#fef2f2' : '#f8fafc',
-                                        borderLeft: `5px solid ${
-                                            uc.displayStatus === 'success' ? '#22c55e' : 
-                                            uc.displayStatus === 'processing' ? '#3b82f6' :
-                                            uc.displayStatus === 'pending' ? '#f97316' :
-                                            uc.displayStatus === 'error' ? '#ef4444' : '#cbd5e1'
-                                        }`,
+                                        background: stConf.bg,
+                                        borderLeft: `5px solid ${stConf.color}`,
                                         cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                     }}>
                                         <div style={{ 
