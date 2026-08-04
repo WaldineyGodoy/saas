@@ -2978,7 +2978,8 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                                             )}
                                         </div>
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
