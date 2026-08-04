@@ -844,17 +844,21 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         }
     };
 
-    const getEnergyStatusBadge = (status, isPastDue) => {
-        const statusMap = {
-            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle },
-            'pendente': isPastDue 
-                ? { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle }
-                : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
+    const getEnergyStatusBadge = (inv) => {
+        const resolved = resolveEnergyStatus(inv);
+        const map = {
+            'pendente': { color: '#f97316', bg: '#fff7ed', label: 'Pendente', icon: Clock },
+            'indisponivel': { color: '#ef4444', bg: '#fef2f2', label: 'Indisponível', icon: AlertCircle },
+            'baixada': { color: '#3b82f6', bg: '#eff6ff', label: 'Baixada', icon: CheckCircle },
+            'processada': { color: '#22c55e', bg: '#f0fdf4', label: 'Processada', icon: CheckCircle2 },
+            'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
             'inconsistente': { color: '#ea580c', bg: '#ffedd5', label: 'Inconsistente', icon: AlertCircle },
+            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban },
             'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
-            'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
+            'atrasada': { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Pago', icon: CheckCircle }
         };
-        const s = statusMap[status] || statusMap['pendente'];
+        const s = map[resolved] || map['pendente'];
         const Icon = s.icon;
         return (
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.6rem', background: s.bg, color: s.color, borderRadius: '99px', fontSize: '0.8rem', width: 'fit-content', fontWeight: 'bold' }}>
@@ -1762,11 +1766,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         borderRadius: '10px',
                         border: '1px solid #e2e8f0',
                         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                        flexWrap: 'nowrap',
-                        overflowX: 'auto',
-                        whiteSpace: 'nowrap',
-                        scrollbarWidth: 'none',
-                        msOverflowStyle: 'none'
+                        flexWrap: 'wrap'
                     }}>
                         {activeTab === 'faturas' ? (
                             <>
@@ -2447,7 +2447,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                     {getStatusBadge(inv.status)}
                                                 </td>
                                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                                    {getEnergyStatusBadge(inv.energy_bill_status || 'pendente', isPastDue)}
+                                                    {getEnergyStatusBadge(inv)}
                                                 </td>
                                             </tr>
                                         );
