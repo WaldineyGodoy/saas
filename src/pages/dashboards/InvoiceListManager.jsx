@@ -41,9 +41,22 @@ let pageSessionState = {
 export const resolveEnergyStatus = (inv) => {
     let ebStatus = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
     
+    // Auto-correção para contas do legado que ficaram presas como 'pendente' mas já foram extraídas/processadas
+    if (['pending', 'pendente', 'aguardando'].includes(ebStatus)) {
+        const hasValorPagar = Number(inv.valor_a_pagar) > 0;
+        const hasRealBill = Number(inv.valor_concessionaria) > 0 && !!inv.concessionaria_pdf_url;
+        
+        if (hasValorPagar) {
+            ebStatus = 'a_vencer';
+        } else if (hasRealBill) {
+            ebStatus = 'baixada';
+        } else {
+            return 'pendente';
+        }
+    }
+    
     if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ebStatus)) return 'indisponivel';
     if (['processing', 'processando', 'baixada'].includes(ebStatus)) return 'baixada';
-    if (['pending', 'pendente', 'aguardando'].includes(ebStatus)) return 'pendente';
     if (['success', 'sucesso', 'processada'].includes(ebStatus)) return 'processada';
     
     if (['pago', 'parcelada', 'contestada', 'inconsistente'].includes(ebStatus)) {
