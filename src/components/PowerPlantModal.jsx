@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
@@ -9,7 +9,7 @@ import {
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
     Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard,
-    Percent, SlidersHorizontal, ArrowUpDown, Check, Building2
+    Percent, SlidersHorizontal, ArrowUpDown, Check, Building2, UploadCloud
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import { useAuth } from '../contexts/AuthContext';
@@ -1467,6 +1467,108 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
         doc.save(`anexo_iv_${formData.name || 'usina'}.pdf`);
         showAlert('Arquivo CSV e PDF gerados com sucesso!', 'success');
+    };
+
+    const fileInputDemonstrativoRef = useRef(null);
+    const [isExtractingDemonstrativo, setIsExtractingDemonstrativo] = useState(false);
+
+    const handleImportDemonstrativo = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.type !== 'application/pdf') {
+            showAlert('Por favor, selecione um arquivo PDF.', 'warning');
+            return;
+        }
+
+        setIsExtractingDemonstrativo(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64 = reader.result.toString().split(',')[1];
+                
+                const { data, error } = await supabase.functions.invoke('parse-demonstrativo', {
+                    body: { pdfBase64: base64 }
+                });
+
+                if (error) throw error;
+                if (!data || !data.ucs || data.ucs.length === 0) {
+                    throw new Error("Nenhuma UC encontrada no documento.");
+                }
+
+                let isInferredPorcentagem = false;
+                const sumValues = data.ucs.reduce((acc, curr) => acc + curr.valor, 0);
+                if (Math.abs(sumValues - 100) < 1 || data.ucs.some(u => u.valor > 100 || !Number.isInteger(u.valor))) {
+                    isInferredPorcentagem = true;
+                }
+
+                const newRateioType = isInferredPorcentagem ? 'porcentagem' : 'prioridade';
+
+                const { data: existingUcs, error: ucsError } = await supabase
+                    .from('unidades_consumidoras')
+                    .select('id, num_uc');
+                
+                if (ucsError) throw ucsError;
+
+                let updatedSelectedUCs = [...selectedUCs];
+
+                for (const item of data.ucs) {
+                    const cleanUcNum = item.uc.replace(/\D/g, '');
+                    let dbUc = existingUcs.find(u => u.num_uc.replace(/\D/g, '') === cleanUcNum);
+                    
+                    if (!dbUc) {
+                        const { data: newUc, error: createError } = await supabase
+                            .from('unidades_consumidoras')
+                            .insert([{
+                                num_uc: cleanUcNum,
+                                status: 'ativo'
+                            }])
+                            .select()
+                            .single();
+                        
+                        if (createError) throw createError;
+                        dbUc = newUc;
+                    }
+
+                    const selectedIndex = updatedSelectedUCs.findIndex(u => u.id === dbUc.id);
+                    if (selectedIndex === -1) {
+                        const { data: fullUc } = await supabase
+                            .from('unidades_consumidoras')
+                            .select('*, subscribers(name)')
+                            .eq('id', dbUc.id)
+                            .single();
+                        
+                        if (fullUc) {
+                            if (newRateioType === 'prioridade') {
+                                fullUc.prioridade_rateio = item.valor;
+                            } else {
+                                fullUc.porcentagem_rateio = item.valor;
+                            }
+                            updatedSelectedUCs.push(fullUc);
+                        }
+                    } else {
+                        if (newRateioType === 'prioridade') {
+                            updatedSelectedUCs[selectedIndex].prioridade_rateio = item.valor;
+                        } else {
+                            updatedSelectedUCs[selectedIndex].porcentagem_rateio = item.valor;
+                        }
+                    }
+                }
+
+                setSelectedUCs(updatedSelectedUCs);
+                setFormData(prev => ({ ...prev, rateio_type: newRateioType }));
+                showAlert(`Demonstrativo processado. ${data.ucs.length} UCs vinculadas (Regra: ${newRateioType === 'prioridade' ? 'Prioridade' : 'Porcentagem'}).`, 'success');
+            };
+        } catch (error) {
+            console.error('Erro ao processar demonstrativo:', error);
+            showAlert('Erro ao processar o demonstrativo: ' + error.message, 'error');
+        } finally {
+            setIsExtractingDemonstrativo(false);
+            if (fileInputDemonstrativoRef.current) {
+                fileInputDemonstrativoRef.current.value = '';
+            }
+        }
     };
 
     const handleCreateRateioCard = async () => {
@@ -3145,6 +3247,26 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b', fontWeight: 800 }}>Dashboard de Rateio</h4>
                                         </div>
                                         <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputDemonstrativoRef.current?.click()}
+                                                disabled={isExtractingDemonstrativo}
+                                                style={{ 
+                                                    padding: '0.6rem 1rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', 
+                                                    cursor: isExtractingDemonstrativo ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#475569',
+                                                    opacity: isExtractingDemonstrativo ? 0.7 : 1
+                                                }}
+                                            >
+                                                {isExtractingDemonstrativo ? <Loader2 size={16} className="spin" /> : <UploadCloud size={16} />}
+                                                {isExtractingDemonstrativo ? 'Importando...' : 'Importar Demonstrativo'}
+                                            </button>
+                                            <input
+                                                type="file"
+                                                ref={fileInputDemonstrativoRef}
+                                                style={{ display: 'none' }}
+                                                accept="application/pdf"
+                                                onChange={handleImportDemonstrativo}
+                                            />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowExpandedUCs(true)}

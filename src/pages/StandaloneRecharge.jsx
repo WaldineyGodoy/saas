@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Zap, Coins, Check, AlertCircle, Copy } from 'lucide-react';
 
 const PACKAGES = [
-    { id: 30, tokens: 30, price: 0, desc: 'Renovação mensal (Plano Free).', isFree: true },
+    { id: 30, tokens: 20, price: 0, desc: 'Renovação mensal (Plano Free).', isFree: true },
     { id: 50, tokens: 50, price: 49.90, desc: 'Ideal para testes e pequenas demandas.' },
     { id: 100, tokens: 100, price: 89.90, desc: 'Mais popular. Ótimo custo-benefício.' },
     { id: 200, tokens: 200, price: 159.90, desc: 'Para geradores com grande volume.' }
@@ -176,7 +176,7 @@ export default function StandaloneRecharge() {
                                         </li>
                                         <li className="flex items-center text-sm font-medium text-gray-700">
                                             <Check className="w-5 h-5 text-emerald-500 mr-3 flex-shrink-0" />
-                                            {pkg.isFree ? 'Limite de 3 contas/mês' : 'Validade de 1 ano'}
+                                            {pkg.isFree ? 'Limite de 2 contas/mês' : 'Validade de 1 ano'}
                                         </li>
                                     </ul>
 

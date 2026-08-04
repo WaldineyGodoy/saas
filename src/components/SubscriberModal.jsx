@@ -41,6 +41,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [totalUnpaidGlobal, setTotalUnpaidGlobal] = useState(0);
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
     
+    const [specificDueDate, setSpecificDueDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        while (d.getDay() === 0 || d.getDay() === 6) {
+            d.setDate(d.getDate() + 1);
+        }
+        return d;
+    });
+    const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+    const [calendarViewDate, setCalendarViewDate] = useState(() => new Date());
+    
     // Manual Communication States
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
@@ -2559,15 +2570,105 @@ Associado`;
                                         </div>
 
                                         {billingMode === 'consolidada' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
                                                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>DIA VENC.:</span>
-                                                <select
-                                                    value={consolidatedDueDay}
-                                                    onChange={(e) => setConsolidatedDueDay(e.target.value)}
-                                                    style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setShowDueDatePicker(!showDueDatePicker)}
+                                                    style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                                                 >
-                                                    {[1, 5, 10, 15, 20, 25, 30].map(d => <option key={d} value={d}>{d}</option>)}
-                                                </select>
+                                                    <Calendar size={14} />
+                                                    {specificDueDate.toLocaleDateString('pt-BR')}
+                                                </button>
+                                                
+                                                {showDueDatePicker && (
+                                                    <div style={{
+                                                        position: 'absolute', top: '110%', left: 0, background: 'white', 
+                                                        border: '1px solid #e2e8f0', borderRadius: '12px', 
+                                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 100, 
+                                                        padding: '1rem', width: '280px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newD = new Date(calendarViewDate);
+                                                                    newD.setMonth(newD.getMonth() - 1);
+                                                                    setCalendarViewDate(newD);
+                                                                }} 
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
+                                                            >&lt;</button>
+                                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', textTransform: 'capitalize' }}>
+                                                                {calendarViewDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                            </span>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newD = new Date(calendarViewDate);
+                                                                    newD.setMonth(newD.getMonth() + 1);
+                                                                    setCalendarViewDate(newD);
+                                                                }} 
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-blue)', fontWeight: 'bold' }}
+                                                            >&gt;</button>
+                                                        </div>
+                                                        
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '0.5rem' }}>
+                                                            {['D','S','T','Q','Q','S','S'].map((d, i) => (
+                                                                <div key={i} style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#94a3b8' }}>{d}</div>
+                                                            ))}
+                                                        </div>
+                                                        
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                                                            {(() => {
+                                                                const today = new Date();
+                                                                today.setHours(0,0,0,0);
+                                                                const minValid = new Date(today);
+                                                                minValid.setDate(minValid.getDate() + 2);
+                                                                
+                                                                const y = calendarViewDate.getFullYear();
+                                                                const m = calendarViewDate.getMonth();
+                                                                const firstDay = new Date(y, m, 1).getDay();
+                                                                const daysInMonth = new Date(y, m + 1, 0).getDate();
+                                                                
+                                                                const cells = [];
+                                                                for(let i=0; i<firstDay; i++) cells.push(<div key={`empty-${i}`} />);
+                                                                
+                                                                for(let d=1; d<=daysInMonth; d++) {
+                                                                    const date = new Date(y, m, d);
+                                                                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                                                                    const isValid = !isWeekend && date >= minValid;
+                                                                    const isSelected = specificDueDate.getDate() === d && specificDueDate.getMonth() === m && specificDueDate.getFullYear() === y;
+                                                                    
+                                                                    cells.push(
+                                                                        <button
+                                                                            key={d}
+                                                                            type="button"
+                                                                            disabled={!isValid}
+                                                                            onClick={() => {
+                                                                                setSpecificDueDate(date);
+                                                                                setConsolidatedDueDay(d);
+                                                                                setShowDueDatePicker(false);
+                                                                            }}
+                                                                            style={{
+                                                                                padding: '0.4rem 0',
+                                                                                border: 'none',
+                                                                                borderRadius: '4px',
+                                                                                background: isSelected ? 'var(--color-blue)' : (isValid ? '#f8fafc' : 'transparent'),
+                                                                                color: isSelected ? 'white' : (isValid ? '#1e293b' : '#cbd5e1'),
+                                                                                cursor: isValid ? 'pointer' : 'not-allowed',
+                                                                                fontWeight: isSelected ? 'bold' : 'normal',
+                                                                                fontSize: '0.8rem'
+                                                                            }}
+                                                                        >
+                                                                            {d}
+                                                                        </button>
+                                                                    );
+                                                                }
+                                                                return cells;
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -2611,7 +2712,7 @@ Associado`;
 
                                                         setGenerating(true);
                                                         try {
-                                                            const dueDate = calculateConsolidatedDueDate(consolidatedDueDay);
+                                                            const dueDate = specificDueDate.toISOString().split('T')[0];
                                                             const result = await createAsaasCharge(subscriber.id, 'subscriber', {
                                                                 dueDate,
                                                                 invoice_ids: invoices

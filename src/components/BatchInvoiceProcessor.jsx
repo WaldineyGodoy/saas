@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { parseInvoice } from '../lib/api';
 import { X, UploadCloud, Loader2, AlertCircle, FileText, CheckCircle2, Trash2, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import Lottie from 'lottie-react';
+import loadingAnimation from '../assets/animation-loading.json';
 
 // Necessário ter acesso ao pdfjs (mesma forma que o StandaloneAccountModal)
 const getPdfJs = () => window.pdfjsLib;
@@ -11,6 +13,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
     const [isDragging, setIsDragging] = useState(false);
     const [cycles, setCycles] = useState([]);
     const [ugContas, setUgContas] = useState([]);
+    const [isSavingAll, setIsSavingAll] = useState(false);
     const fileInputRef = useRef(null);
 
     // Re-compute cycles when the modal opens or dependencies change
@@ -201,6 +204,14 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                                 if (regexMatch) extractedUcNumber = regexMatch[1] || regexMatch[0];
                             }
                             
+                            // Força a buscar TOTAL A PAGAR R$ 0,00 localmente caso o OCR perca (Ex. Fatura zerada)
+                            const totalAPagarMatch = cleanText.match(/TOTAL\s+A\s+PAGAR\s+R\$[^\d]*(\d{1,5},\d{2})/i);
+                            if (totalAPagarMatch) {
+                                const val = parseValue(totalAPagarMatch[1]);
+                                parsedData.valor_a_pagar = val;
+                                parsedData.valorTotal = val;
+                            }
+                            
                             // Check for Parcelamento that might have been lumped into outros_lancamentos by OCR
                             if (!parsedData.parcelamento) {
                                 const parcMatch = cleanText.match(/((?:Parc|Acordo|Presta[çc][ãa]o)[^\d]*\d+[\s\/\-a-zA-Z]*\d*).*?(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i) || cleanText.match(/(Parcelamento|Acordo|Ref Negocia[çc][ãa]o)[^\d]*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i);
@@ -257,25 +268,116 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                                 console.log('Erro ao buscar CEP no ViaCEP:', e);
                             }
                         }
-
                         const autoAlerts = [];
+
+                        let extractedFioBUnit = parsedData.fio_b_vr_unit || 0;
+                        if (!extractedFioBUnit) {
+                            try {
+                                const parseUnitValue = (v) => {
+                                    if (!v) return 0;
+                                    let cleaned = v.trim();
+                                    if (cleaned.includes(',') && !cleaned.includes('.')) {
+                                        cleaned = cleaned.replace(',', '.');
+                                    } else if (cleaned.includes(',') && cleaned.includes('.')) {
+                                        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+                                    }
+                                    return parseFloat(cleaned) || 0;
+                                };
+
+                                let consumoTusdUnit = 0;
+                                let compTusdUnit = 0;
+                                
+                                const consumoTusdMatches = [
+                                    cleanText.match(/Consumo[\s-]*(?:Energia[\s-]+)?TUSD[\s-]*kWh\s+([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i),
+                                    cleanText.match(/(?:Consumo[\s-]*(?:Energia[\s-]+)?TUSD|Uso[\s-]+Sist\.?[\s-]+Distr\.?).{0,20}?(?:kWh)?\s*([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i)
+                                ];
+                                const consumoTusdExato = consumoTusdMatches.find(m => m);
+                                if (consumoTusdExato) consumoTusdUnit = parseUnitValue(consumoTusdExato[2]);
+
+                                const compGdMatches = [
+                                    cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp).{0,40}?(?:TUSD)?\s*kWh\s+([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/i),
+                                    cleanText.match(/(?:Energia[\s-]+Compensada|Energia[\s-]+Injetada|GX[\s-]*COMP|GXCOMP|G\dComp)(?:(?!(?:LINHA|NOME|CNPJ)).){1,60}?([\d.,]+)-?\s+([\d.,]+)-?\s+([\d.,]+)-?/is)
+                                ];
+                                const compGdMatch = compGdMatches.find(m => m);
+                                if (compGdMatch) compTusdUnit = parseUnitValue(compGdMatch[2]);
+
+                                if (consumoTusdUnit > 0 && compTusdUnit > 0) {
+                                    const diff = consumoTusdUnit - compTusdUnit;
+                                    if (diff > 0.01 && diff < 0.50) { 
+                                        extractedFioBUnit = diff;
+                                    }
+                                }
+
+                                // Fallback: Engenharia reversa do Fio B se a Usina for GD2 e a regex falhou em extrair a tarifa
+                                const isUsinaGD2 = usinaInfo?.modalidade_gd === 'GD2';
+                                
+                                if (extractedFioBUnit === 0 && isUsinaGD2) {
+                                    const valTotal = parsedData.valor_a_pagar || parsedData.valorTotal || 0;
+                                    const valConsumo = parsedData.consumo_reais || 0;
+                                    const valIlum = parsedData.iluminacao_publica || 0;
+                                    const valOutros = parsedData.outros_lancamentos || 0;
+                                    const valParcela = parsedData.parcelamento || 0;
+                                    
+                                    const unexplained = valTotal - valConsumo - valIlum - valOutros - valParcela;
+                                    
+                                    if (unexplained > 5 && extractedCompensado > 0) {
+                                        extractedFioBUnit = unexplained / extractedCompensado;
+                                        autoAlerts.push(`Fio B (Reverso) Aplicado (GD2): Total=${valTotal}, Cons=${valConsumo}, Ilum=${valIlum}, Sobrou=${unexplained.toFixed(2)}. Tarifa=${extractedFioBUnit.toFixed(4)}`);
+                                    } else {
+                                        autoAlerts.push(`Fio B (Reverso) Ignorado: Diferença de R$ ${unexplained.toFixed(2)} não justificou. Comp=${extractedCompensado}`);
+                                    }
+                                } else if (extractedFioBUnit === 0) {
+                                    if (!isUsinaGD2) {
+                                        autoAlerts.push(`Fio B (Reverso): Ignorado pois a usina está configurada como GD1 (Isenta).`);
+                                    }
+                                }
+                            } catch(e) { 
+                                console.warn('Erro extraindo Fio B em lote:', e); 
+                                autoAlerts.push('Erro interno ao tentar extrair o Fio B.');
+                            }
+                        }
+                        
+                        const parseSafeNumber = (val) => {
+                            if (typeof val === 'number') return val;
+                            if (val === null || val === undefined || val === '') return 0;
+                            
+                            let str = val.toString();
+                            
+                            // Remove tudo que não for número, vírgula, ponto ou sinal de menos
+                            str = str.replace(/[^0-9,\.-]/g, '');
+                            
+                            if (str === '') return 0;
+
+                            // Se tem ponto e vírgula, assume que o ponto é separador de milhar e remove
+                            if (str.includes(',') && str.includes('.')) {
+                                str = str.replace(/\./g, '').replace(',', '.');
+                            } else if (str.includes(',')) {
+                                // Apenas vírgula, assume que é decimal
+                                str = str.replace(',', '.');
+                            }
+
+                            const num = parseFloat(str);
+                            return isNaN(num) ? 0 : num;
+                        };
                         
                         const extractedData = {
                             mes_referencia: parsedData.mes_referencia ? parsedData.mes_referencia.substring(0, 7) : '',
                             data_leitura: parsedData.data_leitura ? parsedData.data_leitura.split('T')[0] : '',
                             data_leitura_anterior: parsedData.data_leitura_anterior ? parsedData.data_leitura_anterior.split('T')[0] : '',
                             vencimento: parsedData.vencimento ? parsedData.vencimento.split('T')[0] : '',
-                            consumo_kwh: parsedData.consumo_kwh || 0,
-                            energia_injetada: extractedInjetada || 0,
-                            energia_compensada: extractedCompensado || 0,
-                            saldo_kwh: extractedSaldo || 0,
-                            valor_concessionaria: parsedData.valor_a_pagar || parsedData.valorTotal || 0,
+                            consumo_kwh: parseSafeNumber(parsedData.consumo_kwh),
+                            energia_injetada: parseSafeNumber(extractedInjetada),
+                            energia_compensada: parseSafeNumber(extractedCompensado),
+                            saldo_kwh: parseSafeNumber(extractedSaldo),
+                            valor_concessionaria: parseSafeNumber(parsedData.valor_a_pagar || parsedData.valorTotal),
                             numero_uc: extractedUcNumber || '',
-                            parcelamento: parsedData.parcelamento || 0,
+                            parcelamento: parseSafeNumber(parsedData.parcelamento),
                             parcelamento_descricao: parsedData.parcelamento_descricao || '',
-                            consumo_reais: parsedData.consumo_reais || 0,
-                            iluminacao_publica: parsedData.iluminacao_publica || 0,
-                            outros_lancamentos: parsedData.outros_lancamentos || 0,
+                            consumo_reais: parseSafeNumber(parsedData.consumo_reais),
+                            iluminacao_publica: parseSafeNumber(parsedData.iluminacao_publica),
+                            outros_lancamentos: parseSafeNumber(parsedData.outros_lancamentos),
+                            fio_b_vr_unit: parseSafeNumber(extractedFioBUnit),
+                            fio_b_total: parseSafeNumber(extractedFioBUnit * parseSafeNumber(extractedCompensado)),
                             cep: extractedCep || '',
                             municipio: extractedMunicipio || '',
                             classe: extractedClasse || '',
@@ -300,6 +402,17 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
 
                         const isUg = extractedData.energia_injetada > 0;
 
+                        let calculatedStatus = 'A Vencer';
+                        if (extractedData.valor_concessionaria === 0) {
+                            calculatedStatus = 'Pago';
+                        } else if (extractedData.vencimento) {
+                            const d = new Date();
+                            const todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                            if (extractedData.vencimento < todayStr) {
+                                calculatedStatus = 'Atrasada';
+                            }
+                        }
+
                         setQueue(prev => {
                             const newQ = [...prev];
                             newQ[nextItemIndex] = { 
@@ -309,6 +422,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                                 ucInfo,
                                 alerts: autoAlerts,
                                 isUg,
+                                selectedStatus: calculatedStatus,
                                 priorityVal: ucInfo.isNew ? '' : (usinaInfo.tipo_compensacao === 'porcentagem' ? ucInfo.existingUc.porcentagem : ucInfo.existingUc.prioridade)
                             };
                             return newQ;
@@ -366,7 +480,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                     // Deduction limits check
                     if (profile && profile.role !== 'super_admin') {
                         const totalTokens = (profile.free_tokens || 0) + (profile.tokens || 0);
-                        if (totalTokens < 10 && ucs.length >= 3) {
+                        if (totalTokens < 10 && ucs.length >= 2) {
                             throw new Error('Limite Free excedido para novas UCs.');
                         }
                     }
@@ -375,7 +489,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                         usina_id: usinaInfo.id,
                         numero_uc: item.data.numero_uc,
                         tipo: tipo,
-                        prioridade: usinaInfo.tipo_compensacao === 'prioridade' ? (item.priorityVal || 2) : 1,
+                        prioridade: tipo === 'ug' ? 0 : (usinaInfo.tipo_compensacao === 'prioridade' ? (item.priorityVal || 1) : 0),
                         porcentagem: usinaInfo.tipo_compensacao === 'porcentagem' ? (item.priorityVal || 0) : 0,
                         conta_saldo: false,
                         cep: item.data.cep || null,
@@ -392,34 +506,58 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
             if (!ucId) throw new Error("ID da UC não definido ou falhou.");
 
             // 2. Token Deduction for Saving Conta
-            if (profile && profile.role !== 'super_admin') {
+            let isMasked = false;
+            if (profile && profile.role !== 'super_admin' && profile.role !== 'admin') {
                 const { data: existingContas } = await supabase
                     .from('standalone_contas')
                     .select('id')
                     .eq('mes_referencia', item.data.mes_referencia)
-                    .limit(3);
+                    .limit(2);
                 
-                if (existingContas && existingContas.length >= 3) {
-                    const { data: pData } = await supabase.from('profiles').select('tokens, free_tokens').eq('id', profile.id).single();
-                    let freeT = pData.free_tokens || 0;
-                    let paidT = pData.tokens || 0;
-                    if ((freeT + paidT) < 10) throw new Error('Sem tokens para salvar a análise.');
+                const { data: pData } = await supabase.from('profiles').select('tokens, free_tokens').eq('id', profile.id).single();
+                let freeT = pData.free_tokens || 0;
+                let paidT = pData.tokens || 0;
 
-                    if (freeT >= 10) freeT -= 10;
-                    else {
-                        const rem = 10 - freeT;
-                        freeT = 0;
-                        paidT -= rem;
+                if (existingContas && existingContas.length >= 2) {
+                    // Third or more bill in the cycle. Cannot use free_tokens.
+                    if (paidT >= 10) {
+                        paidT -= 10;
+                        await supabase.from('profiles').update({ tokens: paidT }).eq('id', profile.id);
+                        await supabase.from('token_transactions').insert({
+                            profile_id: profile.id,
+                            amount: -10,
+                            type: 'usage',
+                            status: 'completed',
+                            description: `Processamento Lote (Pago) - UC ${item.data.numero_uc}`
+                        });
+                    } else {
+                        isMasked = true;
                     }
-
-                    await supabase.from('profiles').update({ free_tokens: freeT, tokens: paidT }).eq('id', profile.id);
-                    await supabase.from('token_transactions').insert({
-                        profile_id: profile.id,
-                        amount: -10,
-                        type: 'usage',
-                        status: 'completed',
-                        description: `Processamento Lote - UC ${item.data.numero_uc}`
-                    });
+                } else {
+                    // Less than 2 bills, can use free_tokens or paidT
+                    if (freeT >= 10) {
+                        freeT -= 10;
+                        await supabase.from('profiles').update({ free_tokens: freeT }).eq('id', profile.id);
+                        await supabase.from('token_transactions').insert({
+                            profile_id: profile.id,
+                            amount: -10,
+                            type: 'usage',
+                            status: 'completed',
+                            description: `Processamento Lote (Bonus) - UC ${item.data.numero_uc}`
+                        });
+                    } else if (paidT >= 10) {
+                        paidT -= 10;
+                        await supabase.from('profiles').update({ tokens: paidT }).eq('id', profile.id);
+                        await supabase.from('token_transactions').insert({
+                            profile_id: profile.id,
+                            amount: -10,
+                            type: 'usage',
+                            status: 'completed',
+                            description: `Processamento Lote (Pago) - UC ${item.data.numero_uc}`
+                        });
+                    } else {
+                        throw new Error('Sem tokens para salvar a análise.');
+                    }
                 }
             }
 
@@ -438,29 +576,32 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
             }
 
             // 4. Save Invoice
+            const invoiceAlerts = item.alerts || [];
+            if (isMasked) invoiceAlerts.push("LIMITE_FREE_EXCEDIDO");
+
             const invoiceData = {
                 uc_id: ucId,
                 mes_referencia: item.data.mes_referencia,
                 data_leitura: item.data.data_leitura || null,
                 data_leitura_anterior: item.data.data_leitura_anterior || null,
                 vencimento: item.data.vencimento || null,
-                consumo_kwh: item.data.consumo_kwh,
-                energia_injetada: item.data.energia_injetada,
-                energia_compensada: item.data.energia_compensada,
-                saldo_kwh: item.data.saldo_kwh,
-                valor_concessionaria: item.data.valor_concessionaria,
-                parcelamento: item.data.parcelamento,
+                consumo_kwh: isMasked ? 0 : item.data.consumo_kwh,
+                energia_injetada: isMasked ? 0 : item.data.energia_injetada,
+                energia_compensada: isMasked ? 0 : item.data.energia_compensada,
+                saldo_kwh: isMasked ? 0 : item.data.saldo_kwh,
+                valor_concessionaria: isMasked ? 0 : item.data.valor_concessionaria,
+                parcelamento: isMasked ? 0 : item.data.parcelamento,
                 
                 // Valores cobrados
-                consumo_reais: item.data.consumo_reais || 0,
-                fio_b_total: item.data.fio_b_total || 0,
-                fio_b_vr_unit: item.data.fio_b_vr_unit || 0,
-                iluminacao_publica: item.data.iluminacao_publica || 0,
-                outros_lancamentos: item.data.outros_lancamentos || 0,
+                consumo_reais: isMasked ? 0 : (item.data.consumo_reais || 0),
+                fio_b_total: isMasked ? 0 : (item.data.fio_b_total || 0),
+                fio_b_vr_unit: isMasked ? 0 : (item.data.fio_b_vr_unit || 0),
+                iluminacao_publica: isMasked ? 0 : (item.data.iluminacao_publica || 0),
+                outros_lancamentos: isMasked ? 0 : (item.data.outros_lancamentos || 0),
 
                 status_conta: item.selectedStatus,
                 pdf_url: pdfUrl,
-                alertas: item.alerts
+                alertas: invoiceAlerts
             };
 
             const { error } = await supabase.from('standalone_contas').insert(invoiceData);
@@ -472,6 +613,15 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
         } catch (err) {
             setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'error', error: err.message } : q));
         }
+    };
+
+    const handleSaveAll = async () => {
+        setIsSavingAll(true);
+        const doneItems = queue.filter(q => q.status === 'done');
+        for (const item of doneItems) {
+            await handleSaveItem(item);
+        }
+        setIsSavingAll(false);
     };
 
     if (!isOpen) return null;
@@ -553,23 +703,37 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                     </button>
                 </div>
 
-                {/* Dropzone */}
-                <div 
-                    className={`m-6 p-8 border-2 border-dashed rounded-xl transition-all flex flex-col items-center justify-center cursor-pointer ${isDragging ? 'border-emerald-500 bg-emerald-50 scale-[1.01]' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    <UploadCloud className={`w-12 h-12 mb-3 ${isDragging ? 'text-emerald-500' : 'text-gray-400'}`} />
-                    <p className="text-gray-600 font-medium text-lg">Arraste e solte os PDFs aqui</p>
-                    <p className="text-gray-400 text-sm mt-1">ou clique para selecionar múltiplos arquivos</p>
-                    <input type="file" multiple accept=".pdf" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                </div>
+                {/* Área rolável (Dropzone + Faturas) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                    
+                    {/* Dropzone */}
+                    <div 
+                        className={`shrink-0 mx-6 mt-6 p-8 border-2 border-dashed rounded-xl transition-all flex flex-col items-center justify-center cursor-pointer ${isDragging ? 'border-emerald-500 bg-emerald-50 scale-[1.01]' : 'border-gray-300 bg-white hover:bg-gray-50'}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        {queue.some(q => q.status === 'processing') ? (
+                            <div className="w-24 h-24 mb-3 flex items-center justify-center">
+                                <Lottie animationData={loadingAnimation} loop={true} />
+                            </div>
+                        ) : (
+                            <UploadCloud className={`w-12 h-12 mb-3 ${isDragging ? 'text-emerald-500' : 'text-gray-400'}`} />
+                        )}
+                        
+                        <p className="text-gray-600 font-medium text-lg">
+                            {queue.some(q => q.status === 'processing') ? 'Processando faturas...' : 'Arraste e solte os PDFs aqui'}
+                        </p>
+                        <p className="text-gray-400 text-sm mt-1">
+                            {queue.some(q => q.status === 'processing') ? 'Aguarde o motor finalizar a leitura (OCR)' : 'ou clique para selecionar múltiplos arquivos'}
+                        </p>
+                        <input type="file" multiple accept=".pdf" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                    </div>
 
-                {/* Queue List */}
-                <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
-                    {Object.keys(groupedQueue).length > 0 ? (
+                    {/* Queue List */}
+                    <div className="flex-1 px-6 pb-6 pt-6">
+                        {Object.keys(groupedQueue).length > 0 ? (
                         Object.entries(groupedQueue).sort((a,b) => a[0].localeCompare(b[0])).map(([groupName, items]) => (
                             <div key={groupName} className="mb-6">
                                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 bg-gray-200/50 py-1.5 px-3 rounded-lg flex items-center">
@@ -583,7 +747,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                                             <div className="flex items-center flex-1">
                                                 <div className="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 mr-4">
                                                     {item.status === 'pending' && <FileText className="w-6 h-6 text-gray-400" />}
-                                                    {item.status === 'processing' && <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />}
+                                                    {item.status === 'processing' && <Lottie animationData={loadingAnimation} loop={true} className="w-8 h-8" />}
                                                     {item.status === 'done' && <CheckCircle2 className="w-6 h-6 text-blue-500" />}
                                                     {item.status === 'saved' && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
                                                     {item.status === 'error' && <AlertCircle className="w-6 h-6 text-red-500" />}
@@ -696,21 +860,34 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                             </div>
                         ))
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                        <div className="py-12 flex flex-col items-center justify-center text-gray-400">
                             <FileText className="w-16 h-16 mb-4 opacity-30" />
                             <p className="font-medium">Nenhuma fatura na esteira.</p>
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* Footer Actions */}
                 {queue.length > 0 && (
-                    <div className="bg-white px-6 py-4 border-t border-gray-200 flex justify-end items-center shrink-0">
+                    <div className="bg-white px-6 py-4 border-t border-gray-200 flex justify-between items-center shrink-0">
+                        <div className="flex items-center">
+                            {queue.some(q => q.status === 'done') && (
+                                <button 
+                                    onClick={handleSaveAll}
+                                    disabled={isSavingAll}
+                                    className={`px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center ${isSavingAll ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
+                                >
+                                    {isSavingAll ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
+                                    {isSavingAll ? 'Processando...' : `Processar Todas as Faturas Lidas (${queue.filter(q => q.status === 'done').length})`}
+                                </button>
+                            )}
+                        </div>
                         <button 
                             onClick={onClose} 
-                            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all hover:-translate-y-0.5 flex items-center"
+                            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all flex items-center"
                         >
-                            <CheckCircle2 className="w-5 h-5 mr-2" />
+                            <X className="w-5 h-5 mr-2" />
                             Concluir e Fechar
                         </button>
                     </div>

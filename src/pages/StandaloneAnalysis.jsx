@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, Plus, FileText, AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Activity, Zap, Edit, Trash2, Save, X, Coins, UploadCloud, Sun, Home, Moon, Banknote, PiggyBank, DollarSign, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Plus, FileText, AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Activity, Zap, Edit, Trash2, Save, X, Coins, UploadCloud, Loader2, Sun, Home, Moon, Banknote, PiggyBank, DollarSign, AlertTriangle, Eye, Download, HelpCircle } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import StandaloneAccountModal from '../components/StandaloneAccountModal';
 import StandaloneUsinaModal from '../components/StandaloneUsinaModal';
 import BatchInvoiceProcessor from '../components/BatchInvoiceProcessor';
@@ -21,6 +23,8 @@ export default function StandaloneAnalysis() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [showTokensPopup, setShowTokensPopup] = useState(false);
 
     const [alertPopup, setAlertPopup] = useState(null); // { isOpen, alertas, ucName }
     
@@ -31,6 +35,90 @@ export default function StandaloneAnalysis() {
     const [editUsinaModal, setEditUsinaModal] = useState(false);
     const [showVerificationAlert, setShowVerificationAlert] = useState(false);
     const [activeTooltip, setActiveTooltip] = useState(null);
+
+    // ----------------- IMPORT DEMONSTRATIVO -----------------
+    const fileInputDemonstrativoRef = useRef(null);
+    const [isExtractingDemonstrativo, setIsExtractingDemonstrativo] = useState(false);
+
+    const handleImportDemonstrativo = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!selectedUsinaId) {
+            setAlertPopup({ isOpen: true, alertas: ['Selecione uma Usina primeiro.'] });
+            return;
+        }
+
+        if (file.type !== 'application/pdf') {
+            setAlertPopup({ isOpen: true, alertas: ['Por favor, selecione um arquivo PDF.'] });
+            return;
+        }
+
+        setIsExtractingDemonstrativo(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64 = reader.result.toString().split(',')[1];
+                
+                const { data, error } = await supabase.functions.invoke('parse-demonstrativo', {
+                    body: { pdfBase64: base64 }
+                });
+
+                if (error) throw error;
+                if (!data || !data.ucs || data.ucs.length === 0) {
+                    throw new Error("Nenhuma UC encontrada no documento.");
+                }
+
+                let isInferredPorcentagem = false;
+                const sumValues = data.ucs.reduce((acc, curr) => acc + curr.valor, 0);
+                if (Math.abs(sumValues - 100) < 1 || data.ucs.some(u => u.valor > 100 || !Number.isInteger(u.valor))) {
+                    isInferredPorcentagem = true;
+                }
+                const newRateioType = isInferredPorcentagem ? 'porcentagem' : 'prioridade';
+
+                await supabase.from('standalone_usinas').update({ tipo_compensacao: newRateioType }).eq('id', selectedUsinaId);
+                
+                const { data: existingUcs, error: ucsError } = await supabase
+                    .from('standalone_ucs')
+                    .select('id, numero_uc')
+                    .eq('usina_id', selectedUsinaId);
+                
+                if (ucsError) throw ucsError;
+
+                for (const item of data.ucs) {
+                    const cleanUcNum = item.uc.replace(/\D/g, '');
+                    let dbUc = existingUcs.find(u => u.numero_uc.replace(/\D/g, '') === cleanUcNum);
+                    
+                    const payload = {
+                        usina_id: selectedUsinaId,
+                        numero_uc: cleanUcNum,
+                        tipo: 'beneficiaria',
+                        prioridade: newRateioType === 'prioridade' ? item.valor : 1,
+                        porcentagem: newRateioType === 'porcentagem' ? item.valor : 0,
+                        conta_saldo: false
+                    };
+
+                    if (dbUc) {
+                        await supabase.from('standalone_ucs').update(payload).eq('id', dbUc.id);
+                    } else {
+                        await supabase.from('standalone_ucs').insert(payload);
+                    }
+                }
+
+                await loadData();
+                setAlertPopup({ isOpen: true, alertas: [`Demonstrativo processado. ${data.ucs.length} UCs vinculadas (Regra: ${newRateioType === 'prioridade' ? 'Prioridade' : 'Porcentagem'}).`] });
+            };
+        } catch (error) {
+            console.error('Erro ao processar demonstrativo:', error);
+            setAlertPopup({ isOpen: true, alertas: ['Erro ao processar o demonstrativo: ' + error.message] });
+        } finally {
+            setIsExtractingDemonstrativo(false);
+            if (fileInputDemonstrativoRef.current) {
+                fileInputDemonstrativoRef.current.value = '';
+            }
+        }
+    };
 
     const loadData = async () => {
         if (!user || !profile) return;
@@ -80,7 +168,27 @@ export default function StandaloneAnalysis() {
             if (ucsData && ucsData.length > 0) {
                 const ucIds = ucsData.map(u => u.id);
                 const { data: contasData } = await supabase.from('standalone_contas').select('*').in('uc_id', ucIds);
-                setContas(contasData || []);
+                
+                let uniqueContas = [];
+                if (contasData) {
+                    const seen = new Set();
+                    const sorted = [...contasData].sort((a, b) => (b.id > a.id ? 1 : -1)); // keep newest
+                    for (const c of sorted) {
+                        let mesRef = c.mes_referencia ? c.mes_referencia.replace(/[^0-9]/g, '') : '';
+                        if (mesRef.length === 6 && mesRef.startsWith('20')) {
+                            mesRef = mesRef.substring(4, 6) + mesRef.substring(0, 4);
+                        }
+                        if (!mesRef && c.data_leitura) {
+                            mesRef = c.data_leitura.substring(0, 7).replace('-', '');
+                        }
+                        const key = `${c.uc_id}-${mesRef}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            uniqueContas.push(c);
+                        }
+                    }
+                }
+                setContas(uniqueContas);
             } else {
                 setContas([]);
             }
@@ -223,6 +331,41 @@ export default function StandaloneAnalysis() {
     const handleCreateUsina = () => {
         setCreateUsinaModal({ isOpen: true, nome: '', tipo_compensacao: 'prioridade' });
     };
+    const handleGeneratePDF = async () => {
+        if (!profile || (profile.tokens || 0) <= 0) {
+            setShowTokensPopup(true);
+            return;
+        }
+
+        const element = document.getElementById('pdf-content');
+        if (!element) return;
+        
+        try {
+            setIsGeneratingPDF(true);
+            // wait a tick for react to render the client header if needed
+            await new Promise(r => setTimeout(r, 100));
+
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            // A4 page height is 297mm. If canvas height is larger, it might be truncated or scaled down.
+            // We'll scale it to fit the width.
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            
+            const cycle = cycles.find(c => c.id === selectedCycleId);
+            pdf.save(`relatorio_${usinaInfo?.nome || 'usina'}_${cycle?.name || 'ciclo'}.pdf`);
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            alert('Erro ao gerar PDF. Tente novamente.');
+        } finally {
+            setIsGeneratingPDF(false);
+        }
+    };
+
     // Render Data
     const renderDashboard = () => {
         if (loading) return <div className="p-8 text-center text-gray-500">Carregando dados...</div>;
@@ -287,33 +430,39 @@ export default function StandaloneAnalysis() {
         let geracaoExibida = 0;
         let showLowGenerationAlert = false;
         
-        // Find UG conta in this cycle to determine month
-        const ugConta = filteredContas.find(c => {
+        // Find all UG contas to determine months
+        const ugContas = filteredContas.filter(c => {
             const u = ucs.find(uc => uc.id === c.uc_id);
             return u && u.tipo === 'ug';
         });
 
-        if (ugConta && ugConta.data_leitura && usinaInfo?.potencia_kwp && irradianciaInfo) {
-            const dateObj = new Date(ugConta.data_leitura);
-            const monthIdx = dateObj.getUTCMonth(); // 0 to 11
-            const yearStr = dateObj.getUTCFullYear().toString();
-            
-            const irrFactor = irradianciaInfo[irrKeys[monthIdx]];
-            if (irrFactor) {
-                geracaoEstimada = Math.round(Number(irrFactor) * Number(usinaInfo.potencia_kwp));
-            }
-            
-            if (usinaInfo.geracao_aferida && usinaInfo.geracao_aferida[yearStr] && usinaInfo.geracao_aferida[yearStr][monthIdx] !== undefined && usinaInfo.geracao_aferida[yearStr][monthIdx] !== null) {
-                geracaoAferida = Number(usinaInfo.geracao_aferida[yearStr][monthIdx]);
-                isAferida = true;
-                geracaoExibida = geracaoAferida;
-                
-                // Alert if aferida is more than 10% below estimada
-                if (geracaoAferida < (geracaoEstimada * 0.9)) {
-                    showLowGenerationAlert = true;
+        if (usinaInfo?.potencia_kwp && irradianciaInfo) {
+            ugContas.forEach(ugConta => {
+                if (ugConta.data_leitura) {
+                    const dateObj = new Date(ugConta.data_leitura);
+                    const monthIdx = dateObj.getUTCMonth(); // 0 to 11
+                    const yearStr = dateObj.getUTCFullYear().toString();
+                    
+                    const irrFactor = irradianciaInfo[irrKeys[monthIdx]];
+                    let est = 0;
+                    if (irrFactor) {
+                        est = Math.round(Number(irrFactor) * Number(usinaInfo.potencia_kwp));
+                        geracaoEstimada += est;
+                    }
+                    
+                    if (usinaInfo.geracao_aferida && usinaInfo.geracao_aferida[yearStr] && usinaInfo.geracao_aferida[yearStr][monthIdx] !== undefined && usinaInfo.geracao_aferida[yearStr][monthIdx] !== null) {
+                        const aferida = Number(usinaInfo.geracao_aferida[yearStr][monthIdx]);
+                        geracaoAferida = (geracaoAferida || 0) + aferida;
+                        isAferida = true;
+                        geracaoExibida += aferida;
+                    } else {
+                        geracaoExibida += est;
+                    }
                 }
-            } else {
-                geracaoExibida = geracaoEstimada;
+            });
+
+            if (isAferida && geracaoAferida < (geracaoEstimada * 0.85)) {
+                showLowGenerationAlert = true;
             }
         }
 
@@ -322,13 +471,52 @@ export default function StandaloneAnalysis() {
         let totalCompensado = 0;
         let totalValorFaturas = 0;
         let totalParcelamentos = 0;
+        let totalConsumoKwh = 0;
+        let totalConsumoFaturadoKwh = 0;
+        let totalConsumoFaturadoReais = 0;
+        let totalValorAuditadoCalc = 0;
         const contasComParcelamento = [];
 
         filteredContas.forEach(c => {
-            const isUg = ucs.find(u => u.id === c.uc_id)?.tipo === 'ug';
-            if (isUg) totalInjetado += Number(c.energia_injetada || 0);
-            totalCompensado += Number(c.energia_compensada || 0);
-            
+            const uc = ucs.find(u => u.id === c.uc_id);
+            if (!uc) return;
+
+            const isUg = uc.tipo === 'ug';
+            const inj = Number(c.energia_injetada || 0);
+            const comp = Number(c.energia_compensada || 0);
+            const cons = Number(c.consumo_kwh || 0);
+
+            if (isUg) totalInjetado += inj;
+            totalCompensado += comp;
+            totalConsumoKwh += cons;
+
+            const uncomp = Math.max(0, cons - comp);
+            totalConsumoFaturadoKwh += uncomp;
+
+            const frac = cons > 0 ? uncomp / cons : 0;
+            const consumoCorreto = Number(c.consumo_reais || 0) * frac;
+            totalConsumoFaturadoReais += consumoCorreto;
+
+            const fioBCorreto = comp * Number(c.fio_b_vr_unit || 0);
+
+            let ilumCorreto = Number(c.iluminacao_publica || 0);
+            if (uc.municipio && uc.classe && cosipRates.length > 0) {
+                const match = cosipRates.find(r => 
+                    r.municipio.toUpperCase() === uc.municipio.toUpperCase() &&
+                    r.classe.toUpperCase() === uc.classe.toUpperCase() &&
+                    cons >= Number(r.faixa_de) &&
+                    cons <= Number(r.faixa_ate)
+                );
+                if (match) {
+                    if (Number(match.valor_fixo) > 0) ilumCorreto = Number(match.valor_fixo);
+                    else if (Number(match.percentual) > 0) ilumCorreto = (Number(c.consumo_reais || 0) * Number(match.percentual)) / 100;
+                }
+            }
+
+            const outrosCorreto = Number(c.parcelamento || 0) + Number(c.outros_lancamentos || 0);
+            const valAudCalc = consumoCorreto + fioBCorreto + ilumCorreto + outrosCorreto;
+            totalValorAuditadoCalc += valAudCalc;
+
             const vOcr = Number(c.valor_concessionaria || 0);
             const vAud = Number(c.valor_auditado || 0);
             
@@ -338,8 +526,8 @@ export default function StandaloneAnalysis() {
             totalParcelamentos += parc;
             
             if (parc > 0) {
-                const ucName = ucs.find(u => u.id === c.uc_id)?.numero_uc || 'Desconhecida';
-                contasComParcelamento.push({ uc: ucName, valor: parc });
+                const ucName = uc.numero_uc || 'Desconhecida';
+                contasComParcelamento.push({ uc: ucName, valor: parc, mesRef: c.mes_referencia || 'N/D' });
             }
         });
 
@@ -361,9 +549,7 @@ export default function StandaloneAnalysis() {
         let currentCascadeBalance = 0;
         let totalCompensadoAteAqui = 0;
         
-        let totalConsumoKwh = 0;
-        let totalConsumoFaturadoKwh = 0;
-        let totalConsumoFaturadoReais = 0;
+
         const mappedUcs = sortedUcs.map(uc => {
             const contasDaUc = filteredContas.filter(c => c.uc_id === uc.id);
             const conta = contasDaUc[0]; // first one for reference
@@ -416,11 +602,8 @@ export default function StandaloneAnalysis() {
 
             totalCompensadoAteAqui += compensado;
             
-            totalConsumoKwh += consumo;
-            totalConsumoFaturadoKwh += uncompensated;
             const frac = consumo > 0 ? uncompensated / consumo : 0;
             const consumoCorreto = Number(conta?.consumo_reais || 0) * frac;
-            totalConsumoFaturadoReais += consumoCorreto;
 
             const fioBCorreto = compensado * Number(conta?.fio_b_vr_unit || 0);
             
@@ -455,48 +638,67 @@ export default function StandaloneAnalysis() {
             if (c.saldo > maxVal) maxVal = c.saldo;
         });
 
+        const autoConsumoCalc = Math.max(0, geracaoExibida - totalInjetado);
+        const showExpansionAlert = (autoConsumoCalc + totalConsumoKwh) > geracaoExibida;
+
         return (
-            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                {contasComParcelamento.length > 0 && (
-                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl shadow-sm flex items-start space-x-4">
-                        <div className="bg-red-100 p-2 rounded-full flex-shrink-0 animate-pulse">
-                            <AlertTriangle className="w-6 h-6 text-red-600" />
-                        </div>
-                        <div>
-                            <h3 className="font-extrabold text-red-800 text-lg">ALERTA VISUAL: Parcelamento Detectado neste Ciclo!</h3>
-                            <p className="text-red-700 font-medium text-sm mt-1">
-                                O sistema identificou cobranças de parcelamento/acordos nas seguintes UCs:
-                            </p>
-                            <ul className="mt-2 space-y-1">
-                                {contasComParcelamento.map((cp, i) => (
-                                    <li key={i} className="text-sm font-bold text-red-900 bg-red-100/50 px-3 py-1 rounded-lg inline-block mr-2">
-                                        UC {cp.uc}: R$ {cp.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </li>
-                                ))}
-                            </ul>
-                            <p className="text-xs text-red-600 font-bold mt-2 uppercase tracking-wide">
-                                * Verifique a tabela abaixo (ícone vermelho) para ler os detalhes da auditoria.
-                            </p>
-                        </div>
+            <div id="pdf-content" className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 bg-gray-50/50 p-2 rounded-xl">
+                {/* Cabeçalho do Cliente (Somente visível no PDF) */}
+                {isGeneratingPDF && (
+                    <div className="text-center mb-6 border-b border-gray-200 pb-4">
+                        <h2 className="text-2xl font-extrabold text-gray-800">{usinaInfo?.nome_cliente || usinaInfo?.nome || 'Cliente'}</h2>
+                        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mt-1">Relatório de Desempenho e Auditoria - {cycle?.name} {cycle?.label ? `(${cycle.label})` : ''}</p>
                     </div>
                 )}
+
                 
                 {/* Generation Block */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+                <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes energyFlow {
+                    0% { left: -25%; opacity: 0; }
+                    10% { opacity: 1; }
+                    90% { opacity: 1; }
+                    100% { left: 100%; opacity: 0; }
+                }
+                .animate-energy-flow {
+                    animation: energyFlow 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+                }
+                `}} />
+                <div className="relative pt-2 pb-2">
+                    {/* Energy line background for desktop */}
+                    <div className="absolute top-[50%] left-8 right-8 h-[2px] -translate-y-1/2 hidden xl:block z-0 pointer-events-none">
+                        {/* Base track */}
+                        <div className="absolute inset-0 bg-gray-200/40 rounded-full"></div>
+                        
+                        {/* Moving Container */}
+                        <div className="absolute top-[50%] -translate-y-1/2 w-[25%] h-[40px] animate-energy-flow flex items-center justify-center">
+                            {/* Glow trail */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent blur-md"></div>
+                            {/* Solid line */}
+                            <div className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
+                            {/* Core bright dot */}
+                            <div className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_15px_5px_rgba(34,211,238,0.8)] z-10"></div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 relative z-10">
                     {/* 1. Geração Estimada Card */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-blue-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-blue-100 group-hover:border-blue-300 group-hover:shadow-lg group-hover:shadow-blue-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
                             <div className="flex flex-col items-center space-y-1 mb-2">
-                                <p className="text-[9px] text-blue-600/80 font-bold uppercase tracking-wider leading-tight">
-                                    {isAferida ? 'Geração Aferida' : 'Geração Estimada'}
-                                </p>
+                                <div className="flex items-center justify-center gap-1">
+                                    <p className="text-[9px] text-blue-600/80 font-bold uppercase tracking-wider leading-tight">
+                                        {isAferida ? 'Geração Aferida' : 'Geração Estimada'}
+                                    </p>
+                                    <span title="Energia gerada pela usina no período. Pode ser aferida (leitura real) ou estimada (baseada em potência e irradiação local)."><HelpCircle className="w-3 h-3 text-blue-400 cursor-help" /></span>
+                                </div>
                             </div>
                             <div className="bg-gradient-to-br from-blue-400 to-indigo-500 p-2.5 rounded-xl shadow-inner shadow-blue-700/20 text-white mb-2">
                                 <Sun className="w-5 h-5"/>
                             </div>
                             <div className="flex flex-col items-center">
-                                <h3 className="text-lg font-extrabold bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">
+                                <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-blue-700' : 'bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent'}`}>
                                     {geracaoExibida > 0 ? geracaoExibida.toLocaleString('pt-BR') : '--'} <span className="text-[8px] font-semibold text-gray-400">kWh</span>
                                 </h3>
                                 {showLowGenerationAlert && (
@@ -509,103 +711,134 @@ export default function StandaloneAnalysis() {
                     </div>
 
                     {/* 2. Auto Consumo */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-rose-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-red-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-red-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Auto Consumo</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-red-400 to-rose-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-red-100 group-hover:border-red-300 group-hover:shadow-lg group-hover:shadow-red-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-red-600/80 font-bold uppercase tracking-wider leading-tight">Auto Consumo</p>
+                                <span title="Energia consumida instantaneamente pela própria unidade geradora, que não chega a ser injetada na rede da concessionária."><HelpCircle className="w-3 h-3 text-red-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-red-400 to-rose-500 p-2.5 rounded-xl shadow-inner shadow-red-700/20 text-white mb-2">
                                 <Home className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-red-600 to-rose-700 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-red-700' : 'bg-gradient-to-r from-red-600 to-rose-700 bg-clip-text text-transparent'}`}>
                                 {Math.max(0, geracaoExibida - totalInjetado).toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span>
                             </h3>
                         </div>
                     </div>
 
                     {/* 3. Energia Injetada */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-emerald-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-emerald-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Energia Injetada</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-emerald-100 group-hover:border-emerald-300 group-hover:shadow-lg group-hover:shadow-emerald-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-emerald-600/80 font-bold uppercase tracking-wider leading-tight">Energia Injetada</p>
+                                <span title="Excedente de energia que a usina envia para a rede da concessionária, gerando créditos."><HelpCircle className="w-3 h-3 text-emerald-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 p-2.5 rounded-xl shadow-inner shadow-emerald-700/20 text-white mb-2">
                                 <Zap className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-emerald-700 to-teal-800 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">{totalInjetado.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-emerald-700' : 'bg-gradient-to-r from-emerald-700 to-teal-800 bg-clip-text text-transparent'}`}>{totalInjetado.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
                         </div>
                     </div>
 
                     {/* 4. Energia Consumida */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-violet-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-purple-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-purple-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Energia Consumida</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-400 to-violet-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-purple-100 group-hover:border-purple-300 group-hover:shadow-lg group-hover:shadow-purple-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-purple-600/80 font-bold uppercase tracking-wider leading-tight">Energia Consumida</p>
+                                <span title="Total de energia que todas as unidades consumiram da rede da concessionária no período."><HelpCircle className="w-3 h-3 text-purple-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-purple-400 to-violet-500 p-2.5 rounded-xl shadow-inner shadow-purple-700/20 text-white mb-2">
                                 <Moon className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-purple-700 to-violet-800 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">{totalConsumoKwh.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-purple-700' : 'bg-gradient-to-r from-purple-700 to-violet-800 bg-clip-text text-transparent'}`}>{totalConsumoKwh.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
                         </div>
                     </div>
                     
                     {/* 5. Energia Compensada */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-amber-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-yellow-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-yellow-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Energia Compensada</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-yellow-100 group-hover:border-yellow-300 group-hover:shadow-lg group-hover:shadow-yellow-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-yellow-600/80 font-bold uppercase tracking-wider leading-tight">Energia Compensada</p>
+                                <span title="Total de energia consumida que foi abatida usando os créditos de energia injetada."><HelpCircle className="w-3 h-3 text-yellow-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-yellow-400 to-amber-500 p-2.5 rounded-xl shadow-inner shadow-yellow-700/20 text-white mb-2">
                                 <Coins className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-yellow-600 to-amber-700 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">{totalCompensado.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-yellow-600' : 'bg-gradient-to-r from-yellow-600 to-amber-700 bg-clip-text text-transparent'}`}>{totalCompensado.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
                         </div>
                     </div>
 
                     {/* 6. Energia Faturada */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-red-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-orange-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full" title={`R$ ${totalConsumoFaturadoReais.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`}>
-                            <p className="text-[9px] text-orange-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Energia Faturada</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-400 to-red-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-orange-100 group-hover:border-orange-300 group-hover:shadow-lg group-hover:shadow-orange-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full" title={`R$ ${totalConsumoFaturadoReais.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}>
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-orange-600/80 font-bold uppercase tracking-wider leading-tight">Energia Faturada</p>
+                                <span title="Energia consumida que não foi coberta pelos créditos e será cobrada na fatura, incluindo o custo de disponibilidade."><HelpCircle className="w-3 h-3 text-orange-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-orange-400 to-red-500 p-2.5 rounded-xl shadow-inner shadow-orange-700/20 text-white mb-2">
                                 <Banknote className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-orange-600 to-red-700 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">{totalConsumoFaturadoKwh.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-orange-600' : 'bg-gradient-to-r from-orange-600 to-red-700 bg-clip-text text-transparent'}`}>{totalConsumoFaturadoKwh.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
                         </div>
                     </div>
 
                     {/* 7. Saldo no Ciclo */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-green-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-emerald-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-emerald-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Saldo no Ciclo</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-400 to-green-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-emerald-100 group-hover:border-emerald-300 group-hover:shadow-lg group-hover:shadow-emerald-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-emerald-600/80 font-bold uppercase tracking-wider leading-tight">Saldo no Ciclo</p>
+                                <span title="Créditos gerados neste ciclo que sobraram após todas as compensações. Serão acumulados para os próximos meses."><HelpCircle className="w-3 h-3 text-emerald-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-emerald-400 to-green-500 p-2.5 rounded-xl shadow-inner shadow-emerald-700/20 text-white mb-2">
                                 <PiggyBank className="w-5 h-5"/>
                             </div>
-                            <h3 className="text-lg font-extrabold bg-gradient-to-r from-emerald-600 to-green-700 bg-clip-text text-transparent flex items-center gap-1 justify-center leading-tight">{totalSaldo.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
+                            <h3 className={`text-lg font-extrabold flex items-center gap-1 justify-center leading-tight ${isGeneratingPDF ? 'text-emerald-600' : 'bg-gradient-to-r from-emerald-600 to-green-700 bg-clip-text text-transparent'}`}>{totalSaldo.toLocaleString('pt-BR')} <span className="text-[8px] font-semibold text-gray-400">kWh</span></h3>
                         </div>
                     </div>
 
                     {/* 8. Total Faturas */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-sky-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-cyan-100 flex flex-col items-center justify-between text-center hover:shadow-md transition-all h-full">
-                            <p className="text-[9px] text-cyan-600/80 font-bold uppercase tracking-wider mb-2 leading-tight">Total Faturas</p>
+                    <div className="relative group transition-transform duration-300 hover:scale-[1.03] hover:-translate-y-1 z-0 hover:z-10">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-400 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-75 group-hover:blur-md transition-all duration-500"></div>
+                        <div className="relative bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-cyan-100 group-hover:border-cyan-300 group-hover:shadow-lg group-hover:shadow-cyan-500/20 flex flex-col items-center justify-between text-center transition-all duration-300 h-full">
+                            <div className="flex items-center justify-center gap-1 mb-2">
+                                <p className="text-[9px] text-cyan-600/80 font-bold uppercase tracking-wider leading-tight">Total Faturas</p>
+                                <span title="Soma dos valores auditados (ou cobrados) nas faturas de todas as unidades no período."><HelpCircle className="w-3 h-3 text-cyan-400 cursor-help" /></span>
+                            </div>
                             <div className="bg-gradient-to-br from-cyan-400 to-sky-500 p-2.5 rounded-xl shadow-inner shadow-cyan-700/20 text-white mb-2">
                                 <DollarSign className="w-5 h-5"/>
                             </div>
-                            <h3 className="font-extrabold bg-gradient-to-r from-cyan-700 to-sky-800 bg-clip-text text-transparent flex items-baseline justify-center gap-1 w-full px-1 leading-tight" title={`R$ ${mappedUcs.reduce((acc, m) => acc + (m.valorAuditadoCalc || 0), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}>
+                            <h3 className={`font-extrabold flex items-baseline justify-center gap-1 w-full px-1 leading-tight ${isGeneratingPDF ? 'text-cyan-700' : 'bg-gradient-to-r from-cyan-700 to-sky-800 bg-clip-text text-transparent'}`} title={`R$ ${totalValorAuditadoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}>
                                 <span className="text-[10px] text-cyan-700">R$</span>
-                                <span className="text-base tracking-tighter">{mappedUcs.reduce((acc, m) => acc + (m.valorAuditadoCalc || 0), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                <span className="text-base tracking-tighter">{totalValorAuditadoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                             </h3>
                         </div>
                     </div>
                 </div>
+                </div>
 
+                {selectedCycleId !== 'all' && (
                 <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden relative">
                     <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
                     <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
                         <h3 className="font-bold text-gray-800 flex items-center">
                             <LayoutDashboard className="w-5 h-5 mr-2 text-emerald-500"/>
                             Demonstrativo por Unidade
-                            <button onClick={loadData} className="ml-4 p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors" title="Atualizar Dados">
+                            <button data-html2canvas-ignore="true" onClick={loadData} className="ml-4 p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-md transition-colors" title="Atualizar Dados">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            </button>
+                            <button data-html2canvas-ignore="true" onClick={handleGeneratePDF} disabled={isGeneratingPDF} className="ml-2 flex items-center px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors text-sm font-semibold border border-blue-100 shadow-sm disabled:opacity-50" title="Gerar PDF">
+                                {isGeneratingPDF ? (
+                                    <span className="animate-spin mr-1">⌛</span>
+                                ) : (
+                                    <Download className="w-4 h-4 mr-1" />
+                                )}
+                                {isGeneratingPDF ? 'Gerando...' : 'Gerar PDF'}
                             </button>
                         </h3>
                         <div className="text-xs font-semibold text-gray-500 flex space-x-5">
@@ -615,6 +848,8 @@ export default function StandaloneAnalysis() {
                     </div>
                     <div className="divide-y divide-gray-100/80">
                         {mappedUcs.map(({ uc, conta, compensado, consumo, injetado, uncompensated, saldo, saldoAnterior, dataLeitura, valorOcr, valorAuditado, statusAuditoria, hasAlerts, totalCompensadoAteAqui, consumoCorreto, fioBCorreto, ilumCorreto, outrosCorreto, valorAuditadoCalc }) => {
+
+                            const isMasked = conta && Array.isArray(conta.alertas) && conta.alertas.includes("LIMITE_FREE_EXCEDIDO");
 
                             // Escala para a barra empilhada
                             const maxValTable = Math.max(totalInjetado, maxVal);
@@ -642,7 +877,7 @@ export default function StandaloneAnalysis() {
                                                     if (parseFloat(conta.parcelamento) > 0) {
                                                         const pVal = parseFloat(conta.parcelamento);
                                                         const pDesc = conta.parcelamento_descricao || 'Parcelamento';
-                                                        const alertText = `Auditoria: Parcelamento identificado (${pDesc} - R$ ${pVal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). Verifique se é devido.`;
+                                                        const alertText = `Auditoria: Parcelamento identificado (${pDesc} - R$ ${pVal.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Verifique se é devido.`;
                                                         if (!dynamicAlerts.includes(alertText)) {
                                                             dynamicAlerts.push(alertText);
                                                         }
@@ -656,8 +891,16 @@ export default function StandaloneAnalysis() {
                                             </button>
                                         )}
                                     </div>
-                                    
-                                    <div className="w-[50%] px-4 border-l border-gray-100 flex flex-col justify-center space-y-4">
+                                    <div className="w-[50%] px-4 border-l border-gray-100 flex flex-col justify-center space-y-4 relative min-h-[120px]">
+                                        {isMasked && (
+                                            <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center rounded-xl m-2 border border-gray-100 shadow-sm">
+                                                <AlertTriangle className="w-6 h-6 text-orange-500 mb-1" />
+                                                <p className="text-xs font-bold text-gray-800">Dados Ocultos (Limite Free)</p>
+                                                <p className="text-[10px] text-gray-600 px-4 text-center mt-1">
+                                                    Exclua esta fatura, adquira Tokens Pagos e refaça a análise para visualizar.
+                                                </p>
+                                            </div>
+                                        )}
                                         {/* Auto Consumo Bar (Only UG) */}
                                         {uc.tipo === 'ug' && (
                                             <div className="flex flex-col w-full group/autoconsumo cursor-default">
@@ -690,14 +933,14 @@ export default function StandaloneAnalysis() {
                                                         <span className="text-[9px] uppercase font-bold text-gray-500 tracking-wider">Compensado</span>
                                                         <span className="text-[11px] font-extrabold text-blue-600 leading-none">{compensado} <span className="text-[9px] opacity-70">kWh</span></span>
                                                         {compensado > 0 && (
-                                                            <span className="text-[10px] font-extrabold text-blue-800 ml-1.5 drop-shadow-sm">Fio B R$ {(compensado * Number(conta?.fio_b_vr_unit || 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                                            <span className="text-[10px] font-extrabold text-blue-800 ml-1.5 drop-shadow-sm">Fio B R$ {(compensado * Number(conta?.fio_b_vr_unit || 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                                                         )}
                                                     </div>
                                                     <div className="flex items-baseline space-x-1">
                                                         <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider">Cons. Fat.</span>
                                                         <span className="text-[11px] font-extrabold text-red-400 leading-none">{uncompensated} <span className="text-[9px] opacity-70">kWh</span></span>
                                                         {conta && (
-                                                            <span className="text-[10px] font-extrabold text-red-500 ml-1.5">(R$ {(Number(conta.consumo_reais || 0) * (consumo > 0 ? uncompensated / consumo : 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})})</span>
+                                                            <span className="text-[10px] font-extrabold text-red-500 ml-1.5">(R$ {(Number(conta.consumo_reais || 0) * (consumo > 0 ? uncompensated / consumo : 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -737,8 +980,8 @@ export default function StandaloneAnalysis() {
                                                 <div className="flex justify-between items-end mb-1 ml-[82px]">
                                                     <div></div>
                                                     <div className="flex items-baseline space-x-1">
-                                                        <span className="text-[9px] uppercase font-bold text-emerald-500 tracking-wider">Saldo</span>
-                                                        <span className="text-[11px] font-extrabold text-emerald-600 leading-none">{saldo} <span className="text-[9px] opacity-70">kWh</span></span>
+                                                        <span className="text-[9px] uppercase font-bold text-red-500 tracking-wider">Energia Consumida</span>
+                                                        <span className="text-[11px] font-extrabold text-red-600 leading-none">{consumo} <span className="text-[9px] opacity-70">kWh</span></span>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center w-full">
@@ -760,46 +1003,69 @@ export default function StandaloneAnalysis() {
                                                         ></div>
                                                     </div>
                                                 </div>
+                                                <div className="flex justify-between items-start mt-1 ml-[82px]">
+                                                    <div className="flex items-baseline space-x-1">
+                                                        <span className="text-[9px] uppercase font-bold text-red-500 tracking-wider">Consumo da Unid.</span>
+                                                        <span className="text-[11px] font-extrabold text-red-600 leading-none">
+                                                            {uc.tipo === 'ug' ? consumo + Math.max(0, geracaoExibida - injetado) : consumo} <span className="text-[9px] opacity-70">kWh</span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-baseline space-x-1">
+                                                        <span className="text-[9px] uppercase font-bold text-emerald-500 tracking-wider">Saldo</span>
+                                                        <span className="text-[11px] font-extrabold text-emerald-600 leading-none">{saldo} <span className="text-[9px] opacity-70">kWh</span></span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                     
 
-
                                     <div className="w-[30%] pl-4 flex items-start justify-end space-x-3">
                                         {/* Breakdown Blocks & Totals (Col) */}
-                                        {conta && (
-                                            <div className="flex space-x-3 mr-2">
+                                        {isMasked ? (
+                                            <div className="flex items-center justify-between w-full bg-orange-50 border border-orange-100 p-3 rounded-xl shadow-sm mr-2 self-center">
+                                                <div className="flex flex-col mr-3">
+                                                    <span className="text-[10px] font-bold text-orange-800 uppercase tracking-wider mb-0.5">Adquira Tokens Pagos</span>
+                                                    <span className="text-[9px] text-orange-600 leading-tight">Para analisar mais de 2 contas por ciclo, adquira tokens.</span>
+                                                </div>
+                                                <button onClick={() => window.location.href = '/analisedeconta/recarga'} className="px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm hover:shadow-md hover:from-orange-600 hover:to-orange-700 transition-all whitespace-nowrap flex items-center">
+                                                    <Coins className="w-3.5 h-3.5 mr-1" />
+                                                    Tokens
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            conta && (
+                                                <div className="flex space-x-3 mr-2">
                                                 {/* Coluna Fatura (Lido) */}
                                                 <div className="flex flex-col items-center">
                                                     <div className="border border-gray-200 rounded-lg p-2 w-[120px] bg-white flex flex-col justify-between shadow-sm mb-2">
                                                         <span className="text-[9px] font-bold text-gray-500 uppercase text-center border-b border-gray-100 pb-1 mb-1">Fatura (Lido)</span>
-                                                        <div className="flex justify-between text-[8px] text-gray-600"><span className="truncate w-12" title="Consumo Faturado">Cons.</span> <span className="font-semibold">{(Number(conta.consumo_reais || 0) * (consumo > 0 ? uncompensated / consumo : 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                                                        <div className="flex justify-between text-[8px] text-gray-600"><span className="truncate w-12" title="Fio B">Fio B</span> <span className="font-semibold">{Number(conta.fio_b_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                                                        <div className="flex justify-between text-[8px] text-gray-600"><span className="truncate w-12" title="Ilum. Pub.">Ilum.</span> <span className="font-semibold">{Number(conta.iluminacao_publica || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-600"><span title="Consumo Faturado">Cons.</span> <span className="font-semibold">{(Number(conta.consumo_reais || 0) * (consumo > 0 ? uncompensated / consumo : 0)).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-600"><span title="Fio B">Fio B</span> <span className="font-semibold">{Number(conta.fio_b_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-600"><span title="Ilum. Pub.">Ilum.</span> <span className="font-semibold">{Number(conta.iluminacao_publica || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                         {Number(conta.parcelamento || 0) > 0 && (
-                                                            <div className="flex justify-between text-[8px] text-orange-600"><span className="truncate w-12" title="Parcelamento">Parc.</span> <span className="font-semibold">{Number(conta.parcelamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                            <div className="flex justify-between text-[8px] text-orange-600"><span title="Parcelamento">Parc.</span> <span className="font-semibold">{Number(conta.parcelamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                         )}
-                                                        <div className="flex justify-between text-[8px] text-gray-600"><span className="truncate w-12" title="Outros">Outros</span> <span className="font-semibold">{Number(conta.outros_lancamentos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-600"><span title="Outros">Outros</span> <span className="font-semibold">{Number(conta.outros_lancamentos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                     </div>
                                                     
                                                     {/* Total Fatura */}
                                                     <div className="flex flex-col items-center">
                                                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Fatura (OCR)</span>
-                                                        <span className="text-xs font-bold text-gray-600">R$ {valorOcr.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                                        <span className="text-xs font-bold text-gray-600">R$ {valorOcr.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex flex-col items-center">
                                                     <div className="border border-emerald-200 rounded-lg p-2 w-[120px] bg-emerald-50/30 flex flex-col justify-between shadow-sm mb-2">
                                                         <span className="text-[9px] font-bold text-emerald-600 uppercase text-center border-b border-emerald-100 pb-1 mb-1">Auditado (Calc)</span>
-                                                        <div className="flex justify-between text-[8px] text-gray-700"><span className="truncate w-12" title="Consumo">Cons.</span> <span className="font-semibold text-emerald-700">{consumoCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                                                        <div className="flex justify-between text-[8px] text-gray-700"><span className="truncate w-12" title="Fio B">Fio B</span> <span className="font-semibold text-emerald-700">{fioBCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                                                        <div className="flex justify-between text-[8px] text-gray-700"><span className="truncate w-12" title="Ilum. Pub.">Ilum.</span> <span className="font-semibold text-emerald-700">{ilumCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-700"><span title="Consumo">Cons.</span> <span className="font-semibold text-emerald-700">{consumoCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-700"><span title="Fio B">Fio B</span> <span className="font-semibold text-emerald-700">{fioBCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-700"><span title="Ilum. Pub.">Ilum.</span> <span className="font-semibold text-emerald-700">{ilumCorreto.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                         {Number(conta.parcelamento || 0) > 0 && (
-                                                            <div className="flex justify-between text-[8px] text-orange-600"><span className="truncate w-12" title="Parcelamento">Parc.</span> <span className="font-semibold text-orange-700">{Number(conta.parcelamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                            <div className="flex justify-between text-[8px] text-orange-600"><span title="Parcelamento">Parc.</span> <span className="font-semibold text-orange-700">{Number(conta.parcelamento || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                         )}
-                                                        <div className="flex justify-between text-[8px] text-gray-700"><span className="truncate w-12" title="Outros">Outros</span> <span className="font-semibold text-emerald-700">{Number(conta.outros_lancamentos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                                                        <div className="flex justify-between text-[8px] text-gray-700"><span title="Outros">Outros</span> <span className="font-semibold text-emerald-700">{Number(conta.outros_lancamentos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                                                     </div>
                                                     
                                                     {/* Total Auditado */}
@@ -808,22 +1074,36 @@ export default function StandaloneAnalysis() {
                                                             {statusAuditoria === 'contestado' ? 'Contestado' : 'Auditado'}
                                                         </span>
                                                         <span className={`text-xs font-extrabold ${statusAuditoria === 'contestado' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                            R$ {valorAuditadoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                                            R$ {valorAuditadoCalc.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                                         </span>
-                                                    </div>
                                                 </div>
-                                            </div>
+                                                </div>
+                                                </div>
+                                            )
                                         )}
                                         
                                         {conta && (
                                             <div className="flex flex-col space-y-2 mt-1">
-                                                <button 
-                                                    onClick={() => setEditContaModal(conta)}
-                                                    className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                                                    title="Editar Valores Manuais"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
+                                                {!isMasked && conta.pdf_url && (
+                                                    <a
+                                                        href={conta.pdf_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-1.5 text-gray-500 bg-gray-50 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                                                        title="Visualizar Conta Analisada"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </a>
+                                                )}
+                                                {!isMasked && (
+                                                    <button 
+                                                        onClick={() => setEditContaModal(conta)}
+                                                        className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center"
+                                                        title="Editar Valores Manuais"
+                                                    >
+                                                        <Edit className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button 
                                                     onClick={() => {
                                                         setDeleteModal({
@@ -833,7 +1113,7 @@ export default function StandaloneAnalysis() {
                                                             message: `Tem certeza que deseja excluir a fatura de Ref ${conta.mes_referencia}? Isso removerá a conta da análise deste ciclo.`
                                                         });
                                                     }}
-                                                    className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                                                    className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center"
                                                     title="Excluir Fatura"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
@@ -875,6 +1155,60 @@ export default function StandaloneAnalysis() {
                         </div>
                     )}
                 </div>
+                )}
+
+                {/* --- Alertas Movidos para o Rodapé --- */}
+                {showExpansionAlert && (
+                    <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl shadow-sm flex items-start space-x-4">
+                        <div className="bg-amber-100 p-2 rounded-full flex-shrink-0 animate-pulse">
+                            <AlertTriangle className="w-6 h-6 text-amber-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-extrabold text-amber-800 text-lg">ALERTA DE AUDITORIA: Necessidade de Ampliação</h3>
+                            <p className="text-amber-700 font-medium text-sm mt-1">
+                                A soma do auto consumo com a energia consumida está superior à geração {isAferida ? 'aferida' : 'estimada'} no período. Recomenda-se um estudo para ampliação do sistema.
+                            </p>
+                        </div>
+                    </div>
+                )}
+                
+                {showLowGenerationAlert && isAferida && (
+                    <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-xl shadow-sm flex items-start space-x-4">
+                        <div className="bg-orange-100 p-2 rounded-full flex-shrink-0 animate-pulse">
+                            <AlertTriangle className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-extrabold text-orange-800 text-lg">ALERTA DE AUDITORIA: Baixa Geração</h3>
+                            <p className="text-orange-700 font-medium text-sm mt-1">
+                                A geração aferida foi inferior à geração estimada em mais de 15%. Verifique a necessidade de manutenção preventiva ou limpeza dos módulos.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {contasComParcelamento.length > 0 && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl shadow-sm flex items-start space-x-4">
+                        <div className="bg-red-100 p-2 rounded-full flex-shrink-0 animate-pulse">
+                            <AlertTriangle className="w-6 h-6 text-red-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-extrabold text-red-800 text-lg">ALERTA VISUAL: Parcelamento Detectado neste Ciclo!</h3>
+                            <p className="text-red-700 font-medium text-sm mt-1">
+                                O sistema identificou cobranças de parcelamento/acordos nas seguintes UCs:
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                                {contasComParcelamento.map((cp, i) => (
+                                    <li key={i} className="text-sm font-bold text-red-900 bg-red-100/50 px-3 py-1 rounded-lg inline-block mr-2">
+                                        UC {cp.uc} (Ref: {cp.mesRef}): R$ {cp.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </li>
+                                ))}
+                            </ul>
+                            <p className="text-xs text-red-600 font-bold mt-2 uppercase tracking-wide">
+                                * Verifique a tabela de UCs para ler os detalhes da auditoria.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -937,7 +1271,8 @@ export default function StandaloneAnalysis() {
                         </div>
                         <div>
                             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Período Analisado</label>
-                            <div className="relative flex items-center bg-gray-50/50 border border-gray-200 rounded-lg p-1 w-[280px] justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="relative flex items-center bg-gray-50/50 border border-gray-200 rounded-lg p-1 w-[280px] justify-between">
                                 <button 
                                     onClick={() => {
                                         if (selectedCycleId === 'all') {
@@ -979,6 +1314,23 @@ export default function StandaloneAnalysis() {
                                     <ChevronRight className="w-4 h-4" />
                                 </button>
                             </div>
+                            {selectedCycleId === 'all' && (
+                                <button 
+                                    data-html2canvas-ignore="true" 
+                                    onClick={handleGeneratePDF} 
+                                    disabled={isGeneratingPDF} 
+                                    className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors text-sm font-bold border border-blue-100 shadow-sm disabled:opacity-50" 
+                                    title="Gerar PDF do Histórico"
+                                >
+                                    {isGeneratingPDF ? (
+                                        <span className="animate-spin mr-1">⌛</span>
+                                    ) : (
+                                        <Download className="w-4 h-4 mr-1" />
+                                    )}
+                                    {isGeneratingPDF ? 'Gerando...' : 'Gerar PDF'}
+                                </button>
+                            )}
+                        </div>
                         </div>
                     </div>
 
@@ -1016,19 +1368,20 @@ export default function StandaloneAnalysis() {
 
                         <div className="relative flex items-center">
                             <button 
-                                onClick={() => {
-                                    if (!usinaInfo?.verificada) {
-                                        setShowVerificationAlert(true);
-                                        return;
-                                    }
-                                    setIsModalOpen(true);
-                                }}
-                                disabled={!selectedUsinaId}
+                                onClick={() => fileInputDemonstrativoRef.current?.click()} 
+                                disabled={!selectedUsinaId || isExtractingDemonstrativo}
                                 className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/30 flex items-center transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/40"
                             >
-                                <FileText className="w-5 h-5 mr-2" />
-                                Analisar Conta Individual
+                                {isExtractingDemonstrativo ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <UploadCloud className="w-5 h-5 mr-2" />}
+                                {isExtractingDemonstrativo ? 'Importando...' : 'Importar Demonstrativo'}
                             </button>
+                            <input
+                                type="file"
+                                ref={fileInputDemonstrativoRef}
+                                style={{ display: 'none' }}
+                                accept="application/pdf"
+                                onChange={handleImportDemonstrativo}
+                            />
                             <div 
                                 className="ml-2 bg-emerald-100 text-emerald-600 hover:bg-emerald-600 hover:text-white cursor-help rounded-full w-6 h-6 flex items-center justify-center text-xs font-black transition-colors"
                                 onMouseEnter={() => setActiveTooltip('single')}
@@ -1039,7 +1392,7 @@ export default function StandaloneAnalysis() {
 
                             {activeTooltip === 'single' && (
                                 <div className="absolute bottom-full right-0 mb-3 w-64 p-3 bg-gray-900 text-white text-xs font-medium rounded-xl shadow-2xl z-50 text-center animate-in fade-in zoom-in-95 duration-200 border border-gray-700 pointer-events-none">
-                                    Importe ou preencha manualmente os dados de uma única fatura. Ideal para correções e auditorias pontuais.
+                                    Importe o Demonstrativo de Faturamento para preencher automaticamente as UCs da Usina e sua regra de rateio.
                                     <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
                                 </div>
                             )}
@@ -1214,6 +1567,31 @@ export default function StandaloneAnalysis() {
                             >
                                 Cancelar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Tokens Premium Popup */}
+            {showTokensPopup && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
+                                <Download className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">Recurso Premium</h3>
+                            <p className="text-sm text-gray-600 mb-6 font-medium">
+                                A emissão de relatórios em PDF é um recurso exclusivo para usuários que possuem tokens adquiridos. Tokens de bonificação mensal (Free) não habilitam esta função.
+                            </p>
+                            <div className="flex w-full gap-3">
+                                <button onClick={() => setShowTokensPopup(false)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">
+                                    Agora não
+                                </button>
+                                <button onClick={() => window.location.href = '/analisedeconta/recarga'} className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-md shadow-emerald-500/30">
+                                    Adquirir Tokens
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

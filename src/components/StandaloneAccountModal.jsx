@@ -39,7 +39,7 @@ export default function StandaloneAccountModal({ isOpen, onClose, onSave, usinaI
         numero_uc: '',
         tipo: 'uc',
         sistema_compensacao: 'prioridade',
-        prioridade: 2,
+        prioridade: 1,
         porcentagem: 0,
         conta_saldo: false
     });
@@ -202,7 +202,7 @@ export default function StandaloneAccountModal({ isOpen, onClose, onSave, usinaI
                 usina_id: usinaId,
                 numero_uc: newUcForm.numero_uc,
                 tipo: newUcForm.tipo,
-                prioridade: newUcForm.tipo === 'ug' ? 1 : newUcForm.prioridade,
+                prioridade: newUcForm.tipo === 'ug' ? 0 : newUcForm.prioridade,
                 porcentagem: newUcForm.tipo === 'uc' && newUcForm.sistema_compensacao === 'porcentagem' ? newUcForm.porcentagem : 0,
                 conta_saldo: newUcForm.conta_saldo
             };
@@ -270,8 +270,8 @@ export default function StandaloneAccountModal({ isOpen, onClose, onSave, usinaI
                             .in('uc_id', ucIds)
                             .eq('mes_referencia', formData.mes_referencia);
                             
-                        // Se já tem 3 contas neste ciclo, cobra tokens
-                        if (existingContas && existingContas.length >= 3) {
+                        // Se já tem 2 contas neste ciclo, cobra tokens
+                        if (existingContas && existingContas.length >= 2) {
                             requireTokens = true;
                         }
                     }
@@ -430,8 +430,8 @@ export default function StandaloneAccountModal({ isOpen, onClose, onSave, usinaI
                                     ) : (
                                         <>
                                             <div>
-                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nível de Prioridade</label>
-                                                <input type="number" min="2" value={newUcForm.prioridade} onChange={e => setNewUcForm({...newUcForm, prioridade: parseInt(e.target.value)})} className="w-full border-gray-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white transition-all shadow-sm"/>
+                                                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Ordem de Prioridade (Ex: 1, 2, 3...)</label>
+                                                <input type="number" min="1" value={newUcForm.prioridade} onChange={e => setNewUcForm({...newUcForm, prioridade: parseInt(e.target.value)})} className="w-full border-gray-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white transition-all shadow-sm"/>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Cota (%)</label>
