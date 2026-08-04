@@ -1754,22 +1754,21 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                 </div>
 
-                {/* Legenda de Status e Quantitativo (Totais) Abaixo do submenu de forma totalmente horizontal */}
+                {/* Legenda de Status e Quantitativo (Totais) Abaixo do submenu */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', width: '100%' }}>
-                    {/* Linha única de Legendas */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem',
-                        padding: '0.6rem 1rem',
-                        background: 'white',
-                        borderRadius: '10px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
-                        flexWrap: 'wrap'
-                    }}>
-                        {activeTab === 'faturas' ? (
-                            <>
+                    {activeTab === 'faturas' ? (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            padding: '0.6rem 1rem',
+                            background: 'white',
+                            borderRadius: '10px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                            flexWrap: 'wrap'
+                        }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS FATURA:</span>
                                 {/* Botão Todos/Total */}
                                 <button
                                     onClick={() => setStatusFilter('')}
@@ -1845,9 +1844,21 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         </button>
                                     );
                                 })}
-                            </>
-                        ) : (
-                            <>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.6rem 1rem',
+                                background: 'white',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                                flexWrap: 'wrap'
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS DA CONTA:</span>
                                 {/* Botão Todos/Total */}
                                 <button
                                     onClick={() => setStatusFilter('')}
@@ -1924,9 +1935,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     );
                                 })}
                                 
-                                <div style={{ width: '1px', height: '24px', background: '#cbd5e1', margin: '0 0.5rem', flexShrink: 0 }}></div>
-                                
-                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>Status Fatura:</span>
+                            </div>
+                            
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.6rem 1rem',
+                                background: 'white',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+                                flexWrap: 'wrap'
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.25rem', flexShrink: 0 }}>STATUS DA FATURA:</span>
                                 
                                 <button
                                     onClick={() => setStatusFaturaFilter('')}
@@ -2002,10 +2024,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         </button>
                                     );
                                 })}
-                            </>
-                        )}
-                    </div>
-
+                            </div>
+                        </>
+                    )}
                     {/* Bloco Totais abaixo das legendas, alinhado à direita da tela */}
                     <div style={{
                         display: 'flex',
