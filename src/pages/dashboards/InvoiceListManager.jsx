@@ -2387,8 +2387,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Consumo</th>
                                         <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Compens.</th>
                                         <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Injetada</th>
-                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>St. Fatura</th>
                                         <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>St. Conta</th>
+                                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>St. Fatura</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2465,10 +2465,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                     {inv.energia_injetada ? `${inv.energia_injetada} kWh` : '-'}
                                                 </td>
                                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                                    {getStatusBadge(inv.status)}
+                                                    {getEnergyStatusBadge(inv)}
                                                 </td>
                                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                                    {getEnergyStatusBadge(inv)}
+                                                    {getStatusBadge(inv.status)}
                                                 </td>
                                             </tr>
                                         );
