@@ -1916,6 +1916,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         <div>
                             <h3 style={{ fontSize: '1.2rem', color: '#0f172a', fontWeight: 800 }}>Sandbox de Análise Avulsa</h3>
                             <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Simulador de faturamento e auditoria operacional de contas da concessionária</p>
+                            {selectedUc && (
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem', fontSize: '0.85rem', color: '#334155', flexWrap: 'wrap' }}>
+                                    <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>UC: {selectedUc.numero_uc || 'N/A'}</span>
+                                    <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>Assinante: {selectedUc.subscribers?.name || selectedUc.titular_conta || 'N/A'}</span>
+                                    <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>Concessionária: {selectedUc.concessionaria || 'N/A'}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <button onClick={onClose} className="sandbox-close-btn">
