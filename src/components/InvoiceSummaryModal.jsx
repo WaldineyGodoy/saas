@@ -22,13 +22,15 @@ const energyStatusColors = {
 };
 
 const getEnergyStatus = (inv) => {
+    if (!inv) return 'a_vencer';
     const ebStatus = inv.energy_bill_status || 'pendente';
     const today = new Date();
     today.setHours(0,0,0,0);
-    const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
+    const dueDateStr = inv.vencimento_concessionaria || inv.vencimento;
+    const dueDate = dueDateStr ? new Date(dueDateStr + 'T12:00:00') : null;
     const isPastDue = dueDate && dueDate < today;
 
-    if (ebStatus === 'pendente') {
+    if (ebStatus === 'pendente' || ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
         return isPastDue ? 'atrasada' : 'a_vencer';
     }
     return ebStatus;
@@ -46,7 +48,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
     const [loading, setLoading] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
-    const [energyStatus, setEnergyStatus] = useState(invoice?.energy_bill_status || 'pendente');
+    const [energyStatus, setEnergyStatus] = useState(() => getEnergyStatus(invoice));
     
     const [updatingFaturaStatus, setUpdatingFaturaStatus] = useState(false);
     const [faturaStatus, setFaturaStatus] = useState(invoice?.status === 'ag_emissao_boleto' ? 'sem_faturamento' : (invoice?.status || 'sem_faturamento'));
@@ -1302,8 +1304,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      const isPastDue = dueDate && dueDate < today;
                                      
                                      const pendenteOption = isPastDue 
-                                         ? { id: 'pendente', label: 'Atrasada', color: '#dc2626' }
-                                         : { id: 'pendente', label: 'A Vencer', color: '#2563eb' };
+                                         ? { id: 'atrasada', label: 'Atrasada', color: '#dc2626' }
+                                         : { id: 'a_vencer', label: 'A Vencer', color: '#2563eb' };
 
                                      return [
                                          pendenteOption,
