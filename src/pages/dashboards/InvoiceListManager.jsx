@@ -2852,7 +2852,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
         const matchingInvoice = invoices.find(inv => 
             inv.uc_id === unit.id && 
             (inv.mes_referencia?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter) || inv.vencimento?.startsWith(monthFilter === 'all' ? `${filterYear}-${String(filterMonth).padStart(2, '0')}` : monthFilter)) && 
-            inv.status?.trim().toLowerCase() !== 'cancelado'
+            !['cancelado', 'cancelada'].includes(inv.status?.trim().toLowerCase())
         );
         const hasInvoice = !!matchingInvoice;
 
@@ -2863,18 +2863,15 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
                        (isCurrentMonth && day > currentDayNum);
 
         if (hasInvoice) {
-            status = resolveEnergyStatus(matchingInvoice);
+            const rs = matchingInvoice.reading_status;
+            if (rs === 'error') status = 'indisponivel';
+            else if (rs === 'processing') status = 'baixada';
+            else if (rs === 'success') status = 'processada';
+            else status = 'pendente';
         } else if (isFuture) {
             status = 'not_available';
         } else {
-            if (isCurrentMonth && unit.last_scraping_status && unit.last_scraping_status !== 'success') {
-                const ls = unit.last_scraping_status.toLowerCase().trim();
-                if (['erro', 'error', 'indisponivel', 'indisponível'].includes(ls)) status = 'indisponivel';
-                else if (['processing', 'processando', 'baixada'].includes(ls)) status = 'baixada';
-                else status = 'pendente';
-            } else {
-                status = 'pendente';
-            }
+            status = 'pendente';
         }
 
         if (readingStatusFilter && status !== readingStatusFilter) return acc;

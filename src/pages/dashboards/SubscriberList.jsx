@@ -209,7 +209,7 @@ export default function SubscriberList() {
             // Filtramos por subscriber_id via consumer_units para performance e precisão
             const { data: allInvoices, error: invError } = await supabase
                 .from('invoices')
-                .select('id, uc_id, valor_a_pagar, status, mes_referencia, vencimento, consumer_units!inner(subscriber_id)')
+                .select('id, uc_id, valor_a_pagar, status, reading_status, mes_referencia, vencimento, consumer_units!inner(subscriber_id)')
                 .in('consumer_units.subscriber_id', subIds);
 
             if (invError) throw invError;
@@ -258,11 +258,10 @@ export default function SubscriberList() {
                 // Indicador de Leitura (UCs com leitura ou fatura NO MÊS de REFERÊNCIA filtrado)
                 const readingTotal = subUnits.length;
                 const readingScanned = subUnits.filter(u => {
-                    const hasInvThisMonth = subInvoices.some(inv => 
-                        inv.uc_id === u.id && inv.mes_referencia?.startsWith(month)
+                    const invThisMonth = subInvoices.find(inv => 
+                        inv.uc_id === u.id && inv.mes_referencia?.startsWith(month) && !['cancelado', 'cancelada'].includes(inv.status?.trim().toLowerCase())
                     );
-                    const readThisMonth = u.last_scraping_at?.startsWith(month);
-                    return hasInvThisMonth || (readThisMonth && u.last_scraping_status === 'success');
+                    return invThisMonth && invThisMonth.reading_status === 'success';
                 }).length;
 
                 // Cor do Ícone de Boleto (Baseado no financeiro do mês)
