@@ -1249,13 +1249,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 {updatingFaturaStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
                             
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
                                 {[
                                     { id: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb' },
                                     { id: 'a_vencer', label: 'A Vencer', color: '#854d0e' },
                                     { id: 'atrasado', label: 'Atrasado', color: '#dc2626' },
                                     { id: 'confirmado', label: 'Confirmado', color: '#0891b2' },
-                                    { id: 'pago', label: 'Pago', color: '#166534' }
+                                    { id: 'pago', label: 'Pago', color: '#166534' },
+                                    { id: 'cancelada', label: 'Cancelada', color: '#64748b' }
                                 ].map(s => (
                                     <button
                                         key={s.id}

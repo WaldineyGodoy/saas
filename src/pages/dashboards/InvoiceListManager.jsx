@@ -81,7 +81,8 @@ export const faturasStatuses = [
     { key: 'a_vencer', label: 'A Vencer', color: '#ca8a04', bg: '#fef9c3' },
     { key: 'atrasado', label: 'Atrasado', color: '#dc2626', bg: '#fee2e2' },
     { key: 'confirmado', label: 'Confirmado', color: '#0891b2', bg: '#ecfeff' },
-    { key: 'pago', label: 'Pago', color: '#166534', bg: '#dcfce7' }
+    { key: 'pago', label: 'Pago', color: '#166534', bg: '#dcfce7' },
+    { key: 'cancelada', label: 'Cancelada', color: '#64748b', bg: '#f1f5f9' }
 ];
 
 export const contasStatuses = [
