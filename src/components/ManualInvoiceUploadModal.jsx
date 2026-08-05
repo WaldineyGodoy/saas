@@ -384,7 +384,10 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess }) {
                 status: 'ag_emissao_boleto',
                 concessionaria_pdf_url: publicUrl,
                 linha_digitavel: extractedData.linhaDigitavel || null,
-                pix_string: extractedData.pixString || null
+                pix_string: extractedData.pixString || null,
+                reading_status: 'success',
+                reading_checked_at: new Date().toISOString(),
+                is_placeholder: false
             };
 
             const { data: newInvoice, error: dbError } = await supabase

@@ -2614,7 +2614,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     uc={consumerUnit} // full consumer unit object needs to match
                     onClose={() => setShowManualUploadModal(false)}
                     onSuccess={(newInvoice) => {
-                        setFormData(prev => ({ ...prev, last_scraping_status: 'success' }));
                         setShowManualUploadModal(false);
                         setInvoiceToEdit(newInvoice);
                         setShowInvoiceForm(true);

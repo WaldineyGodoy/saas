@@ -1850,9 +1850,9 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
       } else if (inc.type === 'overlap' || inc.type === 'no_compensation') {
         // Trigger simulated scraping check
         const { error } = await supabase
-          .from('consumer_units')
-          .update({ last_scraping_status: 'pending' })
-          .eq('id', inc.uc_id);
+          .from('invoices')
+          .update({ reading_status: 'pending' })
+          .eq('id', inc.invoice_id);
         
         if (error) throw error;
         showAlert('Re-agendado scraping automático para correção dos dados!', 'success');
