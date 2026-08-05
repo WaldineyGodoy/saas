@@ -598,8 +598,8 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         tarifa_concessionaria,
                         desconto_assinante,
                         address,
-                        subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone),
-                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(id, name, email, phone)
+                        subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone, cpf_cnpj),
+                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(id, name, email, phone, cpf_cnpj)
                     )
                 `);
 
@@ -650,7 +650,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento,
                 status, dia_leitura, created_at, last_scraping_status,
                 subscribers!consumer_units_subscriber_id_fkey(name, cpf_cnpj, portal_credentials),
-                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, portal_credentials)
+                titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, cpf_cnpj, portal_credentials)
             `)
             .in('status', ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado'])
             .order('titular_conta');

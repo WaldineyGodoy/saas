@@ -191,6 +191,17 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                         {isUpdating && <Loader2 size={24} color="#64748b" style={{ animation: 'spin 1s linear infinite' }} />}
                     </div>
 
+                    {/* Assinante Section */}
+                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#64748b' }}>
+                            <User size={16} />
+                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Assinante</span>
+                        </div>
+                        <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '1rem' }}>
+                            {uc.subscribers?.name || 'Nenhum assinante vinculado'}
+                        </div>
+                    </div>
+
                     {/* Info Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                         <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
@@ -206,7 +217,7 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                         <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#64748b' }}>
                                 <UserCheck size={16} />
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Titular da Conta</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Identificação da Fatura</span>
                             </div>
                             <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem', wordBreak: 'break-word' }}>
                                 {uc.titular_conta || uc.titular_fatura?.name || 'Não informado'}
@@ -233,13 +244,16 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                             </div>
                         </div>
 
-                        <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '8px', gridColumn: '1 / -1' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#64748b' }}>
-                                <User size={16} />
-                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Assinante</span>
+                        <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '8px', gridColumn: '1 / -1', border: '1px dashed #22c55e' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: '#166534' }}>
+                                <UserCheck size={16} />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Titular da Conta de Energia (concessionária)</span>
                             </div>
-                            <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem' }}>
-                                {uc.subscribers?.name || 'Nenhum assinante vinculado'}
+                            <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{uc.titular_fatura?.name || 'Não informado'}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>
+                                    CPF/CNPJ: {uc.titular_fatura?.cpf_cnpj || 'Não informado'}
+                                </span>
                             </div>
                         </div>
                     </div>
