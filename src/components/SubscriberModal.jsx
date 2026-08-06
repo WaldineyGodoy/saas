@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, shortenLink, cancelAsaasCharge } from '../lib/api';
+import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
@@ -725,8 +726,10 @@ Associado`;
             const energyBillUrls = [...new Set(invs
                 .map(i => i.concessionaria_pdf_url)
                 .filter(url => !!url))];
+            
+            const secureEnergyBillUrls = await Promise.all(energyBillUrls.map(url => getSecurePdfUrl(supabase, url)));
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, energyBillUrls, null);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, secureEnergyBillUrls.filter(u => !!u), null);
             
             // Browser Download
             const blobUrl = window.URL.createObjectURL(mergedBlob);
@@ -861,7 +864,12 @@ Associado`;
             const summaryBase64 = pdfSummary.output('datauristring').split(',')[1];
             const asaasUrl = inv.asaas_boleto_url;
 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, null);
+            let secureEnergyBillUrl = inv.concessionaria_pdf_url;
+            if (secureEnergyBillUrl) {
+                secureEnergyBillUrl = await getSecurePdfUrl(supabase, secureEnergyBillUrl);
+            }
+            
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, secureEnergyBillUrl, null);
             
             // Browser Download
             const blobUrl = window.URL.createObjectURL(mergedBlob);

@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { deriveReadingStatus } from '../lib/readingStatus';
 import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2, Search, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import html2canvas from 'html2canvas';
@@ -240,9 +242,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
     };
 
-    const handleViewPdf = () => {
+    const handleViewPdf = async () => {
         if (invoice.concessionaria_pdf_url) {
-            window.open(invoice.concessionaria_pdf_url, '_blank');
+            const secureUrl = await getSecurePdfUrl(supabase, invoice.concessionaria_pdf_url);
+            if (secureUrl) {
+                window.open(secureUrl, '_blank');
+            } else {
+                showAlert('Não foi possível gerar a URL de acesso ao PDF.', 'error');
+            }
         } else {
             showAlert('PDF da concessionária não disponível para esta fatura.', 'warning');
         }
@@ -277,7 +284,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     .update({ 
                         status: 'pago', 
                         asaas_status: 'PAID',
-                        energy_bill_status: 'pago' 
+                        energy_bill_status: 'pago',
+                        reading_status: 'success',
+                        reading_checked_at: new Date().toISOString()
                     })
                     .eq('id', invoice.id);
 
@@ -320,7 +329,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         try {
             const { error } = await supabase
                 .from('invoices')
-                .update({ status: newStatus })
+                .update({ 
+                    status: newStatus,
+                    reading_status: deriveReadingStatus(newStatus, invoice.energy_bill_status, {
+                        valorConcessionaria: invoice.valor_concessionaria,
+                        concessionariaPdfUrl: invoice.concessionaria_pdf_url,
+                        isPlaceholder: invoice.is_placeholder
+                    }),
+                    reading_checked_at: new Date().toISOString()
+                })
                 .eq('id', invoice.id);
 
             if (error) throw error;
@@ -340,7 +357,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         try {
             const { error } = await supabase
                 .from('invoices')
-                .update({ energy_bill_status: newStatus })
+                .update({ 
+                    energy_bill_status: newStatus,
+                    reading_status: deriveReadingStatus(invoice.status, newStatus, {
+                        valorConcessionaria: invoice.valor_concessionaria,
+                        concessionariaPdfUrl: invoice.concessionaria_pdf_url,
+                        isPlaceholder: invoice.is_placeholder
+                    }),
+                    reading_checked_at: new Date().toISOString()
+                })
                 .eq('id', invoice.id);
 
             if (error) throw error;
@@ -520,7 +545,13 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
 
             const summaryBase64 = pdfSummary.output('datauristring');
             const asaasUrl = currentBoletoUrl; 
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, null);
+            
+            let secureEnergyBillUrl = inv.concessionaria_pdf_url;
+            if (secureEnergyBillUrl) {
+                secureEnergyBillUrl = await getSecurePdfUrl(supabase, secureEnergyBillUrl);
+            }
+            
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, secureEnergyBillUrl, null);
 
             /*
             // OTIMIZAÇÃO: Fazer upload para o Storage para os próximos downloads serem instantâneos
@@ -587,7 +618,13 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 .update({ 
                     status: 'a_vencer',
                     asaas_boleto_url: result.url || null,
-                    asaas_status: 'PENDING'
+                    asaas_status: 'PENDING',
+                    reading_status: deriveReadingStatus('a_vencer', invoice.energy_bill_status, {
+                        valorConcessionaria: invoice.valor_concessionaria,
+                        concessionariaPdfUrl: invoice.concessionaria_pdf_url,
+                        isPlaceholder: invoice.is_placeholder
+                    }),
+                    reading_checked_at: new Date().toISOString()
                 })
                 .eq('id', invoice.id);
 
@@ -761,7 +798,17 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             const payload = {
                 ...sanitizedData,
                 // Garantir que mes_referencia tenha o dia 01 se for apenas YYYY-MM
-                mes_referencia: sanitizedData.mes_referencia?.length === 7 ? `${sanitizedData.mes_referencia}-01` : sanitizedData.mes_referencia
+                mes_referencia: sanitizedData.mes_referencia?.length === 7 ? `${sanitizedData.mes_referencia}-01` : sanitizedData.mes_referencia,
+                reading_status: deriveReadingStatus(
+                    sanitizedData.status || invoice.status,
+                    sanitizedData.energy_bill_status || invoice.energy_bill_status,
+                    {
+                        valorConcessionaria: sanitizedData.valor_concessionaria ?? invoice.valor_concessionaria,
+                        concessionariaPdfUrl: sanitizedData.concessionaria_pdf_url ?? invoice.concessionaria_pdf_url,
+                        isPlaceholder: sanitizedData.is_placeholder ?? invoice.is_placeholder
+                    }
+                ),
+                reading_checked_at: new Date().toISOString()
             };
 
             const { error } = await supabase

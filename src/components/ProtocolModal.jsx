@@ -657,7 +657,11 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                 try {
                     await supabase
                         .from('invoices')
-                        .update({ energy_bill_status: 'contestada' })
+                        .update({ 
+                            energy_bill_status: 'contestada',
+                            reading_status: 'success',
+                            reading_checked_at: new Date().toISOString()
+                        })
                         .eq('id', linkedEntityId);
                 } catch (updateErr) {
                     console.error('Erro ao atualizar status da conta de energia para contestada:', updateErr);

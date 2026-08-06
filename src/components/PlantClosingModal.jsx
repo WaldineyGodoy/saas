@@ -255,7 +255,11 @@ export default function PlantClosingModal({ usina, closingId, onClose, onSave })
 
             if (ucIds.length > 0) {
                 await supabase.from('invoices')
-                    .update({ status: 'liquidado' })
+                    .update({ 
+                        status: 'liquidado',
+                        reading_status: 'success',
+                        reading_checked_at: new Date().toISOString()
+                    })
                     .in('uc_id', ucIds)
                     .ilike('mes_referencia', `%${formData.ref_month}%`)
                     .eq('ano_referencia', formData.ref_year)

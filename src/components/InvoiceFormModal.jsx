@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { deriveReadingStatus } from '../lib/readingStatus';
 import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle, Send, Plus, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
@@ -7,7 +8,6 @@ import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, 
 import { useBranding } from '../contexts/BrandingContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { useRef } from 'react';
 import './InvoicesModal.css';
 import { Download, Loader2, Info, Clock, RefreshCw } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
@@ -15,6 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { getSecurePdfUrl } from '../lib/pdfHelper';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraActions }) {
@@ -84,6 +85,17 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         const digits = str.replace(/\D/g, '');
         const value = Number(digits) / 100;
         return isNegative ? -value : value;
+    };
+
+    const handleOpenOriginalPdf = async () => {
+        if (!invoice?.concessionaria_pdf_url) return;
+        try {
+            const secureUrl = await getSecurePdfUrl(supabase, invoice.concessionaria_pdf_url);
+            window.open(secureUrl, '_blank');
+        } catch (error) {
+            console.error('Error opening original PDF:', error);
+            showAlert('Erro ao abrir PDF original.', 'error');
+        }
     };
 
     // Load Invoice Data
@@ -471,40 +483,14 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
         console.log('Generating Combined PDF for invoice:', inv.id, 'Energy Bill URL:', inv.concessionaria_pdf_url);
 
         try {
+            let secureEnergyBillUrl = inv.concessionaria_pdf_url;
+            if (secureEnergyBillUrl) {
+                secureEnergyBillUrl = await getSecurePdfUrl(supabase, secureEnergyBillUrl);
+            }
             const monthYear = inv.mes_referencia ? inv.mes_referencia.substring(0, 7).split('-').reverse().join('_') : '';
             const cleanName = (selectedUc?.titular_conta || 'Fatura').normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^\w]/g, '');
             const ucNumber = selectedUc?.numero_uc || '';
             const fileName = `Fatura_${cleanName}_${ucNumber}_${monthYear}.pdf`;
-
-            // OTIMIZAÇÃO: Tentar baixar direto do Storage se já existir (Ignorar se for apenas o boleto bruto do Asaas)
-            const isRawAsaas = inv.asaas_pdf_storage_url?.includes('bankSlipUrl') || 
-                              inv.asaas_pdf_storage_url?.includes('invoiceUrl') ||
-                              inv.asaas_pdf_storage_url?.includes('asaas.com');
-            
-            /*
-            if (inv.asaas_pdf_storage_url && !isRawAsaas) {
-                console.log("Obtendo URL assinada para PDF individual...");
-                const { data: signedData, error: signedError } = await supabase.storage
-                    .from('invoices_pdfs')
-                    .createSignedUrl(`${inv.id}.pdf`, 60);
-
-                if (!signedError && signedData?.signedUrl) {
-                    const link = document.createElement('a');
-                    link.href = signedData.signedUrl;
-                    link.download = fileName;
-                    link.target = "_blank"; 
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    showAlert('PDF Baixado!', 'success');
-                    
-                    // Se estivermos gerando para notificação, precisamos do blob
-                    const { data: fileBlob } = await supabase.storage.from('invoices_pdfs').download(`${inv.id}.pdf`);
-                    return fileBlob;
-                }
-                console.warn("Falha ao obter URL assinada, gerando novo...", signedError);
-            }
-            */
 
             // Fallback: Gerar novo - Wait for DOM with retry
             let element = null;
@@ -535,8 +521,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
             const summaryBase64 = pdfSummary.output('datauristring');
             const asaasUrl = currentBoletoUrl; 
-            if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, null);
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, secureEnergyBillUrl, null);
             
             // Download the file
             const url = window.URL.createObjectURL(mergedBlob);
@@ -1194,12 +1179,7 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
                     if (uploadError) throw uploadError;
 
-                    // Get Public URL
-                    const { data: { publicUrl: url } } = supabase.storage
-                        .from('energy-bills')
-                        .getPublicUrl(storagePath);
-                    
-                    publicUrl = url;
+                    publicUrl = storagePath;
                 } catch (uploadErr) {
                     console.error("Erro ao fazer upload do PDF:", uploadErr);
                     showAlert("Erro ao salvar arquivo PDF na nuvem, mas tentando salvar dados: " + uploadErr.message, "warning");
@@ -1249,7 +1229,17 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 status: formData.status,
                 desconto_aplicado: discountToApply,
                 energy_bill_status: formData.energy_bill_status || 'pendente',
-                concessionaria_pdf_url: publicUrl || invoice?.concessionaria_pdf_url || null
+                concessionaria_pdf_url: publicUrl || invoice?.concessionaria_pdf_url || null,
+                reading_status: deriveReadingStatus(
+                    formData.status || 'a_vencer',
+                    formData.energy_bill_status || 'pendente',
+                    {
+                        valorConcessionaria: formData.valor_concessionaria,
+                        concessionariaPdfUrl: publicUrl || invoice?.concessionaria_pdf_url || null,
+                        isPlaceholder: formData.is_placeholder || false
+                    }
+                ),
+                reading_checked_at: new Date().toISOString()
             };
 
             if (!payload.uc_id) throw new Error('Selecione uma Unidade Consumidora.');
@@ -2067,12 +2057,20 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                             {invoice?.concessionaria_pdf_url && (
                                                 <div style={{ marginTop: '1rem', textAlign: 'center' }}>
                                                     <a 
-                                                        href={invoice.concessionaria_pdf_url} 
-                                                        target="_blank" 
-                                                        rel="noreferrer"
+                                                        href="#"
+                                                        onClick={async (e) => {
+                                                            e.preventDefault();
+                                                            const secureUrl = await getSecurePdfUrl(supabase, invoice.concessionaria_pdf_url);
+                                                            if (secureUrl) {
+                                                                window.open(secureUrl, '_blank');
+                                                            } else {
+                                                                showAlert('Não foi possível carregar o PDF original.', 'error');
+                                                            }
+                                                        }}
                                                         style={{ 
                                                             fontSize: '0.8rem', color: '#64748b', textDecoration: 'none', 
-                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                                                            cursor: 'pointer'
                                                         }}
                                                     >
                                                         <FileText size={14} /> Ver Conta da Concessionária

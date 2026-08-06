@@ -6,6 +6,7 @@ import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
 import StandaloneAnalysisModal from '../../components/StandaloneAnalysisModal';
 import ReadingCalendarModal from '../../components/ReadingCalendarModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import ScraperQueueModal from '../../components/ScraperQueueModal';
 import { Search, Filter, Plus, FileText, CheckCircle, AlertCircle, Clock, CreditCard, Trash2, Ban, History, Layout, List, Info, Calendar as CalendarIcon, TicketCheck, TicketMinus, Download, CheckCircle2, X, Zap, BarChart2, Printer, Link as LinkIcon } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import InvoiceSummaryModal from '../../components/InvoiceSummaryModal';
@@ -141,6 +142,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const [selectedUcForModal, setSelectedUcForModal] = useState(null);
     const [isUcModalOpen, setIsUcModalOpen] = useState(false);
     const [isReadingCalendarModalOpen, setIsReadingCalendarModalOpen] = useState(false);
+    const [isScraperQueueModalOpen, setIsScraperQueueModalOpen] = useState(false);
     const [selectedUcForReadingModal, setSelectedUcForReadingModal] = useState(null);
     const [ucModalSection, setUcModalSection] = useState('geral');
     const [filterCriterion, setFilterCriterion] = useState(() => savedState.filterCriterion || 'vencimento'); // 'mes_referencia' | 'vencimento'
@@ -1746,9 +1748,14 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     <Plus size={16} /> Nova Fatura
                                 </button>
                             ) : (
-                                <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                    <Plus size={16} /> Nova Conta
-                                </button>
+                                <>
+                                    <button onClick={() => setIsScraperQueueModalOpen(true)} style={{ background: '#3b82f6', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <Download size={16} /> Fila da Automação
+                                    </button>
+                                    <button onClick={() => setIsAnalysisModalOpen(true)} style={{ background: 'var(--color-orange)', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <Plus size={16} /> Nova Conta
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>
@@ -2760,6 +2767,16 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     initialMesReferencia={sandboxPreselectedMesRef}
                 />
             )}
+
+            <ScraperQueueModal 
+                isOpen={isScraperQueueModalOpen}
+                onClose={() => setIsScraperQueueModalOpen(false)}
+                onProcessed={() => {
+                    fetchData();
+                    fetchUcs();
+                }}
+            />
+
             <ReadingCalendarModal
                 isOpen={isReadingCalendarModalOpen}
                 onClose={() => setIsReadingCalendarModalOpen(false)}

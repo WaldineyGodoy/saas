@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { deriveReadingStatus } from '../lib/readingStatus';
 import { supabase } from '../lib/supabase';
+import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -909,12 +911,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                 if (uploadError) throw uploadError;
 
-                // Get Public URL
-                const { data: { publicUrl: url } } = supabase.storage
-                    .from('energy-bills')
-                    .getPublicUrl(storagePath);
-                
-                publicUrl = url;
+                publicUrl = storagePath;
             } catch (uploadErr) {
                 console.error("Erro ao fazer upload do PDF:", uploadErr);
                 showAlert("Erro ao salvar arquivo PDF na nuvem, mas tentando salvar dados: " + uploadErr.message, "warning");
@@ -956,7 +953,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.desconto_assinante || 0),
             energy_bill_status: finalEnergyBillStatus,
             status: saveStatus,
-            concessionaria_pdf_url: publicUrl
+            concessionaria_pdf_url: publicUrl,
+            reading_status: deriveReadingStatus(saveStatus, finalEnergyBillStatus, {
+                valorConcessionaria: concessionariaVal,
+                concessionariaPdfUrl: publicUrl,
+                isPlaceholder: false
+            }),
+            reading_checked_at: new Date().toISOString()
         };
 
         try {
@@ -1221,7 +1224,13 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             const summaryBase64 = pdfSummary.output('datauristring');
             const asaasUrl = currentBoletoUrl; 
             if (!asaasUrl && !inv.asaas_pdf_storage_url) throw new Error("URL do boleto não encontrada.");
-            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, inv.concessionaria_pdf_url, inv.asaas_pdf_storage_url);
+            
+            let secureEnergyBillUrl = inv.concessionaria_pdf_url;
+            if (secureEnergyBillUrl) {
+                secureEnergyBillUrl = await getSecurePdfUrl(supabase, secureEnergyBillUrl);
+            }
+            
+            const mergedBlob = await mergePdf(summaryBase64, asaasUrl, fileName, secureEnergyBillUrl, inv.asaas_pdf_storage_url);
 
             try {
                 const storagePath = `${inv.id}.pdf`;

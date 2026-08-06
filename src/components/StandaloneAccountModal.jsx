@@ -317,12 +317,12 @@ export default function StandaloneAccountModal({ isOpen, onClose, onSave, usinaI
             if (pdfFile) {
                 const fileExt = pdfFile.name.split('.').pop();
                 const fileName = `${matchedUc.id}-${Date.now()}.${fileExt}`;
+                const storagePath = `invoices/${matchedUc.id}/${fileName}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('invoices')
-                    .upload(`standalone/${fileName}`, pdfFile);
+                    .from('energy-bills')
+                    .upload(storagePath, pdfFile);
                 if (!uploadError && uploadData) {
-                    const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(`standalone/${fileName}`);
-                    pdfUrl = publicUrl;
+                    pdfUrl = storagePath;
                 }
             }
 

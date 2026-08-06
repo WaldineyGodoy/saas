@@ -566,12 +566,12 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
             if (item.file) {
                 const fileExt = item.file.name.split('.').pop();
                 const fileName = `${ucId}-${Date.now()}.${fileExt}`;
+                const storagePath = `invoices/${ucId}/${fileName}`;
                 const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('invoices')
-                    .upload(`standalone/${fileName}`, item.file);
+                    .from('energy-bills')
+                    .upload(storagePath, item.file);
                 if (!uploadError && uploadData) {
-                    const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(`standalone/${fileName}`);
-                    pdfUrl = publicUrl;
+                    pdfUrl = storagePath;
                 }
             }
 

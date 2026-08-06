@@ -48,15 +48,28 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
         }
     };
 
+    const UI_TO_DB = {
+        pendente:     { reading: 'pending',    energy: 'pendente'  },
+        indisponivel: { reading: 'error',      energy: 'erro'      },
+        baixada:      { reading: 'processing', energy: 'processing'},
+        processada:   { reading: 'success',    energy: 'success'   },
+        // Fallback robusto caso haja outro status legado
+        error:        { reading: 'error',      energy: 'erro'      }
+    };
+
     const handleUpdateStatus = async (newStatus) => {
         setIsUpdating(true);
         try {
-            let energyStatus = newStatus === 'error' ? 'erro' : newStatus;
+            const map = UI_TO_DB[newStatus] || { reading: 'pending', energy: newStatus };
 
             if (uc.matchingInvoice) {
                 const { error } = await supabase
                     .from('invoices')
-                    .update({ energy_bill_status: energyStatus })
+                    .update({ 
+                        energy_bill_status: map.energy,
+                        reading_status: map.reading,
+                        reading_checked_at: new Date().toISOString()
+                    })
                     .eq('id', uc.matchingInvoice.id);
                 if (error) throw error;
             } else {
@@ -71,7 +84,9 @@ export default function ReadingCalendarModal({ isOpen, onClose, uc, monthFilter,
                         uc_id: uc.id,
                         mes_referencia: refMonth,
                         status: 'sem_faturamento',
-                        energy_bill_status: energyStatus,
+                        energy_bill_status: map.energy,
+                        reading_status: map.reading,
+                        reading_checked_at: new Date().toISOString(),
                         valor_a_pagar: 0,
                         valor_concessionaria: 0
                     });
