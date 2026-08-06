@@ -1,9 +1,22 @@
 name: Neoenergia Invoice Scraper
 
 on:
-  schedule:
-    - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
-  workflow_dispatch: 
+  # ⏸️ AGENDAMENTO PAUSADO em 06/08/2026 — reativar após validar o scraper.
+  # Motivo: a versão nova (casamento de mês-alvo, conta mínima por evidência,
+  # timeout 60s, upload no bucket privado) ainda não foi executada nenhuma vez.
+  # Risco em aberto: o seletor `hasCheckbox` não foi validado na página real —
+  # um falso positivo classificaria contas normais como "conta mínima" e as
+  # removeria da fila de processamento.
+  # Antes de reativar:
+  #   1. Trocar o secret SUPABASE_KEY (GitHub) pela service_role — a anon key
+  #      não passa pelo RLS e o robô não lê nem grava nada.
+  #   2. Rodar manualmente via workflow_dispatch para UMA UC com fatura normal
+  #      (ex.: 7030839328, Jul/2026, situação "Pago") e confirmar no log que ela
+  #      NÃO foi classificada como conta mínima.
+  # Para reativar: descomentar as duas linhas abaixo.
+  # schedule:
+  #   - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
+  workflow_dispatch:
     inputs:
       target_days:
         description: 'Dias de leitura (ex: 5 ou 1,2,3...)'
