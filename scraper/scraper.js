@@ -131,11 +131,16 @@ async function run() {
                 .eq('id', uc.id);
             continue;
         }
+        const [mm, yyyy] = currentMesRef.split('/');
+        const inicioMes = `${yyyy}-${mm}-01`;
+        const fimMes = new Date(Number(yyyy), Number(mm), 1).toISOString().slice(0, 10);
+
         const { data: existingInvoices } = await supabase
             .from('invoices')
             .select('id, concessionaria_pdf_url')
             .eq('uc_id', uc.id)
-            .eq('mes_referencia', currentMesRef)
+            .gte('mes_referencia', inicioMes)
+            .lt('mes_referencia', fimMes)
             .not('concessionaria_pdf_url', 'is', null)
             .limit(1);
 
@@ -390,11 +395,9 @@ async function run() {
                         const paddedUC = uc.numero_uc.toString().padStart(12, '0');
                         console.log(`-> UC: ${uc.numero_uc}`);
                         
-                        // Fase 3: Busca de UC em meus-imoveis
-                        if (!page.url().includes('meus-imoveis')) {
-                            await irPara(page, '#/home/meus-imoveis');
-                            await page.waitForTimeout(3000);
-                        }
+                        // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
+                        await irPara(page, '#/home/meus-imoveis');
+                        await page.waitForTimeout(3000);
 
                         const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
                         await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
@@ -426,16 +429,6 @@ async function run() {
 
                         // Acha checkboxes
                         const checkboxes = await page.locator('mat-checkbox[id^="checkItem-"]').all();
-                        // DIAGNÓSTICO TEMPORÁRIO
-                        const diag = await page.evaluate(() => ({
-                            hash: location.hash,
-                            qtdMatCheckItem: document.querySelectorAll('mat-checkbox[id^="checkItem-"]').length,
-                            qtdInputCheckItem: document.querySelectorAll('input[id^="checkItem-"]').length,
-                            temListaFaturas: document.body.innerText.includes('LISTA DE FATURAS'),
-                            refsNaTela: (document.body.innerText.match(/[A-ZÇ]+\/20\d\d/g) || []).slice(0, 6),
-                            bodyLen: document.body.innerText.trim().length
-                        }));
-                        console.log('   [DIAG FATURAS]', JSON.stringify(diag));
                         let foundBill = false;
 
                         for (const cb of checkboxes) {
@@ -451,7 +444,6 @@ async function run() {
                                 }
                                 return '';
                             }).catch((e) => { console.log('   [DIAG] erro no evaluate:', e.message); return ''; });
-                            console.log(`   [DIAG ROW] id=${cbId} | parsed=${parseMesRef(rowText)} | alvo=${currentMesRef} | texto="${(rowText||'').slice(0,70)}"`);
                             
                             const parsedRef = parseMesRef(rowText);
                             if (parsedRef === currentMesRef) {

@@ -10,8 +10,8 @@ on:
   #    com mais rigor que IP residencial.
   #
   #    Para reativar: descomentar as duas linhas abaixo.
-  # schedule:
-  #   - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
+  schedule:
+    - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
   workflow_dispatch:
     inputs:
       target_days:
