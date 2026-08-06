@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar as CalendarIcon, List, Layout, Info, Download, Pencil, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, List, Layout, Info, Download, Pencil, Trash2, Printer } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
-
 import ScraperTriggerModal from '../../components/ScraperTriggerModal';
-
-
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 import {
     DndContext,
@@ -168,6 +167,7 @@ export default function ConsumerUnitList() {
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
 
     const [viewMode, setViewMode] = useState('list');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -185,6 +185,7 @@ export default function ConsumerUnitList() {
     );
 
     const filteredUnits = units.filter(u => {
+        if (statusFilter && u.status !== statusFilter) return false;
         if (!searchTerm) return true;
         const lower = searchTerm.toLowerCase();
         return (
@@ -316,6 +317,89 @@ export default function ConsumerUnitList() {
         }
     };
 
+    const handleGenerateExtrato = () => {
+        if (filteredUnits.length === 0) {
+            showAlert('Nenhum registro para exportar.', 'warning');
+            return;
+        }
+
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // Título e Header
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 51, 102); // Navy Blue
+        doc.text('EXTRATO DE UNIDADES CONSUMIDORAS', 14, 18);
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139); // Slate Grey
+        const generationDate = new Date().toLocaleString('pt-BR');
+        doc.text(`Gerado em: ${generationDate}`, pageWidth - 14, 18, { align: 'right' });
+
+        // Linha divisória
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(14, 22, pageWidth - 14, 22);
+
+        // Resumo / Filtros aplicados
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42); // Charcoal
+        doc.text(`Total Unidades: ${filteredUnits.length}`, 14, 29);
+
+        // Mapear dados para a tabela
+        const tableBody = filteredUnits.map(u => {
+            const statusStyle = getStatusBadgeStyle(u.status);
+            return [
+                u.numero_uc || '-',
+                u.concessionaria || '-',
+                u.subscriber?.name || 'Sem Assinante',
+                u.titular_conta || '-',
+                u.franquia ? `${Number(u.franquia).toLocaleString('pt-BR')} kWh` : '-',
+                statusStyle.label || '-'
+            ];
+        });
+
+        // Tabela autoTable
+        autoTable(doc, {
+            startY: 35,
+            head: [[
+                'Número UC', 
+                'Concessionária', 
+                'Assinante', 
+                'Identificação / Titular', 
+                'Franquia', 
+                'Status'
+            ]],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [0, 51, 102], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+            bodyStyles: { fontSize: 9, textColor: [51, 65, 85] },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            margin: { left: 14, right: 14 },
+            columnStyles: {
+                0: { cellWidth: 40 },
+                1: { cellWidth: 45 },
+                2: { cellWidth: 55 },
+                3: { cellWidth: 55 },
+                4: { cellWidth: 30, halign: 'center' },
+                5: { cellWidth: 45, halign: 'center' }
+            },
+            didDrawPage: (data) => {
+                const str = `Página ${data.pageNumber}`;
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(148, 163, 184);
+                doc.text(str, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+            }
+        });
+
+        doc.save(`Extrato_Unidades_${new Date().toISOString().substring(0, 10)}.pdf`);
+        showAlert('Extrato gerado com sucesso!', 'success');
+    };
+
 
     return (
         <div style={{ padding: '1.5rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
@@ -359,6 +443,25 @@ export default function ConsumerUnitList() {
                                 }}
                             />
                         </div>
+                        <select
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value)}
+                            style={{
+                                padding: '0.6rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                fontSize: '0.9rem',
+                                background: 'white',
+                                color: '#1e293b',
+                                outline: 'none',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="">Todos os Status</option>
+                            {KANBAN_STATUSES.map(s => (
+                                <option key={s.status} value={s.status}>{s.label}</option>
+                            ))}
+                        </select>
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -372,6 +475,27 @@ export default function ConsumerUnitList() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                                onClick={handleGenerateExtrato}
+                                style={{
+                                    padding: '0.6rem 1.2rem',
+                                    background: 'white',
+                                    color: '#003366',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '8px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                            >
+                                <Printer size={16} /> Extrato
+                            </button>
                             <button
                                 onClick={() => { setEditingUnit(null); setIsModalOpen(true); }}
                                 style={{ padding: '0.6rem 1.2rem', background: 'var(--color-blue)', color: 'white', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', border: 'none', fontSize: '0.85rem', transition: 'all 0.2s' }}
