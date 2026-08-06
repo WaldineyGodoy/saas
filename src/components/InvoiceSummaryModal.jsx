@@ -795,6 +795,16 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 }
             }
 
+            const dateFields = [
+                'vencimento', 'vencimento_concessionaria', 
+                'data_leitura', 'data_leitura_anterior'
+            ];
+            for (const field of dateFields) {
+                if (sanitizedData[field] === '') {
+                    sanitizedData[field] = null;
+                }
+            }
+
             const payload = {
                 ...sanitizedData,
                 // Garantir que mes_referencia tenha o dia 01 se for apenas YYYY-MM

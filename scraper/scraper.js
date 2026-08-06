@@ -15,6 +15,22 @@ async function run() {
     let currentMesRef = "";
     const now = new Date();
 
+    const UF_TO_ESTADO = {
+        RN: 'Rio Grande do Norte',
+        BA: 'Bahia',
+        PE: 'Pernambuco',
+        SP: 'São Paulo',
+        MS: 'Mato Grosso do Sul',
+    };
+
+    const CONCESSIONARIA_TO_ESTADO = {
+        'neoenergia cosern':     'Rio Grande do Norte',
+        'neoenergia coelba':     'Bahia',
+        'neoenergia pernambuco': 'Pernambuco',
+        'neoenergia celpe':      'Pernambuco',
+        'neoenergia elektro':    null,
+    };
+
     if (process.env.TARGET_DAYS) {
         const targetStr = process.env.TARGET_DAYS.trim();
         // Regex para YYYY-MM-DD (Modo Dia ou Semana via CRM)
@@ -61,6 +77,7 @@ async function run() {
             subscriber_id,
             titular_fatura_id,
             concessionaria,
+            address,
             tipo_ligacao,
             tarifa_concessionaria,
             desconto_assinante,
@@ -78,7 +95,7 @@ async function run() {
                 portal_credentials
             )
         `)
-        .eq('concessionaria', 'Neoenergia Cosern');
+        .ilike('concessionaria', 'Neoenergia%');
 
     if (targetedDays.length > 0) {
         query = query.in('dia_leitura', targetedDays);
@@ -94,6 +111,26 @@ async function run() {
     // 2.1 Refinamento Híbrido: Verifica se a fatura já existe no banco (via código)
     const ucsToScrape = [];
     for (const uc of (allUcs || [])) {
+        if (uc.numero_uc) {
+            uc.numero_uc = String(uc.numero_uc).trim();
+        }
+
+        const uf = uc.address?.uf?.toUpperCase();
+        const conc = uc.concessionaria?.toLowerCase();
+        uc.estadoAlvo = UF_TO_ESTADO[uf] || CONCESSIONARIA_TO_ESTADO[conc];
+
+        if (!uc.estadoAlvo) {
+            console.error(`[Faturista] ERRO: Estado não resolvido para UC ${uc.numero_uc} (UF: ${uf}, Conc: ${uc.concessionaria}). Pulando.`);
+            await supabase
+                .from('consumer_units')
+                .update({ 
+                    last_scraping_status: 'error',
+                    last_scraping_at: new Date().toISOString(),
+                    last_scraping_error: 'estado nao resolvido'
+                })
+                .eq('id', uc.id);
+            continue;
+        }
         const { data: existingInvoices } = await supabase
             .from('invoices')
             .select('id, concessionaria_pdf_url')
@@ -132,9 +169,8 @@ async function run() {
 
     console.log(`\nAgente Playwright Iniciado para ${ucsToScrape.length} UCs.`);
 
-    // 3. Agrupa UCs selecionadas por Titular das Credenciais
+    // 3. Agrupa UCs selecionadas por Titular das Credenciais e depois por Estado
     const groups = ucsToScrape.reduce((acc, uc) => {
-        // Prioriza o titular_fatura se houver, senão usa o subscriber_id
         const effectiveSub = uc.titular_fatura || uc.subscriber;
         const subId = effectiveSub?.id || uc.subscriber_id;
         
@@ -142,10 +178,16 @@ async function run() {
             acc[subId] = {
                 subscriber: effectiveSub,
                 credentials: effectiveSub?.portal_credentials,
-                ucs: []
+                estados: {}
             };
         }
-        acc[subId].ucs.push(uc);
+        
+        const estado = uc.estadoAlvo;
+        if (!acc[subId].estados[estado]) {
+            acc[subId].estados[estado] = [];
+        }
+        
+        acc[subId].estados[estado].push(uc);
         return acc;
     }, {});
 
@@ -181,14 +223,21 @@ async function run() {
     // Processa cada grupo (Titular)
     for (const subId in groups) {
         const group = groups[subId];
-        const { subscriber, credentials: creds, ucs: groupUcs } = group;
-
-        console.log(`\n=== Processando Assinante: ${subscriber.name} (${groupUcs.length} UCs) ===`);
+        const { subscriber, credentials: creds, estados } = group;
+        const estadosList = Object.keys(estados);
+        
+        if (estadosList.length === 0) continue;
+        const primeiroEstado = estadosList[0];
+        
+        const allUcsCount = Object.values(estados).reduce((acc, curr) => acc + curr.length, 0);
+        console.log(`\n=== Processando Assinante: ${subscriber.name} (${allUcsCount} UCs em ${estadosList.length} estado(s)) ===`);
 
         if (!creds?.login || !creds?.password) {
             console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
-            for (const uc of groupUcs) {
-                await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
+            for (const estado in estados) {
+                for (const uc of estados[estado]) {
+                    await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
+                }
             }
             continue;
         }
@@ -198,6 +247,9 @@ async function run() {
             await page.goto('https://agenciavirtual.neoenergia.com/#/login', { waitUntil: 'load', timeout: 60000 });
 
             let loggedIn = false;
+            let stuckOnOlaCount = 0;
+            let agenciaClicks = 0;
+            
             for (let i = 0; i < 15; i++) {
                 await page.waitForTimeout(3000);
                 const url = page.url();
@@ -206,32 +258,34 @@ async function run() {
                 const passField = page.locator('input#password, input[name="password"], input[name="j_password"], mat-form-field:has-text("Senha") input, input[type="password"]').first();
                 const enterBtn = page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).first();
                 const portalAccessBtn = page.locator('button[aria-label="Conectar-se a agência virtual"]');
-                const rnCard = page.locator('mat-card:has-text("Rio Grande do Norte")');
-                const ucSearchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
+                const stateOption = page.getByText(primeiroEstado, { exact: false }).first();
+                const ucSearchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Unidade Consumidora"]').first();
                 const checkOla = page.locator('text=Olá,').first();
                 const checkSair = page.locator('button:has-text("Sair"), a:has-text("Sair")').first();
 
-                // Safe login check: strictly waits for dashboard search input or dashboard cards
-                if (await ucSearchInput.isVisible() || page.url().includes('/home/dashboard')) {
+                // 1) Safe login check: strictly waits for dashboard search input or dashboard cards
+                if (await ucSearchInput.isVisible() || page.url().includes('/home/dashboard') || page.url().includes('/home/meus-imoveis')) {
                     console.log('ACESSO REALIZADO E DASHBOARD CARREGADO!');
                     loggedIn = true;
                     break;
                 }
 
-                if (await checkOla.isVisible()) {
-                    const currentUrl = page.url();
-                    if (!(await ucSearchInput.isVisible()) && !currentUrl.includes('/dashboard')) {
-                        console.log('   [Faturista] Logado, mas preso na home pública. Clicando em "2ª Via de Pagamento"...');
-                        const segundaViaBtn = page.locator('mat-card:has-text("2ª Via de Pagamento"), mat-card:has-text("2a Via de Pagamento"), a:has-text("2ª Via de Pagamento")').first();
-                        if (await segundaViaBtn.isVisible()) {
-                            await segundaViaBtn.click({ force: true });
-                        } else {
-                            await page.goto('https://agenciavirtual.neoenergia.com/rn/#/home');
+                // 2) Seleção de Estado (Tela logo após login, antes do dashboard)
+                if (await stateOption.count() > 0) {
+                    console.log(`   [Faturista] Selecionando estado: ${primeiroEstado} (elemento existe no DOM)`);
+                    await stateOption.scrollIntoViewIfNeeded().catch(() => {});
+                    await stateOption.click({ force: true }).catch(() => {});
+                    try {
+                        await page.waitForTimeout(3000);
+                        if (!page.url().includes('/meus-imoveis')) {
+                            await page.goto('https://agenciavirtual.neoenergia.com/#/home/meus-imoveis').catch(() => {});
+                            await page.waitForTimeout(2000);
                         }
-                        continue;
-                    }
+                    } catch (e) {}
+                    continue;
                 }
 
+                // 3) Formulário de Credenciais Aberto? (Modal ou tela nativa)
                 if (await userField.isVisible()) {
                     console.log(`   [Faturista] Preenchendo credenciais para ${creds.login} (Modo Humano)...`);
                     
@@ -263,20 +317,95 @@ async function run() {
                     continue;
                 }
 
+                // 4) Botão de Abrir Modal de Login na Home Institucional
+                const entrarAgencia = page.locator('button[aria-label="Conectar-se a agência virtual"], button:has-text("LOGIN")').filter({ hasNotText: 'CADASTRE' }).first();
+                if (await entrarAgencia.count() > 0 && !(await userField.isVisible())) {
+                    if (await checkOla.isVisible()) {
+                        console.log('   [Faturista] Já autenticado na home institucional, tentando navegação direta para a área logada...');
+                        await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(()=>{});
+                        await page.waitForTimeout(3000);
+                        continue;
+                    }
+
+                    agenciaClicks++;
+                    console.log(`   [Faturista] Abrindo formulário de login (Tentativa ${agenciaClicks}/2)...`);
+                    
+                    if (agenciaClicks > 2) {
+                        console.log('   [Faturista] Limite de cliques excedido, forçando recarga da página...');
+                        await page.goto('https://agenciavirtual.neoenergia.com/#/login').catch(()=>{});
+                        continue;
+                    }
+
+                    await entrarAgencia.click({ force: true }).catch(()=>{});
+                    await page.waitForTimeout(3000);
+                    
+                    if (agenciaClicks === 1) {
+                        try {
+                            await page.screenshot({ path: `./downloads/debug/pos_click_agencia_${Date.now()}.png`, fullPage: true });
+                        } catch(e) {}
+                    }
+                    continue;
+                }
+
+                // 5) Botão LOGIN solto (excepcional, se existir fora do modal)
                 const loginBtn = page.locator('.btn-login, button:has-text("LOGIN")').filter({ hasNotText: 'Cadastrar' }).first();
                 if (await loginBtn.isVisible() && !(await checkOla.isVisible())) {
                     await loginBtn.click({ force: true });
                     continue;
                 }
 
-                if (await rnCard.isVisible()) {
-                    await rnCard.click();
-                    continue;
-                }
+                // 6) checkOla (preso na home, após tudo falhar)
+                if (await checkOla.isVisible()) {
+                    const currentUrl = page.url();
+                    if (!(await ucSearchInput.isVisible()) && !currentUrl.includes('/dashboard')) {
+                        stuckOnOlaCount++;
+                        console.log(`   [Faturista] Preso na home pública (${stuckOnOlaCount}/3). URL: ${currentUrl}`);
+                        
+                        // Diagnóstico do H1 / Título
+                        try {
+                            const mainHeading = await page.locator('h1, h2, h3').first().innerText({ timeout: 1000 });
+                            console.log(`   [Faturista] Título visível na tela: "${mainHeading}"`);
+                        } catch (e) {}
 
-                if (await portalAccessBtn.isVisible()) {
-                    await portalAccessBtn.click();
-                    continue;
+                        if (stuckOnOlaCount === 1) {
+                            try {
+                                await page.screenshot({ path: `./downloads/debug/home_dump_${Date.now()}.png`, fullPage: true });
+                                const dump = await page.evaluate((estadoEsperado) => ({
+                                    hash: location.hash,
+                                    links: [...document.querySelectorAll('a')]
+                                            .map(a => ({ txt: a.innerText.trim().slice(0,40),
+                                                         href: a.getAttribute('href'),
+                                                         vis: !!a.offsetParent }))
+                                            .filter(x => x.txt),
+                                    temEstado: document.body.innerText.includes(estadoEsperado),
+                                    matCards: document.querySelectorAll('mat-card').length
+                                }), primeiroEstado);
+                                console.log('[DEBUG DOM]', JSON.stringify(dump, null, 1));
+                            } catch (errDump) {
+                                console.error('Erro ao gerar dump DOM:', errDump);
+                            }
+                        }
+
+                        if (stuckOnOlaCount >= 3) {
+                            console.log('   [Faturista] Abortando por falha de navegação (repetições estouradas).');
+                            break;
+                        }
+
+                        console.log('   [Faturista] Autenticado, mas preso na home. Tentando clicar em "LOGIN" para entrar na área logada...');
+                        const entrarArea = page.locator('button[aria-label="Conectar-se a agência virtual"], button:has-text("LOGIN")').filter({ hasNotText: 'CADASTRE' }).first();
+                        if (await entrarArea.count() > 0) {
+                            await entrarArea.click({ force: true }).catch(()=>{});
+                            await page.waitForTimeout(4000);
+                            try {
+                                await page.screenshot({ path: `./downloads/debug/pos_login_autenticado_${Date.now()}.png`, fullPage: true });
+                            } catch(e) {}
+                            continue;
+                        }
+
+                        console.log('   [Faturista] Tentando forçar ida à raiz da home (fallback final)...');
+                        await page.goto('https://agenciavirtual.neoenergia.com/#/home').catch(()=>{});
+                        continue;
+                    }
                 }
             }
 
@@ -284,10 +413,43 @@ async function run() {
                 throw new Error('Falha na autenticação ou timeout do portal.');
             }
 
-            for (const uc of groupUcs) {
+            for (let eIdx = 0; eIdx < estadosList.length; eIdx++) {
+                const estadoAlvo = estadosList[eIdx];
+                const ucsDoEstado = estados[estadoAlvo];
+                console.log(`\n--- Processando Estado: ${estadoAlvo} (${ucsDoEstado.length} UCs) ---`);
+
+                if (eIdx > 0) {
+                    console.log(`   [Faturista] Trocando estado na sessão para: ${estadoAlvo}`);
+                    const trocarEstadoBtn = page.getByText('Trocar Estado', { exact: false }).first();
+                    if (await trocarEstadoBtn.isVisible()) {
+                        await trocarEstadoBtn.click({ force: true });
+                        await page.waitForTimeout(3000);
+                        
+                        const nextStateOption = page.getByText(estadoAlvo, { exact: false }).first();
+                        if (await nextStateOption.count() > 0) {
+                            await nextStateOption.scrollIntoViewIfNeeded().catch(()=>{});
+                            await nextStateOption.click({ force: true }).catch(()=>{});
+                            await page.waitForTimeout(4000);
+                        }
+                    } else {
+                        console.error('   [Faturista] Botão "Trocar Estado" não encontrado. Pode causar falhas neste grupo.');
+                    }
+                }
+
+                // Aguarda o nome do estado aparecer na tela antes de seguir
+                console.log(`   [Faturista] Aguardando confirmação do estado no cabeçalho...`);
                 try {
-                    const paddedUC = uc.numero_uc.toString().padStart(12, '0');
-                    console.log(`-> UC: ${uc.numero_uc}`);
+                    await page.waitForFunction((expectedState) => {
+                        return document.body.innerText.includes(expectedState);
+                    }, estadoAlvo, { timeout: 10000 });
+                } catch (e) {
+                    console.error(`   [Faturista] AVISO: Não confirmamos "${estadoAlvo}" na tela, prosseguindo com risco.`);
+                }
+
+                for (const uc of ucsDoEstado) {
+                    try {
+                        const paddedUC = uc.numero_uc.toString().padStart(12, '0');
+                        console.log(`-> UC: ${uc.numero_uc}`);
                     
                     // Verifica se o campo de busca está visível (espera até 6 segundos para a página carregar caso acabe de logar)
                     const searchInput = page.locator('input[placeholder*="digo"], input[placeholder*="Código"], input[placeholder*="Conta"], input[placeholder*="Contrato"], mat-form-field:has-text("Conta") input, mat-form-field:has-text("Contrato") input, mat-form-field:has-text("Código") input, input[type="text"]').first();
@@ -303,7 +465,7 @@ async function run() {
                     if (!isSearchReady) {
                         console.log('   [Faturista] Buscador não encontrado. Forçando rota do dashboard...');
                         // Se estivermos dentro de uma UC anterior ou perdidos, forçamos o roteador angular para o dashboard
-                        await page.goto('https://agenciavirtual.neoenergia.com/rn/#/home/dashboard').catch(() => {});
+                        await page.goto('https://agenciavirtual.neoenergia.com/#/home/meus-imoveis').catch(() => {});
                         await page.waitForTimeout(4000);
                         
                         try {
@@ -508,23 +670,25 @@ async function run() {
                     } else {
                         throw new Error('Unidade não encontrada no painel da concessionária.');
                     }
-                } catch (err) {
-                    console.error(`   Erro UC ${uc.numero_uc}: ${err.message}`);
-                    await updateUCStatus(uc.id, 'error', err.message);
+                } catch (ucErr) {
+                    console.error(`   Erro UC ${uc.numero_uc}: ${ucErr.message}`);
+                    await updateUCStatus(uc.id, 'error', ucErr.message.substring(0, 255));
                     await takeScreenshot(`erro_uc_${uc.numero_uc}`);
                 }
+            } // end ucs loop
+            } // end states loop
+        } catch (groupErr) {
+            console.error(`Erro Crítico no Grupo ${subscriber.name}:`, groupErr.message);
+            for (const estado in estados) {
+                for (const uc of estados[estado]) {
+                    await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
+                }
             }
-
+            await takeScreenshot(`erro_grupo_${subId}`);
+        } finally {
             console.log('Finalizando sessão do assinante...');
             await page.goto('https://agenciavirtual.neoenergia.com/#/login').catch(() => {});
             await context.clearCookies();
-
-        } catch (groupErr) {
-            console.error(`Erro Crítico no Grupo ${subscriber.name}:`, groupErr.message);
-            for (const uc of groupUcs) {
-                await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
-            }
-            await takeScreenshot(`erro_grupo_${subId}`);
         }
     }
 
