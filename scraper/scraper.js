@@ -193,7 +193,18 @@ async function run() {
 
     console.log(`[Faturista] Iniciando processamento de ${allUcs.length} UCs em ${Object.keys(groups).length} contas de titular.`);
 
-    const browser = await chromium.launch({ headless: false, slowMo: 250, args: ['--disable-blink-features=AutomationControlled'] });
+    // headless:false é OBRIGATÓRIO — em headless o Akamai devolve Access Denied.
+    // No CI isso funciona porque o processo roda dentro de um display virtual (xvfb-run).
+    // A flag AutomationControlled remove navigator.webdriver, sem ela o portal não autentica.
+    const browser = await chromium.launch({
+        headless: process.env.HEADLESS === 'true',
+        slowMo: Number(process.env.SLOW_MO || 0),
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--disable-dev-shm-usage'
+        ]
+    });
     const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',

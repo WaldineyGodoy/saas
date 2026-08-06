@@ -1,25 +1,21 @@
 name: Neoenergia Invoice Scraper
 
 on:
-  # ⏸️ AGENDAMENTO PAUSADO em 06/08/2026 — reativar após validar o scraper.
-  # Motivo: a versão nova (casamento de mês-alvo, conta mínima por evidência,
-  # timeout 60s, upload no bucket privado) ainda não foi executada nenhuma vez.
-  # Risco em aberto: o seletor `hasCheckbox` não foi validado na página real —
-  # um falso positivo classificaria contas normais como "conta mínima" e as
-  # removeria da fila de processamento.
-  # Antes de reativar:
-  #   1. Trocar o secret SUPABASE_KEY (GitHub) pela service_role — a anon key
-  #      não passa pelo RLS e o robô não lê nem grava nada.
-  #   2. Rodar manualmente via workflow_dispatch para UMA UC com fatura normal
-  #      (ex.: 7030839328, Jul/2026, situação "Pago") e confirmar no log que ela
-  #      NÃO foi classificada como conta mínima.
-  # Para reativar: descomentar as duas linhas abaixo.
+  # ⏸️ AGENDAMENTO PAUSADO — reativar só depois que um disparo manual
+  #    (workflow_dispatch) baixar pelo menos 1 fatura com sucesso NO CI.
+  #
+  #    O robô já funciona na máquina local (validado 06/08/2026, UCs 7029875701
+  #    e 7030004129). O que falta provar aqui é se o IP do GitHub Actions passa
+  #    pelo WAF (Akamai) da Neoenergia — IPs de datacenter costumam ser tratados
+  #    com mais rigor que IP residencial.
+  #
+  #    Para reativar: descomentar as duas linhas abaixo.
   # schedule:
   #   - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
   workflow_dispatch:
     inputs:
       target_days:
-        description: 'Dias de leitura (ex: 5 ou 1,2,3...)'
+        description: 'Alvo: AAAA-MM-DD (dia+mês), AAAA-MM (mês inteiro) ou "5,12" (dias no mês corrente)'
         required: false
         default: ''
       reason:
@@ -33,7 +29,8 @@ jobs:
   scrape:
     name: Executar Agente Neoenergia
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 45
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -46,23 +43,30 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          cd scraper
-          npm install
+        working-directory: scraper
+        run: npm install
 
-      - name: Install Playwright Browsers
-        run: |
-          cd scraper
-          npx playwright install firefox --with-deps
+      # O scraper usa CHROMIUM (antes era firefox).
+      # Firefox headless passa pelo WAF mas recebe a aplicação sem o corpo;
+      # chromium + display virtual é a combinação que funciona.
+      - name: Install Playwright Chromium
+        working-directory: scraper
+        run: npx playwright install chromium --with-deps
 
-      - name: Run Scraper
+      # Xvfb = display virtual. Permite rodar o navegador em modo "com interface"
+      # numa máquina sem monitor. Sem isso, headless=true -> Access Denied (Akamai).
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run Scraper (dentro do display virtual)
+        working-directory: scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TARGET_DAYS: ${{ github.event.inputs.target_days || github.event.client_payload.value || '' }}
-        run: |
-          cd scraper
-          node scraper.js
+          HEADLESS: 'false'   # obrigatório: headless real é bloqueado pelo portal
+          SLOW_MO: '0'        # sem atraso artificial no CI
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" node scraper.js
 
       - name: Upload Debug Screenshots
         if: always()
@@ -70,3 +74,5 @@ jobs:
         with:
           name: debug-screenshots
           path: scraper/downloads/debug/
+          if-no-files-found: ignore
+          retention-days: 7
