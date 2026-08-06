@@ -234,12 +234,19 @@ async function run() {
 
                 if (await userField.isVisible()) {
                     console.log(`   [Faturista] Preenchendo credenciais para ${creds.login} (Modo Humano)...`);
-                    const cleanUser = creds.login.replace(/\D/g, '');
+                    
+                    const formatDoc = (v) => {
+                        const d = (v || '').replace(/\D/g, '');
+                        if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                        if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+                        return v;
+                    };
+                    const formattedUser = formatDoc(creds.login);
                     
                     await userField.click();
                     await page.keyboard.press('Control+A');
                     await page.keyboard.press('Backspace');
-                    await userField.pressSequentially(cleanUser, { delay: 100 });
+                    await userField.pressSequentially(formattedUser, { delay: 100 });
                     
                     await passField.click();
                     await page.keyboard.press('Control+A');
@@ -314,10 +321,17 @@ async function run() {
                     const userFormField = page.locator('mat-dialog-container input#userId, .mat-mdc-dialog-container input#userId, input#userId, mat-form-field:has-text("CPF") input, input[name="username"], input[name="cpfCnpj"]').filter({ visible: true }).first();
                     if (await userFormField.isVisible()) {
                         console.log('   [Faturista] Refazendo login no loop interno (Modo Humano)...');
+                        const formatDoc = (v) => {
+                            const d = (v || '').replace(/\D/g, '');
+                            if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                            if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+                            return v;
+                        };
+                        
                         await userFormField.click();
                         await page.keyboard.press('Control+A');
                         await page.keyboard.press('Backspace');
-                        await userFormField.pressSequentially(creds.login.replace(/\D/g, ''), { delay: 100 });
+                        await userFormField.pressSequentially(formatDoc(creds.login), { delay: 100 });
                         
                         const innerPass = page.locator('input#password, input[type="password"]').first();
                         await innerPass.click();
@@ -361,74 +375,128 @@ async function run() {
                         
                         let foundBill = false;
                         for (const panel of panels) {
-                            const statusText = await panel.locator('.mat-content div:nth-child(4) span:nth-child(2)').innerText().catch(() => '');
                             const mesRefStr = await panel.locator('.mat-content div:nth-child(2) span:nth-child(2)').innerText().catch(() => '');
+                            const panelText = await panel.innerText().catch(() => '');
                             
-                            if (statusText.includes('Vencida') || statusText.includes('A Vencer')) {
-                                console.log(`   Baixando fatura [${mesRefStr.trim()}]...`);
-                                const header = panel.locator('mat-expansion-panel-header');
-                                await header.click();
-                                await page.waitForTimeout(1500);
+                            const parsedRef = parseMesRef(mesRefStr.trim());
+                            if (!parsedRef) continue;
+                            
+                            // Check if this panel matches the target month (currentMesRef)
+                            // e.g., '07/2026' === '07/2026'
+                            if (parsedRef !== currentMesRef) {
+                                continue;
+                            }
 
-                                const downloadBtn = panel.locator('button[aria-label*="Download"], button:has-text("Baixar")').first();
-                                if (await downloadBtn.isVisible()) {
+                            console.log(`   Verificando fatura [${mesRefStr.trim()}]...`);
+                            
+                            // Check for Conta Minima
+                            const isContaMinimaText = panelText.toUpperCase().includes('CONTA MÍNIMA');
+                            const hasCheckbox = await panel.locator('mat-checkbox, input[type="checkbox"], [id^="checkItem-"]').count() > 0;
+                            
+                            if (isContaMinimaText || !hasCheckbox) {
+                                console.log(`   [Faturista] Fatura identificada como CONTA MÍNIMA. Pulando download.`);
+                                const [month, year] = parsedRef.split('/').map(Number);
+                                const valorStr = await panel.locator('.mat-content div:nth-child(5) span:nth-child(2)').innerText().catch(() => '0');
+                                const parseValue = (raw) => {
+                                    if (!raw) return 0;
+                                    let cleaned = raw.replace('R$', '').trim();
+                                    if (cleaned.includes(',') && cleaned.includes('.')) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+                                    if (cleaned.includes(',')) return parseFloat(cleaned.replace(',', '.'));
+                                    return parseFloat(cleaned);
+                                };
+                                const valorFatura = parseValue(valorStr);
+
+                                await supabase.from('invoices').upsert({
+                                    uc_id: uc.id,
+                                    mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                    reading_status: 'processing',
+                                    reading_error: '[INFO] Conta minima - concessionaria nao emite PDF/boleto; saldo acumula para o mes seguinte. Nao reprocessar.',
+                                    status: 'sem_faturamento',
+                                    valor_concessionaria: valorFatura,
+                                    is_placeholder: false,
+                                    reading_checked_at: new Date().toISOString()
+                                }, { onConflict: 'uc_id,mes_referencia' });
+                                foundBill = true;
+                                continue;
+                            }
+
+                            // If it's a regular bill, we open the panel and download
+                            const header = panel.locator('mat-expansion-panel-header');
+                            await header.click();
+                            await page.waitForTimeout(1500);
+
+                            const downloadBtn = panel.locator('button[aria-label*="Download"], button:has-text("Baixar")').first();
+                            if (await downloadBtn.isVisible()) {
+                                try {
                                     const [dl] = await Promise.all([
-                                        page.waitForEvent('download'),
+                                        page.waitForEvent('download', { timeout: 60000 }), // increased to 60s
                                         downloadBtn.click()
                                     ]);
                                     const fileName = `${uc.numero_uc}_${mesRefStr.trim().replace('/', '-')}_${Date.now()}.pdf`;
                                     const localPath = `./downloads/${fileName}`;
                                     await dl.saveAs(localPath);
                                     
-                                    const publicUrl = await uploadToSupabase(localPath, uc.numero_uc, fileName);
+                                    const storagePath = await uploadToSupabase(localPath, uc.numero_uc, fileName);
                                     
-                                        // Scanner do PDF para extrair kWh e CIP
-                                        const pdfData = await parseInvoicePdf(localPath);
+                                    const [month, year] = parsedRef.split('/').map(Number);
+                                    const valorStr = await panel.locator('.mat-content div:nth-child(5) span:nth-child(2)').innerText().catch(() => '0');
+                                    const parseValue = (raw) => {
+                                        if (!raw) return 0;
+                                        let cleaned = raw.replace('R$', '').trim();
+                                        if (cleaned.includes(',') && cleaned.includes('.')) return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+                                        if (cleaned.includes(',')) return parseFloat(cleaned.replace(',', '.'));
+                                        return parseFloat(cleaned);
+                                    };
+                                    const valorFatura = parseValue(valorStr);
 
-                                        const mesReferenciaBase = pdfData.mesReferencia || parseMesRef(mesRefStr.trim());
-                                        if (mesReferenciaBase) {
-                                            // Regras de Criação de Fatura Automática
-                                            const [month, year] = mesReferenciaBase.split('/').map(Number);
-                                            
-                                            // Vencimento: Usa o do PDF se houver, senão calcula
-                                            let vencimentoStr = pdfData.vencimento;
-                                            if (!vencimentoStr) {
-                                                let nextMonth = month + 1;
-                                                let nextYear = year;
-                                                if (nextMonth > 12) { nextMonth = 1; nextYear++; }
-                                                const vencimentoDate = new Date(nextYear, nextMonth - 1, uc.dia_vencimento || 10);
-                                                vencimentoStr = vencimentoDate.toISOString().split('T')[0];
-                                            }
-
-                                            // Regra: Consumo Mínimo por Tipo de Ligação (Fallback se extração falhar)
-                                            const kwhMinimo = uc.tipo_ligacao === 'trifasico' ? 100 : (uc.tipo_ligacao === 'bifasico' ? 50 : 30);
-                                            const tarifa = Number(uc.tarifa_concessionaria) || 0;
-                                            const valorTarifaMinima = kwhMinimo * tarifa;
-
-                                            // Upsert no CRM
-                                            await supabase.from('invoices').upsert({ 
-                                                uc_id: uc.id, 
-                                                mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
-                                                vencimento: vencimentoStr,
-                                                data_leitura: pdfData.dataLeitura,
-                                                tipo_ligacao: uc.tipo_ligacao,
-                                                tarifa_concessionaria: tarifa,
-                                                tarifa_minima: valorTarifaMinima,
-                                                consumo_kwh: pdfData.consumoKwh || 0, 
-                                                iluminacao_publica: pdfData.cipValor || 0,
-                                                outros_lancamentos: pdfData.outrosLancamentos || 0,
-                                                consumo_reais: (pdfData.consumoKwh || kwhMinimo) * tarifa, 
-                                                valor_a_pagar: pdfData.valorTotal || (((pdfData.consumoKwh || kwhMinimo) * tarifa) + (pdfData.cipValor || 0)), 
-                                                desconto_assinante: Number(uc.desconto_assinante) || 0,
-                                                status: 'a_vencer',
-                                                concessionaria_pdf_url: publicUrl 
-                                            }, { onConflict: 'uc_id,mes_referencia' });
-                                            
-                                            foundBill = true;
-                                        }
+                                    await supabase.from('invoices').upsert({ 
+                                        uc_id: uc.id, 
+                                        mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                        concessionaria_pdf_url: storagePath,
+                                        status: 'sem_faturamento',
+                                        reading_status: 'processing',
+                                        reading_checked_at: new Date().toISOString(),
+                                        valor_concessionaria: valorFatura,
+                                        is_placeholder: false
+                                    }, { onConflict: 'uc_id,mes_referencia' });
+                                    
+                                    foundBill = true;
+                                } catch (downloadErr) {
+                                    console.error(`   [Faturista] Falha ao baixar o PDF:`, downloadErr.message);
+                                    
+                                    // Check if the page has an error dialog for "indisponível" or missing fields
+                                    const bodyText = await page.innerText('body').catch(() => '');
+                                    const isPortalError = bodyText.includes('Fatura indisponível no canal digital') || 
+                                                          bodyText.includes('Campos obrigatórios ausentes');
+                                    
+                                    if (isPortalError) {
+                                        console.log(`   [Faturista] Erro de conta minima detectado via modal do portal.`);
+                                        const [month, year] = parsedRef.split('/').map(Number);
+                                        await supabase.from('invoices').upsert({
+                                            uc_id: uc.id,
+                                            mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                            reading_status: 'processing',
+                                            reading_error: '[INFO] Conta minima - concessionaria nao emite PDF/boleto; saldo acumula para o mes seguinte. Nao reprocessar.',
+                                            status: 'sem_faturamento',
+                                            is_placeholder: false,
+                                            reading_checked_at: new Date().toISOString()
+                                        }, { onConflict: 'uc_id,mes_referencia' });
+                                        foundBill = true;
+                                    } else {
+                                        const [month, year] = parsedRef.split('/').map(Number);
+                                        await supabase.from('invoices').upsert({
+                                            uc_id: uc.id,
+                                            mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                            reading_status: 'error',
+                                            reading_error: `Falha no download: ${downloadErr.message}`,
+                                            status: 'sem_faturamento',
+                                            is_placeholder: true,
+                                            reading_checked_at: new Date().toISOString()
+                                        }, { onConflict: 'uc_id,mes_referencia' });
+                                    }
                                 }
-                                await header.click();
                             }
+                            await header.click();
                         }
 
                         if (foundBill) {
@@ -550,7 +618,7 @@ async function uploadToSupabase(localPath, ucNumber, fileName) {
     const storagePath = `invoices/${ucNumber}/${fileName}`;
     
     const { data, error } = await supabase.storage
-        .from('invoices')
+        .from('energy-bills')
         .upload(storagePath, fileBuffer, {
             contentType: 'application/pdf',
             upsert: true
@@ -558,11 +626,7 @@ async function uploadToSupabase(localPath, ucNumber, fileName) {
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabase.storage
-        .from('invoices')
-        .getPublicUrl(storagePath);
-    
-    return publicUrl;
+    return storagePath;
 }
 
 const dir = './downloads';
