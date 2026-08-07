@@ -13,7 +13,56 @@ async function run() {
     // 1. Identifica o dia atual, mês ref, ou os dias informados via variável de ambiente
     let targetedDays = [];
     let currentMesRef = "";
+    let modoJanela = false;
     const now = new Date();
+
+    // ---- Regra da janela de disponibilidade (modo automático) ----
+    // A leitura do dia D refere-se ao MÊS DA LEITURA (confirmado nos dados:
+    // data_leitura 2026-07-09 -> mes_referencia 07/2026).
+    // A concessionária publica a conta em até ~15 dias, às vezes atrasando mais.
+    const JANELA_INICIO_DIAS = 7;   // só procura a partir de D+7
+    const JANELA_RETENTATIVA  = 7;  // repete a cada 7 dias enquanto indisponível
+    const JANELA_DESISTIR_DIAS = 60; // depois disso é anomalia -> exige ação humana
+
+    // Datas em UTC para não variar com o fuso do runner.
+    const hojeUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    function ultimoDiaDoMes(ano, mesIdx) {
+        return new Date(Date.UTC(ano, mesIdx + 1, 0)).getUTCDate();
+    }
+
+    // Descobre a última leitura que JÁ ocorreu e o mês de referência dela.
+    function calcularJanelaUC(diaLeitura, ultimaTentativaISO) {
+        const ano = hojeUTC.getUTCFullYear();
+        const mesIdx = hojeUTC.getUTCMonth();
+
+        // dia_leitura pode não existir no mês (ex.: 31 em fevereiro) -> usa o último dia
+        const diaEsteMes = Math.min(diaLeitura, ultimoDiaDoMes(ano, mesIdx));
+
+        let dataLeitura;
+        if (hojeUTC.getUTCDate() >= diaEsteMes) {
+            dataLeitura = new Date(Date.UTC(ano, mesIdx, diaEsteMes));
+        } else {
+            const mesAntIdx = mesIdx === 0 ? 11 : mesIdx - 1;
+            const anoAnt = mesIdx === 0 ? ano - 1 : ano;
+            const diaAnt = Math.min(diaLeitura, ultimoDiaDoMes(anoAnt, mesAntIdx));
+            dataLeitura = new Date(Date.UTC(anoAnt, mesAntIdx, diaAnt));
+        }
+
+        const diasDesdeLeitura = Math.floor((hojeUTC - dataLeitura) / 86400000);
+        const diasUltimaTentativa = ultimaTentativaISO
+            ? Math.floor((hojeUTC - new Date(ultimaTentativaISO)) / 86400000)
+            : Infinity;
+
+        const mesRef = `${String(dataLeitura.getUTCMonth() + 1).padStart(2, '0')}/${dataLeitura.getUTCFullYear()}`;
+
+        let motivo = null;
+        if (diasDesdeLeitura < JANELA_INICIO_DIAS) motivo = `aguarda D+${JANELA_INICIO_DIAS} (leitura há ${diasDesdeLeitura}d)`;
+        else if (diasDesdeLeitura > JANELA_DESISTIR_DIAS) motivo = `desiste: ${diasDesdeLeitura}d sem publicar (>${JANELA_DESISTIR_DIAS}d)`;
+        else if (diasUltimaTentativa < JANELA_RETENTATIVA) motivo = `retentativa em ${JANELA_RETENTATIVA - diasUltimaTentativa}d`;
+
+        return { mesRef, dataLeitura, diasDesdeLeitura, elegivel: motivo === null, motivo };
+    }
 
     const UF_TO_ESTADO = {
         RN: 'Rio Grande do Norte',
@@ -59,12 +108,17 @@ async function run() {
             currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
         }
     } else {
-        // Disparo Automático (Cron Diário)
-        targetedDays = [now.getDate()];
-        currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+        // Disparo automático (cron diário) -> MODO JANELA.
+        // Não filtra por dia de leitura: cada UC calcula seu próprio mês-alvo e
+        // sua própria elegibilidade (ver calcularJanelaUC). Regra de negócio:
+        // a concessionária tem até 15 dias para publicar a conta, então só faz
+        // sentido procurar a partir de D+7 da leitura, repetindo a cada 7 dias.
+        modoJanela = true;
+        targetedDays = [];
+        currentMesRef = null; // definido POR UC
     }
 
-    console.log(`[Faturista] REF: ${currentMesRef} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
+    console.log(`[Faturista] REF: ${currentMesRef || "por UC (modo janela)"} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
 
     // 2. Busca UCs da Neoenergia
     console.log('Pesquisando UCs aptas via código (Supabase)...');
@@ -83,7 +137,9 @@ async function run() {
             desconto_assinante,
             dia_leitura,
             dia_vencimento,
+            status,
             last_scraping_status,
+            last_scraping_at,
             subscriber:subscriber_id (
                 id, 
                 name, 
@@ -131,7 +187,25 @@ async function run() {
                 .eq('id', uc.id);
             continue;
         }
-        const [mm, yyyy] = currentMesRef.split('/');
+        // MODO JANELA: cada UC tem seu próprio mês-alvo (derivado da data da leitura)
+        // e sua própria elegibilidade. No modo manual (TARGET_DAYS) segue o mês global.
+        if (modoJanela) {
+            if (!uc.dia_leitura) {
+                console.log(`[Janela] UC ${uc.numero_uc}: sem dia_leitura cadastrado. Pulando.`);
+                continue;
+            }
+            const j = calcularJanelaUC(uc.dia_leitura, uc.last_scraping_at);
+            uc.mesRefAlvo = j.mesRef;
+            if (!j.elegivel) {
+                console.log(`[Janela] UC ${uc.numero_uc} (leitura dia ${uc.dia_leitura}, ref ${j.mesRef}): ${j.motivo}`);
+                continue;
+            }
+            console.log(`[Janela] UC ${uc.numero_uc}: elegível — leitura há ${j.diasDesdeLeitura}d, buscando ${j.mesRef}`);
+        } else {
+            uc.mesRefAlvo = currentMesRef;
+        }
+
+        const [mm, yyyy] = uc.mesRefAlvo.split('/');
         const inicioMes = `${yyyy}-${mm}-01`;
         // Date.UTC evita depender do fuso da máquina: mes_referencia é uma coluna DATE,
         // a comparação não pode variar conforme o TZ do runner.
@@ -148,12 +222,12 @@ async function run() {
             .limit(1);
 
         if (existingInvoices && existingInvoices.length > 0) {
-            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${currentMesRef}] já existe. Pulando scrape.`);
+            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] já existe. Pulando scrape.`);
             if (uc.last_scraping_status !== 'success') {
                 await updateUCStatus(uc.id, 'success', 'Fatura detectada via consulta de banco de dados.');
             }
         } else {
-            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${currentMesRef}] pendente. Adicionando à fila do Agente.`);
+            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] pendente. Adicionando à fila do Agente.`);
             ucsToScrape.push(uc);
         }
     }
@@ -449,7 +523,7 @@ async function run() {
                             }).catch((e) => { console.log('   [DIAG] erro no evaluate:', e.message); return ''; });
                             
                             const parsedRef = parseMesRef(rowText);
-                            if (parsedRef === currentMesRef) {
+                            if (parsedRef === uc.mesRefAlvo) {
                                 console.log(`   [Faturista] Fatura [${parsedRef}] localizada na tabela!`);
 
                                 // Fase 5: Fluxo de Download
