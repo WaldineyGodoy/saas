@@ -133,7 +133,10 @@ async function run() {
         }
         const [mm, yyyy] = currentMesRef.split('/');
         const inicioMes = `${yyyy}-${mm}-01`;
-        const fimMes = new Date(Number(yyyy), Number(mm), 1).toISOString().slice(0, 10);
+        // Date.UTC evita depender do fuso da máquina: mes_referencia é uma coluna DATE,
+        // a comparação não pode variar conforme o TZ do runner.
+        // Number(mm) já aponta para o mês seguinte (o construtor é 0-indexed).
+        const fimMes = new Date(Date.UTC(Number(yyyy), Number(mm), 1)).toISOString().slice(0, 10);
 
         const { data: existingInvoices } = await supabase
             .from('invoices')
