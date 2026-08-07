@@ -57,11 +57,12 @@ async function run() {
         const mesRef = `${String(dataLeitura.getUTCMonth() + 1).padStart(2, '0')}/${dataLeitura.getUTCFullYear()}`;
 
         let motivo = null;
+        let desistiu = false;
         if (diasDesdeLeitura < JANELA_INICIO_DIAS) motivo = `aguarda D+${JANELA_INICIO_DIAS} (leitura há ${diasDesdeLeitura}d)`;
-        else if (diasDesdeLeitura > JANELA_DESISTIR_DIAS) motivo = `desiste: ${diasDesdeLeitura}d sem publicar (>${JANELA_DESISTIR_DIAS}d)`;
+        else if (diasDesdeLeitura > JANELA_DESISTIR_DIAS) { motivo = `desiste: ${diasDesdeLeitura}d sem publicar (>${JANELA_DESISTIR_DIAS}d)`; desistiu = true; }
         else if (diasUltimaTentativa < JANELA_RETENTATIVA) motivo = `retentativa em ${JANELA_RETENTATIVA - diasUltimaTentativa}d`;
 
-        return { mesRef, dataLeitura, diasDesdeLeitura, elegivel: motivo === null, motivo };
+        return { mesRef, dataLeitura, diasDesdeLeitura, elegivel: motivo === null, motivo, desistiu };
     }
 
     const UF_TO_ESTADO = {
@@ -198,6 +199,13 @@ async function run() {
             uc.mesRefAlvo = j.mesRef;
             if (!j.elegivel) {
                 console.log(`[Janela] UC ${uc.numero_uc} (leitura dia ${uc.dia_leitura}, ref ${j.mesRef}): ${j.motivo}`);
+
+                // SINALIZAÇÃO NO CRM: quando a automação DESISTE (>60d sem a conta
+                // ser publicada), a UC não pode sumir em silêncio da fila — precisa
+                // ficar visível no Calendário de Leituras para ação humana.
+                if (j.desistiu) {
+                    await sinalizarDesistencia(uc, j);
+                }
                 continue;
             }
             console.log(`[Janela] UC ${uc.numero_uc}: elegível — leitura há ${j.diasDesdeLeitura}d, buscando ${j.mesRef}`);
@@ -780,6 +788,61 @@ async function parseInvoicePdf(filePath) {
     } catch (err) {
         console.error('      [Scanner PDF] Erro ao processar arquivo:', err.message);
         return { consumoKwh: 0, cipValor: 0 };
+    }
+}
+
+/**
+ * Sinaliza no CRM que a automação DESISTIU de buscar a conta desta UC/mês.
+ *
+ * Sem isso a UC simplesmente pararia de ser tentada e sumiria da fila em
+ * silêncio — ninguém saberia que existe uma conta que nunca foi publicada.
+ *
+ * A marcação é feita na INVOICE do mês (não só na UC) porque é dela que o
+ * Calendário de Leituras lê a cor. Resultado: card VERMELHO (Indisponível)
+ * no mês correspondente, com o motivo em reading_error.
+ *
+ * É idempotente: se já estiver sinalizada, não regrava (evita ruído diário).
+ */
+async function sinalizarDesistencia(uc, janela) {
+    const [mm, yyyy] = janela.mesRef.split('/');
+    const mesReferencia = `${yyyy}-${mm}-01`;
+    const nota = `[ATENCAO] Automacao desistiu apos ${janela.diasDesdeLeitura} dias sem a concessionaria publicar a conta (leitura em ${janela.dataLeitura.toISOString().slice(0, 10)}). Verificar manualmente no portal ou abrir chamado na concessionaria.`;
+
+    try {
+        const { data: existente } = await supabase
+            .from('invoices')
+            .select('id, reading_error')
+            .eq('uc_id', uc.id)
+            .eq('mes_referencia', mesReferencia)
+            .limit(1);
+
+        // Já sinalizada -> não repete a gravação todo dia
+        if (existente && existente.length > 0 && (existente[0].reading_error || '').includes('Automacao desistiu')) {
+            return;
+        }
+
+        await supabase.from('invoices').upsert({
+            uc_id: uc.id,
+            mes_referencia: mesReferencia,
+            status: 'sem_faturamento',
+            reading_status: 'error',
+            reading_error: nota,
+            reading_checked_at: new Date().toISOString(),
+            is_placeholder: true
+        }, { onConflict: 'uc_id,mes_referencia' });
+
+        await supabase
+            .from('consumer_units')
+            .update({
+                last_scraping_status: 'error',
+                last_scraping_error: nota,
+                last_scraping_at: new Date().toISOString()
+            })
+            .eq('id', uc.id);
+
+        console.log(`   [ATENÇÃO] UC ${uc.numero_uc} sinalizada no CRM: conta de ${janela.mesRef} não publicada em ${janela.diasDesdeLeitura} dias.`);
+    } catch (e) {
+        console.error(`   Falha ao sinalizar desistência da UC ${uc.numero_uc}:`, e.message);
     }
 }
 
