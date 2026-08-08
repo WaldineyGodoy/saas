@@ -7,9 +7,9 @@ BEGIN
         RAISE EXCEPTION 'FALHOU fio_b: esperado 0.21280, veio %', round(v, 5);
     END IF;
 
-    -- compensado nulo: sem compensacao nao ha Fio B
-    IF public.fn_fio_b_apurado(0.64164, NULL) <> 0 THEN
-        RAISE EXCEPTION 'FALHOU fio_b: compensado nulo deveria dar 0';
+    -- insumo ausente: propaga NULL, nao inventa zero
+    IF public.fn_fio_b_apurado(0.64164, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU fio_b: insumo nulo deveria propagar NULL';
     END IF;
 
     -- nunca negativo
@@ -44,6 +44,14 @@ BEGIN
     -- nunca negativa
     IF public.fn_tarifa_fornecedor(0.10000, 0.10000, 20, 0.90000) <> 0 THEN
         RAISE EXCEPTION 'FALHOU tarifa_fornecedor: resultado negativo deveria travar em 0';
+    END IF;
+
+    -- insumo ausente: propaga NULL em qualquer um dos quatro parametros
+    IF public.fn_tarifa_fornecedor(NULL, 0.64164, 20, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, NULL, 20, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, 0.64164, NULL, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, 0.64164, 20, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU tarifa_fornecedor: insumo nulo deveria propagar NULL';
     END IF;
 
     RAISE NOTICE 'OK: fn_tarifa_fornecedor';

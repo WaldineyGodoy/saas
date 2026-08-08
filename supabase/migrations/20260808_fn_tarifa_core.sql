@@ -7,13 +7,13 @@ IMMUTABLE
 SET search_path TO 'public'
 AS $$
     SELECT CASE
-        WHEN p_tusd_consumo_unit IS NULL OR p_tusd_compensado_unit IS NULL THEN 0
+        WHEN p_tusd_consumo_unit IS NULL OR p_tusd_compensado_unit IS NULL THEN NULL
         ELSE GREATEST(p_tusd_consumo_unit - p_tusd_compensado_unit, 0)
     END;
 $$;
 
 COMMENT ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) IS
-    'Fio B (R$/kWh) apurado na conta = TUSD do consumo - TUSD compensado. Spec 5.3, decisao 10.';
+    'Fio B (R$/kWh) apurado na conta = TUSD do consumo - TUSD compensado. Spec 5.3, decisao 10. Devolve NULL se faltar insumo. "Sem compensacao" deve ser gravado como 0, nao NULL.';
 
 REVOKE EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) TO authenticated, service_role;
@@ -28,16 +28,18 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path TO 'public'
 AS $$
-    SELECT GREATEST(
-        (COALESCE(p_te, 0) + COALESCE(p_tusd, 0))
-        * (1 - COALESCE(p_desconto_pct, 0) / 100.0)
-        - COALESCE(p_fio_b, 0),
-        0
-    );
+    SELECT CASE
+        WHEN p_te IS NULL OR p_tusd IS NULL
+          OR p_desconto_pct IS NULL OR p_fio_b IS NULL THEN NULL
+        ELSE GREATEST(
+            (p_te + p_tusd) * (1 - p_desconto_pct / 100.0) - p_fio_b,
+            0
+        )
+    END;
 $$;
 
 COMMENT ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) IS
-    'Tarifa Fornecedor (R$/kWh) = (TE+TUSD) - desconto% - Fio B. Base da reparticao. Spec 5.3.';
+    'Tarifa Fornecedor (R$/kWh) = (TE+TUSD) - desconto% - Fio B. Base da reparticao. Spec 5.3. Devolve NULL se faltar qualquer insumo.';
 
 REVOKE EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) TO authenticated, service_role;
