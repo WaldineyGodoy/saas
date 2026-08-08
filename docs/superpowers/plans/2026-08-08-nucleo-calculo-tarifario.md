@@ -391,9 +391,23 @@ BEGIN
         RAISE EXCEPTION 'FALHOU split: total para 1000 kWh deveria ser 600.00, veio %', r->>'total';
     END IF;
 
+    -- insumo ausente propaga NULL em qualquer um dos cinco parametros (Global Constraint)
+    IF public.fn_split_tarifa(NULL, 1000, 3, 10, 5) IS NOT NULL
+       OR public.fn_split_tarifa(0.60, NULL, 3, 10, 5) IS NOT NULL
+       OR public.fn_split_tarifa(0.60, 1000, NULL, 10, 5) IS NOT NULL
+       OR public.fn_split_tarifa(0.60, 1000, 3, NULL, 5) IS NOT NULL
+       OR public.fn_split_tarifa(0.60, 1000, 3, 10, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU split: insumo nulo deveria propagar NULL';
+    END IF;
+
     RAISE NOTICE 'OK: fn_split_tarifa';
 END $$;
 ```
+
+> A propagação de `NULL` aqui é o `WHERE` da CTE `base`: sem linha, o `SELECT` final não
+> produz linha, e a função devolve `NULL` em vez de um jsonb com zeros. Um split que
+> reparte zero é indistinguível de um split legítimo de valor zero — e este é o ponto do
+> plano onde o dinheiro se divide.
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
@@ -416,12 +430,17 @@ IMMUTABLE
 SET search_path TO 'public'
 AS $$
     WITH base AS (
-        SELECT COALESCE(p_tarifa_fornecedor, 0) * COALESCE(p_energia_compensada, 0) AS total
+        SELECT p_tarifa_fornecedor * p_energia_compensada AS total
+         WHERE p_tarifa_fornecedor  IS NOT NULL
+           AND p_energia_compensada IS NOT NULL
+           AND p_pct_crm            IS NOT NULL
+           AND p_pct_gestora        IS NOT NULL
+           AND p_pct_originador     IS NOT NULL
     ), partes AS (
         SELECT total,
-               total * COALESCE(p_pct_crm, 0)        / 100.0 AS crm,
-               total * COALESCE(p_pct_gestora, 0)    / 100.0 AS gestora,
-               total * COALESCE(p_pct_originador, 0) / 100.0 AS originador
+               total * p_pct_crm        / 100.0 AS crm,
+               total * p_pct_gestora    / 100.0 AS gestora,
+               total * p_pct_originador / 100.0 AS originador
           FROM base
     )
     SELECT jsonb_build_object(
@@ -565,17 +584,17 @@ BEGIN
 
     IF p_te IS NOT NULL AND v_ref.te IS NOT NULL AND v_ref.te <> 0
        AND abs(p_te - v_ref.te) / v_ref.te * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'te';
+        v_campos := v_campos || 'te'::text;
     END IF;
 
     IF p_tusd IS NOT NULL AND v_ref.tusd IS NOT NULL AND v_ref.tusd <> 0
        AND abs(p_tusd - v_ref.tusd) / v_ref.tusd * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'tusd';
+        v_campos := v_campos || 'tusd'::text;
     END IF;
 
     IF p_fio_b IS NOT NULL AND v_ref.fio_b IS NOT NULL AND v_ref.fio_b <> 0
        AND abs(p_fio_b - v_ref.fio_b) / v_ref.fio_b * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'fio_b';
+        v_campos := v_campos || 'fio_b'::text;
     END IF;
 
     RETURN jsonb_build_object(
