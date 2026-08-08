@@ -40,6 +40,25 @@
   ```
 
   Esperado: `anon_pode = false`, `authenticated_pode = true`.
+- **Dado faltante propaga `NULL`, nunca vira zero silenciosamente.** Decisão do dono em
+  08/08/2026, após a revisão da Task 3 apontar que as duas primeiras funções tratavam nulo
+  de formas divergentes.
+
+  Toda função de cálculo devolve `NULL` quando lhe falta um insumo essencial. Ela não
+  inventa zero, não calcula parcial, e não decide sozinha o que fazer — quem chama é que
+  decide, e o fechamento acusa a UC com dado incompleto.
+
+  O motivo é dinheiro. Com `COALESCE(p_te, 0)`, um TE não extraído produz uma tarifa
+  menor e o fornecedor recebe a menos, em silêncio. Com `COALESCE(p_desconto_pct, 0)`, um
+  desconto não extraído produz tarifa cheia e o fornecedor recebe a **mais**, também em
+  silêncio. A spec 5.5 já registra duas UCs com `te = tusd = fio_b = 0` e 1.631 kWh
+  compensados — o problema não é hipotético.
+
+  **Contrato de dado que isso cria:** "sem compensação no mês" deve ser gravado como `0`,
+  não como `NULL`. `NULL` passa a significar exclusivamente "não apurado". Sem essa
+  distinção no dado, nenhuma função consegue separar ausência de fato de ausência de
+  leitura.
+
 - Percentuais de repartição são **parâmetros**, nunca constantes no corpo. O modelo de pagamento será revisado e não queremos editar função para mudar percentual.
 - Precisão monetária: arredondar apenas na saída final, com `round(x, 2)`. Cálculos intermediários mantêm a precisão de `numeric`.
 - Nomes em português, prefixo `fn_`, seguindo o padrão já existente no banco (`fn_dispatch_notification`, `fn_process_notification_triggers`).
