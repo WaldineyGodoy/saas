@@ -1,3 +1,9 @@
+-- ATENCAO: esta assercao roda SOMENTE contra a base de producao.
+-- Ela depende de dados reais: a usina 'UFV Bom Jesus', o mes 2026-05-01, e o
+-- fechamento correspondente em generation_production. Em base vazia ou em CI
+-- ela falha por ausencia de dado, nao por defeito de codigo.
+-- A tolerancia de 2%% e' deliberada e NAO deve ser relaxada: ver o plano,
+-- Task 6, Step 4.
 DO $$
 DECLARE
     v_usina uuid;

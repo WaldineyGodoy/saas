@@ -70,9 +70,9 @@
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `supabase/migrations/20260808_fn_tarifa_core.sql` | As quatro funções de cálculo puro |
-| `supabase/migrations/20260808_invoices_apuracao_tarifaria.sql` | Colunas de apuração em `invoices` |
-| `supabase/migrations/20260808_fn_faturamento_mensal.sql` | Agregação por usina/mês |
+| `supabase/migrations/20260808a_invoices_apuracao_tarifaria.sql` | Colunas de apuração em `invoices` |
+| `supabase/migrations/20260808b_fn_tarifa_core.sql` | As quatro funções de cálculo puro |
+| `supabase/migrations/20260808c_fn_faturamento_mensal.sql` | Agregação por usina/mês |
 | `supabase/tests/tarifa_core.test.sql` | Asserções das funções puras |
 | `supabase/tests/faturamento_mensal.test.sql` | Asserção contra produção |
 
@@ -83,7 +83,7 @@
 A Tarifa Fornecedor precisa de TE, TUSD e Fio B **apurados na conta**, não do cadastro da UC. Hoje `invoices` não guarda nenhum deles: `tarifa_concessionaria` e `desconto_assinante` estão nulos em 12 de 13 faturas, e `fio_b` só existe em `consumer_units`, congelado.
 
 **Files:**
-- Create: `supabase/migrations/20260808_invoices_apuracao_tarifaria.sql`
+- Create: `supabase/migrations/20260808a_invoices_apuracao_tarifaria.sql`
 
 **Interfaces:**
 - Consumes: nada
@@ -149,7 +149,7 @@ Esperado: `NOTICE: OK: colunas de apuracao presentes`, sem exceção.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260808_invoices_apuracao_tarifaria.sql supabase/tests/apuracao_colunas.test.sql
+git add supabase/migrations/20260808a_invoices_apuracao_tarifaria.sql supabase/tests/apuracao_colunas.test.sql
 git commit -m "feat(db): colunas de apuracao tarifaria em invoices"
 ```
 
@@ -166,7 +166,7 @@ reconcilia com o `0,2128` de produção e com `1,02 − 0,204 − 0,21 = 0,60`. 
 devolve a alíquota; o total é `alíquota × energia_compensada`.
 
 **Files:**
-- Create: `supabase/migrations/20260808_fn_tarifa_core.sql`
+- Create: `supabase/migrations/20260808b_fn_tarifa_core.sql`
 - Test: `supabase/tests/tarifa_core.test.sql`
 
 **Interfaces:**
@@ -187,9 +187,9 @@ BEGIN
         RAISE EXCEPTION 'FALHOU fio_b: esperado 0.21280, veio %', round(v, 5);
     END IF;
 
-    -- compensado nulo: sem compensacao nao ha Fio B
-    IF public.fn_fio_b_apurado(0.64164, NULL) <> 0 THEN
-        RAISE EXCEPTION 'FALHOU fio_b: compensado nulo deveria dar 0';
+    -- insumo ausente: propaga NULL, nao inventa zero
+    IF public.fn_fio_b_apurado(0.64164, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU fio_b: insumo nulo deveria propagar NULL';
     END IF;
 
     -- nunca negativo
@@ -219,21 +219,23 @@ IMMUTABLE
 SET search_path TO 'public'
 AS $$
     SELECT CASE
-        WHEN p_tusd_consumo_unit IS NULL OR p_tusd_compensado_unit IS NULL THEN 0
+        WHEN p_tusd_consumo_unit IS NULL OR p_tusd_compensado_unit IS NULL THEN NULL
         ELSE GREATEST(p_tusd_consumo_unit - p_tusd_compensado_unit, 0)
     END;
 $$;
 
 COMMENT ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) IS
-    'Fio B (R$/kWh) apurado na conta = TUSD do consumo - TUSD compensado. Spec 5.3, decisao 10.';
+    'Fio B (R$/kWh) apurado na conta = TUSD do consumo - TUSD compensado. Spec 5.3, decisao 10. Devolve NULL se faltar insumo. "Sem compensacao" deve ser gravado como 0, nao NULL.';
 
 REVOKE EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) TO authenticated, service_role;
 ```
 
-> Por que `CASE` e não `COALESCE(..., 0)` nos dois argumentos: com o compensado nulo, o
-> `COALESCE` devolveria o TUSD cheio como se fosse Fio B. Sem compensação não existe Fio B
-> a descontar — o resultado tem que ser zero. É o segundo caso do teste.
+> Por que `CASE` e não `COALESCE(..., 0)`: com o compensado nulo, o `COALESCE` devolveria o
+> TUSD cheio como se fosse Fio B. E devolver `0` também seria errado — zero é um Fio B
+> legítimo, indistinguível de "não apurado". Pela Global Constraint de propagação de
+> `NULL`, insumo ausente devolve `NULL`, e quem chama decide. "Sem compensação no mês"
+> deve ser gravado como `0` no dado, não como `NULL`.
 
 - [ ] **Step 4: Rodar e confirmar que passa**
 
@@ -242,7 +244,7 @@ Esperado: `NOTICE: OK: fn_fio_b_apurado`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260808_fn_tarifa_core.sql supabase/tests/tarifa_core.test.sql
+git add supabase/migrations/20260808b_fn_tarifa_core.sql supabase/tests/tarifa_core.test.sql
 git commit -m "feat(db): fn_fio_b_apurado calcula Fio B por conta"
 ```
 
@@ -253,7 +255,7 @@ git commit -m "feat(db): fn_fio_b_apurado calcula Fio B por conta"
 Spec 5.3: `Tarifa Fornecedor = (TE + TUSD) − desconto% − Fio B`.
 
 **Files:**
-- Modify: `supabase/migrations/20260808_fn_tarifa_core.sql`
+- Modify: `supabase/migrations/20260808b_fn_tarifa_core.sql`
 - Test: `supabase/tests/tarifa_core.test.sql`
 
 **Interfaces:**
@@ -291,6 +293,14 @@ BEGIN
         RAISE EXCEPTION 'FALHOU tarifa_fornecedor: resultado negativo deveria travar em 0';
     END IF;
 
+    -- insumo ausente: propaga NULL em qualquer um dos quatro parametros
+    IF public.fn_tarifa_fornecedor(NULL, 0.64164, 20, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, NULL, 20, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, 0.64164, NULL, 0.21280) IS NOT NULL
+       OR public.fn_tarifa_fornecedor(0.39033, 0.64164, 20, NULL) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU tarifa_fornecedor: insumo nulo deveria propagar NULL';
+    END IF;
+
     RAISE NOTICE 'OK: fn_tarifa_fornecedor';
 END $$;
 ```
@@ -314,16 +324,18 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path TO 'public'
 AS $$
-    SELECT GREATEST(
-        (COALESCE(p_te, 0) + COALESCE(p_tusd, 0))
-        * (1 - COALESCE(p_desconto_pct, 0) / 100.0)
-        - COALESCE(p_fio_b, 0),
-        0
-    );
+    SELECT CASE
+        WHEN p_te IS NULL OR p_tusd IS NULL
+          OR p_desconto_pct IS NULL OR p_fio_b IS NULL THEN NULL
+        ELSE GREATEST(
+            (p_te + p_tusd) * (1 - p_desconto_pct / 100.0) - p_fio_b,
+            0
+        )
+    END;
 $$;
 
 COMMENT ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) IS
-    'Tarifa Fornecedor (R$/kWh) = (TE+TUSD) - desconto% - Fio B. Base da reparticao. Spec 5.3.';
+    'Tarifa Fornecedor (R$/kWh) = (TE+TUSD) - desconto% - Fio B. Base da reparticao. Spec 5.3. Devolve NULL se faltar qualquer insumo.';
 
 REVOKE EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) TO authenticated, service_role;
@@ -347,7 +359,7 @@ git commit -m "feat(db): fn_tarifa_fornecedor, base da reparticao por kWh"
 Spec 5.3. Percentuais são **parâmetros**, não constantes: o modelo de pagamento será revisado.
 
 **Files:**
-- Modify: `supabase/migrations/20260808_fn_tarifa_core.sql`
+- Modify: `supabase/migrations/20260808b_fn_tarifa_core.sql`
 - Test: `supabase/tests/tarifa_core.test.sql`
 
 **Interfaces:**
@@ -486,7 +498,7 @@ correspondem a B1). A extensão por classe fica bloqueada até `consumer_units.c
 existir — registrado como Task 7 do plano seguinte, não deste.
 
 **Files:**
-- Modify: `supabase/migrations/20260808_fn_tarifa_core.sql`
+- Modify: `supabase/migrations/20260808b_fn_tarifa_core.sql`
 - Test: `supabase/tests/tarifa_core.test.sql`
 
 **Interfaces:**
@@ -639,7 +651,7 @@ Spec 5.4, decisão 8: `faturamento_mensal` soma `tarifa_fornecedor × energia_co
 em todo o histórico — é justamente o fallback que permite validar contra 05/2026.
 
 **Files:**
-- Create: `supabase/migrations/20260808_fn_faturamento_mensal.sql`
+- Create: `supabase/migrations/20260808c_fn_faturamento_mensal.sql`
 - Create: `supabase/tests/faturamento_mensal.test.sql`
 
 **Interfaces:**
