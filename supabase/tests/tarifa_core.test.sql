@@ -100,3 +100,48 @@ BEGIN
 
     RAISE NOTICE 'OK: fn_split_tarifa';
 END $$;
+
+DO $$
+DECLARE
+    v_ibge text;
+    v_te   numeric;
+    v_tusd numeric;
+    r      jsonb;
+BEGIN
+    -- pega um municipio real da tabela de referencia
+    SELECT "Cod. Ibge", "TE", "TUSD"
+      INTO v_ibge, v_te, v_tusd
+      FROM public."Concessionaria"
+     WHERE "TE" IS NOT NULL AND "TE" > 0 AND "TUSD" IS NOT NULL AND "TUSD" > 0
+     LIMIT 1;
+
+    IF v_ibge IS NULL THEN
+        RAISE EXCEPTION 'FALHOU: tabela Concessionaria sem linha utilizavel para o teste';
+    END IF;
+
+    -- valor identico a referencia: nao diverge
+    r := public.fn_auditar_tarifa(v_ibge, v_te, v_tusd, NULL, 5);
+    IF (r->>'divergente')::boolean THEN
+        RAISE EXCEPTION 'FALHOU auditoria: valor igual a referencia acusou divergencia: %', r;
+    END IF;
+
+    -- 50%% acima da referencia: diverge e aponta o campo
+    r := public.fn_auditar_tarifa(v_ibge, v_te * 1.5, v_tusd, NULL, 5);
+    IF NOT (r->>'divergente')::boolean THEN
+        RAISE EXCEPTION 'FALHOU auditoria: 50%% de desvio nao acusou divergencia: %', r;
+    END IF;
+    IF NOT (r->'campos' ? 'te') THEN
+        RAISE EXCEPTION 'FALHOU auditoria: campo te deveria constar em campos: %', r;
+    END IF;
+
+    -- municipio inexistente: nao diverge, mas sinaliza ausencia de referencia
+    r := public.fn_auditar_tarifa('0000000', 1.0, 1.0, NULL, 5);
+    IF (r->>'divergente')::boolean THEN
+        RAISE EXCEPTION 'FALHOU auditoria: sem referencia nao deve acusar divergencia';
+    END IF;
+    IF r->'referencia' <> 'null'::jsonb THEN
+        RAISE EXCEPTION 'FALHOU auditoria: sem referencia, a chave referencia deve ser null';
+    END IF;
+
+    RAISE NOTICE 'OK: fn_auditar_tarifa';
+END $$;

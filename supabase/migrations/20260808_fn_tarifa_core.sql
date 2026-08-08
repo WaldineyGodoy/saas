@@ -83,3 +83,61 @@ COMMENT ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, n
 
 REVOKE EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_auditar_tarifa(
+    p_ibge           text,
+    p_te             numeric,
+    p_tusd           numeric,
+    p_fio_b          numeric,
+    p_tolerancia_pct numeric DEFAULT 5
+) RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SET search_path TO 'public'
+AS $$
+DECLARE
+    v_ref    record;
+    v_campos text[] := ARRAY[]::text[];
+BEGIN
+    SELECT "TE" AS te, "TUSD" AS tusd, "Fio B" AS fio_b
+      INTO v_ref
+      FROM public."Concessionaria"
+     WHERE "Cod. Ibge" = p_ibge
+     LIMIT 1;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'divergente', false,
+            'campos',     '[]'::jsonb,
+            'referencia', NULL
+        );
+    END IF;
+
+    IF p_te IS NOT NULL AND v_ref.te IS NOT NULL AND v_ref.te <> 0
+       AND abs(p_te - v_ref.te) / v_ref.te * 100 > p_tolerancia_pct THEN
+        v_campos := v_campos || 'te';
+    END IF;
+
+    IF p_tusd IS NOT NULL AND v_ref.tusd IS NOT NULL AND v_ref.tusd <> 0
+       AND abs(p_tusd - v_ref.tusd) / v_ref.tusd * 100 > p_tolerancia_pct THEN
+        v_campos := v_campos || 'tusd';
+    END IF;
+
+    IF p_fio_b IS NOT NULL AND v_ref.fio_b IS NOT NULL AND v_ref.fio_b <> 0
+       AND abs(p_fio_b - v_ref.fio_b) / v_ref.fio_b * 100 > p_tolerancia_pct THEN
+        v_campos := v_campos || 'fio_b';
+    END IF;
+
+    RETURN jsonb_build_object(
+        'divergente', array_length(v_campos, 1) IS NOT NULL,
+        'campos',     to_jsonb(v_campos),
+        'referencia', jsonb_build_object('te', v_ref.te, 'tusd', v_ref.tusd, 'fio_b', v_ref.fio_b)
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) IS
+    'Compara a tarifa apurada na conta com a referencia de Concessionaria. NUNCA substitui o valor da conta: apenas sinaliza distorcao. Spec 5.6.';
+
+REVOKE EXECUTE ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) TO authenticated, service_role;
