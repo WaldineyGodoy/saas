@@ -43,3 +43,43 @@ COMMENT ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numer
 
 REVOKE EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.fn_split_tarifa(
+    p_tarifa_fornecedor  numeric,
+    p_energia_compensada numeric,
+    p_pct_crm            numeric,
+    p_pct_gestora        numeric,
+    p_pct_originador     numeric
+) RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+    WITH base AS (
+        SELECT p_tarifa_fornecedor * p_energia_compensada AS total
+         WHERE p_tarifa_fornecedor  IS NOT NULL
+           AND p_energia_compensada IS NOT NULL
+           AND p_pct_crm            IS NOT NULL
+           AND p_pct_gestora        IS NOT NULL
+           AND p_pct_originador     IS NOT NULL
+    ), partes AS (
+        SELECT total,
+               total * p_pct_crm        / 100.0 AS crm,
+               total * p_pct_gestora    / 100.0 AS gestora,
+               total * p_pct_originador / 100.0 AS originador
+          FROM base
+    )
+    SELECT jsonb_build_object(
+        'total',      total,
+        'crm',        crm,
+        'gestora',    gestora,
+        'originador', originador,
+        'fornecedor', total - crm - gestora - originador
+    ) FROM partes;
+$$;
+
+COMMENT ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) IS
+    'Reparte Tarifa Fornecedor x energia compensada. Percentuais sao parametros: o modelo de pagamento sera revisado. O fornecedor recebe o residual, garantindo que as partes fechem com o total.';
+
+REVOKE EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) TO authenticated, service_role;
