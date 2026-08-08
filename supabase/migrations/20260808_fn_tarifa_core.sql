@@ -115,17 +115,17 @@ BEGIN
 
     IF p_te IS NOT NULL AND v_ref.te IS NOT NULL AND v_ref.te <> 0
        AND abs(p_te - v_ref.te) / v_ref.te * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'te';
+        v_campos := v_campos || 'te'::text;
     END IF;
 
     IF p_tusd IS NOT NULL AND v_ref.tusd IS NOT NULL AND v_ref.tusd <> 0
        AND abs(p_tusd - v_ref.tusd) / v_ref.tusd * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'tusd';
+        v_campos := v_campos || 'tusd'::text;
     END IF;
 
     IF p_fio_b IS NOT NULL AND v_ref.fio_b IS NOT NULL AND v_ref.fio_b <> 0
        AND abs(p_fio_b - v_ref.fio_b) / v_ref.fio_b * 100 > p_tolerancia_pct THEN
-        v_campos := v_campos || 'fio_b';
+        v_campos := v_campos || 'fio_b'::text;
     END IF;
 
     RETURN jsonb_build_object(
