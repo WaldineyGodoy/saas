@@ -15,7 +15,31 @@
 - Toda função deste plano é `IMMUTABLE` ou `STABLE`, nunca `VOLATILE`. Elas calculam, não escrevem.
 - Toda função declara `SET search_path TO 'public'`. O banco tem 38 funções com `search_path` mutável e não vamos aumentar esse número.
 - Nenhuma função deste plano é `SECURITY DEFINER`. São cálculos puros; não precisam contornar RLS.
-- `REVOKE EXECUTE ... FROM PUBLIC` em toda função criada, seguido de `GRANT EXECUTE ... TO authenticated, service_role`. O default do Postgres concede a `PUBLIC`, que inclui `anon` — foi assim que 19 funções financeiras ficaram chamáveis sem login.
+- `REVOKE EXECUTE ... FROM PUBLIC, anon` em toda função criada, seguido de
+  `GRANT EXECUTE ... TO authenticated, service_role`.
+
+  **Revogar só de `PUBLIC` não basta neste projeto** — corrigido em 08/08/2026, após a
+  Task 2 falhar a verificação. Há duas vias distintas pelas quais `anon` ganha `EXECUTE`:
+
+  1. O default do Postgres concede a `PUBLIC` (entrada `=X/postgres`, grantee vazio no
+     `proacl`), que `anon` herda. Foi assim que 19 funções financeiras ficaram chamáveis
+     sem login.
+  2. O Supabase mantém `ALTER DEFAULT PRIVILEGES` em `public` concedendo `EXECUTE` a
+     `anon` **explicitamente**. Confirmado em `pg_default_acl`:
+     `{postgres=X/postgres, anon=X/postgres, authenticated=X/postgres, service_role=X/postgres}`.
+     Toda função nova nasce com `anon=X` próprio no ACL.
+
+  `REVOKE FROM PUBLIC` mata só a via 1. A via 2 exige revogar de `anon` nominalmente.
+
+  **Verificação obrigatória ao fim de cada task que cria função** — o teste da função
+  passar não prova nada sobre privilégio:
+
+  ```sql
+  SELECT has_function_privilege('anon',          '<assinatura>', 'EXECUTE') AS anon_pode,
+         has_function_privilege('authenticated', '<assinatura>', 'EXECUTE') AS authenticated_pode;
+  ```
+
+  Esperado: `anon_pode = false`, `authenticated_pode = true`.
 - Percentuais de repartição são **parâmetros**, nunca constantes no corpo. O modelo de pagamento será revisado e não queremos editar função para mudar percentual.
 - Precisão monetária: arredondar apenas na saída final, com `round(x, 2)`. Cálculos intermediários mantêm a precisão de `numeric`.
 - Nomes em português, prefixo `fn_`, seguindo o padrão já existente no banco (`fn_dispatch_notification`, `fn_process_notification_triggers`).
@@ -184,7 +208,7 @@ $$;
 COMMENT ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) IS
     'Fio B (R$/kWh) apurado na conta = TUSD do consumo - TUSD compensado. Spec 5.3, decisao 10.';
 
-REVOKE EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_fio_b_apurado(numeric, numeric) TO authenticated, service_role;
 ```
 
@@ -282,7 +306,7 @@ $$;
 COMMENT ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) IS
     'Tarifa Fornecedor (R$/kWh) = (TE+TUSD) - desconto% - Fio B. Base da reparticao. Spec 5.3.';
 
-REVOKE EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_tarifa_fornecedor(numeric, numeric, numeric, numeric) TO authenticated, service_role;
 ```
 
@@ -393,7 +417,7 @@ $$;
 COMMENT ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) IS
     'Reparte Tarifa Fornecedor x energia compensada. Percentuais sao parametros: o modelo de pagamento sera revisado. O fornecedor recebe o residual, garantindo que as partes fechem com o total.';
 
-REVOKE EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) TO authenticated, service_role;
 ```
 
@@ -550,7 +574,7 @@ Na mesma migration, em seguida:
 COMMENT ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) IS
     'Compara a tarifa apurada na conta com a referencia de Concessionaria. NUNCA substitui o valor da conta: apenas sinaliza distorcao. Spec 5.6.';
 
-REVOKE EXECUTE ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_auditar_tarifa(text, numeric, numeric, numeric, numeric) TO authenticated, service_role;
 ```
 
@@ -666,7 +690,7 @@ $$;
 COMMENT ON FUNCTION public.fn_faturamento_mensal_usina(uuid, date, numeric) IS
     'Faturamento do mes da usina: soma de tarifa_fornecedor x energia compensada, apenas faturas pagas (decisao 8). Valor apurado na conta prevalece sobre o cadastro da UC.';
 
-REVOKE EXECUTE ON FUNCTION public.fn_faturamento_mensal_usina(uuid, date, numeric) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.fn_faturamento_mensal_usina(uuid, date, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_faturamento_mensal_usina(uuid, date, numeric) TO authenticated, service_role;
 ```
 
