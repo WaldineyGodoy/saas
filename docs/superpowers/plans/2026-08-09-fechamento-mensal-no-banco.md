@@ -1774,15 +1774,23 @@ serve(async (req) => {
             })
         })
 
-        const data = await response.json()
+        // A ordem aqui protege dinheiro. O status HTTP e' o que diz se o
+        // pagamento aconteceu; o corpo e' so' detalhe. Se o parse viesse antes,
+        // uma resposta 200 com corpo malformado estouraria com asaasId ainda
+        // nulo -- e o catch marcaria 'erro' num boleto que foi pago.
         if (!response.ok) {
-            throw new Error(data.errors?.[0]?.description || 'Asaas recusou o pagamento do boleto')
+            const erro = await response.json().catch(() => ({}))
+            throw new Error(erro.errors?.[0]?.description || 'Asaas recusou o pagamento do boleto')
         }
 
-        // A partir daqui o dinheiro JA' SAIU. Nenhum caminho abaixo pode marcar
-        // este fechamento como 'erro': seria registrar mentira sobre dinheiro que
-        // saiu, e convidar um reprocessamento que pagaria o boleto de novo.
-        asaasId = data.id
+        // 200: o dinheiro JA' SAIU, mesmo que o corpo venha ilegivel. A partir
+        // daqui nenhum caminho pode marcar este fechamento como 'erro' - seria
+        // registrar mentira sobre dinheiro que saiu, e convidar um
+        // reprocessamento que pagaria o boleto de novo.
+        asaasId = 'desconhecido'
+
+        const data = await response.json()
+        asaasId = data.id ?? 'desconhecido'
 
         // 6. Confirma de volta. Toda chamada checa error (spec 6.2).
         const { error: rpcError } = await supabase.rpc('confirmar_pagamento_ug', {
