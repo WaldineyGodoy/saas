@@ -2004,10 +2004,8 @@ DECLARE
     v_gp       record;
     v_usina    record;
     v_supplier record;
-    v_tx       uuid := gen_random_uuid();
     v_totais   jsonb;
-    v_acc_forn uuid;
-    v_acc_bank uuid;
+    v_valor    numeric;
 BEGIN
     SELECT * INTO v_gp FROM public.generation_production WHERE id = p_id FOR UPDATE;
     IF NOT FOUND THEN
@@ -2019,8 +2017,13 @@ BEGIN
 
     -- Liquidar com o boleto da concessionaria em erro paga o fornecedor por uma
     -- despesa que a B2W ainda vai absorver. Decisao 5: os tres atos sao um so'.
-    IF v_gp.pagamento_ug_status NOT IN ('pago', 'manual') THEN
-        RAISE EXCEPTION 'pagamento da conta da UG esta em %: resolva antes de liquidar', v_gp.pagamento_ug_status;
+    -- IS NULL explicito: NULL NOT IN (...) devolve NULL, o IF nao dispara, e o
+    -- repasse sairia com a conta da concessionaria em estado desconhecido.
+    -- Todas as 11 linhas de producao estao com esta coluna NULL hoje.
+    IF v_gp.pagamento_ug_status IS NULL
+       OR v_gp.pagamento_ug_status NOT IN ('pago', 'manual') THEN
+        RAISE EXCEPTION 'pagamento da conta da UG esta em %: resolva antes de liquidar',
+                        COALESCE(v_gp.pagamento_ug_status, 'NULL');
     END IF;
 
     IF v_gp.saldo_receber IS NULL OR v_gp.saldo_receber <= 0 THEN
@@ -2042,23 +2045,48 @@ BEGIN
     END IF;
 
     SELECT * INTO v_usina FROM public.usinas WHERE id = v_gp.usina_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'fechamento % aponta para uma usina inexistente', p_id;
+    END IF;
+
     SELECT * INTO v_supplier FROM public.suppliers WHERE id = v_usina.supplier_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'usina % nao tem fornecedor cadastrado', v_usina.name;
+    END IF;
+
     IF v_supplier.pix_key IS NULL THEN
         RAISE EXCEPTION 'fornecedor de % nao tem chave PIX cadastrada', v_usina.name;
     END IF;
 
-    SELECT id INTO v_acc_forn FROM public.ledger_accounts WHERE code = '2.1.1';
-    SELECT id INTO v_acc_bank FROM public.ledger_accounts WHERE code = '1.1.1.01';
+    -- pix_key_type nulo faria transfer-asaas-pix cair no default 'CPF' e o
+    -- Asaas recusar uma chave de outro tipo - depois do commit, em silencio.
+    IF v_supplier.pix_key_type IS NULL THEN
+        RAISE EXCEPTION 'fornecedor de % tem chave PIX sem tipo definido', v_usina.name;
+    END IF;
 
-    INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-    VALUES (v_tx, v_acc_forn, v_gp.saldo_receber,
-            'Repasse ' || to_char(v_gp.mes_referencia, 'MM/YYYY') || ' - ' || v_usina.name,
-            'supplier', v_usina.supplier_id, 'liquidacao:' || p_id || ':passivo');
+    -- ESTA FUNCAO NAO LANCA NO RAZAO. Nao e' esquecimento.
+    --
+    -- O trigger tr_transfer_ledger, vivo em financial_transfers, ja' grava
+    -- exatamente esta partida quando a transferencia chega a 'completed':
+    --     2.1.1     += valor    (baixa do passivo)
+    --     1.1.1.01  += -valor   (saida do banco)
+    -- Medido em 09/08/2026: 8 lancamentos 'payout_supplier' para 4 linhas de
+    -- financial_transfers. Ele e' hoje o unico lugar que contabiliza PIX ao
+    -- fornecedor, e lancar aqui tambem dobraria todo repasse.
+    --
+    -- A escolha do dono e' que o razao registre o repasse quando o dinheiro
+    -- sai de verdade, nao quando a intencao de pagar e' registrada. Se o PIX
+    -- falhar, o razao simplesmente nao tem a partida - em vez de ter uma
+    -- partida mentirosa que ninguem corrige (repasse_status nao sai de
+    -- 'enfileirado', ver o COMMENT da coluna).
+    --
+    -- O que esta transacao garante continua sendo o que importa: a validacao,
+    -- a mudanca de estado e o enfileiramento do PIX sao atomicos. Rollback
+    -- cancela o envio antes de qualquer worker ve-lo.
 
-    INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-    VALUES (v_tx, v_acc_bank, -v_gp.saldo_receber,
-            'PIX ao fornecedor ' || v_supplier.name,
-            'supplier', v_usina.supplier_id, 'liquidacao:' || p_id || ':banco');
+    -- O valor que sai e' o recalculado, nao a coluna: ela ja' foi conferida
+    -- contra ele acima, e o recalculado e' o numero autoritativo.
+    v_valor := (v_totais->>'saldo_receber')::numeric;
 
     UPDATE public.generation_production
        SET status = 'liquidado', repasse_status = 'enfileirado'
@@ -2068,7 +2096,7 @@ BEGIN
     PERFORM net.http_post(
         url     := 'https://abbysvxnnhwvvzhftoms.supabase.co/functions/v1/transfer-asaas-pix',
         body    := jsonb_build_object(
-                      'value',           v_gp.saldo_receber,
+                      'value',           v_valor,
                       'pix_key',         v_supplier.pix_key,
                       'pix_key_type',    v_supplier.pix_key_type,
                       'supplier_id',     v_usina.supplier_id,
@@ -2080,9 +2108,9 @@ BEGIN
 
     RETURN jsonb_build_object(
         'ok', true,
-        'transaction_id', v_tx,
-        'valor', v_gp.saldo_receber,
-        'destino', v_supplier.name
+        'valor', v_valor,
+        'destino', v_supplier.name,
+        'razao', 'lancado por tr_transfer_ledger quando o PIX completar'
     );
 END;
 $$;
@@ -2092,7 +2120,7 @@ COMMENT ON COLUMN public.generation_production.repasse_status IS
     'PIX ao fornecedor: enfileirado | pago | erro. NULL = ainda nao liquidado. ATENCAO em 09/08/2026: nada no sistema escreve pago nem erro. O do lado do boleto e confirmar_pagamento_ug, chamada pela edge function; o equivalente do PIX nao existe, porque transfer-asaas-pix nao devolve nada ao banco e o asaas-webhook atualiza financial_transfers sem propagar para ca. Todo repasse fica em enfileirado, tenha dado certo ou nao. Fechar esse ciclo e frente propria: exige funcao nova e religar o webhook.';
 
 COMMENT ON FUNCTION public.liquidar_producao(uuid) IS
-    'Liquida o mes fechado: baixa o passivo 2.1.1 contra o banco e enfileira o PIX ao fornecedor via pg_net, dentro da transacao. Recusa se o mes nao estiver fechado, se o pagamento da conta da UG nao estiver resolvido, se o saldo nao for positivo, ou se o fornecedor nao tiver chave PIX.';
+    'Liquida o mes fechado: valida, marca liquidado e enfileira o PIX ao fornecedor via pg_net, dentro da transacao. NAO lanca no razao - quem lanca e o trigger tr_transfer_ledger, quando a transferencia chega a completed; lancar aqui dobraria o repasse. Reconfere saldo_receber contra fn_totais_fechamento antes de enfileirar. Recusa se o mes nao estiver fechado, se o pagamento da conta da UG nao estiver resolvido ou for NULL, se o saldo nao for positivo ou divergir do recalculado, ou se o fornecedor nao tiver chave PIX com tipo.';
 
 REVOKE EXECUTE ON FUNCTION public.liquidar_producao(uuid) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.liquidar_producao(uuid) TO authenticated, service_role;
