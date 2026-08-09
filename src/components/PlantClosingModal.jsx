@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
-import { X, Save, Calculator, DollarSign, FileText, Calendar } from 'lucide-react';
+import { X, Save, Calculator, FileText, Calendar } from 'lucide-react';
 
 export default function PlantClosingModal({ usina, closingId, onClose, onSave }) {
     const { showAlert } = useUI();
@@ -210,6 +210,30 @@ export default function PlantClosingModal({ usina, closingId, onClose, onSave })
 
 
     const handlePayout = async () => {
+        // DESARMADO EM 08/08/2026 — nao remover sem ler o motivo.
+        //
+        // Este fluxo disparava um PIX real e, em seguida, tentava registrar a
+        // liquidacao em quatro escritas que falham todas em silencio:
+        //   - plant_closings nao existe no banco (migration 20260130 nunca aplicada)
+        //   - status 'liquidado' e filtro 'paga' nao existem no enum fatura_status
+        //   - invoices.ano_referencia nao existe
+        //   - nenhuma das escritas checa o retorno { error } do supabase-js
+        // O resultado era: dinheiro sai, nada e' registrado, e a tela mostra
+        // "Pagamento realizado" em verde.
+        //
+        // A trava contra pagamento duplicado tambem nunca engatava: ela le
+        // formData.status de plant_closings, que volta sempre vazio.
+        //
+        // O repasse funcional vive em BillingList.jsx (generation_production,
+        // cujo enum production_status tem 'liquidado' de verdade). Use aquele.
+        showAlert(
+            'Repasse indisponivel por aqui. Use a tela Billing, que registra a ' +
+            'liquidacao corretamente. Esta tela nao grava o pagamento.',
+            'error'
+        );
+        return;
+
+        /* eslint-disable no-unreachable */
         if (!usina.pix_key) {
             showAlert('Usina sem chave PIX cadastrada!', 'error');
             return;
@@ -327,6 +351,7 @@ export default function PlantClosingModal({ usina, closingId, onClose, onSave })
         } finally {
             setLoading(false);
         }
+        /* eslint-enable no-unreachable */
     };
 
     const handleSubmit = async (e) => {
@@ -551,29 +576,24 @@ export default function PlantClosingModal({ usina, closingId, onClose, onSave })
                             {formatCurrency(formData.saldo_liquido)}
                         </div>
 
-                        {/* Payout Button */}
+                        {/* Payout desarmado em 08/08/2026 — ver comentario em handlePayout.
+                            O botao disparava PIX real sem registrar a liquidacao. */}
                         {formData.saldo_liquido > 0 && formData.status !== 'liquidado' && (
-                            <button
-                                type="button"
-                                onClick={handlePayout}
-                                disabled={loading || formData.status === 'liquidado'}
-                                style={{
-                                    marginTop: '1.5rem',
-                                    background: '#16a34a',
-                                    color: 'white',
-                                    padding: '0.8rem 2rem',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)'
-                                }}
-                            >
-                                <DollarSign size={20} /> Pagar e Liquidar via Pix
-                            </button>
+                            <div style={{
+                                marginTop: '1.5rem',
+                                padding: '0.9rem 1.2rem',
+                                background: '#fffbeb',
+                                border: '1px solid #fcd34d',
+                                borderRadius: '6px',
+                                color: '#92400e',
+                                fontSize: '0.9rem',
+                                textAlign: 'left'
+                            }}>
+                                <strong>Repasse indisponível nesta tela.</strong><br />
+                                Esta tela calcula o fechamento, mas não registra o pagamento.
+                                Faça o repasse pela tela <strong>Billing</strong>, que grava a
+                                liquidação em <code>generation_production</code>.
+                            </div>
                         )}
                         {formData.status === 'liquidado' && (
                             <div style={{ marginTop: '1rem', color: '#166534', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
