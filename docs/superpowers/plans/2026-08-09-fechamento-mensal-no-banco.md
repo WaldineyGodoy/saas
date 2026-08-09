@@ -2005,6 +2005,7 @@ DECLARE
     v_usina    record;
     v_supplier record;
     v_tx       uuid := gen_random_uuid();
+    v_totais   jsonb;
     v_acc_forn uuid;
     v_acc_bank uuid;
 BEGIN
@@ -2024,6 +2025,20 @@ BEGIN
 
     IF v_gp.saldo_receber IS NULL OR v_gp.saldo_receber <= 0 THEN
         RAISE EXCEPTION 'saldo a receber e % - nao ha o que repassar', COALESCE(v_gp.saldo_receber::text, 'NULL');
+    END IF;
+
+    -- saldo_receber e' coluna comum: qualquer UPDATE a altera, e e' ela que
+    -- determina quanto sai por PIX. Antes de enfileirar dinheiro, reconfere
+    -- contra a formula. Divergencia aqui significa que a linha foi tocada
+    -- depois do fechamento - e escolher entre os dois numeros em silencio e'
+    -- exatamente o que nao se pode fazer com repasse.
+    v_totais := public.fn_totais_fechamento(p_id);
+    IF (v_totais->>'saldo_receber') IS NULL THEN
+        RAISE EXCEPTION 'nao foi possivel recalcular o saldo do fechamento %: insumo ausente', p_id;
+    END IF;
+    IF abs((v_totais->>'saldo_receber')::numeric - v_gp.saldo_receber) > 0.005 THEN
+        RAISE EXCEPTION 'saldo gravado (%) diverge do recalculado (%): reabra e feche o mes de novo',
+                        v_gp.saldo_receber, (v_totais->>'saldo_receber')::numeric;
     END IF;
 
     SELECT * INTO v_usina FROM public.usinas WHERE id = v_gp.usina_id;
@@ -2071,6 +2086,10 @@ BEGIN
     );
 END;
 $$;
+
+-- Debito conhecido, registrado onde quem for mexer vai ler.
+COMMENT ON COLUMN public.generation_production.repasse_status IS
+    'PIX ao fornecedor: enfileirado | pago | erro. NULL = ainda nao liquidado. ATENCAO em 09/08/2026: nada no sistema escreve pago nem erro. O do lado do boleto e confirmar_pagamento_ug, chamada pela edge function; o equivalente do PIX nao existe, porque transfer-asaas-pix nao devolve nada ao banco e o asaas-webhook atualiza financial_transfers sem propagar para ca. Todo repasse fica em enfileirado, tenha dado certo ou nao. Fechar esse ciclo e frente propria: exige funcao nova e religar o webhook.';
 
 COMMENT ON FUNCTION public.liquidar_producao(uuid) IS
     'Liquida o mes fechado: baixa o passivo 2.1.1 contra o banco e enfileira o PIX ao fornecedor via pg_net, dentro da transacao. Recusa se o mes nao estiver fechado, se o pagamento da conta da UG nao estiver resolvido, se o saldo nao for positivo, ou se o fornecedor nao tiver chave PIX.';
