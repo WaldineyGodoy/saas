@@ -2253,18 +2253,37 @@ COMMENT ON FUNCTION public.handle_invoice_paid() IS
     'DESARMADA em 09/08/2026, junto com a troca do cashbook por uma view. Ela gravava o valor cheio da fatura no cashbook enquanto handle_invoice_paid_ledger gravava o rateado no razao - os dois livros nunca batiam e nada reconciliava. Mantida sem gatilho apenas para consulta.';
 
 -- ---------------------------------------------------------------------
--- 3. cashbook passa a ser uma leitura do razao, por usina.
---    'entrada' e 'saida' seguem a convencao ja' usada nas partidas: valor
---    negativo em conta de resultado e' credito (entrada de receita), valor
---    positivo em passivo e' debito (saida).
+-- 3. cashbook passa a ser o livro caixa de verdade: uma linha por
+--    movimento de dinheiro, nao uma linha por perna de partida.
+--
+--    Uma versao anterior deste plano listava TODAS as pernas do razao.
+--    Medido em 09/08/2026: 77 transacoes viravam 205 linhas, e somar a
+--    coluna dava R$ 104.050,46 -- quando o caixa que de fato se moveu
+--    foram R$ 20.803,19 de entrada contra R$ 20.511,17 de saida. O resto
+--    era a contrapartida da mesma operacao, contada de novo.
+--
+--    Um livro caixa registra o que passou pelo banco. Por isso a view
+--    filtra as contas de ativo: cada linha aqui e' um real que entrou ou
+--    saiu, e a soma da coluna e' o caixa.
+--
+--    O sinal tambem estava invertido para essas contas. Em conta de
+--    ativo, valor POSITIVO e' debito = dinheiro entrando. A versao
+--    anterior aplicava a convencao de passivo/resultado a todas as
+--    contas, e rotulava um "Recebimento Fatura" de +2.478,15 como saida.
 -- ---------------------------------------------------------------------
 DROP TABLE public.cashbook;
 
-CREATE VIEW public.cashbook AS
+CREATE VIEW public.cashbook
+WITH (security_invoker = on) AS
 SELECT
     le.id,
-    u.id                                   AS usina_id,
-    CASE WHEN le.amount < 0 THEN 'entrada' ELSE 'saida' END::varchar AS type,
+    -- A usina vem da fatura que originou o lancamento, quando ha' uma:
+    -- essa ligacao foi resolvida no momento do lancamento e nao muda se
+    -- alguem cadastrar outra usina amanha. O caminho por supplier_id nao
+    -- tem essa propriedade -- um fornecedor com duas usinas tornaria
+    -- ambiguo o que hoje esta' atribuido.
+    cu.usina_id                            AS usina_id,
+    CASE WHEN le.amount > 0 THEN 'entrada' ELSE 'saida' END::varchar AS type,
     la.name::varchar                       AS category,
     le.description,
     abs(le.amount)                         AS amount,
@@ -2275,11 +2294,13 @@ SELECT
     le.created_at
 FROM public.ledger_entries le
 JOIN public.ledger_accounts la ON la.id = le.account_id
-LEFT JOIN public.usinas u
-       ON (le.reference_type = 'supplier' AND u.supplier_id = le.reference_id);
+LEFT JOIN public.invoices i       ON (le.reference_type = 'invoice' AND i.id = le.reference_id)
+LEFT JOIN public.consumer_units cu ON cu.id = i.uc_id
+WHERE la.type = 'asset'
+  AND le.is_sandbox IS NOT TRUE;
 
 COMMENT ON VIEW public.cashbook IS
-    'Leitura do razao por usina (spec 3.1, item 3). Deixou de ser tabela em 09/08/2026: era o segundo livro, gravado com valor cheio enquanto o razao recebia o rateado. status e sempre liquidado porque o razao so recebe fato consumado - nao ha provisionamento aqui. As 10 linhas antigas estao em cashbook_legado.';
+    'Livro caixa: uma linha por movimento de dinheiro no banco (contas de ativo do razao). Somar amount por type da o caixa real. Deixou de ser tabela em 09/08/2026 - era o segundo livro, gravado com o valor cheio da fatura enquanto o razao recebia o rateado, e nada reconciliava. NAO lista as contrapartidas de passivo e resultado: quem quer a partida inteira le ledger_entries por transaction_id. usina_id vem da fatura de origem e e NULL quando o lancamento nao nasce de uma - repasse e taxa bancaria, por exemplo. As 10 linhas antigas estao em cashbook_legado.';
 
 REVOKE ALL ON public.cashbook FROM PUBLIC, anon;
 GRANT  SELECT ON public.cashbook TO authenticated, service_role;
