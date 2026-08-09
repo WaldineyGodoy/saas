@@ -1323,6 +1323,11 @@ DECLARE
     v_totais    jsonb;
     v_tx        uuid := gen_random_uuid();
     v_servicos  numeric;
+    v_total     numeric;
+    v_disp      numeric;
+    v_manut     numeric;
+    v_arren     numeric;
+    v_serv_leg  numeric;
     v_acc_forn  uuid;
     v_acc_conc  uuid;
     v_acc_desp  uuid;
@@ -1377,33 +1382,55 @@ BEGIN
     SELECT id INTO v_acc_arren FROM public.ledger_accounts WHERE code = '3.1.4';
 
     -- 5. Partidas. Debita o fornecedor pelo total das despesas e credita cada
-    --    contrapartida. Soma zero por construcao.
-    --    external_id e' UNIQUE: reexecutar apos falha nao duplica.
+    --    contrapartida.
+    --
+    --    ARREDONDAMENTO (Global Constraint 6): o debito ja' vem arredondado de
+    --    fn_totais_fechamento. Se as contrapartidas entrassem com o valor cru da
+    --    coluna, um insumo com 3+ casas deixaria a transacao fora do zero -- e
+    --    nada no schema impede 3 casas em custo_disponibilidade, manutencao ou
+    --    arrendamento. Entao cada parcela e' arredondada e a ULTIMA (servicos) e'
+    --    derivada por diferenca, que e' o mesmo padrao que a spec usa no split:
+    --    as partes fecham com o total em centavos, por construcao.
+    --
+    --    Consequencia aceita: a perna de servicos no razao pode diferir em ate' um
+    --    centavo de generation_production.servicos, que continua sendo a soma fiel
+    --    das linhas de detalhe. O razao fecha; o detalhe permanece verdadeiro.
+    --
+    --    Nenhuma parcela pode ser NULL aqui: a validacao 3 ja' recusou o
+    --    fechamento se total_despesas tivesse dado NULL, e ele so' e' NULL se
+    --    alguma parcela for.
+    v_total := (v_totais->>'total_despesas')::numeric;
+    v_disp  := round(v_gp.custo_disponibilidade, 2);
+    v_manut := round(v_gp.manutencao, 2);
+    v_arren := round(v_gp.arrendamento, 2);
+    v_serv_leg := v_total - v_disp - v_manut - v_arren;
+
+    -- external_id e' UNIQUE: reexecutar apos falha nao duplica.
     INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-    VALUES (v_tx, v_acc_forn, (v_totais->>'total_despesas')::numeric,
+    VALUES (v_tx, v_acc_forn, v_total,
             'Fechamento ' || to_char(v_gp.mes_referencia, 'MM/YYYY') || ' - ' || v_usina.name,
             'supplier', v_usina.supplier_id, 'fechamento:' || p_id || ':fornecedor');
 
     INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-    VALUES (v_tx, v_acc_conc, -v_gp.custo_disponibilidade,
+    VALUES (v_tx, v_acc_conc, -v_disp,
             'Conta de energia da UG ' || to_char(v_gp.mes_referencia, 'MM/YYYY'),
             'supplier', v_usina.supplier_id, 'fechamento:' || p_id || ':disponibilidade');
 
-    IF COALESCE(v_gp.manutencao, 0) <> 0 THEN
+    IF v_manut <> 0 THEN
         INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-        VALUES (v_tx, v_acc_manut, -v_gp.manutencao, 'Receita Manutencao (' || v_usina.name || ')',
+        VALUES (v_tx, v_acc_manut, -v_manut, 'Receita Manutencao (' || v_usina.name || ')',
                 'supplier', v_usina.supplier_id, 'fechamento:' || p_id || ':manutencao');
     END IF;
 
-    IF COALESCE(v_gp.arrendamento, 0) <> 0 THEN
+    IF v_arren <> 0 THEN
         INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-        VALUES (v_tx, v_acc_arren, -v_gp.arrendamento, 'Receita Arrendamento (' || v_usina.name || ')',
+        VALUES (v_tx, v_acc_arren, -v_arren, 'Receita Arrendamento (' || v_usina.name || ')',
                 'supplier', v_usina.supplier_id, 'fechamento:' || p_id || ':arrendamento');
     END IF;
 
-    IF COALESCE(v_servicos, 0) <> 0 THEN
+    IF v_serv_leg <> 0 THEN
         INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id, external_id)
-        VALUES (v_tx, v_acc_desp, -v_servicos, 'Servicos (' || v_usina.name || ')',
+        VALUES (v_tx, v_acc_desp, -v_serv_leg, 'Servicos (' || v_usina.name || ')',
                 'supplier', v_usina.supplier_id, 'fechamento:' || p_id || ':servicos');
     END IF;
 
@@ -1475,11 +1502,26 @@ SET search_path TO 'public'
 AS $$
 DECLARE
     v_invoice uuid;
+    v_status  text;
 BEGIN
-    SELECT pagamento_ug_invoice_id INTO v_invoice
-      FROM public.generation_production WHERE id = p_gp_id;
+    SELECT pagamento_ug_invoice_id, pagamento_ug_status
+      INTO v_invoice, v_status
+      FROM public.generation_production WHERE id = p_gp_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'fechamento % nao encontrado', p_gp_id;
+    END IF;
+
+    -- Sem esta guarda, uma chamada com um id qualquer marca a conta como paga
+    -- sem que pagamento nenhum tenha sido enfileirado, e devolve ok=true mesmo
+    -- quando nao ha' fatura associada (o UPDATE casa zero linhas em silencio).
+    -- Confirmar so' faz sentido sobre um pagamento que esta' em voo.
+    IF v_status IS DISTINCT FROM 'enfileirado' THEN
+        RAISE EXCEPTION 'fechamento % nao tem pagamento enfileirado (esta em %): nada a confirmar',
+                        p_gp_id, COALESCE(v_status, 'NULL');
+    END IF;
+
+    IF v_invoice IS NULL THEN
+        RAISE EXCEPTION 'fechamento % esta enfileirado sem conta da UG associada', p_gp_id;
     END IF;
 
     UPDATE public.generation_production
