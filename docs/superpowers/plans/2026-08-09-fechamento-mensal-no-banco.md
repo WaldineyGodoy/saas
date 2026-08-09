@@ -2086,7 +2086,10 @@ BEGIN
 
     -- O valor que sai e' o recalculado, nao a coluna: ela ja' foi conferida
     -- contra ele acima, e o recalculado e' o numero autoritativo.
-    v_valor := (v_totais->>'saldo_receber')::numeric;
+    -- O round e' Global Constraint 2 e nao e' redundante: o saldo vem de uma
+    -- formula com percentual de gestao, entao fracao de centavo e' o caso
+    -- normal. O que sair daqui vai para o Asaas depois do commit, sem volta.
+    v_valor := round((v_totais->>'saldo_receber')::numeric, 2);
 
     UPDATE public.generation_production
        SET status = 'liquidado', repasse_status = 'enfileirado'
