@@ -1653,6 +1653,40 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // 1. Segredo compartilhado, ANTES de qualquer outra coisa.
+    //
+    //    A ordem aqui e' de seguranca, nao de estilo. Se a validacao dos campos
+    //    viesse primeiro, um POST sem token com {"gp_id": "<uuid>"} e sem
+    //    invoice_id cairia no catch e marcaria aquele fechamento como 'erro' sem
+    //    nunca passar pelo portao: nao paga nada, mas corrompe o estado de um
+    //    pagamento em voo. Nada e' lido do corpo antes de o chamador provar quem e'.
+    const token = req.headers.get('x-fechamento-token')
+    if (!token) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+            status: 401, headers: { 'Content-Type': 'application/json' }
+        })
+    }
+
+    const { data: hook, error: hookError } = await supabase
+        .from('integrations_config')
+        .select('api_key')
+        .eq('service_name', 'fechamento_hook')
+        .single()
+
+    if (hookError) {
+        return new Response(JSON.stringify({ error: 'Segredo do hook nao configurado: ' + hookError.message }), {
+            status: 500, headers: { 'Content-Type': 'application/json' }
+        })
+    }
+
+    if (token !== hook.api_key) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+            status: 401, headers: { 'Content-Type': 'application/json' }
+        })
+    }
+
+    // Autenticado. So' a partir daqui gpId pode ser preenchido, e so' a partir
+    // daqui o catch tem direito de escrever no banco.
     let gpId: string | null = null
 
     try {
@@ -1661,22 +1695,6 @@ serve(async (req) => {
 
         if (!gp_id || !invoice_id || !valor) {
             throw new Error('Campos obrigatorios: gp_id, invoice_id, valor')
-        }
-
-        // 1. Segredo compartilhado
-        const { data: hook, error: hookError } = await supabase
-            .from('integrations_config')
-            .select('api_key')
-            .eq('service_name', 'fechamento_hook')
-            .single()
-
-        if (hookError) throw new Error('Segredo do hook nao configurado: ' + hookError.message)
-
-        const token = req.headers.get('x-fechamento-token')
-        if (!token || token !== hook.api_key) {
-            return new Response(JSON.stringify({ error: 'unauthorized' }), {
-                status: 401, headers: { 'Content-Type': 'application/json' }
-            })
         }
 
         // 2. A linha digitavel vem do banco, nao do corpo da requisicao:
