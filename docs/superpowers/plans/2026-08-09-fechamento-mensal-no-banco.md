@@ -1688,6 +1688,9 @@ serve(async (req) => {
     // Autenticado. So' a partir daqui gpId pode ser preenchido, e so' a partir
     // daqui o catch tem direito de escrever no banco.
     let gpId: string | null = null
+    // Marca a fronteira do dinheiro: enquanto for null, nada foi pago e o catch
+    // pode registrar erro. Depois de preenchido, o pagamento aconteceu.
+    let asaasId: string | null = null
 
     try {
         const { gp_id, invoice_id, valor, descricao } = await req.json()
@@ -1697,8 +1700,31 @@ serve(async (req) => {
             throw new Error('Campos obrigatorios: gp_id, invoice_id, valor')
         }
 
-        // 2. A linha digitavel vem do banco, nao do corpo da requisicao:
-        //    quem paga decide o que paga.
+        // 2. Idempotencia ANTES de gastar dinheiro.
+        //    A guarda de confirmar_pagamento_ug age depois do POST: sem esta,
+        //    um replay da mesma requisicao paga o mesmo boleto duas vezes.
+        const { data: fechamento, error: fechamentoError } = await supabase
+            .from('generation_production')
+            .select('pagamento_ug_status, pagamento_ug_invoice_id')
+            .eq('id', gp_id)
+            .single()
+
+        if (fechamentoError) throw new Error('Fechamento nao encontrado: ' + fechamentoError.message)
+        if (fechamento.pagamento_ug_status !== 'enfileirado') {
+            throw new Error(
+                `Fechamento nao tem pagamento enfileirado (esta em ${fechamento.pagamento_ug_status ?? 'NULL'}): nada a pagar`
+            )
+        }
+        if (fechamento.pagamento_ug_invoice_id !== invoice_id) {
+            throw new Error('invoice_id nao e a conta da UG registrada neste fechamento')
+        }
+
+        // 3. A linha digitavel E O VALOR vem do banco, nao do corpo da
+        //    requisicao: quem paga decide o que paga, e quanto.
+        //    O corpo traz custo_disponibilidade, que e' um snapshot gravado no
+        //    fechamento; a conta e' valor_concessionaria. Os dois deveriam ser
+        //    iguais, e e' justamente por isso que a divergencia precisa gritar
+        //    em vez de escolher um dos dois em silencio.
         const { data: invoice, error: invoiceError } = await supabase
             .from('invoices')
             .select('linha_digitavel, vencimento_concessionaria, valor_concessionaria')
@@ -1707,6 +1733,17 @@ serve(async (req) => {
 
         if (invoiceError) throw new Error('Conta da UG nao encontrada: ' + invoiceError.message)
         if (!invoice.linha_digitavel) throw new Error('Conta da UG sem linha digitavel')
+        if (invoice.valor_concessionaria === null) throw new Error('Conta da UG sem valor')
+
+        const valorConta = Number(invoice.valor_concessionaria)
+        if (!Number.isFinite(valorConta) || valorConta <= 0) {
+            throw new Error(`Valor da conta da UG invalido: ${invoice.valor_concessionaria}`)
+        }
+        if (Math.abs(valorConta - Number(valor)) > 0.005) {
+            throw new Error(
+                `Divergencia entre o fechamento (${valor}) e a conta da UG (${valorConta}): nao pago no escuro`
+            )
+        }
 
         // 3. Credenciais do Asaas, mesma fonte de pay-asaas-bill
         const { data: config, error: configError } = await supabase
@@ -1725,13 +1762,13 @@ serve(async (req) => {
 
         if (!asaasKey) throw new Error('Asaas sem chave de API configurada')
 
-        // 4. Pagamento
+        // 5. Pagamento. O valor e' o da conta, nao o do corpo.
         const response = await fetch(`${asaasUrl}/bill`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'access_token': asaasKey },
             body: JSON.stringify({
                 identificationField: invoice.linha_digitavel,
-                value: Number(valor),
+                value: valorConta,
                 dueDate: invoice.vencimento_concessionaria ?? undefined,
                 description: descricao ?? 'Conta de energia da UG'
             })
@@ -1742,11 +1779,29 @@ serve(async (req) => {
             throw new Error(data.errors?.[0]?.description || 'Asaas recusou o pagamento do boleto')
         }
 
-        // 5. Confirma de volta. Toda chamada checa error (spec 6.2).
+        // A partir daqui o dinheiro JA' SAIU. Nenhum caminho abaixo pode marcar
+        // este fechamento como 'erro': seria registrar mentira sobre dinheiro que
+        // saiu, e convidar um reprocessamento que pagaria o boleto de novo.
+        asaasId = data.id
+
+        // 6. Confirma de volta. Toda chamada checa error (spec 6.2).
         const { error: rpcError } = await supabase.rpc('confirmar_pagamento_ug', {
             p_gp_id: gp_id, p_ok: true, p_detalhe: { asaas_id: data.id, status: data.status }
         })
-        if (rpcError) throw new Error('Pagamento feito mas confirmacao falhou: ' + rpcError.message)
+
+        if (rpcError) {
+            // Pago no Asaas, nao registrado no banco. O fechamento fica em
+            // 'enfileirado', que e' o estado que trava a liquidacao (Task 8 exige
+            // 'pago' ou 'manual') - a operacao para, e alguem reconcilia com o
+            // asaas_id devolvido aqui. 502, porque a falha nao e' do chamador.
+            console.error('PAGAMENTO SEM REGISTRO', { gp_id, asaas_id: data.id, erro: rpcError.message })
+            return new Response(JSON.stringify({
+                error: 'pagamento_sem_registro',
+                asaas_id: data.id,
+                detalhe: rpcError.message,
+                acao: 'Boleto pago no Asaas e nao confirmado no banco. Reconciliar a mao pelo asaas_id.'
+            }), { status: 502, headers: { 'Content-Type': 'application/json' } })
+        }
 
         return new Response(JSON.stringify({ ok: true, asaas_id: data.id }), {
             headers: { 'Content-Type': 'application/json' }
@@ -1754,14 +1809,20 @@ serve(async (req) => {
 
     } catch (err) {
         // Falha registrada, nunca engolida: e' ela que impede a liquidacao.
-        if (gpId) {
+        // Mas so' quando o dinheiro NAO saiu - se asaasId existe, o pagamento
+        // aconteceu e marcar 'erro' seria mentira. Esse caminho ja' retornou 502
+        // acima; aqui asaasId so' pode estar preenchido se algo estourou depois,
+        // e a regra continua valendo.
+        if (gpId && asaasId === null) {
             const { error: rpcError } = await supabase.rpc('confirmar_pagamento_ug', {
                 p_gp_id: gpId, p_ok: false, p_detalhe: { erro: String(err?.message ?? err) }
             })
             if (rpcError) console.error('confirmar_pagamento_ug falhou:', rpcError.message)
+        } else if (asaasId !== null) {
+            console.error('PAGAMENTO SEM REGISTRO', { gp_id: gpId, asaas_id: asaasId, erro: String(err?.message ?? err) })
         }
-        return new Response(JSON.stringify({ error: String(err?.message ?? err) }), {
-            status: 400, headers: { 'Content-Type': 'application/json' }
+        return new Response(JSON.stringify({ error: String(err?.message ?? err), asaas_id: asaasId }), {
+            status: asaasId === null ? 400 : 502, headers: { 'Content-Type': 'application/json' }
         })
     }
 })
