@@ -505,8 +505,9 @@ DECLARE
 BEGIN
     SELECT id INTO v_usina FROM public.usinas WHERE name = 'UFV Bom Jesus';
 
-    -- Medido em 09/08/2026: 12 faturas pagas em 05/2026, todas com insumo completo,
-    -- total 5.896,03 contra 5.833,18 registrado (1,08%).
+    -- Medido em 09/08/2026: 11 faturas pagas em 05/2026, todas com insumo completo,
+    -- total 5.896,03 contra 5.833,18 registrado (1,08%). Sao 13 linhas no mes:
+    -- 11 pagas, 1 atrasada e 1 cancelada.
     v_r := public.fn_faturamento_detalhado(v_usina, DATE '2026-05-01');
 
     IF round((v_r->>'total')::numeric, 2) <> 5896.03 THEN
@@ -516,8 +517,8 @@ BEGIN
         RAISE EXCEPTION 'FALHOU faturamento 05/2026: esperava 0 descartadas, veio % - %',
                         v_r->>'descartadas', v_r->'descartes';
     END IF;
-    IF (v_r->>'faturas')::int <> 12 THEN
-        RAISE EXCEPTION 'FALHOU faturamento 05/2026: esperava 12 faturas pagas, veio %', v_r->>'faturas';
+    IF (v_r->>'faturas')::int <> 11 THEN
+        RAISE EXCEPTION 'FALHOU faturamento 05/2026: esperava 11 faturas pagas, veio %', v_r->>'faturas';
     END IF;
 
     -- 04/2026: 12 faturas pagas, 10.853,05 kWh compensados.
