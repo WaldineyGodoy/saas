@@ -62,6 +62,10 @@ AS $$
            AND p_pct_crm            IS NOT NULL
            AND p_pct_gestora        IS NOT NULL
            AND p_pct_originador     IS NOT NULL
+           AND p_pct_crm        >= 0
+           AND p_pct_gestora    >= 0
+           AND p_pct_originador >= 0
+           AND (p_pct_crm + p_pct_gestora + p_pct_originador) <= 100
     ), partes AS (
         SELECT total,
                total * p_pct_crm        / 100.0 AS crm,
@@ -79,7 +83,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) IS
-    'Reparte Tarifa Fornecedor x energia compensada. Percentuais sao parametros: o modelo de pagamento sera revisado. O fornecedor recebe o residual, garantindo que as partes fechem com o total.';
+    'Reparte Tarifa Fornecedor x energia compensada. Percentuais sao parametros: o modelo de pagamento sera revisado. O fornecedor recebe o residual, garantindo que as partes fechem com o total. Devolve NULL se faltar insumo, se algum percentual for negativo, ou se a soma dos tres passar de 100 - nesse caso o fornecedor ficaria negativo.';
 
 REVOKE EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_split_tarifa(numeric, numeric, numeric, numeric, numeric) TO authenticated, service_role;

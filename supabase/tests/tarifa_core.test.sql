@@ -98,6 +98,22 @@ BEGIN
         RAISE EXCEPTION 'FALHOU split: insumo nulo deveria propagar NULL';
     END IF;
 
+    -- soma exatamente 100 e' valida: o fornecedor fica com zero, e' o limite
+    r := public.fn_split_tarifa(0.60, 1, 50, 30, 20);
+    IF r IS NULL OR round((r->>'fornecedor')::numeric, 6) <> 0 THEN
+        RAISE EXCEPTION 'FALHOU split: soma 100 deveria valer com fornecedor zero, veio %', r;
+    END IF;
+
+    -- soma acima de 100 deixaria o fornecedor negativo: recusa
+    IF public.fn_split_tarifa(0.60, 1, 3, 100, 5) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU split: soma 108 deveria recusar';
+    END IF;
+
+    -- percentual negativo: mesmo tratamento
+    IF public.fn_split_tarifa(0.60, 1, -3, 10, 5) IS NOT NULL THEN
+        RAISE EXCEPTION 'FALHOU split: percentual negativo deveria recusar';
+    END IF;
+
     RAISE NOTICE 'OK: fn_split_tarifa';
 END $$;
 
