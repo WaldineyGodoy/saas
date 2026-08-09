@@ -2086,9 +2086,11 @@ BEGIN
 
     -- O valor que sai e' o recalculado, nao a coluna: ela ja' foi conferida
     -- contra ele acima, e o recalculado e' o numero autoritativo.
-    -- O round e' Global Constraint 2 e nao e' redundante: o saldo vem de uma
-    -- formula com percentual de gestao, entao fracao de centavo e' o caso
-    -- normal. O que sair daqui vai para o Asaas depois do commit, sem volta.
+    -- O round e' defesa em profundidade, nao guarda ativa: fn_totais_fechamento
+    -- ja' termina em round(..., 2), entao hoje ele nao muda nenhum numero -- e
+    -- por isso nenhum teste consegue mata-lo sem alterar aquela funcao. Fica
+    -- porque o que sai daqui vai ao Asaas depois do commit, sem volta, e uma
+    -- mudanca futura la' nao pode vazar fracao de centavo para ca em silencio.
     v_valor := round((v_totais->>'saldo_receber')::numeric, 2);
 
     UPDATE public.generation_production
