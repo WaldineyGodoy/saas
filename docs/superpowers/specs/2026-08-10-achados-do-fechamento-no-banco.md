@@ -18,7 +18,15 @@ O `CHECK` da coluna aceita `pago` e `erro`, e **nada no sistema escreve esses va
 
 Consequência prática: **`enfileirado` não significa que o dinheiro saiu.** Todo repasse fica nesse estado, tenha dado certo ou não. Até existir a função de confirmação, cada repasse precisa ser conferido no extrato do Asaas à mão.
 
-Criar a função sozinha não resolve — ela nasceria sem chamador. Fechar o ciclo exige religar o `asaas-webhook`, que é webhook de pagamento vivo, e isso merece frente própria.
+Criar a função sozinha não resolve — ela nasceria sem chamador. Fechar o ciclo exige mexer no `asaas-webhook`, que é webhook de pagamento vivo, e isso merece frente própria.
+
+**Medido em 10/08/2026, e a frente é menor do que parece:** o `asaas-webhook` **já recebe e classifica** os eventos de transferência (`index.ts:64-80`) — `TRANSFER_DONE` e `TRANSFER_CONFIRMED` viram `completed`, `TRANSFER_FAILED` e `TRANSFER_REVERSED` viram `failed`, `TRANSFER_PENDING` vira `pending` — e já atualiza `financial_transfers` por `asaas_transfer_id`. O mecanismo existe; ele só não propaga para `generation_production`.
+
+Faltam três coisas, e a primeira é a única com decisão de desenho:
+
+1. **Saber qual transferência pertence a qual fechamento.** `transfer-asaas-pix` grava `financial_transfers` com `destination_id = supplier_id` e nada mais — e um fornecedor tem três usinas, que é a mesma ambiguidade que já obrigou a guarda de 3 minutos em `liquidar_producao`. Precisa de um vínculo explícito: passar uma referência no corpo do POST que `transfer-asaas-pix` persista, ou uma coluna nova em `financial_transfers`.
+2. **A RPC `confirmar_repasse(uuid, boolean, jsonb)`**, espelho de `confirmar_pagamento_ug`, que já existe, funciona, e tem as guardas certas para copiar.
+3. **Poucas linhas no webhook**, chamando a RPC depois do update que ele já faz.
 
 ### b) `transfer-asaas-pix` não tem autenticação
 
