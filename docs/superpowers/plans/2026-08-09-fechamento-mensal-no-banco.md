@@ -86,7 +86,14 @@ nunca escrevia esses dois campos. `gestao_reais` é `0` nas 11 linhas de
 `generation_production`, apesar de `gestao_percentual` ser `10` em todas as
 usinas. O teste da Task 11 enumera as seis e reprova se aparecer uma sétima.
 
-E `265,69` é exatamente o que o cron lançou no razão em 01/08 para Julho — os dois livros passam a dizer o mesmo número pela primeira vez.
+E `265,69` é exatamente o que o cron lançou no razão em 01/08 para Julho.
+
+**Cuidado com essa coincidência, medido na Task 11:** os dois números batem porque
+`usinas.service_values` tem `Energia: 109,79` congelado — que por acaso é a conta de
+*abril*. Maio é 118,18 e junho 119,87. Ou seja, o lançamento do cron não é confirmação
+independente da regra nova: é o mesmo jsonb replayed. Não existe transação de cron para
+abril; as duas que existem são de junho e julho. Um teste que compare o recalculado de
+abril contra o razão está comparando abril com julho, e passa por coincidência.
 
 **f) `arrendamento` está zerado no fechamento e cobrado no razão.** `generation_production.arrendamento = 0` em todos os meses da UFV Bom Jesus, enquanto o razão recebe `R$ 600,00` de arrendamento todo mês (`3.1.4`, via cron). O rascunho da Task 5 passa a preencher `arrendamento` a partir do contrato, e isso **aumenta `total_despesas` em R$ 600** frente ao histórico. É correção, não regressão, e a Task 11 mede.
 
