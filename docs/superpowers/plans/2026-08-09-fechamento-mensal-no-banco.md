@@ -2283,7 +2283,9 @@ SELECT
     -- tem essa propriedade -- um fornecedor com duas usinas tornaria
     -- ambiguo o que hoje esta' atribuido.
     cu.usina_id                            AS usina_id,
-    CASE WHEN le.amount > 0 THEN 'entrada' ELSE 'saida' END::varchar AS type,
+    -- >= e' deliberado: existem lancamentos de "Recebimento Fatura" com valor
+    -- zero, e recebimento de zero e' entrada de zero, nao saida.
+    CASE WHEN le.amount >= 0 THEN 'entrada' ELSE 'saida' END::varchar AS type,
     la.name::varchar                       AS category,
     le.description,
     abs(le.amount)                         AS amount,
@@ -2296,7 +2298,14 @@ FROM public.ledger_entries le
 JOIN public.ledger_accounts la ON la.id = le.account_id
 LEFT JOIN public.invoices i       ON (le.reference_type = 'invoice' AND i.id = le.reference_id)
 LEFT JOIN public.consumer_units cu ON cu.id = i.uc_id
-WHERE la.type = 'asset'
+-- Filtra a FAMILIA de contas bancarias (1.1.1.*), nao o tipo 'asset'.
+-- O plano de contas tem 4 contas de ativo e so' 1.1.1.01 recebe lancamento
+-- hoje; as outras tres sao contas-pai. Filtrar por tipo faria uma futura
+-- "contas a receber" (1.1.2) entrar no livro caixa, e uma conta ponte daria
+-- duas pernas de ativo na mesma operacao -- o dinheiro contado duas vezes,
+-- de novo. Por codigo, um segundo banco (1.1.1.02) entra sozinho e nada
+-- que nao seja banco entra por engano.
+WHERE la.code LIKE '1.1.1.%'
   AND le.is_sandbox IS NOT TRUE;
 
 COMMENT ON VIEW public.cashbook IS
