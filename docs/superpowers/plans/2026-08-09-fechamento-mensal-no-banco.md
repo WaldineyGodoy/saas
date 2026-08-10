@@ -2411,10 +2411,15 @@ git rm supabase/migrations/20260130_create_plant_closings.sql
 Criar `supabase/migrations/20260809g_aposentadorias.sql` e aplicar via `apply_migration` com o nome `20260809g_aposentadorias`:
 
 ```sql
--- A Edge Function cron-monthly-expenses filtrava status = 'operacao', valor
--- que nao existe no enum usina_status ('gerando','em_conexao','manutencao',
--- 'inativa','cancelada'). Nunca retornou uma usina e nunca produziu efeito.
--- Removida do repositorio em 09/08/2026; aqui fica o registro no banco.
+-- Duas aposentadorias, e so' uma delas tem objeto no banco.
+--
+-- 1. A Edge Function cron-monthly-expenses filtrava status = 'operacao', valor
+--    que nao existe no enum usina_status ('gerando','em_conexao','manutencao',
+--    'inativa','cancelada'). Nunca retornou uma usina e nunca produziu efeito.
+--    Removida do repositorio em 09/08/2026. Ela vivia no Deno, nao no Postgres:
+--    nao ha objeto de banco para comentar, e este registro em -- e' o que existe.
+--
+-- 2. sync_tariffs_to_entities, essa sim funcao SQL, ganha o COMMENT abaixo.
 COMMENT ON FUNCTION public.sync_tariffs_to_entities() IS
     'DESARMADA em 08/08/2026. O trigger trg_sync_concessionaria_changes foi removido: ela escrevia a tarifa de referencia dentro de consumer_units, contradizendo a regra de que o que vale e a conta de energia. Mantida sem gatilho apenas para consulta. Em 09/08/2026, com o fechamento passando a ler a conta da UG, ela deixou de ter qualquer uso previsto.';
 
