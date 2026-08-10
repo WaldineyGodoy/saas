@@ -79,6 +79,13 @@ total_despesas 04/2026     registrado   266,10   = 76,00 + 110,20 + 79,90   (Ene
                            recalculado  265,69   = 155,90 + 109,79          (serviços sem Energia + conta real)
 ```
 
+**Correção medida na Task 11:** as diferenças são **seis**, não quatro. Além das
+quatro acima, `gestao_reais` vai de `0,00` para `265,58` e `saldo_receber` de
+`NULL` para `1.524,57` — não por mudança de fórmula, mas porque o fluxo antigo
+nunca escrevia esses dois campos. `gestao_reais` é `0` nas 11 linhas de
+`generation_production`, apesar de `gestao_percentual` ser `10` em todas as
+usinas. O teste da Task 11 enumera as seis e reprova se aparecer uma sétima.
+
 E `265,69` é exatamente o que o cron lançou no razão em 01/08 para Julho — os dois livros passam a dizer o mesmo número pela primeira vez.
 
 **f) `arrendamento` está zerado no fechamento e cobrado no razão.** `generation_production.arrendamento = 0` em todos os meses da UFV Bom Jesus, enquanto o razão recebe `R$ 600,00` de arrendamento todo mês (`3.1.4`, via cron). O rascunho da Task 5 passa a preencher `arrendamento` a partir do contrato, e isso **aumenta `total_despesas` em R$ 600** frente ao histórico. É correção, não regressão, e a Task 11 mede.
