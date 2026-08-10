@@ -853,7 +853,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         .select('energia_injetada, valor_concessionaria')
                         .eq('uc_id', ugId)
                         .eq('mes_referencia', firstDay)
-                        .neq('status', 'cancelado')
                         .maybeSingle();
                     
                     if (ugInvoice?.energia_injetada) {
