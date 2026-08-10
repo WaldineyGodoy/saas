@@ -1374,6 +1374,17 @@ BEGIN
                         v_fat->>'descartadas', v_fat->'descartes';
     END IF;
 
+    -- 2b. A coluna precisa refletir a conta antes de qualquer calculo derivar
+    --     dela. fn_totais_fechamento le custo_disponibilidade da linha, entao
+    --     sem este UPDATE o total sai com o valor velho mesmo que a validacao
+    --     acima tenha visto o certo.
+    IF v_gp.custo_disponibilidade IS DISTINCT FROM (v_conta->>'valor')::numeric THEN
+        UPDATE public.generation_production
+           SET custo_disponibilidade = (v_conta->>'valor')::numeric
+         WHERE id = p_id;
+        v_gp.custo_disponibilidade := (v_conta->>'valor')::numeric;
+    END IF;
+
     -- 3. Os totais precisam ser numero. NULL aqui significa insumo faltando.
     v_totais   := public.fn_totais_fechamento(p_id);
     v_servicos := (v_totais->>'servicos')::numeric;
@@ -1413,8 +1424,15 @@ BEGIN
     --    Nenhuma parcela pode ser NULL aqui: a validacao 3 ja' recusou o
     --    fechamento se total_despesas tivesse dado NULL, e ele so' e' NULL se
     --    alguma parcela for.
+    -- O valor da conta vem de fn_conta_ug, nao da coluna. A validacao 1 acabou
+    -- de provar que a conta existe e tem valor; usar a coluna aqui seria validar
+    -- uma fonte e lancar outra -- e a coluna pode estar velha, ou zerada, se o
+    -- cron nao passou depois que a conta chegou. Foi assim que as 8 linhas
+    -- herdadas ficaram com custo_disponibilidade = 0 e conta real de 118,18.
+    -- E' o mesmo principio que liquidar_producao aplica ao saldo e
+    -- pagar-conta-ug ao valor do boleto.
     v_total := (v_totais->>'total_despesas')::numeric;
-    v_disp  := round(v_gp.custo_disponibilidade, 2);
+    v_disp  := round((v_conta->>'valor')::numeric, 2);
     v_manut := round(v_gp.manutencao, 2);
     v_arren := round(v_gp.arrendamento, 2);
     v_serv_leg := v_total - v_disp - v_manut - v_arren;
