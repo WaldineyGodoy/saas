@@ -1393,6 +1393,19 @@ BEGIN
                         v_gp.custo_disponibilidade, v_gp.manutencao, v_gp.arrendamento, v_servicos;
     END IF;
 
+    -- 3b. Conta ja' paga nao se paga de novo.
+    --     fn_conta_ug devolve energy_bill_status desde a Task 2 e ninguem
+    --     consumia. Medido em 10/08/2026: duas das tres contas fechaveis
+    --     estavam em 'pago' (Bom Jesus 05/2026 e Novo Leblon 06/2026), entao
+    --     fechar qualquer uma delas pelo caminho automatico mandaria o boleto
+    --     ao Asaas uma segunda vez. Quem ja' pagou fora do sistema fecha com
+    --     p_pagamento_manual => true, que e' exatamente o que a flag existe
+    --     para dizer.
+    IF (v_conta->>'energy_bill_status') = 'pago' AND NOT p_pagamento_manual THEN
+        RAISE EXCEPTION 'a conta da UG de % ja esta paga: feche com p_pagamento_manual => true para nao pagar duas vezes',
+                        to_char(v_gp.mes_referencia, 'MM/YYYY');
+    END IF;
+
     -- 4. Sem linha digitavel nao da' para pagar pelo Asaas. Spec 4.2: avisa e
     --    permite fechar registrando pagamento manual — mas so' se pedirem.
     IF (v_conta->>'tem_linha_digitavel')::boolean IS NOT TRUE AND NOT p_pagamento_manual THEN
