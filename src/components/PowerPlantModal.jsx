@@ -1468,6 +1468,152 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         showAlert('Arquivo CSV e PDF gerados com sucesso!', 'success');
     };
 
+    const handleGenerateExtratoPDF = async () => {
+        try {
+            const allUCs = [...selectedUCs, ...availableUCs];
+            const ucIds = allUCs.map(u => u.id).filter(Boolean);
+
+            let latestInvoiceMap = {};
+
+            if (ucIds.length > 0) {
+                const { data: invoices, error } = await supabase
+                    .from('invoices')
+                    .select('uc_id, consumo_compensado, mes_referencia')
+                    .in('uc_id', ucIds)
+                    .neq('status', 'cancelado')
+                    .order('mes_referencia', { ascending: false });
+
+                if (error) throw error;
+
+                if (invoices) {
+                    invoices.forEach(inv => {
+                        if (!latestInvoiceMap[inv.uc_id]) {
+                            latestInvoiceMap[inv.uc_id] = inv;
+                        }
+                    });
+                }
+            }
+
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`EXTRATO DE RATEIO - ${formData.name.toUpperCase()}`, 14, 20);
+
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.5);
+            doc.line(14, 24, pageWidth - 14, 24);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.setTextColor(71, 85, 105);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Potência Instalada:', 14, 32);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${potenciaKwp} kWp`, 55, 32);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Geração Estimada:', 14, 38);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${Number(formData.geracao_estimada_kwh || 0).toLocaleString('pt-BR')} kWh/mês`, 55, 38);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Geração Comprometida:', 14, 44);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${totalFranquiaVinculada.toFixed(0)} kWh/mês (${((totalFranquiaVinculada / (Number(formData.geracao_estimada_kwh) || 1)) * 100).toFixed(1)}%)`, 55, 44);
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('UCs Ativas Vinculadas:', 14, 50);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${selectedUCs.filter(u => u.status === 'ativo').length} unidades`, 55, 50);
+
+            const translateStatus = (status) => {
+                const statusMap = {
+                    'ativo': 'Ativo',
+                    'desconectado': 'Desconectado',
+                    'cancelado': 'Cancelado',
+                    'em_ativacao': 'Em Ativação',
+                    'vinculado': 'Vinculado',
+                    'aguardando_conexao': 'Aguardando Conexão',
+                    'ativacao': 'Ativação',
+                    'em_transf_titularidade': 'Transf. Titularidade'
+                };
+                return statusMap[status] || status || 'Desconhecido';
+            };
+
+            const linkedData = selectedUCs.map(uc => {
+                const sub = subscribers.find(s => s.id === uc.subscriber_id);
+                const assinante = uc.titular_conta || sub?.name || 'Não Identificado';
+                const lastInvoice = latestInvoiceMap[uc.id];
+                const compensada = lastInvoice && lastInvoice.consumo_compensado !== null
+                    ? `${Number(lastInvoice.consumo_compensado).toLocaleString('pt-BR')} kWh`
+                    : '0 kWh';
+
+                return [
+                    uc.numero_uc,
+                    translateStatus(uc.status),
+                    assinante,
+                    `${Number(uc.franquia || 0).toLocaleString('pt-BR')} kWh`,
+                    compensada
+                ];
+            });
+
+            const availableData = availableUCs.map(uc => {
+                const sub = subscribers.find(s => s.id === uc.subscriber_id);
+                const assinante = uc.titular_conta || sub?.name || 'Não Identificado';
+                const lastInvoice = latestInvoiceMap[uc.id];
+                const compensada = lastInvoice && lastInvoice.consumo_compensado !== null
+                    ? `${Number(lastInvoice.consumo_compensado).toLocaleString('pt-BR')} kWh`
+                    : '0 kWh';
+
+                return [
+                    uc.numero_uc,
+                    translateStatus(uc.status),
+                    assinante,
+                    `${Number(uc.franquia || 0).toLocaleString('pt-BR')} kWh`,
+                    compensada
+                ];
+            });
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(30, 41, 59);
+            doc.text('UNIDADES CONSUMIDORAS VINCULADAS', 14, 60);
+
+            autoTable(doc, {
+                startY: 64,
+                head: [['Número da UC', 'Status', 'Assinante / Titular', 'Franquia', 'Última Compensação']],
+                body: linkedData,
+                theme: 'striped',
+                headStyles: { fillColor: [59, 130, 246] },
+                styles: { fontSize: 9, font: 'helvetica' },
+                margin: { horizontal: 14 }
+            });
+
+            const finalY = doc.lastAutoTable.finalY + 12;
+            doc.text('UNIDADES CONSUMIDORAS DISPONÍVEIS', 14, finalY);
+
+            autoTable(doc, {
+                startY: finalY + 4,
+                head: [['Número da UC', 'Status', 'Assinante / Titular', 'Franquia', 'Última Compensação']],
+                body: availableData,
+                theme: 'striped',
+                headStyles: { fillColor: [71, 85, 105] },
+                styles: { fontSize: 9, font: 'helvetica' },
+                margin: { horizontal: 14 }
+            });
+
+            doc.save(`extrato_rateio_${formData.name.toLowerCase().replace(/\s+/g, '_')}.pdf`);
+            showAlert('Extrato em PDF gerado com sucesso!', 'success');
+        } catch (err) {
+            console.error('Erro ao gerar extrato em PDF:', err);
+            showAlert('Erro ao gerar extrato em PDF: ' + err.message, 'error');
+        }
+    };
+
     const fileInputDemonstrativoRef = useRef(null);
     const [isExtractingDemonstrativo, setIsExtractingDemonstrativo] = useState(false);
 
@@ -3275,6 +3421,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 }}
                                             >
                                                 <Maximize2 size={16} /> Gestor
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleGenerateExtratoPDF}
+                                                style={{ 
+                                                    padding: '0.6rem 1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', 
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#166534'
+                                                }}
+                                            >
+                                                <FileText size={16} /> Extrato
                                             </button>
                                             <button
                                                 type="button"
