@@ -1470,7 +1470,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const handleGenerateExtratoPDF = async () => {
         try {
-            const allUCs = [...selectedUCs, ...availableUCs];
+            // Available UCs list filtered to remove duplicates (already linked UCs) and canceled UCs
+            const cleanAvailableUCs = availableUCs.filter(uc => 
+                !selectedUCs.some(s => s.id === uc.id) &&
+                uc.status !== 'cancelado' &&
+                uc.status !== 'cancelado_inadimplente' &&
+                !(uc.status || '').toLowerCase().includes('cancelad')
+            );
+
+            const allUCs = [...selectedUCs, ...cleanAvailableUCs];
             const ucIds = allUCs.map(u => u.id).filter(Boolean);
 
             let latestInvoiceMap = {};
@@ -1494,7 +1502,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 }
             }
 
-            const doc = new jsPDF('p', 'mm', 'a4');
+            // Landscape orientation 'l' for A4
+            const doc = new jsPDF('l', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.getWidth();
 
             doc.setFont('helvetica', 'bold');
@@ -1561,7 +1570,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 ];
             });
 
-            const availableData = availableUCs.map(uc => {
+            const availableData = cleanAvailableUCs.map(uc => {
                 const sub = subscribers.find(s => s.id === uc.subscriber_id);
                 const assinante = uc.titular_conta || sub?.name || 'Não Identificado';
                 const lastInvoice = latestInvoiceMap[uc.id];
