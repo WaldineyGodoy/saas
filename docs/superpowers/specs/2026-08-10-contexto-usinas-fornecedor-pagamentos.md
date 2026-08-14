@@ -104,6 +104,7 @@ Colunas de `invoices` que importam no cálculo: `consumo_compensado` (kWh), `te_
 | código | nome | tipo |
 |---|---|---|
 | 1.1.1.01 | Banco Asaas | asset |
+| **1.1.3** | **Adiantamentos a Investidores** | **asset** |
 | 2.1.1 | Repasse para o Investidor | liability |
 | 2.1.2 | Comissões a Pagar | liability |
 | 2.1.3.01 | Repasse Concessionária | liability |
@@ -113,7 +114,11 @@ Colunas de `invoices` que importam no cálculo: `consumo_compensado` (kWh), `te_
 | 3.1.4 | Receita de Arrendamento B2W | income |
 | 4.1.1 | Taxas Bancárias (Asaas) | expense |
 
-**Convenção de sinal:** débito do passivo `2.1.1` é **positivo** (reduz o que se deve ao fornecedor); contrapartidas são **negativas**. Toda transação soma zero.
+**Convenção de sinal:** débito do passivo `2.1.1` é **positivo** (reduz o que se deve ao fornecedor); contrapartidas são **negativas**. Toda transação *deveria* somar zero.
+
+> ⚠️ **O razão real não fecha.** Medido em 11/08/2026: de 87 transações, **28 não somam zero**, totalizando **−R$ 10.897,39**, e **32 têm perna única**. A causa é `ledger_entries` ter policy `ALL USING(true)` para `authenticated` — enquanto `INSERT` direto for possível, lançamento manual sem contrapartida volta a acontecer. O método do corte (partida única numa conta de ajuste vs. contrapartida por transação) **ainda não foi decidido**.
+>
+> O código escrito no fechamento mensal fecha em zero por construção e é testado para isso. O passivo é histórico, anterior a ele.
 
 ---
 
@@ -170,6 +175,27 @@ Quem paga é a B2W, e desconta do fornecedor. Fluxo:
 `liquidar_producao(gp_id)` → valida → marca `liquidado` e `repasse_status = 'enfileirado'` → enfileira POST para **`transfer-asaas-pix`**.
 
 **Ela NÃO lança no razão.** Quem lança é o trigger `tr_transfer_ledger` em `financial_transfers`, quando a transferência chega a `completed`. Isso é deliberado: lançar nos dois lugares dobrava todo repasse. Foi medido — havia 8 lançamentos `payout_supplier` para 4 transferências.
+
+### Sai dinheiro (3): o adiantamento ao fornecedor — **dia 10**
+
+Este fluxo **não** faz parte do fechamento mensal e não tem código novo. É operação manual, e a regra foi ditada pelo dono em 10/08/2026.
+
+A B2W **adianta** dinheiro ao fornecedor antes de a concessionária emitir as contas, e amortiza conforme as faturas dos assinantes vão sendo pagas.
+
+**Regra dura: adiantamento é ativo, não crédito.** Mora em `1.1.3 — Adiantamentos a Investidores`, segregado por fornecedor via `reference_id`. **Nunca em `2.1.1`.** Lançar adiantamento como crédito em `2.1.1` foi o que duplicou julho/2026 — o crédito manual colidiu com o crédito automático que `handle_invoice_paid_ledger` lança quando a fatura é paga.
+
+Os quatro momentos:
+
+| # | momento | partida |
+|---|---|---|
+| 1 | concessão | `D 1.1.3 / C 1.1.1.01` — **`2.1.1` não é tocada** |
+| 2 | fatura paga | trigger credita `2.1.1` (fonte única do crédito) |
+| 3 | amortização | `D 2.1.1 / C 1.1.3`, por `min(saldo credor de 2.1.1, saldo devedor de 1.1.3)` |
+| 4 | repasse | só o excedente de `2.1.1` depois de amortizar sai por PIX |
+
+Fórmula do crédito que o trigger aplica, medida no código: `investidor = (valor_a_pagar − valor_concessionaria) × (1 − gestao_percentual/100) − comissão_start`. Com `gestao_percentual = 10`, é base × 0,90. A `comissão_start` só incide na primeira fatura paga de cada UC.
+
+**Cuidado:** `PlantLedgerModal.jsx:85` consulta a conta `'1.1.2'`, que não existe. Criar `1.1.2` faria aquela query casar em silêncio com a conta errada.
 
 ### O cron
 

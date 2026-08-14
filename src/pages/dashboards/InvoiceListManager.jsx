@@ -266,7 +266,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const filteredInvoices = invoices.filter(inv => {
-        if (inv.status === 'cancelado') return false;
+        if (['cancelado', 'cancelada'].includes(inv.status)) return false;
         if (inv.parent_invoice_id) {
             if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
                 return false;
@@ -535,7 +535,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
     const invoicesForTotals = invoices.filter(inv => {
-        if (inv.status === 'cancelado') return false;
+        if (['cancelado', 'cancelada'].includes(inv.status)) return false;
         if (inv.parent_invoice_id) {
             if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
                 return false;
@@ -923,7 +923,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
         const groupedInvoices = invoices.reduce((acc, inv) => {
-            if (inv.vencimento && inv.status !== 'cancelado') {
+            if (inv.vencimento && !['cancelado', 'cancelada'].includes(inv.status)) {
                 const date = new Date(inv.vencimento);
                 const day = date.getUTCDate();
                 if (!acc[day]) acc[day] = [];
@@ -1096,7 +1096,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             (Number(inv.valor_a_pagar) > 0 || Number(inv.valor_concessionaria) > 0)
         );
         const groupedInvoices = filteredEnergyInvoices.reduce((acc, inv) => {
-            if (inv.vencimento && inv.status !== 'cancelado') {
+            if (inv.vencimento && !['cancelado', 'cancelada'].includes(inv.status)) {
                 // Prioriza a data de vencimento real da fatura para o calendário
                 const date = new Date(inv.vencimento);
                 const day = date.getUTCDate();
@@ -2304,6 +2304,18 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                         >
                                                                             {payingId === inv.id ? '...' : 'PAGAR'}
                                                                         </button>
+                                                                    ) : ['auto_consumo_remoto', 'geracao_compartilhada'].includes(inv.consumer_units?.modalidade) ? (
+                                                                        <span style={{ 
+                                                                            display: 'block',
+                                                                            textAlign: 'center',
+                                                                            color: '#475569', 
+                                                                            background: '#f1f5f9', 
+                                                                            padding: '0.4rem 0.2rem', 
+                                                                            borderRadius: '4px', 
+                                                                            fontSize: '0.7rem', 
+                                                                            fontWeight: '800',
+                                                                            border: '1px solid #e2e8f0'
+                                                                        }}>SEM CÓDIGO</span>
                                                                     ) : null}
                                                                 </div>
                                                             </div>

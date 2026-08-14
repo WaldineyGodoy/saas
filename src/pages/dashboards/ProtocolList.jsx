@@ -438,7 +438,8 @@ export default function ProtocolList() {
                     deadline_days: lastOpenNode.deadline_days,
                     latest_derivation_id: latestDerivation.id,
                     sub_protocols_count: subs.length,
-                    is_delayed: isLatestDelayed
+                    is_delayed: isLatestDelayed,
+                    subs: subs
                 };
             });
             
@@ -487,14 +488,19 @@ export default function ProtocolList() {
     const filtered = protocols.filter(p => {
         if (!searchTerm) return true;
         const q = searchTerm.toLowerCase();
-        return (
-            p.title?.toLowerCase().includes(q) ||
-            p.description?.toLowerCase().includes(q) ||
-            p.protocol_number?.toLowerCase().includes(q) ||
-            p.parent_protocol_number?.toLowerCase().includes(q) ||
-            p.status?.toLowerCase().includes(q) ||
-            p.linked_entity_type?.toLowerCase().includes(q)
+        
+        const matchProtocol = (proto) => (
+            proto.title?.toLowerCase().includes(q) ||
+            proto.description?.toLowerCase().includes(q) ||
+            proto.protocol_number?.toLowerCase().includes(q) ||
+            proto.status?.toLowerCase().includes(q) ||
+            proto.linked_entity_type?.toLowerCase().includes(q) ||
+            proto.linked_entity_name?.toLowerCase().includes(q)
         );
+
+        return matchProtocol(p) || 
+               (p.parent_protocol_number?.toLowerCase().includes(q)) || 
+               (p.subs && p.subs.some(sub => matchProtocol(sub)));
     });
 
     /* ── Delete ────────────────────────────────────────────────── */

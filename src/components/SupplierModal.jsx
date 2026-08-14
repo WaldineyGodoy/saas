@@ -32,6 +32,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [isPartial, setIsPartial] = useState(false);
     const [pendingBalance, setPendingBalance] = useState(0);
 
+    // Adiantamento: pagamento feito antes de o faturamento existir. Vive na conta
+    // 1.1.3 (ativo), nunca em 2.1.1, e e amortizado conforme as faturas sao pagas.
+    const [advanceBalance, setAdvanceBalance] = useState(0);
+    const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+    const [advanceAmount, setAdvanceAmount] = useState('');
+    const [advanceReason, setAdvanceReason] = useState('');
+    const [advancing, setAdvancing] = useState(false);
+
     // Extrato Filters
     const [extratoStartDate, setExtratoStartDate] = useState('');
     const [extratoEndDate, setExtratoEndDate] = useState('');
@@ -124,6 +132,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 setPendingBalance(pendingSum);
             } else {
                 setPendingBalance(0);
+            }
+
+            // Adiantamento em aberto (conta 1.1.3). Sem isto o operador ve "saldo zero"
+            // e nao sabe que ja pagou adiantado — foi assim que julho/2026 duplicou.
+            const { data: advanceData, error: advanceError } = await supabase
+                .from('ledger_entries')
+                .select('amount, ledger_accounts!inner(code)')
+                .eq('ledger_accounts.code', '1.1.3')
+                .eq('reference_id', supplier.id);
+
+            if (!advanceError && advanceData) {
+                const advSum = advanceData.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+                setAdvanceBalance(Math.round(advSum * 100) / 100);
+            } else {
+                setAdvanceBalance(0);
             }
 
             // Pre-fetch subscriber names for repasse entries
@@ -295,6 +318,132 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             showAlert('Erro ao processar pagamento: ' + err.message, 'error');
         } finally {
             setPaying(false);
+        }
+    };
+
+    const podeMoverDinheiro = ['super_admin', 'superadmin', 'admin', 'gerente'].includes(profile?.role);
+
+    /**
+     * Adiantamento: paga o fornecedor antes de existir faturamento. Nao depende de
+     * saldo — e justamente para quando nao ha. O valor nao pode virar credito em
+     * 2.1.1, senao colide com o credito que o trigger da fatura paga lanca depois
+     * (foi o que duplicou julho/2026); ele vive em 1.1.3 ate ser amortizado.
+     */
+    const handleAdvance = () => {
+        if (!supplier?.id) {
+            showAlert('Salve o fornecedor antes de adiantar valores.', 'warning');
+            return;
+        }
+        if (!podeMoverDinheiro) {
+            showAlert('Você não tem permissão para realizar pagamentos.', 'error');
+            return;
+        }
+        if (!formData.pix_key || !formData.pix_key_type) {
+            showAlert('Chave PIX não cadastrada para este fornecedor.', 'warning');
+            return;
+        }
+        setAdvanceAmount('');
+        setAdvanceReason('');
+        setShowAdvanceModal(true);
+    };
+
+    /** Move para 1.1.3 qualquer pagamento que tenha passado do saldo devido. */
+    const classificarAdiantamento = async () => {
+        const { data, error } = await supabase
+            .rpc('classificar_adiantamento', { p_supplier_id: supplier.id });
+        if (error) throw new Error(error.message);
+        if (data && data.ok === false) throw new Error(data.motivo || 'falha ao classificar');
+        return data;
+    };
+
+    const confirmAdvance = async () => {
+        const valor = Number(advanceAmount);
+
+        if (!valor || isNaN(valor) || valor <= 0) {
+            showAlert('Informe um valor válido para o adiantamento.', 'warning');
+            return;
+        }
+        if (!advanceReason.trim()) {
+            showAlert('Descreva o motivo do adiantamento — ele fica no extrato.', 'warning');
+            return;
+        }
+
+        setAdvancing(true);
+        setShowAdvanceModal(false);
+
+        try {
+            const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
+                body: {
+                    amount: valor,
+                    value: valor,
+                    pixKey: formData.pix_key,
+                    pix_key: formData.pix_key,
+                    pixKeyType: formData.pix_key_type,
+                    pix_key_type: formData.pix_key_type,
+                    supplierId: supplier.id,
+                    destinationType: 'supplier',
+                    description: `Adiantamento a ${formData.name}: ${advanceReason.trim()}`,
+                    operationType: 'PIX'
+                }
+            });
+
+            // supabase-js nao lanca em erro: sem estas duas linhas a falha passa em silencio.
+            if (error) throw error;
+            if (data && data.success === false) throw new Error(data.error);
+
+            const confirmadoNoAsaas = data?.status === 'DONE' || data?.status === 'CONFIRMED';
+
+            if (confirmadoNoAsaas) {
+                const r = await classificarAdiantamento();
+                showAlert(
+                    `Adiantamento de ${formatCurrency(valor)} enviado e registrado. `
+                    + `Adiantamento em aberto: ${formatCurrency(r?.adiantamento_total ?? valor)}.`,
+                    'success'
+                );
+            } else {
+                // O trigger do razao so lanca quando a transferencia vira 'completed'.
+                showAlert(
+                    'PIX enviado, mas o Asaas ainda não confirmou. Assim que confirmar, '
+                    + 'use "Classificar adiantamento" para movê-lo para a conta de adiantamentos.',
+                    'warning'
+                );
+            }
+
+            await addHistory('supplier', supplier.id, 'advance_paid', {
+                amount: valor,
+                reason: advanceReason.trim(),
+                asaas_id: data?.transferId,
+                asaas_status: data?.status
+            }, `Adiantamento de ${formatCurrency(valor)} via PIX — ${advanceReason.trim()}`);
+
+            fetchLedgerStatement();
+        } catch (err) {
+            console.error('Erro no adiantamento:', err);
+            showAlert('Erro ao processar adiantamento: ' + err.message, 'error');
+        } finally {
+            setAdvancing(false);
+        }
+    };
+
+    /** Usado quando a transferencia so confirma depois, ou para acertar historico. */
+    const handleClassificar = async () => {
+        setAdvancing(true);
+        try {
+            const r = await classificarAdiantamento();
+            if (!r?.classificado) {
+                showAlert('Não há pagamento acima do saldo devido para classificar.', 'info');
+            } else {
+                showAlert(
+                    `${formatCurrency(r.classificado)} classificados como adiantamento. `
+                    + `Total em aberto: ${formatCurrency(r.adiantamento_total)}.`,
+                    'success'
+                );
+            }
+            fetchLedgerStatement();
+        } catch (err) {
+            showAlert('Erro ao classificar: ' + err.message, 'error');
+        } finally {
+            setAdvancing(false);
         }
     };
 
