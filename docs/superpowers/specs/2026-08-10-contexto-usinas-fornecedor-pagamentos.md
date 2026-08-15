@@ -1,8 +1,10 @@
 # Contexto: usinas, fornecedor e pagamentos
 
-**Data:** 10/08/2026
+**Data:** 10/08/2026, revisado em 11/08/2026 com o que sessões paralelas apuraram.
 **Para:** um agente sem contexto nenhum deste projeto.
-**Tudo aqui foi medido contra o banco vivo nesta data.** Onde houver número, ele veio de consulta, não de memória. Verifique antes de tratar como verdade — o banco é vivo.
+**Tudo aqui foi medido contra o banco vivo.** Onde houver número, ele veio de consulta, não de memória. Verifique antes de tratar como verdade — o banco é vivo.
+
+> **Se você só tem tempo para três parágrafos, leia estes:** nunca marque a fatura de uma UC geradora como `pago` (§6b) — já contaminou o razão duas vezes. O razão não fecha: faltam R$ 10.897,39 em 28 transações desbalanceadas (§4). E `repasse_status = 'enfileirado'` **não** significa que o PIX saiu (§7a).
 
 ---
 
@@ -205,6 +207,50 @@ Ela preenche a partir de `usinas.service_values`, **excluindo `Manutenção`, `A
 
 ---
 
+## 6b. 🔴 A armadilha da UC geradora — leia antes de tocar em `invoices`
+
+**Nunca marque a fatura de uma UC geradora como `pago` ou `liquidado`.** Já contaminou o razão duas vezes.
+
+O motivo: `handle_invoice_paid_ledger` **não tem guarda por `tipo_unidade`**, e a UC geradora *tem* `subscriber_id` preenchido (a associação B2W), então o `INNER JOIN` passa e a função executa inteira — lança recebimento no Banco Asaas, taxa de boleto de R$ 1,99, provisão da concessionária, comissão e crédito ao investidor. Dinheiro que nunca entrou.
+
+Os dois casos, ambos com `asaas_payment_id` NULL (não existia boleto):
+
+- **UFV Bom Jesus 05/2026** (+118,18) — caso limpo: a geradora tem por assinante a própria SPE e `valor_a_pagar` = `valor_concessionaria`. Estorno redigido em 10/08/2026, **ainda não aplicado**. Ele estorna a transação **inteira, inclusive a provisão** — `fechar_producao` relança a provisão por conta própria, então manter a antiga duplicaria.
+- **Novo Leblon 06/2026** (+190,10) — caso diferente e **adiado por decisão do dono**: ver a frente aberta abaixo.
+
+**Corolário: `invoices.status` não significa nada para UC geradora.** O enum `fatura_status` descreve o boleto do assinante, e a geradora não tem boleto. O estado real da conta de luz dela é `energy_bill_status`, que é texto livre. Medido: das 6 faturas do banco com `energia_injetada > 0` (todas de geradora), **4 estavam `cancelado`** — é o estado normal, não exceção.
+
+Duas consequências práticas:
+
+1. **Filtrar a fatura da UG por `status <> 'cancelado'` descarta a leitura do medidor.** Foi a causa de "geração zerada" em `PlantAnalyticsModal.jsx` e `SupplierDashboard.jsx`, corrigido em 10/08/2026. Por isso `fn_conta_ug` **não filtra por `status`** — é deliberado.
+2. **Para corrigir geração faltante sem risco:** edite só `energia_injetada` e as datas de leitura na fatura da UG. Nenhum trigger de dinheiro dispara nisso.
+
+### Frente aberta e adiada: UC geradora vinculada a assinante
+
+**Não agir sem retomar com o dono.** A UC `7021781376` (Novo Leblon) é `tipo_unidade = 'geradora'` mas está com `subscriber_id` apontando para um assinante real. Segundo o dono, isso está errado — uma geradora não deveria estar como assinante.
+
+Na fatura de 06/2026 isso produziu `valor_a_pagar` R$ 190,10 ≠ `valor_concessionaria` R$ 131,27, e ao virar `pago` disparou 6 partidas repartindo um **custo** como se fosse receita. Os R$ 190,10 nunca foram recebidos; o que houve foi o pagamento da conta, R$ 131,27, por fora do sistema.
+
+Ficou para depois: estornar as 6 partidas, desvincular o assinante, e desenhar a regra geral para UC que gera e consome ao mesmo tempo.
+
+---
+
+## 6c. Franquia e overbook
+
+**Franquia é declaração de estimativa de consumo do assinante, não consumo real.** Quando a soma das franquias das UCs beneficiárias passa da geração da usina no mês, isso é **overbook** — alerta, não erro.
+
+O que fazer, regra do dono: apurar se o consumo efetivamente **compensado** coube na geração; se coube, só acompanhar; se o consumo **confirmou** a franquia declarada, **remanejar UCs para outras usinas**.
+
+**Onde medir, e onde não medir.** O compensado se apura somando `invoices.consumo_compensado` das UCs beneficiárias do mês. A coluna `generation_production.energia_compensada` **está subestimada e não serve**: em 04/2026 da UFV Bom Jesus ela gravou **3.761 kWh contra 10.853,05 apurados nas faturas**.
+
+> Isso já está resolvido no código novo, mas só daqui pra frente: o cron reescrito grava `energia_compensada` a partir de `fn_faturamento_detalhado`, que soma as faturas. As linhas antigas mantêm o valor subestimado, e meses `fechado`/`liquidado` não são tocados.
+
+**Quem ocupa franquia:** ela fica ocupada desde o vínculo, inclusive `aguardando_conexao` e `em_atraso` (a UC segue conectada e compensando; atrasado está o pagamento). Só **três** estados devolvem capacidade: `desconectado`, `cancelado`, `cancelado_inadimplente`. `SupplierDashboard.jsx` esquece `cancelado_inadimplente`.
+
+**A "Conta Saldo" não é assinante.** A UC `7029875787` ("B2W - Conta Saldo") é depósito do saldo energético — quando o consumo fica abaixo da geração, a sobra vai para lá em vez de se perder. Ela tem franquia 1 kWh e compensa milhares: conta como energia compensada, mas **não** como consumo de assinante e **não** ocupa capacidade.
+
+---
+
 ## 7. 🔴 O que impede usar isso hoje
 
 Quatro coisas. Nenhuma é defeito de código novo; todas são pontas soltas.
@@ -253,6 +299,20 @@ A frente é menor do que parece: o `asaas-webhook` **já recebe e classifica** o
 **O merge foi segurado por decisão do dono**, porque o Antigravity faz commits em paralelo no mesmo repositório e um `main` que salta 87 commits pode confundir aquela automação. `.github/workflows/deploy.yml` republica `crm.b2wenergia.com.br` a cada push em `main`.
 
 **As mudanças de banco já estão em produção.** Foram aplicadas uma a uma durante a execução. Mesclar organiza o repositório; não muda o comportamento do banco.
+
+**Frentes abertas neste domínio, para não redescobrir:**
+
+| frente | estado |
+|---|---|
+| Confirmação do PIX (`repasse_status` preso em `enfileirado`) | dimensionada em §7a; webhook já recebe os eventos |
+| Autenticação do `transfer-asaas-pix` | não começada; §7b |
+| Corte do desbalanço de R$ 10.897,39 no razão | método não decidido; §4 |
+| Estorno da fatura fantasma de Bom Jesus 05/2026 | SQL redigido em 10/08, não aplicado; §6b |
+| UC geradora vinculada a assinante (Novo Leblon) | adiada por decisão do dono; §6b |
+| Overbook da UFV Bom Jesus (105,3%) | a apurar; §6c |
+| Revisão do split (kWh × valor de fatura) | não começada; §5 |
+| Tela unificada de fechamento | plano não escrito; spec §5.1 e §5.2 |
+| Coluna `classe` em `consumer_units` | bloqueia a auditoria tarifária; §8 |
 
 **Documentos que valem ler antes de mexer:**
 
