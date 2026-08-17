@@ -575,6 +575,44 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         };
     };
 
+    const generateSlug = () => {
+        const tariffs = getTariffValues() || { tarifa: 0, descontoPercent: 0, fioB: 0, gestaoPercent: 0, tarifaLiquida: 0 };
+        const serviceValues = { ...formData.service_values };
+        delete serviceValues['Gestão'];
+
+        const dataObj = {
+            name: formData.name || '',
+            cep: formData.cep || '',
+            cidade: formData.cidade || '',
+            uf: formData.uf || '',
+            potencia: potenciaKwp || 0,
+            modulos: Number(formData.qtd_modulos) || 0,
+            potModulos: Number(formData.potencia_modulos_w) || 0,
+            potInversor: Number(formData.potencia_inversor_w) || 0,
+            fabInversor: formData.fabricante_inversor || '',
+            valorInvestido: formData.valor_investido || '',
+            concessionaria: formData.concessionaria || '',
+            tarifaCons: tariffs.tarifa || 0,
+            descCliente: tariffs.descontoPercent || 0,
+            fioB: tariffs.fioB || 0,
+            gestao: tariffs.gestaoPercent || 0,
+            tarifaLiq: tariffs.tarifaLiquida || 0,
+            servicos: serviceValues,
+            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa }))
+        };
+
+        try {
+            const jsonStr = JSON.stringify(dataObj);
+            const base64 = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+                return String.fromCharCode(parseInt(p1, 16));
+            }));
+            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        } catch (e) {
+            console.error('Error generating slug:', e);
+            return '';
+        }
+    };
+
     useEffect(() => {
         const mods = Number(formData.qtd_modulos) || 0;
         const potW = Number(formData.potencia_modulos_w) || 0;
@@ -3858,65 +3896,113 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     {/* Tab Content: Portal */}
                     {activeTab === 'portal' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                            <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff7ed', padding: '2rem', borderRadius: '20px', border: '1px solid #ffedd5' }}>
-                                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                                    <div style={{ width: '60px', height: '60px', background: 'white', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', color: '#f97316', boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.1)' }}>
-                                        <Globe size={32} />
-                                    </div>
-                                    <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#9a3412', margin: 0 }}>Portal da Concessionária</h4>
-                                    <p style={{ fontSize: '0.9rem', color: '#c2410c', marginTop: '0.5rem' }}>Credenciais para automação e extração de dados</p>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>URL do Portal</label>
-                                        <input
-                                            type="url"
-                                            value={formData.portal_credentials?.url || ''}
-                                            onChange={e => setFormData({
-                                                ...formData,
-                                                portal_credentials: { ...formData.portal_credentials, url: e.target.value }
-                                            })}
-                                            placeholder="https://seuportal.com.br"
-                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
-                                        />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+                                {/* Portal Creds Card */}
+                                <div style={{ background: '#fff7ed', padding: '2rem', borderRadius: '20px', border: '1px solid #ffedd5' }}>
+                                    <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                                        <div style={{ width: '60px', height: '60px', background: 'white', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', color: '#f97316', boxShadow: '0 4px 6px -1px rgba(249, 115, 22, 0.1)' }}>
+                                            <Globe size={32} />
+                                        </div>
+                                        <h4 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#9a3412', margin: 0 }}>Portal da Concessionária</h4>
+                                        <p style={{ fontSize: '0.9rem', color: '#c2410c', marginTop: '0.5rem' }}>Credenciais para automação e extração de dados</p>
                                     </div>
 
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Usuário / Login</label>
-                                        <input
-                                            type="text"
-                                            value={formData.portal_credentials?.login || ''}
-                                            onChange={e => setFormData({
-                                                ...formData,
-                                                portal_credentials: { ...formData.portal_credentials, login: e.target.value }
-                                            })}
-                                            placeholder="Seu usuário"
-                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Senha</label>
-                                        <div style={{ position: 'relative' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>URL do Portal</label>
                                             <input
-                                                type={showPassword ? "text" : "password"}
-                                                value={formData.portal_credentials?.password || ''}
+                                                type="url"
+                                                value={formData.portal_credentials?.url || ''}
                                                 onChange={e => setFormData({
                                                     ...formData,
-                                                    portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                                    portal_credentials: { ...formData.portal_credentials, url: e.target.value }
                                                 })}
-                                                placeholder="••••••••"
-                                                style={{ width: '100%', padding: '0.8rem 1rem', paddingRight: '3rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                                placeholder="https://seuportal.com.br"
+                                                style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
                                             />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#9a3412', cursor: 'pointer', opacity: 0.6 }}
-                                            >
-                                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                                            </button>
                                         </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Usuário / Login</label>
+                                            <input
+                                                type="text"
+                                                value={formData.portal_credentials?.login || ''}
+                                                onChange={e => setFormData({
+                                                    ...formData,
+                                                    portal_credentials: { ...formData.portal_credentials, login: e.target.value }
+                                                })}
+                                                placeholder="Seu usuário"
+                                                style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Senha</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type={showPassword ? "text" : "password"}
+                                                    value={formData.portal_credentials?.password || ''}
+                                                    onChange={e => setFormData({
+                                                        ...formData,
+                                                        portal_credentials: { ...formData.portal_credentials, password: e.target.value }
+                                                    })}
+                                                    placeholder="••••••••"
+                                                    style={{ width: '100%', padding: '0.8rem 1rem', paddingRight: '3rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#9a3412', cursor: 'pointer', opacity: 0.6 }}
+                                                >
+                                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Página da Usina Card */}
+                                <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                                        <div style={{ width: '40px', height: '40px', background: 'white', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.1)', border: '1px solid #e2e8f0' }}>
+                                            <Globe size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Página Pública da Usina</h4>
+                                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>Link curto para visualização das métricas da usina</p>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={`www.b2wenergia.com.br/usina?${generateSlug()}`}
+                                            style={{ flex: 1, padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem', outline: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 600 }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(`www.b2wenergia.com.br/usina?${generateSlug()}`);
+                                                showAlert('Link da usina copiado!', 'success');
+                                            }}
+                                            style={{
+                                                padding: '0.8rem 1.25rem',
+                                                background: '#3b82f6',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                cursor: 'pointer',
+                                                fontWeight: 700,
+                                                fontSize: '0.85rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                transition: '0.2s'
+                                            }}
+                                        >
+                                            <Check size={16} /> Copiar
+                                        </button>
                                     </div>
                                 </div>
                             </div>
