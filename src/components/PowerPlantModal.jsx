@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
 import { 
@@ -369,10 +369,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         dia_leitura: '',
         rateio_type: 'prioridade',
         grupo_tarifario: 'B1 Residencial',
-        portal_credentials: { url: '', login: '', password: '' }
+        portal_credentials: { url: '', login: '', password: '' },
+        short_url: ''
     });
 
     const [availableUCs, setAvailableUCs] = useState([]);
+    const [isShortening, setIsShortening] = useState(false);
     const [selectedUCs, setSelectedUCs] = useState([]); // Store full objects
     const [subscribers, setSubscribers] = useState([]);
     const [previewUC, setPreviewUC] = useState(null);
@@ -653,7 +655,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 dia_leitura: usina.dia_leitura || '',
                 rateio_type: usina.rateio_type || 'prioridade',
                 grupo_tarifario: usina.grupo_tarifario || 'B1 Residencial',
-                portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' }
+                portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' },
+                short_url: usina.short_url || ''
             });
             fetchLinkedUCs(usina.id);
         }
@@ -2109,6 +2112,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 rateio_type: formData.rateio_type,
                 grupo_tarifario: formData.grupo_tarifario,
                 portal_credentials: formData.portal_credentials,
+                short_url: formData.short_url || null,
                 address: {
                     cep: formData.cep,
                     rua: formData.rua,
@@ -3969,39 +3973,92 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         </div>
                                         <div>
                                             <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Página Pública da Usina</h4>
-                                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>Link curto para visualização das métricas da usina</p>
+                                            <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>Link encurtado via YOURLS contendo métricas da usina</p>
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={`www.b2wenergia.com.br/usina?${generateSlug()}`}
-                                            style={{ flex: 1, padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem', outline: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 600 }}
-                                        />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {formData.short_url ? (
+                                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={formData.short_url}
+                                                    style={{ flex: 1, padding: '0.8rem 1rem', border: '1px solid #bbf7d0', borderRadius: '10px', fontSize: '0.9rem', outline: 'none', background: '#f0fdf4', color: '#166534', fontWeight: 600 }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(formData.short_url);
+                                                        showAlert('Link encurtado copiado!', 'success');
+                                                    }}
+                                                    style={{
+                                                        padding: '0.8rem 1.25rem',
+                                                        background: '#16a34a',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '10px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.85rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        transition: '0.2s'
+                                                    }}
+                                                >
+                                                    <Check size={16} /> Copiar
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div style={{ color: '#64748b', fontSize: '0.85rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>
+                                                Nenhum link encurtado gerado ainda para esta usina.
+                                            </div>
+                                        )}
+
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(`www.b2wenergia.com.br/usina?${generateSlug()}`);
-                                                showAlert('Link da usina copiado!', 'success');
+                                            disabled={isShortening}
+                                            onClick={async () => {
+                                                setIsShortening(true);
+                                                try {
+                                                    const longUrl = `https://www.b2wenergia.com.br/usina?${generateSlug()}`;
+                                                    const keyword = `usina-${formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 15)}-${Math.random().toString(36).substring(2, 6)}`;
+                                                    const title = `Página da Usina - ${formData.name}`;
+                                                    
+                                                    const res = await shortenLink(longUrl, keyword, title);
+                                                    if (res?.success && res?.shortUrl) {
+                                                        setFormData(prev => ({ ...prev, short_url: res.shortUrl }));
+                                                        showAlert('Link encurtado gerado com sucesso! Salve a usina para confirmar no banco.', 'success');
+                                                    } else {
+                                                        throw new Error('Falha ao encurtar o link.');
+                                                    }
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    showAlert('Erro ao encurtar link: ' + err.message, 'error');
+                                                } finally {
+                                                    setIsShortening(false);
+                                                }
                                             }}
                                             style={{
-                                                padding: '0.8rem 1.25rem',
+                                                padding: '0.8rem 1rem',
                                                 background: '#3b82f6',
                                                 color: 'white',
                                                 border: 'none',
                                                 borderRadius: '10px',
-                                                cursor: 'pointer',
+                                                cursor: isShortening ? 'not-allowed' : 'pointer',
                                                 fontWeight: 700,
                                                 fontSize: '0.85rem',
                                                 display: 'flex',
                                                 alignItems: 'center',
+                                                justifyContent: 'center',
                                                 gap: '0.5rem',
+                                                opacity: isShortening ? 0.7 : 1,
                                                 transition: '0.2s'
                                             }}
                                         >
-                                            <Check size={16} /> Copiar
+                                            {isShortening ? <Loader2 size={16} className="animate-spin" /> : <Link size={16} />}
+                                            {formData.short_url ? 'Atualizar Link Encurtado' : 'Gerar Link Encurtado'}
                                         </button>
                                     </div>
                                 </div>
