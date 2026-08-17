@@ -194,13 +194,14 @@ export default function LeadsList() {
 
     const handleSubscriberSaved = async (newSubscriber) => {
         try {
-            // 'convertido' nunca existiu no enum `lead_status`; o lead ia para
-            // 'em_negociacao', que é um estágio ANTERIOR à conversão — o kanban
-            // andava para trás. Convertido = 'ativacao', igual ao assinante.
-            await supabase.from('leads').update({ status: 'ativacao' }).eq('id', leadToConvert.id);
-
-            // Rastreabilidade: sem isso não há como saber de qual lead veio o
-            // assinante, nem a quem atribuir a comissão de originação.
+            // Só grava o VÍNCULO. O status do lead é derivado do status do
+            // assinante pelo gatilho `trg_sync_lead_status`, que conhece a
+            // regra: assinante em 'ativacao' ainda não assinou o contrato,
+            // logo o lead é 'em_negociacao'; ele só vira 'ativacao' quando a
+            // Autentique confirma a assinatura.
+            //
+            // Definir o status aqui na mão foi o que produziu leads em
+            // 'ativacao' sem contrato assinado.
             if (newSubscriber?.id) {
                 await supabase.from('subscribers')
                     .update({ lead_id: leadToConvert.id })
@@ -208,9 +209,9 @@ export default function LeadsList() {
             }
 
             fetchLeads();
-            alert('Lead convertido em Assinante! Status atualizado para "Ativação".');
+            alert('Lead convertido em Assinante! Aguardando a assinatura do contrato.');
         } catch (e) {
-            console.error('Erro ao atualizar status do lead', e);
+            console.error('Erro ao vincular o lead ao assinante', e);
         }
     };
 

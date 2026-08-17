@@ -196,6 +196,27 @@ serve(async (req) => {
 
         const urlTermos = `${PAGINA_TERMOS}?${params.toString()}`;
 
+        // Encurta a própria página de termos para o WhatsApp.
+        //
+        // O link da Autentique já vinha curto, mas ele é só UM dos cinco
+        // parâmetros desta URL — nome, CPF e endereço vão junto, e o texto
+        // final passava de 300 caracteres. Numa mensagem de WhatsApp isso
+        // quebra em várias linhas e parece golpe.
+        let urlTermosCurta = urlTermos;
+        try {
+            const { data: curtoTermos } = await supabaseAdmin.functions.invoke('yourls-shorten', {
+                body: {
+                    url: urlTermos,
+                    keyword: `contrato-${subscriber_id.slice(0, 8)}`,
+                    title: `Termos do contrato - ${sub.name}`
+                }
+            });
+            if (curtoTermos?.success && curtoTermos.shortUrl) urlTermosCurta = curtoTermos.shortUrl;
+            else avisos.push('YOURLS não encurtou a página de termos; o WhatsApp saiu com a URL longa.');
+        } catch (e) {
+            avisos.push(`YOURLS (termos): ${(e as Error).message}`);
+        }
+
         // ------------------------------------------------------------------
         // 5. WhatsApp com o link
         // ------------------------------------------------------------------
@@ -204,7 +225,7 @@ serve(async (req) => {
                 await supabaseAdmin.functions.invoke('send-whatsapp', {
                     body: {
                         phone: soDigitos(sub.phone),
-                        text: `Olá, ${sub.name}! ⚡\n\nSua adesão à B2W Energia foi registrada. Falta só assinar o contrato — leva menos de 2 minutos e é 100% digital. ✍️\n\nEntenda os termos e assine aqui:\n${urlTermos}\n\nQualquer dúvida, é só responder esta mensagem.`
+                        text: `Olá, ${sub.name}! ⚡\n\nSua adesão à B2W Energia foi registrada. Falta só assinar o contrato — leva menos de 2 minutos e é 100% digital. ✍️\n\nEntenda os termos e assine aqui:\n${urlTermosCurta}\n\nQualquer dúvida, é só responder esta mensagem.`
                     }
                 });
             } catch (e) {
