@@ -320,6 +320,7 @@ export default function SubscriberList() {
     // Color mapping for Subscriber Kanban
     const statusColors = {
         ativacao: '#0ea5e9', // Sky Blue
+        contrato_assinado: '#6366f1', // Indigo — assinou, falta ativar na distribuidora
         ativo: '#22c55e', // Green
         ativo_inadimplente: '#f59e0b', // Amber
         transferido: '#64748b', // Slate
@@ -746,7 +747,7 @@ export default function SubscriberList() {
                         >
                             <div className="kanban-box">
                                 <div className="kanban-board">
-                                    {['ativacao', 'ativo', 'ativo_inadimplente', 'transferido', 'cancelado', 'cancelado_inadimplente'].map(status => (
+                                    {['ativacao', 'contrato_assinado', 'ativo', 'ativo_inadimplente', 'transferido', 'cancelado', 'cancelado_inadimplente'].map(status => (
                                         <KanbanColumn
                                             key={status}
                                             status={status}

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { useState } from 'react';
 import { fetchAddressByCep } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+
+const maskCEP = (val) => (val || '').replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
 
 const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -45,57 +46,41 @@ const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
     );
 };
 
-export default function PublicConsumerUnitForm({ consumerUnit, subscriberId, concessionariaDefault, onClose, onSave }) {
-    const { showAlert, showConfirm } = useUI();
-    const [loading, setLoading] = useState(false);
+/**
+ * Coleta os dados de uma UC no fluxo público de adesão.
+ *
+ * Não grava nada: devolve o objeto por `onSave` e quem persiste é a RPC
+ * `fn_criar_assinante_publico`, junto com o assinante, numa transação só.
+ * A versão anterior fazia INSERT direto em `consumer_units` — bloqueado por
+ * RLS para visitante anônimo, e que exigia gravar o assinante antes.
+ */
+export default function PublicConsumerUnitForm({
+    concessionariaDefault,
+    titularDefault,
+    franquiaDefault,
+    enderecoDefault,
+    onClose,
+    onSave
+}) {
+    const { showAlert } = useUI();
     const [searchingCep, setSearchingCep] = useState(false);
 
-    // Initial State
     const [formData, setFormData] = useState({
-        subscriber_id: subscriberId || '',
-        status: 'em_ativacao',
         numero_uc: '',
-        titular_conta: '',
+        titular_conta: titularDefault || '',
         concessionaria: concessionariaDefault || '',
+        franquia: franquiaDefault || '',
 
-        // Defaults for hidden fields
-        modalidade: 'geracao_compartilhada',
-        tipo_ligacao: 'monofasico',
-        usina_id: null,
-
-        // Address
-        cep: '',
-        rua: '',
-        numero: '',
-        complemento: '',
-        bairro: '',
-        cidade: '',
-        uf: ''
+        // Endereço herdado do cadastro do assinante — na maioria das adesões
+        // a UC fica no mesmo endereço, e redigitar é onde o cliente desiste.
+        cep: maskCEP(enderecoDefault?.cep || ''),
+        rua: enderecoDefault?.rua || '',
+        numero: enderecoDefault?.numero || '',
+        complemento: enderecoDefault?.complemento || '',
+        bairro: enderecoDefault?.bairro || '',
+        cidade: enderecoDefault?.cidade || '',
+        uf: enderecoDefault?.uf || ''
     });
-
-    useEffect(() => {
-        if (consumerUnit) {
-            setFormData(prev => ({
-                ...prev,
-                ...consumerUnit,
-                address: undefined, // flattened below
-                cep: maskCEP(consumerUnit.address?.cep || ''),
-                rua: consumerUnit.address?.rua || '',
-                numero: consumerUnit.address?.numero || '',
-                complemento: consumerUnit.address?.complemento || '',
-                bairro: consumerUnit.address?.bairro || '',
-                cidade: consumerUnit.address?.cidade || '',
-                uf: consumerUnit.address?.uf || ''
-            }));
-        }
-        if (concessionariaDefault) {
-            setFormData(prev => ({ ...prev, concessionaria: concessionariaDefault }));
-        }
-    }, [consumerUnit, concessionariaDefault]);
-
-    const maskCEP = (val) => {
-        return val.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
-    };
 
     const handleCepChange = (e) => {
         const masked = maskCEP(e.target.value);
@@ -124,58 +109,27 @@ export default function PublicConsumerUnitForm({ consumerUnit, subscriberId, con
         }
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        setLoading(true);
 
-        try {
-            const payload = {
-                subscriber_id: formData.subscriber_id, // Must be passed from parent
-                status: formData.status,
-                numero_uc: formData.numero_uc,
-                titular_conta: formData.titular_conta,
-                concessionaria: formData.concessionaria,
-                modalidade: formData.modalidade,
-                tipo_ligacao: formData.tipo_ligacao,
-
-                address: {
-                    cep: formData.cep.replace(/\D/g, ''),
-                    rua: formData.rua,
-                    numero: formData.numero,
-                    complemento: formData.complemento,
-                    bairro: formData.bairro,
-                    cidade: formData.cidade,
-                    uf: formData.uf
-                }
-            };
-
-            if (!payload.subscriber_id) throw new Error('Erro: Assinante não identificado.');
-            if (!payload.numero_uc) throw new Error('Número da UC é obrigatório.');
-
-            let result;
-            if (consumerUnit?.id) {
-                // Even if editing is not main flow, logic supports it
-                result = await supabase.from('consumer_units').update(payload).eq('id', consumerUnit.id).select().single();
-            } else {
-                result = await supabase.from('consumer_units').insert(payload).select().single();
-            }
-
-            if (result.error) throw result.error;
-            onSave(result.data);
-            onClose();
-        } catch (error) {
-            showAlert('Erro ao salvar UC: ' + error.message, 'error');
-        } finally {
-            setLoading(false);
+        const numeroUc = formData.numero_uc.trim();
+        if (!numeroUc) return showAlert('Número da UC é obrigatório.', 'warning');
+        if (!formData.titular_conta.trim()) {
+            return showAlert('Informe o titular da conta, exatamente como aparece na fatura.', 'warning');
         }
+
+        onSave({ ...formData, numero_uc: numeroUc });
+        onClose();
     };
 
     return (
         <div className="modal-overlay">
             <div className="modal-content" style={{ maxWidth: '600px' }}>
                 <div className="modal-header">
-                    <h3>{consumerUnit ? 'Editar Unidade Consumidora' : 'Nova Unidade Consumidora'}</h3>
-                    <button onClick={onClose} className="modal-close">&times;</button>
+                    <h3>Nova Unidade Consumidora</h3>
+                    {/* Sem `type="button"` o padrão dentro de <form> é submit:
+                        o "×" adicionava a UC em vez de fechar o modal. */}
+                    <button type="button" onClick={onClose} className="modal-close">&times;</button>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -205,13 +159,32 @@ export default function PublicConsumerUnitForm({ consumerUnit, subscriberId, con
                             />
                         </div>
 
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="label">Consumo médio mensal (kWh)</label>
+                            <input
+                                type="number"
+                                min="0"
+                                value={formData.franquia}
+                                onChange={e => setFormData({ ...formData, franquia: e.target.value })}
+                                placeholder="Ex: 500"
+                                className="input"
+                            />
+                            <small style={{ color: 'var(--color-text-medium)' }}>
+                                Está na sua conta de luz, no histórico de consumo. É o que dimensiona sua economia.
+                            </small>
+                        </div>
+
                         <div>
                             <label className="label">Concessionária</label>
+                            {/* Editável quando a simulação não identificou a distribuidora —
+                                antes o campo ficava travado e vazio, e a UC nascia sem concessionária. */}
                             <input
                                 value={formData.concessionaria}
-                                readOnly
+                                onChange={e => setFormData({ ...formData, concessionaria: e.target.value })}
+                                readOnly={!!concessionariaDefault}
+                                placeholder="Ex: COSERN"
                                 className="input"
-                                style={{ background: '#e0e0e0', color: '#555' }}
+                                style={concessionariaDefault ? { background: '#e0e0e0', color: '#555' } : undefined}
                             />
                         </div>
                     </div>
@@ -297,8 +270,8 @@ export default function PublicConsumerUnitForm({ consumerUnit, subscriberId, con
 
                     <div className="modal-footer" style={{ gridColumn: '1 / -1', marginTop: '1rem' }}>
                         <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
-                        <button type="submit" disabled={loading} className="btn btn-primary" style={{ minWidth: '150px' }}>
-                            {loading ? 'Adicionando...' : 'Adicionar UC'}
+                        <button type="submit" className="btn btn-primary" style={{ minWidth: '150px' }}>
+                            Adicionar UC
                         </button>
                     </div>
 

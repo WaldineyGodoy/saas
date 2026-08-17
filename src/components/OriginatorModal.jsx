@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
+import { buildReferralUrl } from '../lib/originador';
 import { 
     History, User, MapPin, Wallet, Link as LinkIcon, 
     X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
@@ -191,7 +192,7 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
         }
     };
 
-    const referralUrl = originator ? `https://b2wenergia.com.br/convite?name=${encodeURIComponent(originator.name)}&id=${originator.id}` : 'Salve para gerar URL';
+    const referralUrl = originator ? buildReferralUrl(originator) : 'Salve para gerar URL';
 
     const inputStyle = {
         width: '100%',

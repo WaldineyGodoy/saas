@@ -52,6 +52,7 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
         ],
         subscriber: [
             { id: 'ativacao', label: 'Ativação' },
+            { id: 'contrato_assinado', label: 'Contrato Assinado' },
             { id: 'ativo', label: 'Ativo' },
             { id: 'ativo_inadimplente', label: 'Ativo (Inadimplente)' },
             { id: 'transferido', label: 'Transferido' },

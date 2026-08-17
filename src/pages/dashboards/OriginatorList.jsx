@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Edit, Trash, Search, Copy } from 'lucide-react';
 import OriginatorModal from '../../components/OriginatorModal';
+import { buildReferralUrl } from '../../lib/originador';
 
 export default function OriginatorList() {
     const [originators, setOriginators] = useState([]);
@@ -64,8 +65,10 @@ export default function OriginatorList() {
         fetchOriginators(); // Re-fetch list
     };
 
-    const copyLink = (id) => {
-        const url = `${window.location.origin}/clientes?id=${id}`;
+    // Recebe o registro inteiro, e não só o id: o link precisa do nome (a
+    // saudação da landing) e do `short_url`, quando já houver.
+    const copyLink = (originator) => {
+        const url = buildReferralUrl(originator);
         navigator.clipboard.writeText(url);
         alert('Link copiado: ' + url);
     };
@@ -145,7 +148,7 @@ export default function OriginatorList() {
                                             </td>
                                             <td style={{ fontSize: '0.9rem' }}>{item.pix_key || '-'}</td>
                                             <td>
-                                                <button onClick={() => copyLink(item.id)} title="Copiar Link de Indicação" className="btn btn-secondary" style={{ padding: '0.3rem', border: 'none' }}>
+                                                <button onClick={() => copyLink(item)} title="Copiar Link de Indicação" className="btn btn-secondary" style={{ padding: '0.3rem', border: 'none' }}>
                                                     <Copy size={16} color="var(--color-blue)" />
                                                 </button>
                                             </td>

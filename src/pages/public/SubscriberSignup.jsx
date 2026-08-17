@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { fetchAddressByCep, fetchCpfCnpjData, manageAsaasCustomer, sendWhatsapp } from '../../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, sendWhatsapp } from '../../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../../lib/validators';
 import { useUI } from '../../contexts/UIContext';
-import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import { useBranding } from '../../contexts/BrandingContext';
 import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
+import ContratoAdesao from '../../components/ContratoAdesao';
+import { gerarPdfContratoBase64 } from '../../lib/contrato';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight } from 'lucide-react';
 
 export default function SubscriberSignup() {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const { showAlert, showConfirm } = useUI();
+    const { branding } = useBranding();
 
     // URL Params
     const paramName = searchParams.get('name') || '';
@@ -19,29 +21,38 @@ export default function SubscriberSignup() {
     const paramPhone = searchParams.get('phone') || '';
     const paramCep = searchParams.get('cep') || '';
     const paramOriginatorId = searchParams.get('originator_id') || '';
+    const paramLeadId = searchParams.get('lead_id') || '';
     const paramDiscountPercent = searchParams.get('discount_percent') || '0';
     const paramSavingsAnnual = searchParams.get('savings_annual') || '0';
     const paramConcessionaria = searchParams.get('concessionaria') || '';
+    const paramConsumo = searchParams.get('consumo') || '';
 
     const [loading, setLoading] = useState(false);
+    const [etapa, setEtapa] = useState('');
+    const [done, setDone] = useState(false);
     const [showUcModal, setShowUcModal] = useState(false);
-    const [savedSubscriber, setSavedSubscriber] = useState(null);
+    // Alimenta as páginas ocultas do contrato. Só é preenchido depois que o
+    // assinante existe no banco — o PDF precisa refletir o que foi gravado.
+    const [dadosContrato, setDadosContrato] = useState(null);
+    // UCs vivem em memória até o "Finalizar Adesão". Antes, adicionar uma UC
+    // gravava o assinante no banco só para ter um id de vínculo: quem
+    // desistia no meio deixava assinante órfão sem nenhuma unidade.
     const [consumerUnits, setConsumerUnits] = useState([]);
 
     const [formData, setFormData] = useState({
         name: paramName,
         cpf_cnpj: '',
-        status: 'ativacao', // Default hidden
-        phone: paramPhone,
+        // Os parâmetros chegam só com dígitos vindos da simulação; sem a
+        // máscara aqui o cliente via "84999998888" no campo de WhatsApp.
+        phone: maskPhone(paramPhone),
         email: paramEmail,
         cep: paramCep,
-        rua: '',
+        rua: searchParams.get('rua') || '',
         numero: '',
         complemento: '',
-        bairro: '',
-        cidade: '',
-        uf: '',
-        originator_id: paramOriginatorId
+        bairro: searchParams.get('bairro') || '',
+        cidade: searchParams.get('cidade') || '',
+        uf: searchParams.get('uf') || ''
     });
 
     // Address & Doc Search States
@@ -96,175 +107,182 @@ export default function SubscriberSignup() {
 
     // Derived State for Consumption
     const totalConsumption = consumerUnits.reduce((acc, uc) => acc + (Number(uc.franquia) || 0), 0);
-    const displayConsumption = consumerUnits.length > 0 ? totalConsumption : (searchParams.get('consumo') || 0);
+    const displayConsumption = totalConsumption > 0 ? totalConsumption : (paramConsumo || 0);
 
     const maskCEP = (v) => v.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substr(0, 9);
 
-
-    // SAVE SUBSCRIBER (Helper)
-    const saveSubscriberToDb = async () => {
-        // Validation
-        if (!validateDocument(formData.cpf_cnpj)) throw new Error('CPF/CNPJ inválido!');
-        if (!formData.name) throw new Error('Nome é obrigatório');
-
-        const cleanDoc = formData.cpf_cnpj.replace(/\D/g, '');
-
-        // Check duplication
-        if (!savedSubscriber) {
-            const { data: existing } = await supabase.from('subscribers').select('id').eq('cpf_cnpj', formData.cpf_cnpj).single();
-            if (existing) throw new Error('Já existe um assinante com este CPF/CNPJ.');
-        }
-
-        // Asaas Sync (Fail-safe)
-        let asaasId = savedSubscriber?.asaas_customer_id;
-        try {
-            const asaasResult = await manageAsaasCustomer({
-                id: asaasId, // Update if exists
-                name: formData.name,
-                cpfCnpj: formData.cpf_cnpj,
-                email: formData.email,
-                phone: formData.phone.replace(/\D/g, ''),
-                postalCode: formData.cep,
-                addressNumber: formData.numero,
-                address: formData.rua,
-                province: formData.bairro
-            });
-            if (asaasResult?.success) asaasId = asaasResult.asaas_id;
-        } catch (e) {
-            console.error('Asaas Sync Error:', e);
-            const proceed = await showConfirm(
-                `Aviso: Não foi possível sincronizar com o Asaas (${e.message}).\nDeseja finalizar o cadastro apenas localmente?`,
-                'Erro de Sincronização',
-                'Sim, Finalizar Local',
-                'Não, Vou Corrigir'
-            );
-            if (!proceed) throw new Error('Operação cancelada para correção de dados.');
-        }
-
-        const payload = {
-            ...formData,
-            phone: formData.phone.replace(/\D/g, ''),
-            asaas_customer_id: asaasId
-        };
-        // Ensure originator_id is null if empty string
-        if (!payload.originator_id) payload.originator_id = null;
-
-        let result;
-        if (savedSubscriber?.id) {
-            result = await supabase.from('subscribers').update(payload).eq('id', savedSubscriber.id).select().single();
-        } else {
-            result = await supabase.from('subscribers').insert(payload).select().single();
-        }
-
-        if (result.error) throw result.error;
-        setSavedSubscriber(result.data);
-        return result.data;
-    };
-
-    const handleAddUcClick = async () => {
-        // We must save subscriber first to link UC
-        if (!savedSubscriber) {
-            try {
-                // Check if form is filled enough (CPF, Name)
-                if (!formData.cpf_cnpj || !formData.name) {
-                    return showAlert('Preencha os dados do assinante (CPF e Nome) antes de adicionar UCs.', 'warning');
-                }
-                setLoading(true);
-                await saveSubscriberToDb();
-                setLoading(false);
-                setShowUcModal(true);
-            } catch (error) {
-                setLoading(false);
-                showAlert(error.message, 'error');
-            }
-        } else {
-            setShowUcModal(true);
-        }
-    };
+    const handleAddUcClick = () => setShowUcModal(true);
 
     const handleFinalize = async () => {
+        // Validação local — a RPC revalida tudo do lado do banco, já que ela
+        // é chamada direto da internet.
+        if (!formData.name?.trim()) return showAlert('Informe seu nome completo.', 'warning');
+        if (!validateDocument(formData.cpf_cnpj)) return showAlert('CPF/CNPJ inválido.', 'warning');
+        if (!validatePhone(formData.phone)) return showAlert('WhatsApp inválido. Informe DDD + 9 dígitos.', 'warning');
+        if (!formData.email?.trim()) return showAlert('Informe seu e-mail.', 'warning');
+        if (consumerUnits.length === 0) {
+            return showAlert('Adicione pelo menos uma Unidade Consumidora para concluir a adesão.', 'warning');
+        }
+
         setLoading(true);
+        setEtapa('Registrando sua adesão...');
         try {
-            // 1. Ensure Subscriber Saved/Updated
-            const sub = await saveSubscriberToDb();
+            // Assinante + UCs numa transação só. Se qualquer UC falhar, nada
+            // é gravado — não sobra assinante pela metade.
+            const { data, error } = await supabase.rpc('fn_criar_assinante_publico', {
+                p_nome: formData.name,
+                p_cpf_cnpj: formData.cpf_cnpj,
+                p_email: formData.email,
+                p_telefone: formData.phone,
+                p_cep: formData.cep,
+                p_rua: formData.rua,
+                p_numero: formData.numero,
+                p_complemento: formData.complemento,
+                p_bairro: formData.bairro,
+                p_cidade: formData.cidade,
+                p_uf: formData.uf,
+                p_originator_id: paramOriginatorId || null,
+                p_lead_id: paramLeadId || null,
+                p_ucs: consumerUnits.map(uc => ({
+                    numero_uc: uc.numero_uc,
+                    titular_conta: uc.titular_conta,
+                    concessionaria: uc.concessionaria,
+                    franquia: uc.franquia,
+                    cep: uc.cep,
+                    rua: uc.rua,
+                    numero: uc.numero,
+                    complemento: uc.complemento,
+                    bairro: uc.bairro,
+                    cidade: uc.cidade,
+                    uf: uc.uf
+                }))
+            });
 
-            // 2. Validate UCs
-            if (consumerUnits.length === 0) {
-                const proceed = await showConfirm('Nenhuma Unidade Consumidora (UC) foi cadastrada. Deseja finalizar mesmo assim?');
-                if (!proceed) {
-                    setLoading(false);
-                    return;
-                }
-            }
+            if (error) throw error;
+            console.info('Adesão criada:', data);
 
-            // 3. Send WhatsApps
-            // To Originator
-            if (paramOriginatorId) {
-                const { data: org } = await supabase.from('originators_v2').select('phone').eq('id', paramOriginatorId).single();
-                if (org?.phone) {
-                    const msgOrg = `🚀 Novo Cliente Cadastrado!\n\n${sub.name} acabou de completar o cadastro.\nVerifique no CRM.`;
+            // A partir daqui o assinante JÁ EXISTE. Nada abaixo pode
+            // desfazê-lo nem esconder isso do cliente — só degradar a
+            // experiência para "o contrato chega pelo WhatsApp".
+            await notificarOriginador();
+            await enviarContrato(data?.subscriber_id);
 
-                    // Fetch configured instance name
-                    let instanceName = 'default';
-                    try {
-                        const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
-                        if (config?.variables?.instance_name) {
-                            instanceName = config.variables.instance_name;
-                        }
-                    } catch (err) {
-                        console.error('Error fetching integration config:', err);
-                    }
-
-                    await sendWhatsapp(org.phone, msgOrg, null, null, null, instanceName);
-                }
-            }
-
-            // To Subscriber
-            if (sub.phone) {
-                // Remove Greeting per user request logic? Or keep generic. 
-                // "Ola do formulario" referred to the UI header. WhatsApp message is likely fine to keep "Ola".
-                const msgSub = `Olá, ${sub.name}! 👋\n\nSeu cadastro na B2W Energia foi recebido com sucesso e está em fase de ativação.\n\nPara acompanhar o processo, acesse seu email e crie seu login.`;
-
-                // Fetch configured instance name (redundant but safe if block above skipped)
-                let instanceName = 'default';
-                try {
-                    const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
-                    if (config?.variables?.instance_name) {
-                        instanceName = config.variables.instance_name;
-                    }
-                } catch (err) {
-                    console.error('Error fetching integration config:', err);
-                }
-
-                await sendWhatsapp(sub.phone, msgSub, null, null, null, instanceName);
-            }
-
-            showAlert('Cadastro realizado com sucesso!', 'success');
-
-            // 4. Redirect to Login
-            navigate('/login');
+            setDone(true);
 
         } catch (error) {
             console.error(error);
-            showAlert('Erro ao finalizar: ' + error.message, 'error');
+            showAlert(error.message || 'Não foi possível concluir a adesão.', 'error');
         } finally {
             setLoading(false);
+            setEtapa('');
         }
     };
 
-    // Refresh UCs list
-    const fetchLinkedUCs = async () => {
-        if (!savedSubscriber?.id) return;
-        const { data } = await supabase.from('consumer_units').select('*').eq('subscriber_id', savedSubscriber.id);
-        setConsumerUnits(data || []);
+    /**
+     * Gera o contrato e leva o assinante para a página de termos.
+     *
+     * Antes isso dependia de um admin abrir o CRM e clicar em "Gerar e
+     * Enviar para Assinatura Eletrônica" — o cliente saía do site sem
+     * contrato nenhum e sem saber que faltava um passo.
+     */
+    const enviarContrato = async (subscriberId) => {
+        if (!subscriberId) return;
+
+        try {
+            setEtapa('Preparando seu contrato...');
+
+            // Monta as páginas ocultas e espera o React renderizar antes de
+            // o html2canvas tentar capturá-las.
+            setDadosContrato({
+                subscriber: { ...formData, cpf_cnpj: formData.cpf_cnpj.replace(/\D/g, '') },
+                ucs: consumerUnits
+            });
+            await new Promise(resolve => setTimeout(resolve, 400));
+
+            const pdfBase64 = await gerarPdfContratoBase64();
+
+            setEtapa('Enviando para assinatura digital...');
+            const { data: fim, error: fimErro } = await supabase.functions.invoke('onboarding-finalizar', {
+                body: { subscriber_id: subscriberId, pdf_base64: pdfBase64 }
+            });
+
+            if (fimErro) throw fimErro;
+            if (fim?.error) throw new Error(fim.error);
+            if (fim?.avisos?.length) console.warn('Avisos do onboarding:', fim.avisos);
+
+            if (fim?.contrato_url) {
+                // Página de termos com o link de assinatura embutido.
+                window.location.href = fim.contrato_url;
+            }
+        } catch (e) {
+            // Falhou o contrato, não a adesão. O cliente continua cadastrado
+            // e a tela de sucesso avisa que o link chega pelo WhatsApp.
+            console.error('Falha ao gerar/enviar contrato:', e);
+        }
     };
 
-    useEffect(() => {
-        if (savedSubscriber) {
-            fetchLinkedUCs();
-        }
-    }, [savedSubscriber]);
+    /**
+     * Avisa o originador da conversão.
+     *
+     * A mensagem para o próprio assinante NÃO sai daqui: quem manda é a
+     * `onboarding-finalizar`, junto com o link de assinatura. Duas
+     * mensagens seguidas, uma sem link e outra com, só confundiriam.
+     *
+     * `integrations_config` é admin-only por RLS e esta página roda como
+     * visitante anônimo, então a instância do WhatsApp é resolvida pela
+     * Edge Function, não aqui.
+     */
+    const notificarOriginador = async () => {
+        if (!paramOriginatorId) return;
+        try {
+            const { data: org } = await supabase
+                .from('originators_v2')
+                .select('phone')
+                .eq('id', paramOriginatorId)
+                .maybeSingle();
 
+            if (org?.phone) {
+                await sendWhatsapp(
+                    org.phone,
+                    `🚀 Novo cliente cadastrado!\n\n${formData.name} concluiu a adesão pelo seu link e recebeu o contrato para assinar.\nAcompanhe pelo CRM.`
+                );
+            }
+        } catch (e) {
+            console.error('Falha ao notificar originador:', e);
+        }
+    };
+
+
+    if (done) {
+        return (
+            <div className="min-h-screen bg-slate-50 font-inter flex items-center justify-center px-4">
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-10 max-w-lg text-center">
+                    <CheckCircle size={64} className="mx-auto mb-6 text-green-500" />
+                    <h1 className="text-3xl font-bold mb-4" style={{ color: '#003366' }}>
+                        Adesão concluída!
+                    </h1>
+                    <p className="text-slate-600 text-lg mb-2">
+                        Obrigado, {formData.name.split(' ')[0]}. Recebemos seu cadastro e ele já está em ativação.
+                    </p>
+                    <p className="text-slate-500">
+                        Em instantes você recebe no WhatsApp <strong>{formData.phone}</strong> o contrato
+                        de adesão para assinatura digital. É o último passo.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    /* Páginas do contrato: ficam fora da tela e só existem durante a
+       geração do PDF. Montadas aqui para valerem em qualquer ramo do
+       render abaixo. */
+    const paginasContrato = dadosContrato && (
+        <ContratoAdesao
+            subscriber={dadosContrato.subscriber}
+            consumerUnits={dadosContrato.ucs}
+            branding={branding}
+        />
+    );
 
     return (
         <div className="min-h-screen bg-slate-50 font-inter">
@@ -286,7 +304,7 @@ export default function SubscriberSignup() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Concessionária</p>
-                        <p className="font-semibold text-slate-900">Distribuidora Local</p>
+                        <p className="font-semibold text-slate-900">{paramConcessionaria || 'Distribuidora Local'}</p>
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Média de Consumo</p>
@@ -478,18 +496,20 @@ export default function SubscriberSignup() {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {consumerUnits.map(uc => (
-                                <div key={uc.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            {consumerUnits.map((uc, idx) => (
+                                <div key={`${uc.numero_uc}-${idx}`} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
                                     <div>
                                         <p className="font-bold text-slate-800">UC: {uc.numero_uc}</p>
-                                        <p className="text-sm text-slate-500">{uc.concessionaria} • {Number(uc.franquia)} kWh</p>
+                                        <p className="text-sm text-slate-500">
+                                            {[uc.concessionaria, uc.franquia ? `${Number(uc.franquia)} kWh` : null]
+                                                .filter(Boolean).join(' • ') || 'Sem dados adicionais'}
+                                        </p>
                                     </div>
                                     <button
                                         className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                         onClick={async () => {
                                             if (await showConfirm('Remover esta UC?')) {
-                                                await supabase.from('consumer_units').delete().eq('id', uc.id);
-                                                fetchLinkedUCs();
+                                                setConsumerUnits(prev => prev.filter((_, i) => i !== idx));
                                             }
                                         }}
                                     >
@@ -505,27 +525,44 @@ export default function SubscriberSignup() {
                 <button
                     onClick={handleFinalize}
                     disabled={loading}
-                    className="w-full py-5 text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl transition-all transform active:scale-[0.99] flex justify-center items-center gap-3 hover:shadow-2xl"
+                    className="w-full py-5 text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl transition-all transform active:scale-[0.99] flex justify-center items-center gap-3 hover:shadow-2xl disabled:opacity-70"
                     style={{ backgroundColor: '#FF6600' }}
                 >
-                    {loading ? 'Processando...' : (
+                    {loading ? (etapa || 'Processando...') : (
                         <>
                             Finalizar Adesão <ArrowRight size={24} />
                         </>
                     )}
                 </button>
 
+                {loading && etapa && (
+                    <p className="text-center text-sm text-slate-500 -mt-4">
+                        Não feche esta página — estamos preparando seu contrato para assinatura.
+                    </p>
+                )}
+
             </div>
+
+            {paginasContrato}
 
             {/* UC Modal */}
             {showUcModal && (
                 <PublicConsumerUnitForm
-                    consumerUnit={null} // Always new in this flow
-                    subscriberId={savedSubscriber?.id}
                     concessionariaDefault={paramConcessionaria}
+                    titularDefault={formData.name}
+                    franquiaDefault={consumerUnits.length === 0 ? paramConsumo : ''}
+                    enderecoDefault={{
+                        cep: formData.cep,
+                        rua: formData.rua,
+                        numero: formData.numero,
+                        complemento: formData.complemento,
+                        bairro: formData.bairro,
+                        cidade: formData.cidade,
+                        uf: formData.uf
+                    }}
                     onClose={() => setShowUcModal(false)}
-                    onSave={() => {
-                        fetchLinkedUCs();
+                    onSave={(uc) => {
+                        setConsumerUnits(prev => [...prev, uc]);
                         setShowUcModal(false);
                     }}
                 />

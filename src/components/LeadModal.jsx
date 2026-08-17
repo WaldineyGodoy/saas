@@ -222,13 +222,20 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                             const economia = totalSemDesconto * (discountRate / 100);
                             const baseCalculo = totalSemDesconto - economia;
 
-                            const comissaoPercent = Number(originator.split_commission) || 0;
+                            // `split_commission` é jsonb ({start, recurrent}).
+                            // `Number({...})` dá NaN, então o `|| 0` fazia toda
+                            // mensagem prometer "cashback R$ 0,00".
+                            const split = originator.split_commission || {};
+                            const comissaoPercent = Number(split.start ?? split.recurrent) || 0;
                             const comissaoValor = baseCalculo * (comissaoPercent / 100);
 
                             const formattedValue = comissaoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                             const leadName = dataToSave.name || 'O Lead';
 
-                            const msg = `${leadName}, aceitou o convite e está proximo de concluir o cadastro, em breve vc receberá o seu cashback ${formattedValue}`;
+                            // Só promete valor quando há percentual cadastrado.
+                            const msg = comissaoPercent > 0
+                                ? `${leadName} aceitou o convite e está próximo de concluir o cadastro. Em breve você recebe seu cashback de ${formattedValue}.`
+                                : `${leadName} aceitou o convite e está próximo de concluir o cadastro.`;
 
                             await sendWhatsapp(originator.phone, msg);
                             console.log("Notificação de ativação enviada para:", originator.name);
@@ -606,7 +613,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 )}
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                {lead && lead.status !== 'convertido' && onConvert && (
+                                {/* 'convertido' não existe no enum `lead_status`: a comparação
+                                    nunca batia e o botão aparecia até em lead já convertido. */}
+                                {lead && !['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && onConvert && (
                                     <button
                                         type="button"
                                         onClick={() => {

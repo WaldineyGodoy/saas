@@ -8,6 +8,8 @@ import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
+import ContratoAdesao from './ContratoAdesao';
+import { montarTextoContrato, gerarPdfContratoBase64 } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -99,9 +101,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     };
 
 
-    // Status Options: ativacao, ativo, ativo_inadimplente, transferido, cancelado, cancelado_inadimplente
+    // Espelha o enum subscriber_status do banco, na mesma ordem.
+    // 'contrato_assinado' é carimbado pelo webhook da Autentique.
     const statusOptions = [
         { value: 'ativacao', label: 'Em Ativação' },
+        { value: 'contrato_assinado', label: 'Contrato Assinado' },
         { value: 'ativo', label: 'Ativo' },
         { value: 'ativo_inadimplente', label: 'Ativo (Inadimplente)' },
         { value: 'transferido', label: 'Transferido' },
@@ -180,49 +184,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         console.log('Iniciando geração de contrato para:', formData.name);
         
         try {
-            // Aguarda a renderização dos elementos ocultos
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Mesma rotina que a adesão pública usa (ContratoAdesao.jsx).
+            const pdfBase64 = await gerarPdfContratoBase64();
 
-            // 1. Capture Sections individually for fixed paging
-            const sectionIds = ['contract-page-1', 'contract-page-2', 'contract-page-3', 'contract-page-4'];
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210;
-            const pageHeight = 297;
-            
-            let capturedPages = 0;
-            for (let i = 0; i < sectionIds.length; i++) {
-                const element = document.getElementById(sectionIds[i]);
-                if (!element) {
-                    console.warn(`Elemento ${sectionIds[i]} não encontrado no DOM.`);
-                    continue;
-                }
-
-                console.log(`Capturando página ${i + 1}: ${sectionIds[i]}...`);
-                const canvas = await html2canvas(element, {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff'
-                });
-
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = pageWidth;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                
-                if (capturedPages > 0) pdf.addPage();
-                
-                // Centraliza verticalmente se for menor que a página, ou cola no topo
-                const yPos = 0;
-                pdf.addImage(imgData, 'PNG', 0, yPos, imgWidth, imgHeight, undefined, 'FAST');
-                capturedPages++;
-            }
-
-            if (capturedPages === 0) throw new Error('Nenhuma página do contrato pôde ser capturada.');
-
-            console.log(`PDF gerado com ${capturedPages} páginas.`);
-            const pdfBase64 = pdf.output('datauristring').split(',')[1];
-            console.log('Tamanho do Base64:', pdfBase64.length);
-            
             const fileName = `Contrato_${formData.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
 
             // 4. Send to Autentique
@@ -530,88 +494,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     useEffect(() => {
         if (subscriber?.id && activeTab === 'contratos') {
             fetchSignatures(subscriber.id);
-            
-            const fullAddress = `${subscriber.rua || ''}, ${subscriber.numero || ''} ${subscriber.complemento || ''} - ${subscriber.bairro || ''}, ${subscriber.cidade || ''}/${subscriber.uf || ''}`;
-            
-            const template = `ASSOCIAÇÃO DE USINAS B2W ENERGIA 
-
-(I). ASSOCIAÇÃO: ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07 com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, neste ato representada na forma do seu Estatuto Social por seu presidente; 
-
-(II). ASSOCIADO: ${subscriber.name || ''}, ${subscriber.cpf_cnpj || ''}, ${fullAddress}
-
-CLÁUSULA 1 – DO OBJETO 
-O presente Termo tem por objeto o ingresso do ASSOCIADO na ASSOCIAÇÃO DE USINAS B2W ENERGIA, para participação no modelo de geração compartilhada, com compensação de créditos de energia elétrica no Sistema de Compensação de Energia Elétrica (SCEE), nos termos da Lei nº 14.300/2022 e normas da ANEEL, junto à distribuidora COSERN. 
-
-CLÁUSULA 2 – DA NATUREZA DA OPERAÇÃO 
-O ASSOCIADO declara ciência de que não há venda direta de energia elétrica, mas sim a participação em sistema de geração compartilhada por meio de associação. 
-
-CLÁUSULA 3 – DA ECONOMIA E BENEFÍCIOS 
-O ASSOCIADO terá direito a descontos na fatura de energia elétrica, proporcionais à sua cota de participação na geração da associação. 
-
-CLÁUSULA 4 – DOS PRAZOS 
-A adesão tem prazo indeterminado, podendo ser rescindida por ambas as partes com aviso prévio de 90 dias. 
-
-CLÁUSULA 5 – DA PROTEÇÃO DE DADOS 
-As partes declaram conformidade com a Lei Geral de Proteção de Dados (LGPD). 
-
-CLÁUSULA 6 – DO FORO 
-Fica eleito o foro da comarca de Teófilo Otoni/MG para dirimir quaisquer dúvidas.
-
-CLÁUSULA 7 – DA TRANSPARÊNCIA E DEMONSTRATIVO DE CÁLCULO 
-A Associação disponibilizará mensalmente demonstrativo através do seu aplicativo ou portal do cliente contendo:  
-(i) consumo total do período;  
-(ii) energia compensada em kWh;  
-(iii) valores cobrados pela COSERN;  
-(iv) base de cálculo do desconto; e  
-(v) economia obtida, enviado por meio eletrônico. 
-
-CLÁUSULA 8 – DA INADIMPLÊNCIA 
-O inadimplemento acarretará:  
-(a) até 14 dias, suspensão do desconto no período;  
-(b) a partir de 30 dias, suspensão da compensação; e  
-(c) a partir de 60 dias, rescisão contratual e medidas de cobrança, sempre mediante comunicação prévia ao ASSOCIADO. 
-
-CLÁUSULA 9 – DO PRAZO 
-O presente Termo vige por prazo indeterminado, iniciando-se na data de confirmação da compensação pela distribuidora. 
-
-CLÁUSULA 10 – DA RESCISÃO PELO ASSOCIADO 
-O ASSOCIADO poderá solicitar desligamento mediante aviso prévio mínimo de 90 (noventa) dias ou 3 (três) ciclos de compensação, o que ocorrer por último. 
-
-CLÁUSULA 11 – DA RESCISÃO PELA ASSOCIAÇÃO 
-A Associação poderá rescindir o Termo em caso de descumprimento contratual, inviabilidade regulatória ou operacional, mediante comunicação prévia, ressalvadas hipóteses de urgência. 
-
-CLÁUSULA 12 – DA REALOCAÇÃO OPERACIONAL 
-A Associação poderá realocar o ASSOCIADO entre estruturas equivalentes de geração compartilhada do mesmo grupo econômico, desde que mantidas as condições comerciais, mediante comunicação prévia. 
-
-CLÁUSULA 13 – DA REPRESENTAÇÃO OPERACIONAL 
-O ASSOCIADO autoriza a Associação a representá-lo junto à COSERN exclusivamente para fins operacionais relacionados ao SCEE, durante a vigência deste Termo, vedado qualquer uso diverso. 
-
-CLÁUSULA 14 – DA AUSÊNCIA DE INVESTIMENTO 
-O ASSOCIADO declara ciência de que não realiza qualquer investimento financeiro em usinas ou ativos, inexistindo expectativa de retorno financeiro além do desconto na fatura. 
-
-CLÁUSULA 15 – DA PROTEÇÃO DE DADOS 
-Os dados pessoais serão tratados conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), exclusivamente para execução deste Termo. 
-
-CLÁUSULA 16 – DA RESPONSABILIDADE 
-A Associação não se responsabiliza por alterações tarifárias, regulatórias ou tributárias impostas por órgãos competentes, nem por falhas da distribuidora. 
-
-CLÁUSULA 17 – DO FORO 
-Fica eleito o foro do domicílio do ASSOCIADO, com renúncia a qualquer outro, por mais privilegiado que seja. 
-
-E, por estarem de acordo, as partes aderem eletronicamente ao presente Termo. 
-
-________________________________________ 
-ASSOCIAÇÃO DE USINAS B2W ENERGIA 
-Presidente 
-
-________________________________________ 
-Nome do associado : ${subscriber.name || ''} 
-CNPJ/CPF : ${subscriber.cpf_cnpj || ''} 
-Associado`;
-
-            setContractDraft(template);
+            // O texto do termo mora em src/lib/contrato.js: o mesmo que a
+            // adesão pública gera sozinha. O admin ainda pode editar o
+            // rascunho antes de enviar.
+            //
+            // A distribuidora vem da UC — `consumerUnits` entra nas
+            // dependências para o rascunho ser refeito quando as unidades
+            // terminam de carregar; sem isso o termo ficaria com o texto
+            // genérico mesmo tendo concessionária cadastrada.
+            setContractDraft(montarTextoContrato(subscriber, consumerUnits[0]?.concessionaria));
         }
-    }, [subscriber?.id, activeTab, fetchSignatures, subscriber]);
+    }, [subscriber?.id, activeTab, fetchSignatures, subscriber, consumerUnits]);
 
 
 
@@ -1960,162 +1853,6 @@ Associado`;
         })
         .reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0);
 
-    const renderHiddenFullContract = () => {
-        // Logic to split the contract into 3 parts based on Clauses 7 and 14
-        const splitContent = (text) => {
-            if (!text) return ["", "", ""];
-            
-            // Busca insensível a maiúsculas/minúsculas e flexível com espaços
-            const c7Regex = /CLÁUSULA\s+7/i;
-            const c14Regex = /CLÁUSULA\s+14/i;
-            
-            const c7Match = text.match(c7Regex);
-            const c14Match = text.match(c14Regex);
-            
-            const c7Index = c7Match ? c7Match.index : -1;
-            const c14Index = c14Match ? c14Match.index : -1;
-            
-            let p1 = text;
-            let p2 = "";
-            let p3 = "";
-
-            if (c7Index !== -1 && c14Index !== -1 && c14Index > c7Index) {
-                p1 = text.substring(0, c7Index);
-                p2 = text.substring(c7Index, c14Index);
-                p3 = text.substring(c14Index);
-            } else if (c7Index !== -1) {
-                p1 = text.substring(0, c7Index);
-                p2 = text.substring(c7Index);
-            }
-
-            return [p1, p2, p3];
-        };
-
-        const [part1, part2, part3] = splitContent(contractDraft);
-
-        const PageWrapper = ({ children, id }) => (
-            <div id={id} style={{ 
-                width: '210mm', 
-                minHeight: '297mm', 
-                background: 'white', 
-                padding: '20mm', // Aumentado para mais respiro
-                border: `4mm solid ${branding?.primary_color || '#003366'}`, 
-                boxSizing: 'border-box',
-                color: '#1e293b', 
-                fontFamily: 'serif', 
-                position: 'relative', 
-                marginBottom: '10mm',
-                display: 'flex',
-                flexDirection: 'column'
-            }}>
-                {/* Header / Logo */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
-                    {branding?.logo_url ? (
-                        <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
-                    ) : (
-                        <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '28px', color: branding?.primary_color || '#003366' }}>
-                            {branding?.company_name || 'B2W ENERGIA'}
-                        </div>
-                    )}
-                </div>
-
-                <div style={{ flex: 1 }}>
-                    {children}
-                </div>
-
-                {/* Footer fixed per page */}
-                <div style={{ 
-                    position: 'absolute', 
-                    bottom: '10mm', 
-                    left: '20mm', 
-                    right: '20mm', 
-                    fontSize: '9px', 
-                    color: '#94a3b8', 
-                    borderTop: '1px solid #e2e8f0', 
-                    paddingTop: '4mm', 
-                    display: 'flex', 
-                    justifyContent: 'space-between' 
-                }}>
-                    <span>Documento gerado eletronicamente via CRM B2W Energia</span>
-                    <span>Associação de Usinas B2W Energia</span>
-                </div>
-            </div>
-        );
-
-        return (
-            <div style={{ 
-                position: 'absolute', 
-                left: '-9999px', 
-                top: 0, 
-                width: '210mm',
-                zIndex: -1
-            }}>
-                {/* Page 1: Intro + Clauses 1-6 */}
-                <PageWrapper id="contract-page-1">
-                    <h1 style={{ fontSize: '20px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' }}>
-                        TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
-                    </h1>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
-                        {part1}
-                    </div>
-                </PageWrapper>
-
-                {/* Page 2: Clause 7 to 13 */}
-                <PageWrapper id="contract-page-2">
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
-                        {part2}
-                    </div>
-                </PageWrapper>
-
-                {/* Page 3: Clause 14 to 17 + Signatures */}
-                <PageWrapper id="contract-page-3">
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
-                        {part3}
-                    </div>
-                </PageWrapper>
-
-                {/* Page 4: Procuração */}
-                <PageWrapper id="contract-page-4">
-                    <h1 style={{ fontSize: '20px', textAlign: 'center', marginBottom: '12mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' }}>
-                        PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
-                    </h1>
-                    
-                    <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
-                        <p><strong>OUTORGANTE:</strong> {formData.name}, inscrito no CPF/CNPJ sob o nº {formData.cpf_cnpj}, residente e domiciliado à {formData.rua}, nº {formData.numero} {formData.complemento ? `- ${formData.complemento}` : ''}, {formData.bairro}, {formData.cidade}/{formData.uf}, CEP {formData.cep}, doravante denominado "ASSOCIADO".</p>
-                        <p style={{ marginTop: '8mm' }}><strong>OUTORGADO:</strong> {branding?.company_name || 'ASSOCIAÇÃO DE USINAS B2W ENERGIA'}, inscrito no CNPJ sob nº 64.561.352/0001-07, com sede na Praça Apolinario Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, doravante denominada "ASSOCIAÇÃO".</p>
-                        
-                        <p style={{ marginTop: '10mm' }}><strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador para o fim especial de representá-lo junto à concessionária <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de Compensação de Energia Elétrica (Geração Distribuída).</p>
-                        
-                        <div style={{ marginTop: '12mm', padding: '6mm', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                            <p style={{ fontWeight: 'bold', marginBottom: '5mm', fontSize: '12px', color: '#475569', textTransform: 'uppercase' }}>UNIDADES CONSUMIDORAS VINCULADAS:</p>
-                            <table style={{ width: '100%', fontSize: '10pt', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Nº Unidade (UC)</th>
-                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Concessionária</th>
-                                        <th style={{ textAlign: 'left', padding: '3mm 0' }}>Localidade</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {consumerUnits.map(uc => (
-                                        <tr key={uc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '4mm 0', fontWeight: 'bold' }}>{uc.numero_uc}</td>
-                                            <td style={{ padding: '4mm 0' }}>{uc.concessionaria}</td>
-                                            <td style={{ padding: '4mm 0' }}>{uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div style={{ marginTop: '25mm', textAlign: 'center', fontStyle: 'italic', color: '#94a3b8', fontSize: '10px' }}>
-                        <p>Documento gerado eletronicamente para fins de assinatura digital na plataforma Autentique.</p>
-                    </div>
-                </PageWrapper>
-            </div>
-        );
-    };
 
     return (
         <div style={{
@@ -3573,7 +3310,12 @@ Associado`;
                     {consolidatedToDownload && renderHiddenConsolidatedDetail(consolidatedToDownload)}
                 </div>
                 <div ref={contractFullRef}>
-                    {renderHiddenFullContract()}
+                    <ContratoAdesao
+                        subscriber={formData}
+                        consumerUnits={consumerUnits}
+                        branding={branding}
+                        texto={contractDraft}
+                    />
                 </div>
             </div>
 

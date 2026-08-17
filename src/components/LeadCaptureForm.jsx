@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
+import { validatePhone } from '../lib/validators';
 import { useUI } from '../contexts/UIContext';
-// import InputMask from 'react-input-mask';
 
 export default function LeadCaptureForm() {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
     const [showResult, setShowResult] = useState(false);
     const [savedLead, setSavedLead] = useState(null);
 
     // URL Params
+    // O link de convite gerado no CRM (OriginatorModal) é
+    // /convite?name=<nome>&id=<uuid>, e a landing repassa os dois para este
+    // iframe. Lemos `name` primeiro e mantemos `originador` como legado.
     const originatorId = searchParams.get('id');
-    const originatorName = searchParams.get('originador');
+    const originatorName = searchParams.get('name') || searchParams.get('originador');
 
     const [form, setForm] = useState({
         name: '',
@@ -93,6 +95,16 @@ export default function LeadCaptureForm() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!validatePhone(form.phone)) {
+            showAlert('Telefone inválido. Informe DDD + 9 dígitos.', 'warning');
+            return;
+        }
+        if (!Number(form.consumo)) {
+            showAlert('Informe seu consumo médio mensal para calcularmos o desconto.', 'warning');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -102,7 +114,13 @@ export default function LeadCaptureForm() {
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             const validOriginatorId = (originatorId && uuidRegex.test(originatorId)) ? originatorId : null;
 
+            // O id é gerado no cliente para que o insert não precise de
+            // `.select()` — devolver a linha exigia uma policy de SELECT para
+            // `anon` que expunha o cadastro inteiro de todos os leads.
+            const leadId = crypto.randomUUID();
+
             const payload = {
+                id: leadId,
                 name: form.name,
                 email: form.email,
                 phone: form.phone.replace(/\D/g, ''),
@@ -123,17 +141,11 @@ export default function LeadCaptureForm() {
                 originator_id: validOriginatorId // Only send if valid UUID
             };
 
-            const { data, error } = await supabase
-                .from('leads')
-                .insert(payload)
-                .select()
-                .single();
+            const { error } = await supabase.from('leads').insert(payload);
 
             if (error) throw error;
 
-            if (data) {
-                setSavedLead(data);
-            }
+            setSavedLead({ ...payload, calculated_discount: calculatedDiscount });
             setShowResult(true);
 
         } catch (error) {
@@ -160,32 +172,35 @@ export default function LeadCaptureForm() {
         params.append('email', form.email);
         params.append('phone', form.phone.replace(/\D/g, ''));
         params.append('cep', form.cep);
-        params.append('consumo', form.consumo); // Passing consumption for initial display
+        params.append('consumo', form.consumo);
         if (originatorId) params.append('originator_id', originatorId);
+        if (savedLead?.id) params.append('lead_id', savedLead.id);
+        if (form.concessionaria) params.append('concessionaria', form.concessionaria);
+
+        // Endereço já resolvido pelo CEP: evita o cliente redigitar no /contrato.
+        if (form.street) params.append('rua', form.street);
+        if (form.neighborhood) params.append('bairro', form.neighborhood);
+        if (form.city) params.append('cidade', form.city);
+        if (form.uf) params.append('uf', form.uf);
 
         params.append('discount_percent', discountPercent.toFixed(0));
         params.append('savings_annual', annualSavings.toFixed(2));
 
-        // If inside iframe, we might want to redirect the top window, or just navigate if it's the same app.
-        // The user says "LeadCaptureForm exibe o um popup modal...". 
-        // If the LeadCaptureForm is in an iframe, `navigate('/contrato')` will navigate INSIDE the iframe.
-        // If the intention is to escape the iframe or stay within it?
-        // "o SubscriberModal será incoporado em outra landpage que será aberta ao clicar no botão Garantir Desconto"
-        // "separar os iframes...". 
-        // Usually, `window.top.location.href` escapes iframe. 
-        // But if the route `/contrato` is part of the SAME React App, using `navigate` keeps it SPA.
-        // If the iframe src is creating a new history entry in the iframe, it's fine.
-        // Use `window.open`? 
-        // "outra landpage que será aberta". This might mean opening a new tab.
-        // Let's use `window.open` to be safe and ensure it loads fully, carrying the params.
+        // O destino é o formulário de adesão do CRM — mesma origem deste
+        // iframe. O antigo `https://www.b2wenergia.com.br/contrato` é uma
+        // página estática explicativa, sem formulário e sem leitura de
+        // parâmetros: todo cliente que clicava aqui era descartado ali.
+        const url = `${window.location.origin}/contrato?${params.toString()}`;
 
-        // OPEN EXTERNAL LANDING PAGE (Hostinger)
-        const url = `https://www.b2wenergia.com.br/contrato?${params.toString()}`;
+        // Este componente roda dentro de um iframe de 567px na landing.
+        // Navegar a janela de topo tira o cliente da moldura; se a landing
+        // for de outra origem e o browser bloquear, cai para uma aba nova.
+        try {
+            window.top.location.href = url;
+        } catch {
+            window.open(url, '_blank', 'noopener');
+        }
 
-        // Open in new tab (or top window if preferred)
-        window.open(url, '_blank');
-
-        // Close modal or reset?
         setShowResult(false);
     };
 
@@ -311,6 +326,12 @@ export default function LeadCaptureForm() {
                 <h2 style={styles.header}>
                     Saiba o valor do seu desconto
                 </h2>
+
+                {originatorName && (
+                    <p style={{ textAlign: 'center', marginTop: '-1.25rem', marginBottom: '1.5rem', fontSize: '0.9rem', color: '#6b7280' }}>
+                        Convite de <strong style={{ color: colors.primary }}>{originatorName}</strong>
+                    </p>
+                )}
 
                 <form onSubmit={handleSubmit} style={styles.formSpace}>
 

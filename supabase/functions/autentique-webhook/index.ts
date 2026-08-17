@@ -134,19 +134,66 @@ serve(async (req) => {
 
         if (dbError) throw dbError;
 
+        // ------------------------------------------------------------------
+        // Promover o assinante quando o contrato é assinado.
+        //
+        // Até aqui o webhook só carimbava `signatures.status`. O assinante
+        // ficava em 'ativacao' para sempre, e descobrir quem já tinha
+        // assinado exigia abrir contrato por contrato no CRM.
+        // Rejeição e cancelamento NÃO mexem no status: quem decide o que
+        // fazer com um contrato recusado é uma pessoa, não o webhook.
+        // ------------------------------------------------------------------
+        const assinaturas = updateData || [];
+        const promovidos: string[] = [];
+
+        if (newStatus === 'signed') {
+            for (const sig of assinaturas) {
+                if (sig.signer_type !== 'subscriber' || !sig.signer_id) continue;
+
+                const { error: subErr } = await supabaseAdmin
+                    .from('subscribers')
+                    .update({ status: 'contrato_assinado' })
+                    .eq('id', sig.signer_id)
+                    // Só avança quem ainda está em ativação: um assinante já
+                    // 'ativo' (ou cancelado) não pode regredir porque a
+                    // Autentique reenviou o evento.
+                    .eq('status', 'ativacao');
+
+                if (subErr) {
+                    console.error(`Falha ao promover assinante ${sig.signer_id}:`, subErr);
+                    continue;
+                }
+
+                promovidos.push(sig.signer_id);
+
+                await supabaseAdmin.from('crm_history').insert({
+                    entity_type: 'subscriber',
+                    entity_id: sig.signer_id,
+                    content: 'Contrato assinado digitalmente. Status alterado para "Contrato Assinado".',
+                    metadata: {
+                        autentique_doc_id: docId,
+                        signature_id: sig.id,
+                        origem: 'autentique-webhook'
+                    }
+                });
+            }
+        }
+
         // Sucesso
-        const rowCount = updateData?.length || 0;
+        const rowCount = assinaturas.length;
         await supabaseAdmin.from('webhook_logs').insert({
             service_name: 'autentique',
             payload: payload,
             headers: headers,
             status_code: 200,
-            message: rowCount > 0 ? `Documento ${docId} atualizado para ${newStatus}` : `Nenhum registro encontrado para docId ${docId}`
+            message: rowCount > 0
+                ? `Documento ${docId} atualizado para ${newStatus}. Assinantes promovidos: ${promovidos.length}`
+                : `Nenhum registro encontrado para docId ${docId}`
         });
 
-        console.log(`Webhook processado: ${docId} -> ${newStatus}. Rows affected: ${rowCount}`);
+        console.log(`Webhook processado: ${docId} -> ${newStatus}. Assinaturas: ${rowCount}, assinantes promovidos: ${promovidos.length}`);
 
-        return new Response(JSON.stringify({ success: true, rows: rowCount }), {
+        return new Response(JSON.stringify({ success: true, rows: rowCount, promovidos: promovidos.length }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });

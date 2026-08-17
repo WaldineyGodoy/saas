@@ -1,58 +1,49 @@
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { shortenLink } from '../../lib/api';
+import { buildConviteUrl } from '../../lib/originador';
 
 export default function OriginatorDashboard() {
+    // `useState`/`useEffect` não estavam importados e `profile` era usado sem
+    // nunca chamar `useAuth()`: a tela lançava ReferenceError e não abria.
+    const { user, profile } = useAuth();
+
     const [leads, setLeads] = useState([]);
     const [commissions, setCommissions] = useState([]);
     const [originator, setOriginator] = useState(null);
     const [shortLink, setShortLink] = useState('');
 
-    // Logic to generate unique link (fallback/base)
-    const longLink = `${window.location.origin}/simulacao?id=${profile?.id}`;
+    const longLink = originator ? buildConviteUrl(originator) : '';
     const displayLink = shortLink || longLink;
 
     useEffect(() => {
         async function fetchData() {
-            // Find originator by user_id linked to auth
+            if (!user?.id) return;
 
-
-            // Wait! If I am ADMIN visiting this dashboard, 'user.id' is MY admin ID.
-            // If I am Admin, I am not in 'originators_v2' linked to my profile.
-            // BUT OriginatorDashboard is usually for the logged in user.
-            // If Admin visits, how do they see *this specific originator's* dashboard?
-            // They don't. They use 'OriginatorList'.
-            // The user said "Opção B: Adicionar uma seção dentro do `OriginatorDashboard.jsx`".
-            // AND "botão... só deve ser processado por admin".
-            // Maybe the user logs in as Admin and goes to /originator_dashboard? No.
-
-            // IF the user means "The Originator sees the statement, but ONLY the Admin can click the button",
-            // that implies the Admin *sees* this dashboard.
-            // OR the user is confused about where the Admin operates.
-            // OR Option B implies "Put it in the dashboard view, I (Admin) will login as Originator to test? No."
-
-            // I'll stick to: Add logic. If I am Admin, I see button.
-            // But HOW does Admin see this dashboard?
-            // Maybe I should add a way for Admin to "view as" originator?
-            // Or maybe the user plans to put this Component in `OriginatorList` later?
-
-            // I will implement it as requested.
-            // Fetch:
+            // `originators_v2` não tem coluna `user_id` — a chave é o próprio
+            // `id`, igual ao id do usuário de auth (é assim que o
+            // OriginatorSignupForm grava). O filtro antigo por `user_id`
+            // devolvia erro e deixava o painel permanentemente vazio.
             const { data: origData } = await supabase.from('originators_v2')
                 .select('id, name, pix_key, pix_key_type, short_url')
-                .eq('user_id', user.id)
-                .single();
+                .eq('id', user.id)
+                .maybeSingle();
 
             if (origData) {
                 setOriginator(origData);
-                
+
+                // O que se encurta é sempre a URL longa — `buildReferralUrl`
+                // devolveria o próprio `short_url` quando já existe.
+                const refUrl = buildConviteUrl(origData);
+
                 // Handle Short Link
                 if (origData.short_url) {
                     setShortLink(origData.short_url);
                 } else {
                     // Try to generate short link on the fly if missing
                     try {
-                        const res = await shortenLink(longLink, `ref-${profile.id.substring(0, 5)}`, `Link Embaixador - ${origData.name}`);
+                        const res = await shortenLink(refUrl, `ref-${origData.id.substring(0, 5)}`, `Link Embaixador - ${origData.name}`);
                         if (res.success && res.shortUrl) {
                             setShortLink(res.shortUrl);
                             // Persist to DB

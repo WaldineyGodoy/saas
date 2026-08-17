@@ -194,9 +194,21 @@ export default function LeadsList() {
 
     const handleSubscriberSaved = async (newSubscriber) => {
         try {
-            await supabase.from('leads').update({ status: 'em_negociacao' }).eq('id', leadToConvert.id);
+            // 'convertido' nunca existiu no enum `lead_status`; o lead ia para
+            // 'em_negociacao', que é um estágio ANTERIOR à conversão — o kanban
+            // andava para trás. Convertido = 'ativacao', igual ao assinante.
+            await supabase.from('leads').update({ status: 'ativacao' }).eq('id', leadToConvert.id);
+
+            // Rastreabilidade: sem isso não há como saber de qual lead veio o
+            // assinante, nem a quem atribuir a comissão de originação.
+            if (newSubscriber?.id) {
+                await supabase.from('subscribers')
+                    .update({ lead_id: leadToConvert.id })
+                    .eq('id', newSubscriber.id);
+            }
+
             fetchLeads();
-            alert('Lead convertido em Assinante! Status atualizado para "Em Negociação".');
+            alert('Lead convertido em Assinante! Status atualizado para "Ativação".');
         } catch (e) {
             console.error('Erro ao atualizar status do lead', e);
         }
@@ -367,7 +379,7 @@ export default function LeadsList() {
                                                         >
                                                             Editar
                                                         </button>
-                                                        {lead.status !== 'convertido' && (
+                                                        {!['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && (
                                                             <button
                                                                 onClick={() => handleConvert(lead)}
                                                                 className="btn"
