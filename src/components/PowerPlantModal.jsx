@@ -600,7 +600,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             gestao: tariffs.gestaoPercent || 0,
             tarifaLiq: tariffs.tarifaLiquida || 0,
             servicos: serviceValues,
-            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa }))
+            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.geracao }))
         };
 
         try {
