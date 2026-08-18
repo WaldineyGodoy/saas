@@ -6,6 +6,7 @@ import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
 import { maskPhone, validatePhone } from '../lib/validators';
 import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
+import TagInput from './TagInput';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
     const { profile } = useAuth();
@@ -47,7 +48,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         tarifa_concessionaria: '',
         consumo_kwh: '',
         desconto_assinante: '',
-        originator_id: ''
+        originator_id: '',
+        tags: []
     });
 
     const [loading, setLoading] = useState(false);
@@ -72,7 +74,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 tarifa_concessionaria: lead.tarifa_concessionaria || '',
                 consumo_kwh: lead.consumo_kwh || '',
                 desconto_assinante: lead.desconto_assinante || '',
-                originator_id: lead.originator_id || ''
+                originator_id: lead.originator_id || '',
+                tags: lead.tags || []
             });
         } else {
             if (profile?.role === 'originator') {
@@ -440,6 +443,14 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b' }}>Tags</label>
+                                <TagInput 
+                                    value={formData.tags || []} 
+                                    onChange={(newTags) => setFormData({ ...formData, tags: newTags })} 
+                                />
                             </div>
 
                             <div>

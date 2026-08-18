@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import LeadModal from '../../components/LeadModal';
 import SubscriberModal from '../../components/SubscriberModal';
+import { getTagColor } from '../../lib/tagHelpers';
 import {
     DndContext,
     PointerSensor,
@@ -70,6 +71,26 @@ function KanbanCard({ lead, onClick, isOverlay }) {
                     {lead.consumo_kwh ? `${Number(lead.consumo_kwh).toLocaleString('pt-BR')} kWh` : '0 kWh'}
                 </span>
             </div>
+
+            {lead.tags && lead.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                    {lead.tags.map(tag => {
+                        const style = getTagColor(tag);
+                        return (
+                            <span key={tag} style={{
+                                fontSize: '0.65rem',
+                                color: style.color,
+                                backgroundColor: style.bg,
+                                padding: '0.1rem 0.3rem',
+                                borderRadius: '4px',
+                                fontWeight: 500
+                            }}>
+                                {tag}
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
 
             <div style={{ fontSize: '0.8rem', color: 'var(--color-text-medium)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lead.email}
@@ -145,11 +166,13 @@ export default function LeadsList() {
     const filteredLeads = leads.filter(lead => {
         if (!searchTerm) return true;
         const lowerTerm = searchTerm.toLowerCase();
+        const hasTagMatch = lead.tags?.some(tag => tag.toLowerCase().includes(lowerTerm));
         return (
             lead.name?.toLowerCase().includes(lowerTerm) ||
             lead.email?.toLowerCase().includes(lowerTerm) ||
             lead.phone?.includes(lowerTerm) ||
-            lead.concessionaria?.toLowerCase().includes(lowerTerm)
+            lead.concessionaria?.toLowerCase().includes(lowerTerm) ||
+            hasTagMatch
         );
     });
 
@@ -370,6 +393,22 @@ export default function LeadsList() {
                                                         }}>
                                                             {lead.status.toUpperCase().replace('_', ' ')}
                                                         </span>
+                                                        {lead.tags && lead.tags.length > 0 && (
+                                                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                                                {lead.tags.map(tag => {
+                                                                    const style = getTagColor(tag);
+                                                                    return (
+                                                                        <span key={tag} style={{
+                                                                            fontSize: '0.65rem', color: style.color,
+                                                                            backgroundColor: style.bg, padding: '0.1rem 0.3rem',
+                                                                            borderRadius: '4px', fontWeight: 500
+                                                                        }}>
+                                                                            {tag}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td>{lead.originator?.name || '-'}</td>
                                                     <td style={{ display: 'flex', gap: '0.5rem' }}>
