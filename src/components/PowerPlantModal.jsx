@@ -563,17 +563,53 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
         const descontoReais = tarifa * (descontoPercent / 100);
         const gestaoPercent = Number(formData.gestao_percentual) || 0;
-        const baseGestao = tarifa - descontoReais - fioB;
+
+        // GD1 nao paga Fio B.
+        const isGD1 = formData.modalidade_gd === 'GD1';
+        const fioBefetivo = isGD1 ? 0 : fioB;
+
+        // Tributos: so' em Geracao Compartilhada. Base = tarifa - Fio B, porque
+        // o Fio B ja' vem com os impostos embutidos na conta. ICMS primeiro;
+        // PIS e COFINS incidem sobre o valor ja' reduzido pelo ICMS.
+        const isCompartilhada = formData.modalidade === 'geracao_compartilhada';
+        const icmsPercent   = concessionariaTarifas['ICMS'];
+        const pisPercent    = concessionariaTarifas['PIS'];
+        const cofinsPercent = concessionariaTarifas['COFINS'];
+        const temAliquotas = [icmsPercent, pisPercent, cofinsPercent]
+            .every(v => v !== null && v !== undefined && v !== '');
+
+        let icmsReais = 0, pisCofinsReais = 0, tributosReais = 0;
+        let tributosPendentes = false;
+
+        if (isCompartilhada) {
+            if (temAliquotas) {
+                const baseTributavel = tarifa - fioB;
+                icmsReais = baseTributavel * (Number(icmsPercent) / 100);
+                pisCofinsReais = (baseTributavel - icmsReais)
+                    * ((Number(pisPercent) + Number(cofinsPercent)) / 100);
+                tributosReais = icmsReais + pisCofinsReais;
+            } else {
+                // Aliquota ausente nao vira zero: zero exibiria uma tarifa
+                // liquida ~34% maior que a real como se fosse fato.
+                tributosPendentes = true;
+            }
+        }
+
+        const baseGestao = tarifa - descontoReais - fioBefetivo - tributosReais;
         const gestaoReais = baseGestao * (gestaoPercent / 100);
-        const tarifaLiquida = tarifa - descontoReais - fioB - gestaoReais;
+        const tarifaLiquida = baseGestao - gestaoReais;
 
         return {
             tarifa,
             descontoPercent,
             descontoReais,
-            fioB,
+            fioB: fioBefetivo,
+            fioBIsento: isGD1,
             gestaoPercent,
             gestaoReais,
+            isCompartilhada,
+            icmsPercent, pisPercent, cofinsPercent,
+            icmsReais, pisCofinsReais, tributosReais, tributosPendentes,
             tarifaLiquida
         };
     };
@@ -2949,11 +2985,38 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                 </div>
 
                                                 <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>FIO B</span>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>FIO B{values.fioBIsento ? ' (ISENTO, GD1)' : ''}</span>
                                                     <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>
                                                         {values.fioB.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
                                                     </span>
                                                 </div>
+
+                                                {values.isCompartilhada && values.tributosPendentes && (
+                                                    <div style={{ gridColumn: '1 / -1', background: '#fef2f2', padding: '0.9rem 1rem', borderRadius: '12px', border: '1px solid #fecaca' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: '#991b1b', fontWeight: 600 }}>
+                                                            Geração Compartilhada sofre dedução de ICMS, PIS e COFINS, mas as alíquotas desta concessionária não estão cadastradas.
+                                                            A tarifa líquida abaixo está incompleta. Cadastre em Configurações, Contas de Energia.
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {values.isCompartilhada && !values.tributosPendentes && (
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>ICMS ({values.icmsPercent}%)</span>
+                                                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>
+                                                            -{values.icmsReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {values.isCompartilhada && !values.tributosPendentes && (
+                                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                                                        <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>PIS + COFINS ({(Number(values.pisPercent) + Number(values.cofinsPercent)).toFixed(2)}%)</span>
+                                                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>
+                                                            -{values.pisCofinsReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                        </span>
+                                                    </div>
+                                                )}
 
                                                 <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
                                                     <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>GESTÃO ({values.gestaoPercent}%)</span>
@@ -2966,7 +3029,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     <div>
                                                         <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 800, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fórmula da Gestão</span>
                                                         <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>
-                                                            ({values.tarifa.toFixed(4)} - {values.descontoReais.toFixed(4)} - {values.fioB.toFixed(4)}) × {values.gestaoPercent}% = {values.gestaoReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
+                                                            ({values.tarifa.toFixed(4)} - {values.descontoReais.toFixed(4)} - {values.fioB.toFixed(4)}{values.tributosReais ? ` - ${values.tributosReais.toFixed(4)}` : ''}) × {values.gestaoPercent}% = {values.gestaoReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })}
                                                         </span>
                                                     </div>
                                                     <div style={{ textAlign: 'right' }}>
