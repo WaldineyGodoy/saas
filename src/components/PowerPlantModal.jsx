@@ -604,6 +604,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             tarifaCons: tariffs.tarifa || 0,
             descCliente: tariffs.descontoPercent || 0,
             fioB: tariffs.fioB || 0,
+            // Aliquotas de tributos: sem default. A pagina precisa distinguir
+            // "aliquota zero" de "aliquota nao cadastrada": numa usina de
+            // Geracao Compartilhada, tratar ausencia como zero exibiria uma
+            // tarifa liquida 34% maior que a real.
+            icms:   concessionariaTarifas?.['ICMS']   ?? undefined,
+            pis:    concessionariaTarifas?.['PIS']    ?? undefined,
+            cofins: concessionariaTarifas?.['COFINS'] ?? undefined,
             gestao: tariffs.gestaoPercent || 0,
             tarifaLiq: tariffs.tarifaLiquida || 0,
             servicos: serviceValues,

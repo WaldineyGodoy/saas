@@ -141,6 +141,14 @@ export default function EnergyAccountSettings() {
                 fio_b: cons["Fio B_A"] || 0,
                 tarifa_concessionaria: cons["Tarifa Concessionaria_A"] || 0,
                 desconto_assinante: cons["Desconto Assinante_A"] || 0
+            },
+            // Tributos nao sao por grupo tarifario: valem para a concessionaria
+            // inteira. Vazio fica vazio, nunca zero: a pagina da usina precisa
+            // distinguir "aliquota zero" de "nao cadastrada".
+            tributos: {
+                icms:   cons.ICMS   ?? '',
+                pis:    cons.PIS    ?? '',
+                cofins: cons.COFINS ?? ''
             }
         });
         setIsModalOpen(true);
@@ -171,7 +179,10 @@ export default function EnergyAccountSettings() {
                     "TUSD_A": modalData['Grupo A'].tusd,
                     "Fio B_A": modalData['Grupo A'].fio_b,
                     "Tarifa Concessionaria_A": modalData['Grupo A'].tarifa_concessionaria,
-                    "Desconto Assinante_A": modalData['Grupo A'].desconto_assinante
+                    "Desconto Assinante_A": modalData['Grupo A'].desconto_assinante,
+                    "ICMS":   modalData.tributos.icms   === '' ? null : Number(modalData.tributos.icms),
+                    "PIS":    modalData.tributos.pis    === '' ? null : Number(modalData.tributos.pis),
+                    "COFINS": modalData.tributos.cofins === '' ? null : Number(modalData.tributos.cofins)
                 })
                 .eq('Concessionaria', selectedCons.Concessionaria)
                 .eq('UF', selectedCons.UF);
@@ -510,6 +521,66 @@ export default function EnergyAccountSettings() {
                                 </div>
                                 <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', color: '#166534', opacity: 0.8 }}>
                                     Este percentual será sugerido automaticamente em novas propostas vinculadas a esta concessionária.
+                                </p>
+                            </div>
+
+                            {/* Tributos: valem para a concessionaria inteira, nao por grupo
+                                tarifario, por isso ficam fora das abas. Incidem apenas nas
+                                usinas de Geracao Compartilhada. */}
+                            <div style={{ background: '#fff7ed', padding: '1.5rem', borderRadius: '20px', border: '1px solid #fed7aa', marginBottom: '2rem' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: '#7c2d12', marginBottom: '0.25rem' }}>Tributos sobre a energia</label>
+                                <p style={{ margin: '0 0 1rem 0', fontSize: '0.75rem', color: '#9a3412' }}>
+                                    Incidem somente em usinas de Geração Compartilhada, sobre a base (tarifa menos Fio B).
+                                    O Fio B fica de fora porque já vem com os impostos embutidos.
+                                    PIS e COFINS são calculados sobre o valor já reduzido pelo ICMS.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#7c2d12', marginBottom: '0.4rem' }}>ICMS</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#c2410c', fontWeight: 700, fontSize: '0.8rem' }}>%</div>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="não cadastrado"
+                                                value={modalData.tributos?.icms ?? ''}
+                                                onChange={e => setModalData(prev => ({ ...prev, tributos: { ...prev.tributos, icms: e.target.value } }))}
+                                                style={{ width: '100%', padding: '0.8rem 2.5rem 0.8rem 1rem', borderRadius: '12px', border: '1px solid #fed7aa', fontSize: '1rem', fontWeight: 700, color: '#7c2d12', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#7c2d12', marginBottom: '0.4rem' }}>PIS</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#c2410c', fontWeight: 700, fontSize: '0.8rem' }}>%</div>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="não cadastrado"
+                                                value={modalData.tributos?.pis ?? ''}
+                                                onChange={e => setModalData(prev => ({ ...prev, tributos: { ...prev.tributos, pis: e.target.value } }))}
+                                                style={{ width: '100%', padding: '0.8rem 2.5rem 0.8rem 1rem', borderRadius: '12px', border: '1px solid #fed7aa', fontSize: '1rem', fontWeight: 700, color: '#7c2d12', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#7c2d12', marginBottom: '0.4rem' }}>COFINS</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#c2410c', fontWeight: 700, fontSize: '0.8rem' }}>%</div>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="não cadastrado"
+                                                value={modalData.tributos?.cofins ?? ''}
+                                                onChange={e => setModalData(prev => ({ ...prev, tributos: { ...prev.tributos, cofins: e.target.value } }))}
+                                                style={{ width: '100%', padding: '0.8rem 2.5rem 0.8rem 1rem', borderRadius: '12px', border: '1px solid #fed7aa', fontSize: '1rem', fontWeight: 700, color: '#7c2d12', outline: 'none' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', color: '#9a3412', opacity: 0.85 }}>
+                                    Deixar em branco significa <b>não cadastrado</b>, não zero. Sem as três alíquotas, a página da usina
+                                    avisa que a tarifa líquida está incompleta em vez de exibir um valor maior que o real.
                                 </p>
                             </div>
 
