@@ -370,7 +370,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         rateio_type: 'prioridade',
         grupo_tarifario: 'B1 Residencial',
         portal_credentials: { url: '', login: '', password: '' },
-        short_url: ''
+        short_url: '',
+        tipo_usina: 'gd1'
     });
 
     const [availableUCs, setAvailableUCs] = useState([]);
@@ -594,13 +595,15 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             fabInversor: formData.fabricante_inversor || '',
             valorInvestido: formData.valor_investido || '',
             concessionaria: formData.concessionaria || '',
+            modalidade: formData.modalidade === 'auto_consumo_remoto' ? 'Auto Consumo Remoto' : 'Geração Compartilhada',
+            tipoUsina: formData.tipo_usina === 'gd2' ? 'GD2' : 'GD1',
             tarifaCons: tariffs.tarifa || 0,
             descCliente: tariffs.descontoPercent || 0,
             fioB: tariffs.fioB || 0,
             gestao: tariffs.gestaoPercent || 0,
             tarifaLiq: tariffs.tarifaLiquida || 0,
             servicos: serviceValues,
-            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.geracao }))
+            geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa || e.geracao || 0 }))
         };
 
         try {
@@ -656,7 +659,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 rateio_type: usina.rateio_type || 'prioridade',
                 grupo_tarifario: usina.grupo_tarifario || 'B1 Residencial',
                 portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' },
-                short_url: usina.short_url || ''
+                short_url: usina.short_url || '',
+                tipo_usina: ['gd1', 'gd2', 'gd3'].includes(usina.modalidade) ? usina.modalidade : 'gd1'
             });
             fetchLinkedUCs(usina.id);
         }
@@ -2095,7 +2099,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 name: formData.name,
                 concessionaria: formData.concessionaria,
                 status: formData.status,
-                modalidade: formData.modalidade,
+                modalidade: formData.modalidade === 'auto_consumo_remoto' ? 'auto_consumo_remoto' : formData.tipo_usina,
                 valor_investido: valorInvestidoNum,
                 potencia_kwp: Number(potenciaKwp),
                 qtd_modulos: Number(formData.qtd_modulos),
@@ -3739,7 +3743,24 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             </div>
                                         </div>
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
+                                        {formData.modalidade === 'geracao_compartilhada' && (
+                                            <div style={{ padding: '0.75rem 1.25rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Tipo de Geração Compartilhada</span>
+                                                    <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8' }}>Selecione o enquadramento regulatório da usina</p>
+                                                </div>
+                                                <select
+                                                    value={formData.tipo_usina || 'gd1'}
+                                                    onChange={e => setFormData({ ...formData, tipo_usina: e.target.value })}
+                                                    style={{ padding: '0.4rem 0.8rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#334155', outline: 'none' }}
+                                                >
+                                                    <option value="gd1">GD1 (Isenta de Fio B)</option>
+                                                    <option value="gd2">GD2 (Sujeita a Fio B)</option>
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
                                             {/* Option 1: Prioridade */}
                                             <div 
                                                 onClick={async () => {
