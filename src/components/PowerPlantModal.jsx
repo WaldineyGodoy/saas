@@ -596,7 +596,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             valorInvestido: formData.valor_investido || '',
             concessionaria: formData.concessionaria || '',
             modalidade: formData.modalidade === 'auto_consumo_remoto' ? 'Auto Consumo Remoto' : 'Geração Compartilhada',
-            tipoUsina: formData.modalidade_gd || 'GD1',
+            // Sem default: campo vazio vira ausencia no slug, e a pagina trata
+            // como desconhecido. Assumir GD1 removeria o Fio B de uma usina que
+            // talvez o pague - na UFV Bom Jesus isso inflaria a tarifa liquida
+            // em R$ 0,19/kWh, ou R$ 30.696 por ano.
+            tipoUsina: formData.modalidade_gd || undefined,
             tarifaCons: tariffs.tarifa || 0,
             descCliente: tariffs.descontoPercent || 0,
             fioB: tariffs.fioB || 0,
