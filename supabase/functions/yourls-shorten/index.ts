@@ -59,19 +59,18 @@ serve(async (req) => {
             method: 'GET',
         });
 
-        if (!response.ok) {
-            const errorRaw = await response.text();
-            throw new Error(`YOURLS API Error [${response.status}]: ${errorRaw}`);
+        let resData;
+        const responseText = await response.text();
+        try {
+            resData = JSON.parse(responseText);
+        } catch (_) {
+            throw new Error(`YOURLS API HTTP Error [${response.status}]: ${responseText}`);
         }
 
-        const resData = await response.json();
         console.log('YOURLS Response:', JSON.stringify(resData));
 
-        if (resData.status !== 'success' && resData.code !== 'error:nicadb') {
-            // "error:nicadb" means the keyword is already taken or DB error, 
-            // but sometimes YOURLS returns success if the URL is already shortened.
-            // Check for specific success codes.
-            if (resData.message?.includes('already exists')) {
+        if (resData.status !== 'success') {
+            if (resData.message?.includes('already exists') && resData.shorturl) {
                 return new Response(JSON.stringify({ 
                     success: true, 
                     shortUrl: resData.shorturl,
@@ -90,7 +89,7 @@ serve(async (req) => {
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
-        })
+        });
 
     } catch (error) {
         console.error('Edge Function Error:', error);
