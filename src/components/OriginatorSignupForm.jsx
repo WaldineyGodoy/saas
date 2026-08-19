@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAddressByCep } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
+import { maskCpfCnpj, validateDocument, validatePhone } from '../lib/validators';
+import { buildConviteUrl, buildReferralUrl, normalizarNome, PIX_KEY_TYPES } from '../lib/originador';
 
 export default function OriginatorSignupForm() {
     const { showAlert } = useUI();
@@ -9,9 +11,10 @@ export default function OriginatorSignupForm() {
     const [step, setStep] = useState(1); // 1: SignUp, 2: Profile, 3: Success
     const [userId, setUserId] = useState(null);
 
-    React.useEffect(() => {
-        console.log("DEBUG: OriginatorSignupForm Mounted v1.0");
-    }, []);
+    // Link de indicação mostrado no passo 3 — o parceiro sai daqui já com o
+    // que divulgar, em vez de ter que descobrir o painel sozinho.
+    const [referralUrl, setReferralUrl] = useState('');
+    const [cepErro, setCepErro] = useState('');
 
     const [form, setForm] = useState({
         name: '',
@@ -43,27 +46,48 @@ export default function OriginatorSignupForm() {
 
     const handleCepBlur = async () => {
         const rawCep = form.cep.replace(/\D/g, '');
-        if (rawCep.length === 8) {
-            setLoading(true);
-            try {
-                const addr = await fetchAddressByCep(rawCep);
-                setForm(prev => ({
-                    ...prev,
-                    street: addr.rua,
-                    neighborhood: addr.bairro,
-                    city: addr.cidade,
-                    uf: addr.uf
-                }));
-            } catch (error) {
-                console.error('Error fetching CEP:', error);
-            } finally {
-                setLoading(false);
-            }
+        if (rawCep.length !== 8) return;
+
+        setLoading(true);
+        setCepErro('');
+        try {
+            const addr = await fetchAddressByCep(rawCep);
+            setForm(prev => ({
+                ...prev,
+                street: addr.rua || '',
+                neighborhood: addr.bairro || '',
+                city: addr.cidade || '',
+                uf: addr.uf || ''
+            }));
+        } catch (error) {
+            // A falha aqui era silenciosa e os campos de endereço eram
+            // readOnly: com o ViaCEP fora do ar, ou CEP novo que ele ainda
+            // não conhece, o cadastro travava sem dizer por quê. Agora o
+            // erro aparece e os campos liberam para digitação.
+            console.error('Error fetching CEP:', error);
+            setCepErro('Não foi possível buscar o CEP. Preencha o endereço manualmente.');
+        } finally {
+            setLoading(false);
         }
     };
 
+    // Os campos vindos do CEP só ficam travados quando a busca deu certo.
+    const enderecoTravado = !cepErro && !!form.street;
+
+    // CPF/CNPJ alimentam a chave PIX sozinhos; os demais tipos o parceiro digita.
+    const derivadaDoDocumento = form.pix_key_type === 'cpf' || form.pix_key_type === 'cnpj';
+
     const handleSignUp = async (e) => {
         e.preventDefault();
+
+        // O WhatsApp é o canal que avisa o parceiro de cada lead que entra
+        // pelo link dele (SubscriberSignup dispara por esse número). Número
+        // curto aqui significa parceiro que nunca recebe aviso.
+        if (!validatePhone(form.phone)) {
+            showAlert('WhatsApp inválido. Digite DDD + 9 dígitos. Ex: (84) 99999-9999', 'error');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -95,26 +119,43 @@ export default function OriginatorSignupForm() {
 
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
+
+        // O documento vira chave PIX e é por ele que a comissão é paga: um
+        // dígito errado aqui só aparece meses depois, quando a transferência
+        // volta. O modal do CRM já validava; o cadastro público, não.
+        if (!validateDocument(form.cpf)) {
+            showAlert('CPF ou CNPJ inválido. Confira o número digitado.', 'error');
+            return;
+        }
+
+        if (!form.pix_key.trim()) {
+            showAlert('Informe a chave PIX para o pagamento das comissões.', 'error');
+            return;
+        }
+
         setLoading(true);
 
         try {
             const payload = {
                 id: userId,
-                name: form.name,
+                name: normalizarNome(form.name),
                 email: form.email,
                 phone: form.phone.replace(/\D/g, ''),
                 cpf_cnpj: form.cpf,
-                pix_key: form.pix_key,
+                pix_key: form.pix_key.trim(),
                 pix_key_type: form.pix_key_type,
                 profession: form.profession,
+                // Chaves em português: é o vocabulário que o `fetchAddressByCep`
+                // devolve e o que o modal do CRM lê. Gravar em inglês fazia o
+                // modal exibir endereço vazio e apagá-lo no primeiro save.
                 address: {
                     cep: form.cep,
-                    street: form.street,
-                    number: form.number,
-                    neighborhood: form.neighborhood,
-                    city: form.city,
-                    uf: form.uf,
-                    complement: form.complement // Include complement
+                    rua: form.street,
+                    numero: form.number,
+                    complemento: form.complement,
+                    bairro: form.neighborhood,
+                    cidade: form.city,
+                    uf: form.uf
                 }
             };
 
@@ -122,7 +163,23 @@ export default function OriginatorSignupForm() {
 
             if (error) throw error;
 
+            // A URL longa já é montável aqui, sem depender de leitura no banco
+            // — serve de imediato, mesmo se a sessão ainda não estiver ativa
+            // por causa da confirmação de e-mail.
+            setReferralUrl(buildConviteUrl(payload));
             setStep(3);
+
+            // O `short_url` é gerado pelo gatilho via pg_net, logo após o
+            // COMMIT. Damos um tempo e tentamos trocar pelo encurtado; se não
+            // vier, o link longo continua valendo.
+            setTimeout(async () => {
+                const { data } = await supabase
+                    .from('originators_v2')
+                    .select('id, name, short_url')
+                    .eq('id', payload.id)
+                    .maybeSingle();
+                if (data?.short_url) setReferralUrl(buildReferralUrl(data));
+            }, 4000);
 
         } catch (error) {
             console.error('Error saving profile:', error);
@@ -296,6 +353,11 @@ export default function OriginatorSignupForm() {
                                     style={styles.input}
                                     required
                                 />
+                                {cepErro && (
+                                    <p style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.375rem' }}>
+                                        {cepErro}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -303,19 +365,43 @@ export default function OriginatorSignupForm() {
                             {/* Address Fields (Auto-filled) */}
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={styles.label}>Rua</label>
-                                <input value={form.street} style={styles.input} readOnly />
+                                <input
+                                    value={form.street}
+                                    onChange={e => setForm({ ...form, street: e.target.value })}
+                                    style={styles.input}
+                                    readOnly={enderecoTravado}
+                                    required
+                                />
                             </div>
 
                             <div>
                                 <label style={styles.label}>Bairro</label>
-                                <input value={form.neighborhood} style={styles.input} readOnly />
+                                <input
+                                    value={form.neighborhood}
+                                    onChange={e => setForm({ ...form, neighborhood: e.target.value })}
+                                    style={styles.input}
+                                    readOnly={enderecoTravado}
+                                    required
+                                />
                             </div>
 
                             <div>
                                 <label style={styles.label}>Cidade / UF</label>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <input value={form.city} style={{ ...styles.input, flex: 2 }} readOnly />
-                                    <input value={form.uf} style={{ ...styles.input, flex: 1 }} readOnly />
+                                    <input
+                                        value={form.city}
+                                        onChange={e => setForm({ ...form, city: e.target.value })}
+                                        style={{ ...styles.input, flex: 2 }}
+                                        readOnly={enderecoTravado}
+                                        required
+                                    />
+                                    <input
+                                        value={form.uf}
+                                        onChange={e => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
+                                        style={{ ...styles.input, flex: 1 }}
+                                        readOnly={enderecoTravado}
+                                        required
+                                    />
                                 </div>
                             </div>
 
@@ -353,23 +439,21 @@ export default function OriginatorSignupForm() {
 
                         <div style={styles.grid}>
                             <div>
-                                <label style={styles.label}>CPF (Chave PIX)</label>
+                                <label style={styles.label}>CPF / CNPJ</label>
                                 <input
                                     type="text"
                                     value={form.cpf}
                                     onChange={e => {
-                                        // Simple mask for CPF
-                                        let v = e.target.value.replace(/\D/g, '');
-                                        if (v.length > 11) v = v.substring(0, 11);
-                                        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-                                        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-                                        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-
-                                        // Update PIX only if type is CPF
+                                        // A máscara antiga cortava em 11 dígitos, o que impedia
+                                        // o cadastro de parceiro PJ — sendo que a coluna é
+                                        // `cpf_cnpj` e o CRM já aceita CNPJ.
+                                        const v = maskCpfCnpj(e.target.value);
                                         setForm(prev => ({
                                             ...prev,
                                             cpf: v,
-                                            pix_key: prev.pix_key_type === 'cpf' ? v : prev.pix_key
+                                            pix_key: (prev.pix_key_type === 'cpf' || prev.pix_key_type === 'cnpj')
+                                                ? v
+                                                : prev.pix_key
                                         }));
                                     }}
                                     style={styles.input}
@@ -383,33 +467,47 @@ export default function OriginatorSignupForm() {
                                     value={form.pix_key_type}
                                     onChange={e => {
                                         const newType = e.target.value;
-                                        setForm(prev => ({
-                                            ...prev,
-                                            pix_key_type: newType,
-                                            pix_key: newType === 'cpf' ? prev.cpf : '' // Clear if not CPF
-                                        }));
+                                        // Preenche sozinho o que já temos; o resto o parceiro digita.
+                                        const preenchido = {
+                                            cpf: form.cpf,
+                                            cnpj: form.cpf,
+                                            email: form.email,
+                                            telefone: form.phone,
+                                        }[newType] ?? '';
+                                        setForm(prev => ({ ...prev, pix_key_type: newType, pix_key: preenchido }));
                                     }}
                                     style={styles.input}
                                 >
-                                    <option value="cpf">CPF</option>
-                                    <option value="email">E-mail</option>
-                                    <option value="phone">Telefone</option>
-                                    <option value="random">Aleatória</option>
+                                    {/* Vinha gravando `phone`/`random`, que o CRM não reconhecia e
+                                        que a Asaas rejeita no repasse da comissão. */}
+                                    {PIX_KEY_TYPES.map(t => (
+                                        <option key={t.value} value={t.value}>{t.label}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
 
-                        {form.pix_key_type !== 'cpf' && (
-                            <div>
-                                <label style={styles.label}>Chave PIX</label>
-                                <input
-                                    value={form.pix_key}
-                                    onChange={e => setForm({ ...form, pix_key: e.target.value })}
-                                    style={styles.input}
-                                    required
-                                />
-                            </div>
-                        )}
+                        {/* A chave aparece sempre, inclusive quando derivada do documento:
+                            é para onde a comissão vai, e o parceiro precisa conferir. */}
+                        <div>
+                            <label style={styles.label}>Chave PIX para receber as comissões</label>
+                            <input
+                                value={form.pix_key}
+                                onChange={e => setForm({ ...form, pix_key: e.target.value })}
+                                style={{
+                                    ...styles.input,
+                                    ...(derivadaDoDocumento ? { backgroundColor: '#eef2f7', color: '#475569' } : {})
+                                }}
+                                readOnly={derivadaDoDocumento}
+                                required
+                                placeholder={form.pix_key_type === 'aleatoria' ? 'Cole aqui a chave aleatória do seu banco' : ''}
+                            />
+                            <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.375rem' }}>
+                                {derivadaDoDocumento
+                                    ? 'Usaremos seu documento como chave PIX.'
+                                    : 'Confira com atenção: é nesta chave que as comissões serão depositadas.'}
+                            </p>
+                        </div>
 
                         <button type="submit" disabled={loading} style={styles.button}>
                             {loading ? 'Salvando...' : 'Finalizar Cadastro'}
@@ -424,8 +522,40 @@ export default function OriginatorSignupForm() {
                         </svg>
                         <h3 style={{ ...styles.header, marginBottom: '0.5rem' }}>Cadastro Realizado!</h3>
                         <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-                            Verifique seu e-mail para confirmar sua conta.
+                            Confirme sua conta pelo e-mail que enviamos. Seu link de indicação
+                            já está ativo e pode ser divulgado desde agora.
                         </p>
+
+                        {referralUrl && (
+                            <div style={{
+                                textAlign: 'left', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0',
+                                borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem'
+                            }}>
+                                <label style={styles.label}>Seu link de indicação</label>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <input readOnly value={referralUrl} style={{ ...styles.input, flex: 1 }} />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(referralUrl);
+                                            showAlert('Link copiado!', 'success');
+                                        }}
+                                        style={{
+                                            padding: '0.75rem 1rem', borderRadius: '0.75rem', border: 'none',
+                                            backgroundColor: colors.primary, color: 'white', fontWeight: 700,
+                                            cursor: 'pointer', whiteSpace: 'nowrap'
+                                        }}
+                                    >
+                                        Copiar
+                                    </button>
+                                </div>
+                                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                                    Quem se cadastrar por este link fica vinculado a você, e a
+                                    comissão correspondente entra no seu extrato.
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             onClick={() => window.location.href = 'https://app.b2wenergia.com.br/login'}
                             style={styles.button}

@@ -26,10 +26,20 @@ const corsHeaders = {
 
 const LANDING_CONVITE = 'https://b2wenergia.com.br/convite/';
 
+/** Espelho de `normalizarNome` em src/lib/originador.js. Tira espaço das
+ *  pontas e colapsa espaço repetido no meio: há cadastro com sobra no fim
+ *  ("Bennaya Almeida ") e com espaço duplo no meio ("José Claudio Gonçalo
+ *  Silva"), que virariam `%20` e `%20%20` na saudação da landing. */
+const normalizarNome = (nome?: string | null) => (nome || '').trim().replace(/\s+/g, ' ');
+
 /** Monta o link de indicação longo. A barra final importa: sem ela a
- *  landing depende de um redirect do servidor. */
+ *  landing depende de um redirect do servidor.
+ *
+ *  Precisa produzir byte a byte a mesma URL que `buildConviteUrl` do front
+ *  — senão o mesmo originador ganha dois links diferentes conforme quem
+ *  gerou (o gatilho do banco ou o dashboard). */
 export const montarLinkConvite = (originator: { id: string; name?: string | null }) => {
-    const nome = encodeURIComponent((originator.name || '').trim());
+    const nome = encodeURIComponent(normalizarNome(originator.name));
     return `${LANDING_CONVITE}?name=${nome}&id=${originator.id}`;
 };
 

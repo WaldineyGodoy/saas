@@ -28,24 +28,19 @@ export default function OriginatorList() {
         setLoading(false);
     };
 
-    const handleProcessCommissions = async () => {
-        if (!confirm('Deseja processar as comissões deste mês? Isso irá gerar registros financeiros para todas as faturas pagas.')) return;
-
-        setLoading(true);
-        try {
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-            const { data, error } = await supabase.rpc('generate_monthly_commissions', { target_date: today });
-
-            if (error) throw error;
-
-            alert(`Processamento concluído!\nFaturas processadas: ${data.invoices_processed}\nValor total gerado: R$ ${data.total_commission_value}`);
-        } catch (error) {
-            console.error('Error processing commissions:', error);
-            alert('Erro ao processar comissões: ' + (error.message || 'Erro desconhecido'));
-        } finally {
-            setLoading(false);
-        }
-    };
+    // O botão "Processar Comissões" foi removido daqui.
+    //
+    // Ele chamava a RPC `generate_monthly_commissions`, que calcula por
+    // `profiles.commission_split` + `superior_id` — não é a fonte oficial.
+    // A comissão que vale é `originators_v2.split_commission`, aplicada pelo
+    // gatilho `handle_invoice_paid_ledger` a cada fatura paga, direto no
+    // razão (conta 2.1.2). Ou seja: já é lançada sozinha, não há o que
+    // "processar" no fim do mês.
+    //
+    // Manter o botão era um caminho de pagamento em duplicidade: gerava
+    // linhas em `commissions` a partir da fonte descartada, e essas linhas
+    // alimentavam um botão "Pagar" que dispara PIX de verdade — em cima do
+    // que o razão já tinha registrado.
 
     const handleEdit = (originator) => {
         setSelectedOriginator(originator);
@@ -83,15 +78,6 @@ export default function OriginatorList() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h2>Gestão de Originadores</h2>
                 <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button
-                        onClick={handleProcessCommissions}
-                        className="btn"
-                        style={{
-                            background: 'var(--color-success)', color: 'white'
-                        }}
-                    >
-                        💲 Processar Comissões
-                    </button>
                     <button
                         onClick={handleNew}
                         className="btn btn-accent"

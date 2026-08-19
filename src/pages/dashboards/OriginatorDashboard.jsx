@@ -58,15 +58,27 @@ export default function OriginatorDashboard() {
                 const { data: leadsData } = await supabase.from('leads').select('*').eq('originator_id', origData.id);
                 setLeads(leadsData || []);
 
-                // Fetch Commissions
-                // Assuming 'commissions' table exists. If not, it will be empty or error (catch?).
-                const { data: commData, error } = await supabase
-                    .from('commissions')
-                    .select('*')
-                    .eq('originator_id', origData.id)
-                    .order('reference_month', { ascending: false });
+                // O extrato vem do RAZÃO, conta 2.1.2 ("Comissões a Pagar").
+                //
+                // Antes esta consulta ia na tabela `commissions` filtrando por
+                // `originator_id` — coluna que não existe lá (a tabela é
+                // chaveada por `profile_id`). O erro era engolido pelo
+                // `if (!error)` e o extrato ficava vazio para sempre.
+                //
+                // E `commissions` é alimentada por `generate_monthly_commissions`,
+                // que lê `profiles.commission_split` — não é a fonte. Quem
+                // calcula e lança de verdade é o gatilho `handle_invoice_paid_ledger`,
+                // a cada fatura paga, usando `originators_v2.split_commission`.
+                const { data: extratoData, error: extratoError } = await supabase
+                    .from('ledger_entries')
+                    .select('id, amount, description, created_at, reference_id, ledger_accounts!inner(code)')
+                    .eq('ledger_accounts.code', '2.1.2')
+                    .eq('reference_type', 'originator')
+                    .eq('reference_id', origData.id)
+                    .order('created_at', { ascending: false });
 
-                if (!error) setCommissions(commData || []);
+                if (extratoError) console.error('Erro ao carregar extrato:', extratoError);
+                setCommissions(extratoData || []);
             }
         }
         if (user) fetchData();
@@ -77,63 +89,20 @@ export default function OriginatorDashboard() {
         alert('Link copiado!');
     };
 
-    const handlePayCommission = async (commission) => {
-        if (commission.status === 'paid') return;
+    // O botão "Pagar" que existia aqui foi removido, e não apenas desligado.
+    //
+    // Ele lia `commission.originator_id`, `.total_value` e `.reference_month`
+    // e gravava `status`/`payment_id`/`payment_date` — nenhum desses campos
+    // existe. Operava sobre a tabela `commissions`, que está vazia e é
+    // alimentada por uma fonte que não é a oficial.
+    //
+    // Reativar o repasse exige decidir antes como a baixa é registrada: o
+    // lançamento em 2.1.2 é a OBRIGAÇÃO (crédito); o pagamento precisa da
+    // contrapartida debitando 2.1.2 contra a conta de banco, senão o razão
+    // passa a dever eternamente o que já foi pago. Essa contrapartida é
+    // decisão contábil e move dinheiro de verdade — não se inventa aqui.
 
-        // Check for Admin Role
-        if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
-            alert('Apenas administradores podem realizar pagamentos.');
-            return;
-        }
-
-        // We need the originator's pix key.
-        // We can get it from the state we fetched inside useEffect? we didn't save it to state.
-        // Let's refactor to save originator to state OR fetch properly.
-        // I'll fetch it again or store it.
-
-        const { data: orig, error } = await supabase.from('originators_v2').select('pix_key, pix_key_type, name').eq('id', commission.originator_id).single();
-        if (error || !orig) {
-            alert('Erro ao buscar dados do originador.');
-            return;
-        }
-
-        if (!orig.pix_key) {
-            alert('Originador sem Chave Pix cadastrada.');
-            return;
-        }
-
-        if (!confirm(`Confirmar pagamento de ${Number(commission.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} via PIX para ${orig.name}?`)) return;
-
-        try {
-            const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
-                body: {
-                    value: commission.total_value,
-                    pix_key: orig.pix_key,
-                    pix_key_type: orig.pix_key_type,
-                    description: `Comissão - ${new Date(commission.reference_month).toLocaleDateString()}`,
-                    operationType: 'PIX'
-                }
-            });
-
-            if (error) throw error;
-            if (!data.success) throw new Error(data.error || 'Erro no pagamento');
-
-            alert('Pagamento enviado! ID: ' + data.data?.id);
-
-            // Update Commission Status
-            await supabase.from('commissions').update({
-                status: 'paid',
-                payment_id: data.data.id,
-                payment_date: new Date()
-            }).eq('id', commission.id);
-
-            // Refresh? Trigger fetch?
-            window.location.reload(); // Simple refresh for now or move fetch to function
-        } catch (error) {
-            console.error(error);
-            alert('Erro: ' + error.message);
-        }
-    };
+    const totalComissao = commissions.reduce((soma, e) => soma + Math.abs(Number(e.amount) || 0), 0);
 
     return (
         <div>
@@ -188,51 +157,38 @@ export default function OriginatorDashboard() {
                 </div>
             </div>
 
-            <h3 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Extrato Financeiro (Comissões)</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '2rem', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0 }}>Extrato de Comissões</h3>
+                {commissions.length > 0 && (
+                    <span style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>
+                        Total acumulado: {totalComissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                )}
+            </div>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div className="table-container">
                     <table className="table">
                         <thead>
                             <tr>
-                                <th>Mês Ref.</th>
-                                <th>Faturas Proc.</th>
-                                <th>Valor (R$)</th>
-                                <th>Status</th>
-                                <th>Data Pagt.</th>
-                                <th>Ações</th>
+                                <th>Data</th>
+                                <th>Lançamento</th>
+                                <th style={{ textAlign: 'right' }}>Valor (R$)</th>
                             </tr>
                         </thead>
                         <tbody>
                             {commissions.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Nenhuma comissão registrada.</td>
+                                    <td colSpan="3" style={{ textAlign: 'center', color: 'var(--color-text-light)' }}>Nenhuma comissão registrada.</td>
                                 </tr>
                             ) : (
                                 commissions.map(c => (
                                     <tr key={c.id}>
-                                        <td>{new Date(c.reference_month).toLocaleDateString()}</td>
-                                        <td>{c.total_invoices}</td>
-                                        <td style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>
-                                            {Number(c.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${c.status === 'paid' ? 'badge-success' : 'badge-warning'}`}>
-                                                {c.status === 'paid' ? 'Pago' : 'Pendente'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {c.payment_date ? new Date(c.payment_date).toLocaleDateString() : '-'}
-                                        </td>
-                                        <td>
-                                            {c.status !== 'paid' && (profile?.role === 'admin' || profile?.role === 'super_admin') && (
-                                                <button
-                                                    onClick={() => handlePayCommission(c)}
-                                                    className="btn"
-                                                    style={{ background: 'var(--color-success)', color: 'white', padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}
-                                                >
-                                                    Pagar
-                                                </button>
-                                            )}
+                                        <td>{new Date(c.created_at).toLocaleDateString('pt-BR')}</td>
+                                        <td>{c.description}</td>
+                                        <td style={{ fontWeight: 'bold', color: 'var(--color-success)', textAlign: 'right' }}>
+                                            {/* O razão grava a obrigação como crédito (valor negativo);
+                                                para o parceiro o que importa é o quanto ele tem a receber. */}
+                                            {Math.abs(Number(c.amount) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                         </td>
                                     </tr>
                                 ))

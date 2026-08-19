@@ -50,6 +50,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [manualEntryType, setManualEntryType] = useState('credit');
     const [manualEntryDescription, setManualEntryDescription] = useState('');
     const [manualEntryLoading, setManualEntryLoading] = useState(false);
+    // Contrapartida do lancamento avulso. Sem ela o lancamento saia com uma perna
+    // so, e o razao deixava de somar zero — origem do desequilibrio historico.
+    const [manualEntryCounterAccount, setManualEntryCounterAccount] = useState('2.1.4');
+    const [counterAccounts, setCounterAccounts] = useState([]);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const extratoPrintRef = useRef(null);
 
@@ -133,6 +137,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             } else {
                 setPendingBalance(0);
             }
+
+            // Plano de contas para a contrapartida do lancamento avulso.
+            const { data: contas } = await supabase
+                .from('ledger_accounts')
+                .select('code, name, type')
+                .neq('code', '2.1.1')
+                .order('code');
+            setCounterAccounts((contas || []).filter((c) => (c.code.match(/\./g) || []).length >= 2));
 
             // Adiantamento em aberto (conta 1.1.3). Sem isto o operador ve "saldo zero"
             // e nao sabe que ja pagou adiantado — foi assim que julho/2026 duplicou.
@@ -470,28 +482,53 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .single();
             const isSandbox = configData?.environment === 'sandbox';
 
+            // Busca as duas contas de uma vez: a do fornecedor e a contrapartida.
             const { data: accountData, error: accountError } = await supabase
                 .from('ledger_accounts')
-                .select('id')
-                .eq('code', '2.1.1')
-                .single();
-            
+                .select('id, code')
+                .in('code', ['2.1.1', manualEntryCounterAccount]);
+
             if (accountError) throw accountError;
-            
+
+            const contaFornecedor = accountData?.find(a => a.code === '2.1.1');
+            const contaContrapartida = accountData?.find(a => a.code === manualEntryCounterAccount);
+
+            if (!contaFornecedor || !contaContrapartida) {
+                throw new Error('Conta não encontrada no plano de contas.');
+            }
+            if (contaFornecedor.id === contaContrapartida.id) {
+                throw new Error('A contrapartida não pode ser a própria conta do fornecedor.');
+            }
+
             // Crédito (negativo) = aumenta saldo a receber. Débito (positivo) = diminui saldo a receber.
             const amountToInsert = manualEntryType === 'credit' ? -Math.abs(manualEntryAmount) : Math.abs(manualEntryAmount);
 
+            // Partida dobrada: as duas pernas no mesmo transaction_id, somando zero.
+            // `reference_type` em minúsculo — 'SUPPLIER' maiúsculo não é resolvido
+            // pela view_ledger_enriched e o lançamento fica órfão de fornecedor.
+            const transactionId = crypto.randomUUID();
             const { error: insertError } = await supabase
                 .from('ledger_entries')
-                .insert({
-                    transaction_id: crypto.randomUUID(),
-                    account_id: accountData.id,
-                    amount: amountToInsert,
-                    description: manualEntryDescription,
-                    reference_type: 'SUPPLIER',
-                    reference_id: supplier.id,
-                    is_sandbox: isSandbox || false
-                });
+                .insert([
+                    {
+                        transaction_id: transactionId,
+                        account_id: contaFornecedor.id,
+                        amount: amountToInsert,
+                        description: manualEntryDescription,
+                        reference_type: 'supplier',
+                        reference_id: supplier.id,
+                        is_sandbox: isSandbox || false
+                    },
+                    {
+                        transaction_id: transactionId,
+                        account_id: contaContrapartida.id,
+                        amount: -amountToInsert,
+                        description: manualEntryDescription,
+                        reference_type: 'supplier',
+                        reference_id: supplier.id,
+                        is_sandbox: isSandbox || false
+                    }
+                ]);
 
             if (insertError) throw insertError;
 
@@ -1449,6 +1486,33 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     Saldo Retido (Pendente): {formatCurrency(pendingBalance)} | Disponível: {availableBalance > 0 ? '+' : availableBalance < 0 ? '-' : ''}{formatCurrency(availableBalance)}
                                                 </div>
                                             )}
+                                            {advanceBalance > 0 && (
+                                                <div style={{ fontSize: '0.85rem', color: '#ffd7a1', marginTop: '0.35rem', fontWeight: 'bold' }}>
+                                                    Adiantamento em aberto: {formatCurrency(advanceBalance)} — será abatido conforme as faturas forem pagas
+                                                </div>
+                                            )}
+                                            {displayBalance < 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleClassificar}
+                                                    disabled={advancing || !podeMoverDinheiro}
+                                                    style={{
+                                                        marginTop: '0.5rem',
+                                                        background: 'rgba(255,255,255,0.18)',
+                                                        border: '1px solid rgba(255,255,255,0.4)',
+                                                        borderRadius: '8px',
+                                                        padding: '0.4rem 0.8rem',
+                                                        color: 'white',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.8rem',
+                                                        cursor: (advancing || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
+                                                        opacity: (advancing || !podeMoverDinheiro) ? 0.6 : 1
+                                                    }}
+                                                    title="Move para a conta de adiantamentos o que foi pago acima do saldo devido"
+                                                >
+                                                    {advancing ? 'Classificando...' : 'Classificar adiantamento'}
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Filters inside Header to save space */}
@@ -1528,6 +1592,39 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             <Wallet size={20} />
                                             {paying ? 'Processando...' : 'Pagar Agora'}
                                         </button>
+
+                                        {/* Adiantar nao depende de saldo: e para quando nao ha.
+                                            Cai em 1.1.3, nao em 2.1.1. */}
+                                        <button
+                                            type="button"
+                                            onClick={handleAdvance}
+                                            disabled={advancing || paying || !podeMoverDinheiro}
+                                            title="Paga o fornecedor antes do faturamento. O valor fica como adiantamento e é abatido conforme as faturas forem pagas."
+                                            style={{
+                                                background: 'transparent',
+                                                padding: '1rem 1.75rem',
+                                                borderRadius: '20px',
+                                                border: '2px solid rgba(255,255,255,0.85)',
+                                                color: 'white',
+                                                fontWeight: '800',
+                                                fontSize: '1rem',
+                                                cursor: (advancing || paying || !podeMoverDinheiro) ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.75rem',
+                                                opacity: (advancing || paying || !podeMoverDinheiro) ? 0.6 : 1,
+                                                transition: 'transform 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!advancing && !paying && podeMoverDinheiro) {
+                                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                                        >
+                                            <ArrowUpRight size={20} />
+                                            {advancing ? 'Enviando...' : 'Adiantar'}
+                                        </button>
                                     </div>
 
                                     {supplier?.id && (
@@ -1535,7 +1632,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             <div style={{ width: '100%', height: '1px', background: 'rgba(255, 255, 255, 0.2)', margin: '0.25rem 0' }} />
                                             
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2.5fr 1.5fr auto', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 2fr 1.2fr auto', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
                                                     <select
                                                         value={manualEntryType}
                                                         onChange={e => setManualEntryType(e.target.value)}
@@ -1555,7 +1652,35 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         <option value="credit" style={{ color: '#1e293b' }}>Crédito (+)</option>
                                                         <option value="debit" style={{ color: '#1e293b' }}>Débito (-)</option>
                                                     </select>
-                                                    
+
+                                                    {/* Toda partida precisa de destino: sem isto o razão não fecha. */}
+                                                    <select
+                                                        value={manualEntryCounterAccount}
+                                                        onChange={e => setManualEntryCounterAccount(e.target.value)}
+                                                        title="Conta de contrapartida — de onde sai (ou para onde vai) o valor"
+                                                        style={{
+                                                            padding: '0.55rem 0.75rem',
+                                                            borderRadius: '10px',
+                                                            border: '1px solid rgba(255,255,255,0.25)',
+                                                            background: 'rgba(255,255,255,0.15)',
+                                                            color: 'white',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '600',
+                                                            outline: 'none',
+                                                            cursor: 'pointer',
+                                                            height: '38px'
+                                                        }}
+                                                    >
+                                                        {counterAccounts.length === 0 && (
+                                                            <option value="2.1.4" style={{ color: '#1e293b' }}>2.1.4 · Despesas Operacionais Usina</option>
+                                                        )}
+                                                        {counterAccounts.map(c => (
+                                                            <option key={c.code} value={c.code} style={{ color: '#1e293b' }}>
+                                                                {c.code} · {c.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
                                                     <input
                                                         placeholder="Descrição do lançamento avulso"
                                                         value={manualEntryDescription}
@@ -1923,6 +2048,94 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
+
+            {/* Adiantamento ao fornecedor */}
+            {showAdvanceModal && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.4)', backdropFilter: 'blur(4px)',
+                    zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    animation: 'fadeIn 0.2s ease-out'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '24px', width: '90%', maxWidth: '440px',
+                        padding: '2rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        <div style={{
+                            width: '64px', height: '64px', borderRadius: '50%', background: '#fff7ed',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem',
+                            color: '#f97316'
+                        }}>
+                            <ArrowUpRight size={32} />
+                        </div>
+                        <h4 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', color: '#1e293b', fontWeight: 800, textAlign: 'center' }}>
+                            Adiantar ao fornecedor
+                        </h4>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem', textAlign: 'center' }}>
+                            Pagamento antes do faturamento. O valor entra como <strong>adiantamento</strong> e
+                            é abatido conforme as faturas dos assinantes forem pagas — não vira crédito do mês.
+                        </p>
+
+                        <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Valor</label>
+                        <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', color: '#64748b' }}>R$</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                autoFocus
+                                style={{ width: '100%', padding: '0.8rem 0.8rem 0.8rem 3rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontWeight: '800', color: '#1e293b' }}
+                                value={advanceAmount}
+                                onChange={(e) => setAdvanceAmount(e.target.value)}
+                            />
+                        </div>
+
+                        <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Motivo</label>
+                        <input
+                            type="text"
+                            placeholder="Ex.: adiantamento de julho, faturas ainda não emitidas"
+                            style={{ width: '100%', padding: '0.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#1e293b', marginBottom: '1.25rem' }}
+                            value={advanceReason}
+                            onChange={(e) => setAdvanceReason(e.target.value)}
+                        />
+
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.9rem', marginBottom: '1.25rem' }}>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                                Destino
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 700, wordBreak: 'break-all' }}>
+                                {formData.pix_key} ({formData.pix_key_type?.toUpperCase()})
+                            </div>
+                            {advanceBalance > 0 && (
+                                <div style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '0.5rem', fontWeight: 700 }}>
+                                    Já há {formatCurrency(advanceBalance)} de adiantamento em aberto.
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                onClick={confirmAdvance}
+                                style={{
+                                    padding: '0.8rem', background: '#f97316', color: 'white', borderRadius: '12px',
+                                    border: 'none', fontWeight: '700', cursor: 'pointer'
+                                }}
+                            >
+                                Enviar adiantamento
+                            </button>
+                            <button
+                                onClick={() => setShowAdvanceModal(false)}
+                                style={{
+                                    padding: '0.8rem', background: 'white', color: '#94a3b8', borderRadius: '12px',
+                                    border: '1px solid #e2e8f0', fontWeight: '600', cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Custom Payment Modal */}
             {showPaymentModal && (

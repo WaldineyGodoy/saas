@@ -30,12 +30,15 @@ const LANDING_CONVITE = 'https://b2wenergia.com.br/convite/';
  * mas as duas precisam produzir byte a byte a mesma URL, senão o mesmo
  * originador ganha dois links distintos conforme quem gerou.
  *
- * O `.trim()` no nome não é cosmético: há originador cadastrado com espaço
- * sobrando no fim ("Bennaya Almeida "), que sem isso vira um `%20` pendurado
- * no parâmetro.
+ * A normalização do nome não é cosmética: há cadastro com espaço sobrando no
+ * fim ("Bennaya Almeida "), que viraria um `%20` pendurado no parâmetro, e
+ * cadastro com espaço duplo no meio ("José Claudio Gonçalo  Silva"), que
+ * viraria `%20%20` na saudação da landing.
  */
+export const normalizarNome = (nome) => (nome || '').trim().replace(/\s+/g, ' ');
+
 export const buildConviteUrl = (originator) => {
-    const nome = encodeURIComponent((originator?.name || '').trim());
+    const nome = encodeURIComponent(normalizarNome(originator?.name));
     return `${LANDING_CONVITE}?name=${nome}&id=${originator?.id}`;
 };
 
@@ -51,4 +54,58 @@ export const buildConviteUrl = (originator) => {
 export const buildReferralUrl = (originator) => {
     if (originator?.short_url) return originator.short_url;
     return buildConviteUrl(originator);
+};
+
+/**
+ * Vocabulário único de chave PIX.
+ *
+ * Havia duas listas divergentes: o cadastro público gravava `phone`/`random`
+ * e o modal do CRM só conhecia `telefone`/`aleatoria`. Duas consequências,
+ * as duas silenciosas:
+ *   1. o `<select>` do modal ficava em branco ao abrir um originador vindo
+ *      do cadastro público, e o admin salvava por cima com outro tipo;
+ *   2. `transfer-asaas-pix` mapeia ALEATORIA→EVP e TELEFONE→PHONE; `random`
+ *      escapava desse mapa e ia para a Asaas como "RANDOM", que não é um
+ *      `pixAddressKeyType` válido — a comissão simplesmente não paga.
+ *
+ * Os valores aqui são os que o mapa da Asaas entende. `cnpj` existe porque
+ * a coluna é `cpf_cnpj` e há parceiro PJ.
+ */
+export const PIX_KEY_TYPES = [
+    { value: 'cpf', label: 'CPF' },
+    { value: 'cnpj', label: 'CNPJ' },
+    { value: 'email', label: 'E-mail' },
+    { value: 'telefone', label: 'Telefone' },
+    { value: 'aleatoria', label: 'Aleatória' },
+];
+
+/** Traduz os valores legados para o vocabulário acima, para que registro
+ *  antigo não apareça com o select em branco. */
+export const normalizarPixKeyType = (tipo) => {
+    const equivalentes = { phone: 'telefone', celular: 'telefone', random: 'aleatoria', evp: 'aleatoria' };
+    const t = (tipo || 'cpf').toLowerCase();
+    return equivalentes[t] || t;
+};
+
+/**
+ * Endereço canônico, em português — o mesmo vocabulário que
+ * `fetchAddressByCep` devolve e que o modal do CRM já usava.
+ *
+ * O cadastro público gravava em inglês (`street`, `neighborhood`, `city`,
+ * `number`, `complement`) e o modal lia em português. O modal então exibia
+ * o endereço em branco e, ao salvar, gravava as chaves em português vazias
+ * por cima — apagando o endereço de quem se cadastrou pelo site. Isso já
+ * aconteceu em produção; por isso a leitura aceita os dois vocabulários.
+ */
+export const normalizarEndereco = (address) => {
+    const a = address || {};
+    return {
+        cep: a.cep || '',
+        rua: a.rua ?? a.street ?? '',
+        numero: a.numero ?? a.number ?? '',
+        complemento: a.complemento ?? a.complement ?? '',
+        bairro: a.bairro ?? a.neighborhood ?? '',
+        cidade: a.cidade ?? a.city ?? '',
+        uf: a.uf || '',
+    };
 };

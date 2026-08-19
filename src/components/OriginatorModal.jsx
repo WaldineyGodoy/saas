@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
-import { buildReferralUrl } from '../lib/originador';
+import { buildReferralUrl, normalizarEndereco, normalizarPixKeyType, PIX_KEY_TYPES } from '../lib/originador';
 import { 
     History, User, MapPin, Wallet, Link as LinkIcon, 
     X, Save, Trash2, CheckCircle, AlertCircle, Copy, ExternalLink 
@@ -37,22 +37,20 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
 
     useEffect(() => {
         if (originator) {
+            // Sem normalizar, o endereço de quem se cadastrou pelo site (que
+            // vinha com chaves em inglês) aparecia em branco aqui e era
+            // sobrescrito com vazio no primeiro save.
+            const endereco = normalizarEndereco(originator.address);
             setFormData({
                 name: originator.name || '',
                 cpf_cnpj: originator.cpf_cnpj || '',
                 email: originator.email || '',
                 phone: originator.phone || '',
                 pix_key: originator.pix_key || '',
-                pix_key_type: originator.pix_key_type || 'cpf',
+                pix_key_type: normalizarPixKeyType(originator.pix_key_type),
                 split_start: originator.split_commission?.start || 0,
                 split_recurrent: originator.split_commission?.recurrent || 0,
-                cep: originator.address?.cep || '',
-                rua: originator.address?.rua || '',
-                numero: originator.address?.numero || '',
-                complemento: originator.address?.complemento || '',
-                bairro: originator.address?.bairro || '',
-                cidade: originator.address?.cidade || '',
-                uf: originator.address?.uf || ''
+                ...endereco
             });
         }
     }, [originator]);
@@ -178,9 +176,31 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
     };
 
     const handleDelete = async () => {
-        if (!confirm('Excluir este originador?')) return;
         setLoading(true);
         try {
+            // Apagar originador com comissão lançada deixa órfão o crédito no
+            // razão: o lançamento em 2.1.2 aponta para um id que não existe
+            // mais, e o valor fica devido a ninguém. Já aconteceu — há
+            // R$ 207,34 em 2.1.2 apontando para um originador excluído.
+            const { count, error: erroExtrato } = await supabase
+                .from('ledger_entries')
+                .select('id', { count: 'exact', head: true })
+                .eq('reference_type', 'originator')
+                .eq('reference_id', originator.id);
+
+            if (erroExtrato) throw erroExtrato;
+
+            if (count > 0) {
+                alert(
+                    `Este originador tem ${count} lançamento(s) de comissão no razão e não pode ser excluído.\n\n` +
+                    'Excluir apagaria o vínculo de um valor já devido. Se ele não deve mais operar, ' +
+                    'zere as comissões (Start e Recorrente) na aba Financeiro.'
+                );
+                return;
+            }
+
+            if (!confirm('Excluir este originador?')) return;
+
             const { error } = await supabase.from('originators_v2').delete().eq('id', originator.id);
             if (error) throw error;
             if (onDelete) onDelete(originator.id);
@@ -432,11 +452,9 @@ export default function OriginatorModal({ originator, onClose, onSave, onDelete 
                                             onChange={e => setFormData({ ...formData, pix_key_type: e.target.value })}
                                             style={inputStyle}
                                         >
-                                            <option value="cpf">CPF</option>
-                                            <option value="cnpj">CNPJ</option>
-                                            <option value="email">Email</option>
-                                            <option value="telefone">Telefone</option>
-                                            <option value="aleatoria">Aleatória</option>
+                                            {PIX_KEY_TYPES.map(t => (
+                                                <option key={t.value} value={t.value}>{t.label}</option>
+                                            ))}
                                         </select>
                                     </div>
 
