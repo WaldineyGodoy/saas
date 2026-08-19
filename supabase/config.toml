@@ -24,7 +24,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.transfer-asaas-pix]
-verify_jwt = false
+verify_jwt = true
 
 [functions.trigger-faturista]
 verify_jwt = false

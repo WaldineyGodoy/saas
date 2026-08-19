@@ -1,14 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const json = (body: unknown, status: number) => new Response(
+    JSON.stringify(body),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
+)
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+    // Portão de identidade ANTES de ler o corpo da requisição.
+    //
+    // verify_jwt=true no config.toml não bastaria: a chave anon é um JWT
+    // assinado e público, e passa pelo gateway. Só auth.getUser prova usuário.
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return json({ error: auth.error }, auth.status)
     }
 
     try {
@@ -26,11 +41,6 @@ serve(async (req) => {
         if (!amount || !pixKey) {
             throw new Error('Missing required fields: amount or pixKey')
         }
-
-        // 2. Initialize Supabase Client
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-        const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
         // 2.5 Anti-Fraud Throttle (2 minutes)
         if (destinationId) {
