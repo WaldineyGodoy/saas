@@ -4032,22 +4032,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                     </div>
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        {/* A URL do portal não é cadastrada: ela vive no driver da
+                                            concessionária (scraper/drivers/), junto com os seletores
+                                            que dependem dela. Aqui só entra o que varia por titular. */}
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>URL do Portal</label>
-                                            <input
-                                                type="url"
-                                                value={formData.portal_credentials?.url || ''}
-                                                onChange={e => setFormData({
-                                                    ...formData,
-                                                    portal_credentials: { ...formData.portal_credentials, url: e.target.value }
-                                                })}
-                                                placeholder="https://seuportal.com.br"
-                                                style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>Usuário / Login</label>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#9a3412', marginBottom: '0.5rem' }}>CPF / CNPJ do titular</label>
                                             <input
                                                 type="text"
                                                 value={formData.portal_credentials?.login || ''}
@@ -4055,7 +4044,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     ...formData,
                                                     portal_credentials: { ...formData.portal_credentials, login: e.target.value }
                                                 })}
-                                                placeholder="Seu usuário"
+                                                placeholder="000.000.000-00 ou 00.000.000/0000-00"
                                                 style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
                                             />
                                         </div>

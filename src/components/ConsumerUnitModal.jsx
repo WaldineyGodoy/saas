@@ -2482,22 +2482,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                            {/* A URL do portal não é cadastrada: ela vive no driver da
+                                concessionária (scraper/drivers/), junto com os seletores
+                                que dependem dela. Aqui só entra o que varia por titular. */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>URL do Portal</label>
-                                <input
-                                    type="url"
-                                    value={tempCredentials?.url || ''}
-                                    onChange={e => setTempCredentials({
-                                        ...tempCredentials,
-                                        url: e.target.value
-                                    })}
-                                    placeholder="http://portal.concessionaria.com.br"
-                                    style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Email / Login</label>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>CPF / CNPJ do titular</label>
                                 <input
                                     type="text"
                                     value={tempCredentials?.login || ''}
@@ -2505,7 +2494,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                         ...tempCredentials,
                                         login: e.target.value
                                     })}
-                                    placeholder="login@exemplo.com"
+                                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
                                     style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
                                 />
                             </div>
