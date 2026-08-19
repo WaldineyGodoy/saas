@@ -11,7 +11,9 @@ const PACKAGES = [
 ];
 
 export default function StandaloneRecharge() {
-    const { profile, user } = useAuth();
+    // `user` saiu daqui junto com o user_id que ia no corpo da requisicao:
+    // o dono da recarga agora vem do token de sessao, no servidor.
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [selectedPkg, setSelectedPkg] = useState(null);
     const [pixData, setPixData] = useState(null); // { qrCode, pixPayload, invoiceUrl }
