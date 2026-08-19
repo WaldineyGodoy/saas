@@ -648,6 +648,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             pis:    concessionariaTarifas?.['PIS']    ?? undefined,
             cofins: concessionariaTarifas?.['COFINS'] ?? undefined,
             gestao: tariffs.gestaoPercent || 0,
+            // Geolocalizacao: sem default. Sem coordenada, a pagina simplesmente
+            // nao mostra a secao do mapa, em vez de apontar para lugar nenhum.
+            lat: geo?.lat,
+            lng: geo?.lng,
+            aero: geo?.aeroporto || undefined,
             tarifaLiq: tariffs.tarifaLiquida || 0,
             servicos: serviceValues,
             geracao12: monthlyEstimates.map(e => ({ m: e.name, v: e.estimativa || e.geracao || 0 }))
@@ -734,6 +739,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [monthlyDetails, setMonthlyDetails] = useState(null);
     const [loadingMonthly, setLoadingMonthly] = useState(false);
     const [monthlyEstimates, setMonthlyEstimates] = useState([]);
+    // Coordenadas do municipio da usina e do aeroporto de referencia do estado,
+    // usadas pelo mapa da pagina publica.
+    const [geo, setGeo] = useState(null);
 
     const handleChartCalculation = useCallback((avgGeneration, monthlyData) => {
         if (avgGeneration) {
@@ -774,6 +782,24 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 if (error) throw error;
                 if (!result) return;
+
+                // As coordenadas foram normalizadas na migration 20260819a; aqui
+                // so' se le. Aeroporto vem por UF, de aeroportos_referencia.
+                const latMun = Number(result.latitude), lonMun = Number(result.longitude);
+                if (Number.isFinite(latMun) && Number.isFinite(lonMun)) {
+                    const { data: aero } = await supabase
+                        .from('aeroportos_referencia')
+                        .select('nome, cidade, latitude, longitude')
+                        .eq('uf', result.uf)
+                        .maybeSingle();
+                    setGeo({
+                        lat: latMun, lng: lonMun,
+                        aeroporto: aero ? {
+                            nome: aero.nome, cidade: aero.cidade,
+                            lat: Number(aero.latitude), lng: Number(aero.longitude)
+                        } : null
+                    });
+                }
 
                 const months = [
                     { name: 'Jan', key: 'jan.khw' },
