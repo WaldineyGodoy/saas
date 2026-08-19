@@ -2962,6 +2962,17 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                         <option value="Grupo A">Grupo A</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Tipo de Usina (Enquadramento)</label>
+                                    <select
+                                        value={formData.modalidade_gd || 'GD1'}
+                                        onChange={e => setFormData({ ...formData, modalidade_gd: e.target.value })}
+                                        style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', outline: 'none', fontWeight: 700, color: '#1e293b', background: 'white' }}
+                                    >
+                                        <option value="GD1">GD1 (Isenta de Fio B)</option>
+                                        <option value="GD2">GD2 (Sujeita a Fio B)</option>
+                                    </select>
+                                </div>
                             </div>
 
                             {/* Concessionaire Tariff Block */}
@@ -3842,21 +3853,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                                     As contas de energia podem ser de titularidade diferente
                                                 </p>
                                             </div>
-                                        </div>
-
-                                        <div style={{ padding: '0.75rem 1.25rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div>
-                                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Tipo de Usina (Enquadramento)</span>
-                                                <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8' }}>Selecione o enquadramento regulatório da usina (GD1 ou GD2)</p>
-                                            </div>
-                                            <select
-                                                value={formData.modalidade_gd || 'GD1'}
-                                                onChange={e => setFormData({ ...formData, modalidade_gd: e.target.value })}
-                                                style={{ padding: '0.4rem 0.8rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#334155', outline: 'none' }}
-                                            >
-                                                <option value="GD1">GD1 (Isenta de Fio B)</option>
-                                                <option value="GD2">GD2 (Sujeita a Fio B)</option>
-                                            </select>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
