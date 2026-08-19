@@ -29,21 +29,63 @@ serve(async (req) => {
     try {
         const body = await req.json()
         const amount = body.amount ?? body.value
-        const pixKey = body.pixKey ?? body.pix_key
-        const pixKeyType = body.pixKeyType ?? body.pix_key_type
         const description = body.description
         const usinaId = body.usinaId ?? body.usina_id
         const supplierId = body.supplierId ?? body.supplier_id
-        const destinationType = body.destinationType ?? (supplierId ? 'supplier' : 'usina')
-        const destinationId = supplierId ?? usinaId
 
-        // 1. Validation
-        if (!amount || !pixKey) {
-            throw new Error('Missing required fields: amount or pixKey')
+        if (!amount || Number(amount) <= 0) {
+            throw new Error('Valor da transferencia ausente ou nao positivo.')
         }
 
+        // O destino vem do cadastro, nunca do corpo da requisicao. pixKey e
+        // pixKeyType enviados pelo cliente sao ignorados de proposito: aceitar
+        // destino arbitrario foi o que transformou esta funcao num saque.
+        let destinationType: string
+        let destinationId: string
+        let supplierRow: { pix_key: string | null; pix_key_type: string | null } | null = null
+
+        if (supplierId) {
+            destinationType = 'supplier'
+            destinationId = supplierId
+            const { data } = await supabase
+                .from('suppliers')
+                .select('pix_key, pix_key_type')
+                .eq('id', supplierId)
+                .single()
+            supplierRow = data
+        } else if (usinaId) {
+            destinationType = 'usina'
+            destinationId = usinaId
+            const { data: usina } = await supabase
+                .from('usinas')
+                .select('supplier_id')
+                .eq('id', usinaId)
+                .single()
+            if (!usina?.supplier_id) {
+                throw new Error('Usina sem fornecedor vinculado - nao ha destino cadastrado.')
+            }
+            const { data } = await supabase
+                .from('suppliers')
+                .select('pix_key, pix_key_type')
+                .eq('id', usina.supplier_id)
+                .single()
+            supplierRow = data
+        } else {
+            throw new Error('Informe supplierId ou usinaId. Transferencia sem destino cadastrado nao e permitida.')
+        }
+
+        if (!supplierRow?.pix_key) {
+            throw new Error('Destino sem chave PIX cadastrada.')
+        }
+
+        const pixKey = supplierRow.pix_key
+        const pixKeyType = supplierRow.pix_key_type
+
         // 2.5 Anti-Fraud Throttle (2 minutes)
-        if (destinationId) {
+        // Sem `if`: destinationId e obrigatorio desde a validacao acima. O
+        // throttle antigo vivia dentro de um `if (destinationId)` e quem
+        // omitisse o destino pulava a protecao inteira.
+        {
             const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
             const { data: recentTransfers } = await supabase
                 .from('financial_transfers')
