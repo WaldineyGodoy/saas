@@ -25,15 +25,16 @@ export default function StandaloneRecharge() {
         setSelectedPkg(pkg.id);
         setAlertMsg('');
         const mult = multipliers[pkg.id] || 1;
-        const finalTokens = pkg.tokens * mult;
-        const finalPrice = pkg.price * mult;
 
         try {
+            // Manda o QUE comprar, nao QUANTO custa nem para QUEM. A Edge
+            // Function tem a propria tabela de precos e tira o dono da
+            // recarga do token de sessao: preco e user_id vindos daqui eram
+            // preco e destinatario escolhidos por quem paga.
             const { data, error } = await supabase.functions.invoke('create-asaas-token-charge', {
-                body: { 
-                    token_amount: finalTokens, 
-                    price: finalPrice, 
-                    user_id: user.id 
+                body: {
+                    package_id: pkg.id,
+                    quantity: mult
                 }
             });
 

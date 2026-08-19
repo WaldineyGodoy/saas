@@ -1,27 +1,64 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireUser } from "../_shared/auth.ts"
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+/**
+ * Tabela de precos do servidor, espelhando PACKAGES de
+ * src/pages/StandaloneRecharge.jsx.
+ *
+ * Enquanto os pacotes viverem so' no cliente, e' aqui que eles viram fato:
+ * preco vindo do corpo da requisicao e' preco escolhido por quem paga. O
+ * pacote 30 (renovacao mensal do plano Free) nao entra: o botao dele e'
+ * desabilitado na tela e cobrar R$ 0 no Asaas nao faz sentido.
+ */
+const PACKAGES: Record<number, { tokens: number; price: number }> = {
+    50: { tokens: 50, price: 49.90 },
+    100: { tokens: 100, price: 89.90 },
+    200: { tokens: 200, price: 159.90 },
 }
+
+const MAX_QUANTITY = 100
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    try {
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Portao de usuario, nao de admin: esta e' a tela de recarga do proprio
+    // saldo. Exigir admin aqui quebraria a funcionalidade para todo mundo.
+    const auth = await requireUser(req, supabase)
+    if (!auth.ok) {
+        return new Response(
+            JSON.stringify({ success: false, error: auth.error }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: auth.status }
         )
+    }
 
-        const { token_amount, price, user_id } = await req.json()
+    try {
+        const { package_id, quantity } = await req.json()
 
-        if (!token_amount || !price || !user_id) {
-            throw new Error('Faltam parâmetros obrigatórios.')
+        const pkg = PACKAGES[Number(package_id)]
+        if (!pkg) {
+            throw new Error(`Pacote ${package_id} nao existe ou nao esta a venda.`)
         }
+
+        const qty = Number(quantity ?? 1)
+        if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QUANTITY) {
+            throw new Error(`Quantidade invalida: informe um inteiro entre 1 e ${MAX_QUANTITY}.`)
+        }
+
+        // Preco e quantidade de tokens sao do servidor. O corpo nao opina.
+        const token_amount = pkg.tokens * qty
+        const price = Number((pkg.price * qty).toFixed(2))
+
+        // O dono da recarga e' quem esta logado, nunca quem o corpo diz ser.
+        const user_id = auth.userId
 
         const { data: configData, error: configError } = await supabase
             .from('integrations_config')
