@@ -824,9 +824,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 if (data && !data.erro) {
                     setFormData(prev => ({
                         ...prev,
-                        rua: data.logradouro || prev.rua,
+                        rua: data.rua || prev.rua,
                         bairro: data.bairro || prev.bairro,
-                        cidade: data.localidade || prev.cidade,
+                        cidade: data.cidade || prev.cidade,
                         uf: data.uf || prev.uf
                     }));
                 }
