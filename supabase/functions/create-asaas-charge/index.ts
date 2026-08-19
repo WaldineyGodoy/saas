@@ -1,22 +1,30 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    try {
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Portao de identidade antes de ler o corpo. verify_jwt=true no
+    // config.toml nao basta: a chave anon e um JWT valido e publico.
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return new Response(
+            JSON.stringify({ error: auth.error }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: auth.status }
         )
+    }
+
+    try {
 
         const { invoice_id, subscriber_id, invoice_ids, dueDate: customDueDate } = await req.json()
 
