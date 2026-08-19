@@ -171,7 +171,8 @@ serve(async (req) => {
                 destination_type: destinationType,
                 destination_id: destinationId,
                 status: dbStatus,
-                asaas_transfer_id: transferId
+                asaas_transfer_id: transferId,
+                requested_by: auth.userId
             })
             .select()
             .single();
