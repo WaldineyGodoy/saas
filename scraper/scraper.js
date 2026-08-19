@@ -1,15 +1,30 @@
-const { firefox, chromium } = require('playwright');
+/**
+ * Faturista — orquestrador de coleta de faturas de concessionária.
+ *
+ * Este arquivo NÃO conhece portal nenhum. Ele cuida do que é comum a todos:
+ *   - regra da janela de disponibilidade (quando vale a pena procurar)
+ *   - consulta e agrupamento das UCs por driver / titular / escopo
+ *   - gravação de status e faturas no Supabase
+ *
+ * Tudo que é específico de um portal (URL, rotas, seletores, fluxo de
+ * download) vive em drivers/<concessionaria>.js — ver drivers/index.js.
+ */
+
+const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
-const path = require('path');
-const pdf = require('pdf-parse');
 require('dotenv').config();
+
+const { DRIVERS, resolverDriver } = require('./drivers');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+const DOWNLOAD_DIR = './downloads';
+const DEBUG_DIR = './downloads/debug';
+
 async function run() {
     console.log('Iniciando Faturista (Modo CRM/Calendário)...');
-    
+
     // 1. Identifica o dia atual, mês ref, ou os dias informados via variável de ambiente
     let targetedDays = [];
     let currentMesRef = "";
@@ -65,22 +80,6 @@ async function run() {
         return { mesRef, dataLeitura, diasDesdeLeitura, elegivel: motivo === null, motivo, desistiu };
     }
 
-    const UF_TO_ESTADO = {
-        RN: 'Rio Grande do Norte',
-        BA: 'Bahia',
-        PE: 'Pernambuco',
-        SP: 'São Paulo',
-        MS: 'Mato Grosso do Sul',
-    };
-
-    const CONCESSIONARIA_TO_ESTADO = {
-        'neoenergia cosern':     'Rio Grande do Norte',
-        'neoenergia coelba':     'Bahia',
-        'neoenergia pernambuco': 'Pernambuco',
-        'neoenergia celpe':      'Pernambuco',
-        'neoenergia elektro':    null,
-    };
-
     if (process.env.TARGET_DAYS) {
         const targetStr = process.env.TARGET_DAYS.trim();
         // Regex para YYYY-MM-DD (Modo Dia ou Semana via CRM)
@@ -89,16 +88,16 @@ async function run() {
             const year = parts[0];
             const month = parts[1];
             const day = parseInt(parts[2], 10);
-            
+
             targetedDays = [day];
             currentMesRef = `${month}/${year}`;
-        } 
+        }
         // Regex para YYYY-MM (Modo Mês via CRM)
         else if (targetStr.match(/^\d{4}-\d{2}$/)) {
             const parts = targetStr.split('-');
             const year = parts[0];
             const month = parts[1];
-            
+
             // Fica vazio para buscar todos os dias do mês
             targetedDays = [];
             currentMesRef = `${month}/${year}`;
@@ -121,14 +120,14 @@ async function run() {
 
     console.log(`[Faturista] REF: ${currentMesRef || "por UC (modo janela)"} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
 
-    // 2. Busca UCs da Neoenergia
+    // 2. Busca as UCs atendidas por algum driver registrado
     console.log('Pesquisando UCs aptas via código (Supabase)...');
-    
+
     let query = supabase
         .from('consumer_units')
         .select(`
-            id, 
-            numero_uc, 
+            id,
+            numero_uc,
             subscriber_id,
             titular_fatura_id,
             concessionaria,
@@ -142,8 +141,8 @@ async function run() {
             last_scraping_status,
             last_scraping_at,
             subscriber:subscriber_id (
-                id, 
-                name, 
+                id,
+                name,
                 portal_credentials
             ),
             titular_fatura:titular_fatura_id (
@@ -151,8 +150,15 @@ async function run() {
                 name,
                 portal_credentials
             )
-        `)
-        .ilike('concessionaria', 'Neoenergia%');
+        `);
+
+    // Com um único driver usa-se ilike direto (idêntico ao comportamento
+    // anterior); com vários, um or() de ilikes cobre todos os padrões.
+    if (DRIVERS.length === 1) {
+        query = query.ilike('concessionaria', DRIVERS[0].matchConcessionaria);
+    } else {
+        query = query.or(DRIVERS.map(d => `concessionaria.ilike.${d.matchConcessionaria}`).join(','));
+    }
 
     if (targetedDays.length > 0) {
         query = query.in('dia_leitura', targetedDays);
@@ -172,15 +178,28 @@ async function run() {
             uc.numero_uc = String(uc.numero_uc).trim();
         }
 
-        const uf = uc.address?.uf?.toUpperCase();
-        const conc = uc.concessionaria?.toLowerCase();
-        uc.estadoAlvo = UF_TO_ESTADO[uf] || CONCESSIONARIA_TO_ESTADO[conc];
-
-        if (!uc.estadoAlvo) {
-            console.error(`[Faturista] ERRO: Estado não resolvido para UC ${uc.numero_uc} (UF: ${uf}, Conc: ${uc.concessionaria}). Pulando.`);
+        uc.driver = resolverDriver(uc.concessionaria);
+        if (!uc.driver) {
+            console.error(`[Faturista] ERRO: Nenhum driver para a concessionária "${uc.concessionaria}" (UC ${uc.numero_uc}). Pulando.`);
             await supabase
                 .from('consumer_units')
-                .update({ 
+                .update({
+                    last_scraping_status: 'error',
+                    last_scraping_at: new Date().toISOString(),
+                    last_scraping_error: 'concessionaria sem driver de automacao'
+                })
+                .eq('id', uc.id);
+            continue;
+        }
+
+        const uf = uc.address?.uf?.toUpperCase();
+        uc.escopoAlvo = uc.driver.resolverEscopo({ uf, concessionaria: uc.concessionaria });
+
+        if (!uc.escopoAlvo) {
+            console.error(`[Faturista] ERRO: ${uc.driver.rotuloEscopo} não resolvido para UC ${uc.numero_uc} (UF: ${uf}, Conc: ${uc.concessionaria}). Pulando.`);
+            await supabase
+                .from('consumer_units')
+                .update({
                     last_scraping_status: 'error',
                     last_scraping_at: new Date().toISOString(),
                     last_scraping_error: 'estado nao resolvido'
@@ -249,9 +268,9 @@ async function run() {
     for (const uc of ucsToScrape) {
         const { error } = await supabase
             .from('consumer_units')
-            .update({ 
+            .update({
                 last_scraping_status: 'processing',
-                last_scraping_error: null 
+                last_scraping_error: null
             })
             .eq('id', uc.id);
         if (error) console.error(`[Faturista] Erro RLS ao marcar processing em UC ${uc.id}:`, error.message);
@@ -259,465 +278,166 @@ async function run() {
 
     console.log(`\nAgente Playwright Iniciado para ${ucsToScrape.length} UCs.`);
 
-    // 3. Agrupa UCs selecionadas por Titular das Credenciais e depois por Estado
-    const groups = ucsToScrape.reduce((acc, uc) => {
+    // 3. Agrupa: driver -> titular das credenciais -> escopo (estado, no caso da Neoenergia).
+    //    O driver vem primeiro porque cada portal exige seu próprio navegador.
+    const porDriver = ucsToScrape.reduce((acc, uc) => {
+        const driverId = uc.driver.id;
+        if (!acc[driverId]) acc[driverId] = { driver: uc.driver, titulares: {} };
+
         const effectiveSub = uc.titular_fatura || uc.subscriber;
         const subId = effectiveSub?.id || uc.subscriber_id;
-        
-        if (!acc[subId]) {
-            acc[subId] = {
+        const titulares = acc[driverId].titulares;
+
+        if (!titulares[subId]) {
+            titulares[subId] = {
                 subscriber: effectiveSub,
                 credentials: effectiveSub?.portal_credentials,
-                estados: {}
+                escopos: {}
             };
         }
-        
-        const estado = uc.estadoAlvo;
-        if (!acc[subId].estados[estado]) {
-            acc[subId].estados[estado] = [];
+
+        const escopo = uc.escopoAlvo;
+        if (!titulares[subId].escopos[escopo]) {
+            titulares[subId].escopos[escopo] = [];
         }
-        
-        acc[subId].estados[estado].push(uc);
+
+        titulares[subId].escopos[escopo].push(uc);
         return acc;
     }, {});
 
-    console.log(`[Faturista] Iniciando processamento de ${allUcs.length} UCs em ${Object.keys(groups).length} contas de titular.`);
+    const totalTitulares = Object.values(porDriver)
+        .reduce((n, g) => n + Object.keys(g.titulares).length, 0);
+    console.log(`[Faturista] Iniciando processamento de ${allUcs.length} UCs em ${totalTitulares} contas de titular.`);
 
-    // headless:false é OBRIGATÓRIO — em headless o Akamai devolve Access Denied.
-    // No CI isso funciona porque o processo roda dentro de um display virtual (xvfb-run).
-    // A flag AutomationControlled remove navigator.webdriver, sem ela o portal não autentica.
-    const browser = await chromium.launch({
-        headless: process.env.HEADLESS === 'true',
-        slowMo: Number(process.env.SLOW_MO || 0),
-        args: [
-            '--disable-blink-features=AutomationControlled',
-            '--no-sandbox',
-            '--disable-dev-shm-usage'
-        ]
-    });
-    const context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        locale: 'pt-BR',
-        timezoneId: 'America/Fortaleza',
-        acceptDownloads: true
-    });
-    const page = await context.newPage();
+    // 4. Um navegador por driver — as exigências de anti-bot são do portal,
+    //    não do orquestrador (ver launchOptions/contextOptions do driver).
+    for (const driverId in porDriver) {
+        const { driver, titulares } = porDriver[driverId];
 
-    async function takeScreenshot(name) {
-        const dir = './downloads/debug';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        await page.screenshot({ path: `${dir}/${name}_${Date.now()}.png` });
-    }
+        const browser = await chromium.launch(driver.launchOptions());
+        const context = await browser.newContext(driver.contextOptions());
+        const page = await context.newPage();
 
-    async function updateUCStatus(ucId, status, errorMsg = null) {
-        const { error } = await supabase
-            .from('consumer_units')
-            .update({ 
-                last_scraping_status: status,
-                last_scraping_at: new Date().toISOString(),
-                last_scraping_error: errorMsg
-            })
-            .eq('id', ucId);
-        if (error) {
-            console.error(`[Faturista] Erro ao atualizar UC ${ucId} para '${status}':`, error.message);
-        }
-    }
-
-    // Processa cada grupo (Titular)
-    for (const subId in groups) {
-        const group = groups[subId];
-        const { subscriber, credentials: creds, estados } = group;
-        const estadosList = Object.keys(estados);
-        
-        if (estadosList.length === 0) continue;
-        const primeiroEstado = estadosList[0];
-        
-        const allUcsCount = Object.values(estados).reduce((acc, curr) => acc + curr.length, 0);
-        console.log(`\n=== Processando Assinante: ${subscriber.name} (${allUcsCount} UCs em ${estadosList.length} estado(s)) ===`);
-
-        if (!creds?.login || !creds?.password) {
-            console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
-            for (const estado in estados) {
-                for (const uc of estados[estado]) {
-                    await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
-                }
-            }
-            continue;
+        async function takeScreenshot(name, opts = {}) {
+            if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
+            await page.screenshot({ path: `${DEBUG_DIR}/${name}_${Date.now()}.png`, ...opts });
         }
 
-        try {
-            async function irPara(page, rota) {
-                await page.evaluate((r) => { location.hash = r; }, rota);
-                await page.waitForTimeout(3000);
+        const ctx = {
+            log: (msg) => console.log(msg),
+            screenshot: takeScreenshot,
+            downloadDir: DOWNLOAD_DIR,
+        };
+
+        // Processa cada grupo (Titular)
+        for (const subId in titulares) {
+            const group = titulares[subId];
+            const { subscriber, credentials: creds, escopos } = group;
+            const escoposList = Object.keys(escopos);
+
+            if (escoposList.length === 0) continue;
+
+            const allUcsCount = Object.values(escopos).reduce((acc, curr) => acc + curr.length, 0);
+            console.log(`\n=== Processando Assinante: ${subscriber.name} (${allUcsCount} UCs em ${escoposList.length} ${driver.rotuloEscopo.toLowerCase()}(s)) ===`);
+
+            if (!creds?.login || !creds?.password) {
+                console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
+                for (const escopo in escopos) {
+                    for (const uc of escopos[escopo]) {
+                        await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
+                    }
+                }
+                continue;
             }
 
-            console.log('Acessando portal Neoenergia...');
-            await page.goto('https://agenciavirtual.neoenergia.com/#/login', { waitUntil: 'load', timeout: 60000 });
+            try {
+                await driver.login(page, creds, ctx);
 
-            // Fase 1: Loop de Login Enxuto
-            let loggedIn = false;
-            for (let i = 0; i < 15; i++) {
-                await page.waitForTimeout(3000);
-                
-                // Sucesso?
-                if (page.url().includes('/selecionar-estado') || page.url().includes('/meus-imoveis') || await page.locator('input[placeholder*="Unidade Consumidora"]').isVisible()) {
-                    console.log('ACESSO REALIZADO COM SUCESSO!');
-                    loggedIn = true;
-                    break;
-                }
+                for (const escopoAlvo of escoposList) {
+                    const ucsDoEscopo = escopos[escopoAlvo];
+                    console.log(`\n--- Processando ${driver.rotuloEscopo}: ${escopoAlvo} (${ucsDoEscopo.length} UCs) ---`);
 
-                // Modal Aberto?
-                const userField = page.locator('input#userId, input[name="username"], input[name="j_username"], input[name="cpfCnpj"], mat-form-field:has-text("CPF") input, mat-form-field:has-text("CNPJ") input, input[formcontrolname="login"], input[formcontrolname="usuario"]').first();
-                if (await userField.isVisible()) {
-                    console.log(`   [Faturista] Preenchendo credenciais para ${creds.login}...`);
-                    const formatDoc = (v) => {
-                        const d = (v || '').replace(/\D/g, '');
-                        if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                        if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-                        return v;
-                    };
-                    
-                    await userField.click();
-                    await page.keyboard.press('Control+A');
-                    await page.keyboard.press('Backspace');
-                    await userField.pressSequentially(formatDoc(creds.login), { delay: 100 });
-                    
-                    const passField = page.locator('input#password, input[name="password"], input[name="j_password"], mat-form-field:has-text("Senha") input, input[type="password"]').first();
-                    await passField.click();
-                    await page.keyboard.press('Control+A');
-                    await page.keyboard.press('Backspace');
-                    await passField.pressSequentially(creds.password, { delay: 100 });
-                    
-                    await page.waitForTimeout(2000);
-                    const enterBtn = page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).first();
-                    if (await enterBtn.isEnabled()) {
-                        await enterBtn.click({ noWaitAfter: true });
-                    } else {
-                        await enterBtn.click({ force: true, noWaitAfter: true });
-                    }
-                    console.log('   [Faturista] Submeteu form de login. Aguardando redirecionamento autônomo...');
-                    
-                    // Aguarda o portal decidir para onde jogar (não força nav aqui de primeira)
-                    try {
-                        await page.waitForFunction(() => 
-                            location.hash.includes('selecionar-estado') || 
-                            location.hash.includes('meus-imoveis') ||
-                            !!document.querySelector('input[placeholder*="Unidade Consumidora"]'),
-                            { timeout: 15000 });
-                    } catch (e) {
-                        console.log('   [Faturista] Sem redirect automático pós-login. Indo para selecionar-estado...');
-                        await irPara(page, '#/home/selecionar-estado');
-                        await page.waitForTimeout(3000);
-                    }
-                    
-                    try {
-                        await page.waitForFunction(() => 
-                            !!document.querySelector('a.link-page') ||
-                            !!document.querySelector('input[placeholder*="Unidade Consumidora"]'),
-                            { timeout: 20000 });
-                    } catch(e) {
-                        console.log('   [Faturista] Timeout aguardando tela de estados/imóveis após fallback. Tirando dump...');
-                        await page.screenshot({ path: `./downloads/debug/pos_login_fallback_fail_${Date.now()}.png`, fullPage: true });
-                        const hashLog = await page.evaluate(() => location.hash);
-                        const est = await page.evaluate(() => ({
-                            hash: location.hash,
-                            bodyLen: document.body.innerText.trim().length,
-                            temLinkPage: document.querySelectorAll('a.link-page').length,
-                            temRouterOutlet: !!document.querySelector('router-outlet'),
-                            ua: navigator.userAgent,
-                            webdriver: navigator.webdriver
-                        }));
-                        console.log('[DEBUG ESTADO]', JSON.stringify(est));
-                        console.log(`   [Faturista] Location hash atual: ${hashLog}`);
-                    }
-                    continue;
-                }
+                    await driver.selecionarEscopo(page, escopoAlvo, ctx);
 
-                // Botão de Abrir Modal Visível?
-                const abrirModalBtn = page.locator('button[aria-label="Conectar-se a agência virtual"], button:has-text("LOGIN")').filter({ hasNotText: 'CADASTRE' }).first();
-                if (await abrirModalBtn.count() > 0) {
-                    console.log(`   [Faturista] Clicando para abrir modal de login...`);
-                    await abrirModalBtn.click({ force: true }).catch(()=>{});
-                    await page.waitForTimeout(2500);
-                    continue;
-                }
-            }
+                    for (const uc of ucsDoEscopo) {
+                        try {
+                            console.log(`-> UC: ${uc.numero_uc}`);
 
-            if (!loggedIn) {
-                await page.screenshot({ path: `./downloads/debug/login_fail_${Date.now()}.png`, fullPage: true });
-                throw new Error('Falha na autenticação ou timeout do portal.');
-            }
+                            const r = await driver.capturarFatura(page, uc, uc.mesRefAlvo, ctx);
 
-            // Loop dos Estados
-            for (let eIdx = 0; eIdx < estadosList.length; eIdx++) {
-                const estadoAlvo = estadosList[eIdx];
-                const ucsDoEstado = estados[estadoAlvo];
-                console.log(`\n--- Processando Estado: ${estadoAlvo} (${ucsDoEstado.length} UCs) ---`);
-
-                // Fase 2: Seleção de Estado (Navegação explícita)
-                console.log(`   [Faturista] Navegando para #/home/selecionar-estado...`);
-                await irPara(page, '#/home/selecionar-estado');
-                await page.waitForTimeout(3000);
-
-                const estadoLink = page.locator('a.link-page', { hasText: estadoAlvo }).first();
-                if (await estadoLink.count() > 0) {
-                    console.log(`   [Faturista] Selecionando estado: ${estadoAlvo}`);
-                    await estadoLink.click({ force: true });
-                    try {
-                        await page.waitForFunction(() => location.hash.includes('meus-imoveis'), { timeout: 20000 });
-                        console.log(`   [Faturista] Roteado para meus-imoveis com sucesso.`);
-                    } catch (e) {
-                        console.error('   [Faturista] Timeout aguardando redirecionamento pós-estado.');
-                    }
-                } else {
-                    console.error(`   [Faturista] Botão do estado ${estadoAlvo} não encontrado. Risco de falha na UC.`);
-                }
-
-                // Loop das UCs deste Estado
-                for (const uc of ucsDoEstado) {
-                    try {
-                        const paddedUC = uc.numero_uc.toString().padStart(12, '0');
-                        console.log(`-> UC: ${uc.numero_uc}`);
-                        
-                        // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
-                        await irPara(page, '#/home/meus-imoveis');
-                        await page.waitForTimeout(3000);
-
-                        const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
-                        await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
-                        await ucSearchInput.fill(uc.numero_uc); // com trim nativo
-                        
-                        // Clica em Pesquisar
-                        const pesquisarBtn = page.locator('button', { hasText: 'Pesquisar' }).first();
-                        if (await pesquisarBtn.isVisible()) {
-                            await pesquisarBtn.click();
-                        } else {
-                            await page.click('button[aria-label="Pesquisar"]');
-                        }
-                        await page.waitForTimeout(4000);
-
-                        // Clica no card (div.row no li)
-                        const ucCardRow = page.locator('li', { hasText: paddedUC }).locator('div.row').first();
-                        if (await ucCardRow.count() > 0) {
-                            await ucCardRow.click({ force: true });
-                            console.log(`   [Faturista] Card UC ${paddedUC} clicado. Portal deve redirecionar...`);
-                            await page.waitForTimeout(4000); // Aguarda o redirect autônomo do portal
-                        } else {
-                            throw new Error('Unidade não encontrada no painel da concessionária (card não visível).');
-                        }
-
-                        // Fase 4: Lista de Faturas (consultar-debitos)
-                        console.log('   [Faturista] Forçando rota para consultar-debitos...');
-                        await irPara(page, '#/home/servicos/consultar-debitos');
-                        await page.waitForTimeout(5000);
-
-                        // Acha checkboxes
-                        const checkboxes = await page.locator('mat-checkbox[id^="checkItem-"]').all();
-                        let foundBill = false;
-
-                        for (const cb of checkboxes) {
-                            const cbId = await cb.getAttribute('id');
-                            // Sobe na árvore até achar o bloco que contém a REFERÊNCIA (padrão MES/ANO).
-                            // Validado no portal: o texto só aparece ~6 níveis acima do mat-checkbox.
-                            const rowText = await cb.evaluate((el) => {
-                                let h = el;
-                                for (let k = 0; k < 8 && h; k++) {
-                                    const t = (h.textContent || '').replace(/\s+/g, ' ').trim();
-                                    if (/\/20\d\d/.test(t)) return t;
-                                    h = h.parentElement;
-                                }
-                                return '';
-                            }).catch((e) => { console.log('   [DIAG] erro no evaluate:', e.message); return ''; });
-                            
-                            const parsedRef = parseMesRef(rowText);
-                            if (parsedRef === uc.mesRefAlvo) {
-                                console.log(`   [Faturista] Fatura [${parsedRef}] localizada na tabela!`);
-
-                                // Fase 5: Fluxo de Download
-                                const isContaMinima = rowText.toUpperCase().includes('CONTA MÍNIMA');
-                                
-                                if (isContaMinima) {
-                                    console.log(`   [Faturista] Fatura identificada como CONTA MÍNIMA. Pulando download.`);
-                                    // Parse value
-                                    const matchVal = rowText.match(/R\$\s*([\d,.]+)/);
-                                    let valorFatura = 0;
-                                    if (matchVal && matchVal[1]) {
-                                        let cleaned = matchVal[1].trim();
-                                        if (cleaned.includes(',') && cleaned.includes('.')) valorFatura = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-                                        else if (cleaned.includes(',')) valorFatura = parseFloat(cleaned.replace(',', '.'));
-                                        else valorFatura = parseFloat(cleaned);
-                                    }
-
-                                    const [month, year] = parsedRef.split('/').map(Number);
-                                    await supabase.from('invoices').upsert({
-                                        uc_id: uc.id,
-                                        mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
-                                        reading_status: 'processing',
-                                        reading_error: '[INFO] Conta minima - concessionaria nao emite PDF/boleto; saldo acumula para o mes seguinte. Nao reprocessar.',
-                                        status: 'sem_faturamento',
-                                        valor_concessionaria: valorFatura,
-                                        is_placeholder: false,
-                                        reading_checked_at: new Date().toISOString()
-                                    }, { onConflict: 'uc_id,mes_referencia' });
-                                    foundBill = true;
-                                    break; // quebra o loop de checkboxes
-                                }
-
-                                // 1. Marca o checkbox via JS (o <input> do Material é invisível;
-                                //    click({force:true}) do Playwright não registra no Angular).
-                                await cb.evaluate((el) => {
-                                    const i = el.querySelector('input');
-                                    if (i && !i.checked) i.click();
+                            if (r.resultado === 'conta_minima') {
+                                // A concessionária não emite PDF/boleto — o saldo acumula
+                                // para o mês seguinte. Registrar evita reprocessar todo dia.
+                                await upsertInvoice(uc, r.ref, {
+                                    reading_status: 'processing',
+                                    reading_error: '[INFO] Conta minima - concessionaria nao emite PDF/boleto; saldo acumula para o mes seguinte. Nao reprocessar.',
+                                    status: 'sem_faturamento',
+                                    valor_concessionaria: r.valor,
+                                    is_placeholder: false,
                                 });
-                                await page.waitForTimeout(1200);
+                                await updateUCStatus(uc.id, 'success');
 
-                                // 2. Clica no botão "Download" da tela (texto vem com espaços/ícone)
-                                const clicouDownload = await page.evaluate(() => {
-                                    const b = [...document.querySelectorAll('button')]
-                                        .find(x => x.offsetParent !== null && /^\s*Download\s*$/i.test(x.textContent.trim()));
-                                    if (!b) return false;
-                                    b.click();
-                                    return true;
-                                });
-                                if (!clicouDownload) throw new Error('Botão Download não encontrado na tela.');
-                                
-                                // 3. Modal de motivo
-                                console.log(`   [Faturista] Modal de motivo de download. Escolhendo opção...`);
-                                await page.waitForSelector('mat-dialog-container', { timeout: 10000 });
-                                
-                                // Seleciona "Não Estou Com Fatura Em Mãos" via JS.
-                                // O modal é maior que a viewport -> locator.click() dá "outside of the viewport".
-                                // Além disso o id do radio MUDA a cada abertura (mat-radio-5, mat-radio-10...),
-                                // por isso a busca é pelo TEXTO.
-                                // Espera os RADIOS renderizarem (o container aparece antes do conteúdo)
-                                await page.waitForFunction(() => {
-                                    const d = document.querySelector('mat-dialog-container,[role=dialog]');
-                                    return !!d && [...d.querySelectorAll('mat-radio-button')]
-                                        .some(x => /Não Estou Com Fatura/i.test(x.textContent));
-                                }, { timeout: 20000 }).catch(() => {});
-
-                                const motivoOk = await page.evaluate(() => {
-                                    const dlg = document.querySelector('mat-dialog-container,[role=dialog]');
-                                    if (!dlg) return false;
-                                    const rb = [...dlg.querySelectorAll('mat-radio-button')]
-                                        .find(x => /Não Estou Com Fatura/i.test(x.textContent));
-                                    if (!rb) return false;
-                                    const i = rb.querySelector('input');
-                                    if (i && !i.checked) i.click();
-                                    return true;
-                                });
-                                if (!motivoOk) throw new Error('Motivo "Não Estou Com Fatura Em Mãos" não encontrado no modal.');
-                                await page.waitForTimeout(1200);
-
-                                // 4. Clica em BAIXAR no modal (via JS) e intercepta o download
+                            } else if (r.resultado === 'baixada') {
+                                // Upload e gravação ficam no orquestrador; se falharem, a
+                                // fatura é marcada com erro igual a uma falha de download.
                                 try {
-                                    const [dl] = await Promise.all([
-                                        page.waitForEvent('download', { timeout: 60000 }),
-                                        page.evaluate(() => {
-                                            const dlg = document.querySelector('mat-dialog-container,[role=dialog]');
-                                            const b = [...dlg.querySelectorAll('button')]
-                                                .find(x => /^\s*BAIXAR\s*$/i.test(x.textContent.trim()));
-                                            if (b) b.click();
-                                        })
-                                    ]);
-                                    
-                                    const fileName = `${uc.numero_uc}_${parsedRef.replace('/', '-')}_${Date.now()}.pdf`;
-                                    const localPath = `./downloads/${fileName}`;
-                                    await dl.saveAs(localPath);
-                                    
-                                    const storagePath = await uploadToSupabase(localPath, uc.numero_uc, fileName);
-                                    
-                                    // Fecha o diálogo de sucesso ("Download realizado com sucesso").
-                                    // O portal exibe um overlay SweetAlert ("Carregando") que intercepta
-                                    // pointer events -> locator.click() fica em retry infinito.
-                                    // Solução: aguardar o overlay sumir e fechar via JS.
-                                    await page.waitForFunction(() => {
-                                        const c = document.querySelector('.swal2-container');
-                                        return !c || !/Carregando/i.test(c.textContent);
-                                    }, { timeout: 30000 }).catch(() => {});
-
-                                    await page.evaluate(() => {
-                                        [...document.querySelectorAll('button')]
-                                            .filter(b => b.offsetParent !== null && /^\s*(OK|FECHAR)\s*$/i.test(b.textContent.trim()))
-                                            .forEach(b => b.click());
-                                    }).catch(() => {});
-                                    await page.waitForTimeout(1500);
-
-                                    // Parse value
-                                    const matchVal = rowText.match(/R\$\s*([\d,.]+)/);
-                                    let valorFatura = 0;
-                                    if (matchVal && matchVal[1]) {
-                                        let cleaned = matchVal[1].trim();
-                                        if (cleaned.includes(',') && cleaned.includes('.')) valorFatura = parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-                                        else if (cleaned.includes(',')) valorFatura = parseFloat(cleaned.replace(',', '.'));
-                                        else valorFatura = parseFloat(cleaned);
-                                    }
-                                    const [month, year] = parsedRef.split('/').map(Number);
-
-                                    await supabase.from('invoices').upsert({ 
-                                        uc_id: uc.id, 
-                                        mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                    const storagePath = await uploadToSupabase(r.localPath, uc.numero_uc, r.fileName);
+                                    await upsertInvoice(uc, r.ref, {
                                         concessionaria_pdf_url: storagePath,
                                         status: 'sem_faturamento',
                                         reading_status: 'processing',
-                                        reading_checked_at: new Date().toISOString(),
-                                        valor_concessionaria: valorFatura,
-                                        is_placeholder: false
-                                    }, { onConflict: 'uc_id,mes_referencia' });
-                                    
-                                    foundBill = true;
-                                    break; // quebra o loop de checkboxes
-                                } catch (downloadErr) {
-                                    console.error(`   [Faturista] Falha ao baixar o PDF:`, downloadErr.message);
-                                    
-                                    // Tenta fechar qualquer modal pendente se falhou
-                                    const closeBtn = page.locator('mat-dialog-container button[aria-label="Fechar"], mat-dialog-container button:has-text("OK")').first();
-                                    if (await closeBtn.count() > 0) await closeBtn.click({ force: true }).catch(()=>{});
-
-                                    const [month, year] = parsedRef.split('/').map(Number);
-                                    await supabase.from('invoices').upsert({
-                                        uc_id: uc.id,
-                                        mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+                                        valor_concessionaria: r.valor,
+                                        is_placeholder: false,
+                                    });
+                                    await updateUCStatus(uc.id, 'success');
+                                } catch (upErr) {
+                                    console.error(`   [Faturista] Falha ao guardar o PDF:`, upErr.message);
+                                    await upsertInvoice(uc, r.ref, {
                                         reading_status: 'error',
-                                        reading_error: `Falha no download: ${downloadErr.message}`,
+                                        reading_error: `Falha no download: ${upErr.message}`,
                                         status: 'sem_faturamento',
                                         is_placeholder: true,
-                                        reading_checked_at: new Date().toISOString()
-                                    }, { onConflict: 'uc_id,mes_referencia' });
+                                    });
+                                    await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
                                 }
-                            }
-                        }
 
-                        if (foundBill) {
-                            await updateUCStatus(uc.id, 'success');
-                        } else {
-                            console.log('   Fatura não disponível no portal ainda.');
-                            await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
+                            } else if (r.resultado === 'falha_download') {
+                                await upsertInvoice(uc, r.ref, {
+                                    reading_status: 'error',
+                                    reading_error: `Falha no download: ${r.erro}`,
+                                    status: 'sem_faturamento',
+                                    is_placeholder: true,
+                                });
+                                await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
+
+                            } else {
+                                console.log('   Fatura não disponível no portal ainda.');
+                                await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
+                            }
+                        } catch (ucErr) {
+                            console.error(`   Erro UC ${uc.numero_uc}: ${ucErr.message}`);
+                            await updateUCStatus(uc.id, 'error', ucErr.message.substring(0, 255));
+                            await takeScreenshot(`erro_uc_${uc.numero_uc}`);
                         }
-                    } catch (ucErr) {
-                        console.error(`   Erro UC ${uc.numero_uc}: ${ucErr.message}`);
-                        await updateUCStatus(uc.id, 'error', ucErr.message.substring(0, 255));
-                        await takeScreenshot(`erro_uc_${uc.numero_uc}`);
+                    } // end ucs loop
+                } // end escopos loop
+            } catch (groupErr) {
+                console.error(`Erro Crítico no Grupo ${subscriber.name}:`, groupErr.message);
+                for (const escopo in escopos) {
+                    for (const uc of escopos[escopo]) {
+                        await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
                     }
-                } // end ucs loop
-            } // end states loop
-        } catch (groupErr) {
-            console.error(`Erro Crítico no Grupo ${subscriber.name}:`, groupErr.message);
-            for (const estado in estados) {
-                for (const uc of estados[estado]) {
-                    await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
                 }
+                await takeScreenshot(`erro_grupo_${subId}`);
+            } finally {
+                console.log('Finalizando sessão do assinante...');
+                await driver.encerrarSessao(page, context);
             }
-            await takeScreenshot(`erro_grupo_${subId}`);
-        } finally {
-            console.log('Finalizando sessão do assinante...');
-            await page.goto('https://agenciavirtual.neoenergia.com/#/login').catch(() => {});
-            await context.clearCookies();
         }
+
+        await browser.close();
     }
 
-    await browser.close();
     console.log('\nProcesso Calendário Neoenergia Finalizado.');
 
     try {
@@ -733,61 +453,28 @@ async function run() {
     }
 }
 
-async function parseInvoicePdf(filePath) {
-    const dataBuffer = fs.readFileSync(filePath);
-    try {
-        const data = await pdf(dataBuffer);
-        const text = data.text;
+/** Grava a fatura do mês-alvo da UC. `ref` no formato MM/AAAA. */
+async function upsertInvoice(uc, ref, campos) {
+    const [month, year] = ref.split('/').map(Number);
+    return supabase.from('invoices').upsert({
+        uc_id: uc.id,
+        mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
+        reading_checked_at: new Date().toISOString(),
+        ...campos
+    }, { onConflict: 'uc_id,mes_referencia' });
+}
 
-        // Padrões Neoenergia Cosern
-        const consumptionMatch = text.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) || 
-                                 text.match(/kWh[^\d]*(\d+)/i) ||
-                                 text.match(/(\d+)\s*kWh/i);
-        
-        const cipMatch = text.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d,.]+)/i) ||
-                         text.match(/Ilum\.?\s*P[uú]bl\.?[^\d]*([\d,.]+)/i);
-
-        const refMonthMatch = text.match(/Mês\s*Referência[:\s]*(\w{3}\/\d{2,4})|REF[:\s]*(\w{3}\/\d{2,4})/i);
-        const dueDateMatch = text.match(/Vencimento[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-        const totalAmountMatch = text.match(/Total\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)|Valor\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)/i);
-        const readingDateMatch = text.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-        const othersMatch = text.match(/(?:Outros\s*Lançamentos|Adicionais)[:\s]*R\$?\s*([\d,.]+)/i);
-
-        let consumoKwh = 0;
-        if (consumptionMatch) {
-            consumoKwh = parseInt(consumptionMatch[1].replace(/\D/g, ''));
-        }
-
-        const parseValue = (raw) => {
-            if (!raw) return 0;
-            if (raw.includes(',') && raw.includes('.')) return parseFloat(raw.replace(/\./g, '').replace(',', '.'));
-            if (raw.includes(',')) return parseFloat(raw.replace(',', '.'));
-            return parseFloat(raw);
-        };
-
-        const formatDate = (raw) => {
-            if (!raw) return null;
-            const parts = raw.split('/');
-            if (parts.length < 2) return null;
-            const year = parts[2]?.length === 2 ? `20${parts[2]}` : parts[2];
-            return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        };
-
-        let result = {
-            consumoKwh,
-            cipValor: parseValue(cipMatch ? cipMatch[1] : null),
-            mesReferencia: refMonthMatch ? parseMesRef(refMonthMatch[1] || refMonthMatch[2]) : null,
-            vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
-            valorTotal: parseValue(totalAmountMatch ? totalAmountMatch[1] : null),
-            dataLeitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
-            outrosLancamentos: parseValue(othersMatch ? othersMatch[1] : null)
-        };
-
-        console.log(`      [Scanner PDF] Extração: MesRef=${result.mesReferencia}, Consumo=${result.consumoKwh} kWh, CIP=R$ ${result.cipValor}, Venc=${result.vencimento}, Total=R$ ${result.valorTotal}`);
-        return result;
-    } catch (err) {
-        console.error('      [Scanner PDF] Erro ao processar arquivo:', err.message);
-        return { consumoKwh: 0, cipValor: 0 };
+async function updateUCStatus(ucId, status, errorMsg = null) {
+    const { error } = await supabase
+        .from('consumer_units')
+        .update({
+            last_scraping_status: status,
+            last_scraping_at: new Date().toISOString(),
+            last_scraping_error: errorMsg
+        })
+        .eq('id', ucId);
+    if (error) {
+        console.error(`[Faturista] Erro ao atualizar UC ${ucId} para '${status}':`, error.message);
     }
 }
 
@@ -846,43 +533,10 @@ async function sinalizarDesistencia(uc, janela) {
     }
 }
 
-function parseMesRef(texto) {
-    const months = {
-        'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN': '06',
-        'JUL': '07', 'AGO': '08', 'SET': '09', 'OUT': '10', 'NOV': '11', 'DEZ': '12'
-    };
-    if (!texto) return null;
-    const t = String(texto).toUpperCase();
-
-    // ATENÇÃO: o portal renderiza SEM espaços -> "REFERÊNCIAJULHO/2026VENCIMENTO26/08/26".
-    // Por isso não dá para capturar "[A-Z]+/ANO" (pegaria "REFERÊNCIAJULHO").
-    // Busca-se o nome do mês explicitamente, seguido de /ANO.
-    const MESES_EXTENSO = {
-        'JANEIRO': '01', 'FEVEREIRO': '02', 'MARÇO': '03', 'MARCO': '03',
-        'ABRIL': '04', 'MAIO': '05', 'JUNHO': '06', 'JULHO': '07',
-        'AGOSTO': '08', 'SETEMBRO': '09', 'OUTUBRO': '10',
-        'NOVEMBRO': '11', 'DEZEMBRO': '12'
-    };
-    for (const [nome, num] of Object.entries(MESES_EXTENSO)) {
-        const m = t.match(new RegExp(nome + '\\/(\\d{4})'));
-        if (m) return `${num}/${m[1]}`;
-    }
-
-    // Abreviações (JUL/2026)
-    const porAbrev = t.match(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/(\d{4})/);
-    if (porAbrev) return `${months[porAbrev[1]]}/${porAbrev[2]}`;
-
-    // Formato numérico: 07/2026
-    const porNumero = t.match(/\b(\d{1,2})\/(\d{4})\b/);
-    if (porNumero) return `${porNumero[1].padStart(2, '0')}/${porNumero[2]}`;
-
-    return null;
-}
-
 async function uploadToSupabase(localPath, ucNumber, fileName) {
     const fileBuffer = fs.readFileSync(localPath);
     const storagePath = `invoices/${ucNumber}/${fileName}`;
-    
+
     const { data, error } = await supabase.storage
         .from('energy-bills')
         .upload(storagePath, fileBuffer, {
@@ -895,6 +549,5 @@ async function uploadToSupabase(localPath, ucNumber, fileName) {
     return storagePath;
 }
 
-const dir = './downloads';
-if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 run();
