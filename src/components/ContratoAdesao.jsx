@@ -1,82 +1,42 @@
 import { dividirEmPaginas, montarTextoContrato } from '../lib/contrato';
+import { corpoContrato, tituloContrato } from '../lib/contratoBase';
+import { FolhaContrato } from './FolhaContrato';
 
 /**
- * Renderiza as 4 páginas do contrato fora da tela, prontas para o
- * html2canvas de `gerarPdfContratoBase64`. O texto e a rotina de PDF
- * moram em src/lib/contrato.js — usados igualmente pelo CRM e pela
- * página pública de adesão.
+ * Renderiza o termo de adesão fora da tela, pronto para o html2canvas de
+ * `gerarPdfContratoBase64`. O texto e a rotina de PDF moram em
+ * src/lib/contrato.js — usados igualmente pelo CRM e pela página pública
+ * de adesão.
+ *
+ * O número de folhas deixou de ser fixo em quatro: o termo consolidado
+ * tem 22 cláusulas e um anexo, e uma lista fixa de IDs significava
+ * cláusula ficando de fora do PDF sem ninguém perceber.
  */
+export default function ContratoAdesao({ subscriber, consumerUnits = [], branding, texto, opts = {} }) {
+    // A distribuidora citada nas cláusulas 1, 9 e 17 vem da primeira UC,
+    // assim como o desconto e o dia de vencimento que a Cláusula 6 e a 7.2
+    // precisam nomear.
+    const uc = consumerUnits[0];
+    const conteudo = texto || montarTextoContrato(subscriber, uc?.concessionaria, {
+        desconto: opts.desconto ?? uc?.desconto_assinante,
+        diaVencimento: opts.diaVencimento ?? uc?.dia_vencimento ?? subscriber?.consolidated_due_day
+    });
 
-const Pagina = ({ children, id, branding }) => (
-    <div
-        id={id}
-        style={{
-            width: '210mm',
-            minHeight: '297mm',
-            background: 'white',
-            padding: '20mm',
-            border: `4mm solid ${branding?.primary_color || '#003366'}`,
-            boxSizing: 'border-box',
-            color: '#1e293b',
-            fontFamily: 'serif',
-            position: 'relative',
-            marginBottom: '10mm',
-            display: 'flex',
-            flexDirection: 'column'
-        }}
-    >
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10mm' }}>
-            {branding?.logo_url ? (
-                <img src={branding.logo_url} style={{ height: '25mm', objectFit: 'contain' }} alt="Logo" />
-            ) : (
-                <div style={{ height: '25mm', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '28px', color: branding?.primary_color || '#003366' }}>
-                    {branding?.company_name || 'B2W ENERGIA'}
-                </div>
-            )}
-        </div>
-
-        <div style={{ flex: 1 }}>{children}</div>
-
-        <div style={{
-            position: 'absolute', bottom: '10mm', left: '20mm', right: '20mm',
-            fontSize: '9px', color: '#94a3b8', borderTop: '1px solid #e2e8f0',
-            paddingTop: '4mm', display: 'flex', justifyContent: 'space-between'
-        }}>
-            <span>Documento gerado eletronicamente via CRM B2W Energia</span>
-            <span>Associação de Usinas B2W Energia</span>
-        </div>
-    </div>
-);
-
-const corpo = { whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' };
-const titulo = { fontSize: '20px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' };
-
-/**
- * Renderiza as 4 páginas fora da tela, prontas para o html2canvas.
- * Precisa estar montado no DOM antes de chamar `gerarPdfContratoBase64`.
- */
-export default function ContratoAdesao({ subscriber, consumerUnits = [], branding, texto }) {
-    // A distribuidora citada nas cláusulas 1, 7 e 13 vem da primeira UC.
-    const conteudo = texto || montarTextoContrato(subscriber, consumerUnits[0]?.concessionaria);
-    const [parte1, parte2, parte3] = dividirEmPaginas(conteudo);
+    const paginas = dividirEmPaginas(conteudo);
 
     return (
         <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm', zIndex: -1 }}>
-            <Pagina id="contract-page-1" branding={branding}>
-                <h1 style={titulo}>TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA</h1>
-                <div style={corpo}>{parte1}</div>
-            </Pagina>
+            {paginas.map((parte, i) => (
+                <FolhaContrato key={i} contrato="adesao" branding={branding}>
+                    {i === 0 && (
+                        <h1 style={tituloContrato}>TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA</h1>
+                    )}
+                    <div style={corpoContrato}>{parte}</div>
+                </FolhaContrato>
+            ))}
 
-            <Pagina id="contract-page-2" branding={branding}>
-                <div style={corpo}>{parte2}</div>
-            </Pagina>
-
-            <Pagina id="contract-page-3" branding={branding}>
-                <div style={corpo}>{parte3}</div>
-            </Pagina>
-
-            <Pagina id="contract-page-4" branding={branding}>
-                <h1 style={{ ...titulo, marginBottom: '12mm' }}>PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO</h1>
+            <FolhaContrato contrato="adesao" branding={branding}>
+                <h1 style={{ ...tituloContrato, marginBottom: '12mm' }}>PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO</h1>
 
                 <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>
                     <p>
@@ -93,7 +53,7 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
                     <p style={{ marginTop: '10mm' }}>
                         <strong>PODERES:</strong> Pelo presente instrumento, o OUTORGANTE nomeia o OUTORGADO seu procurador
                         para o fim especial de representá-lo junto à concessionária{' '}
-                        <strong>{consumerUnits[0]?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de
+                        <strong>{uc?.concessionaria || 'local'}</strong>, podendo solicitar acesso a dados de
                         consumo, histórico de faturamento e realizar o cadastro da Unidade Consumidora no Sistema de
                         Compensação de Energia Elétrica (Geração Distribuída).
                     </p>
@@ -111,12 +71,12 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
                                 </tr>
                             </thead>
                             <tbody>
-                                {consumerUnits.map((uc, idx) => (
-                                    <tr key={uc.id || `${uc.numero_uc}-${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                        <td style={{ padding: '4mm 0', fontWeight: 'bold' }}>{uc.numero_uc}</td>
-                                        <td style={{ padding: '4mm 0' }}>{uc.concessionaria}</td>
+                                {consumerUnits.map((u, idx) => (
+                                    <tr key={u.id || `${u.numero_uc}-${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                        <td style={{ padding: '4mm 0', fontWeight: 'bold' }}>{u.numero_uc}</td>
+                                        <td style={{ padding: '4mm 0' }}>{u.concessionaria}</td>
                                         <td style={{ padding: '4mm 0' }}>
-                                            {uc.cidade || uc.address?.cidade}/{uc.uf || uc.address?.uf}
+                                            {u.cidade || u.address?.cidade}/{u.uf || u.address?.uf}
                                         </td>
                                     </tr>
                                 ))}
@@ -128,7 +88,7 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
                 <div style={{ marginTop: '25mm', textAlign: 'center', fontStyle: 'italic', color: '#94a3b8', fontSize: '10px' }}>
                     <p>Documento gerado eletronicamente para fins de assinatura digital na plataforma Autentique.</p>
                 </div>
-            </Pagina>
+            </FolhaContrato>
         </div>
     );
 }

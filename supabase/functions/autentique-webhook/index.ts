@@ -148,7 +148,43 @@ serve(async (req) => {
 
         if (newStatus === 'signed') {
             for (const sig of assinaturas) {
-                if (sig.signer_type !== 'subscriber' || !sig.signer_id) continue;
+                if (!sig.signer_id) continue;
+
+                // Fornecedor: 'ativacao' -> 'contrato_assinado'. Parar em
+                // 'contrato_assinado' e não avançar para 'ativo' é
+                // deliberado: um fornecedor 'ativo' é aquele cuja usina está
+                // gerando, e a assinatura acontece muito antes da conexão.
+                if (sig.signer_type === 'supplier') {
+                    const { error: supErr } = await supabaseAdmin
+                        .from('suppliers')
+                        .update({ status: 'contrato_assinado' })
+                        .eq('id', sig.signer_id)
+                        // Só avança quem ainda está em ativação: um fornecedor
+                        // já 'ativo' (ou inativo) não pode regredir porque a
+                        // Autentique reenviou o evento.
+                        .eq('status', 'ativacao');
+
+                    if (supErr) {
+                        console.error(`Falha ao promover fornecedor ${sig.signer_id}:`, supErr);
+                        continue;
+                    }
+
+                    promovidos.push(sig.signer_id);
+
+                    await supabaseAdmin.from('crm_history').insert({
+                        entity_type: 'supplier',
+                        entity_id: sig.signer_id,
+                        content: 'Contrato de Gestão assinado digitalmente. Status alterado para "Contrato Assinado".',
+                        metadata: {
+                            autentique_doc_id: docId,
+                            signature_id: sig.id,
+                            origem: 'autentique-webhook'
+                        }
+                    });
+                    continue;
+                }
+
+                if (sig.signer_type !== 'subscriber') continue;
 
                 const { error: subErr } = await supabaseAdmin
                     .from('subscribers')
@@ -187,11 +223,11 @@ serve(async (req) => {
             headers: headers,
             status_code: 200,
             message: rowCount > 0
-                ? `Documento ${docId} atualizado para ${newStatus}. Assinantes promovidos: ${promovidos.length}`
+                ? `Documento ${docId} atualizado para ${newStatus}. Registros promovidos: ${promovidos.length}`
                 : `Nenhum registro encontrado para docId ${docId}`
         });
 
-        console.log(`Webhook processado: ${docId} -> ${newStatus}. Assinaturas: ${rowCount}, assinantes promovidos: ${promovidos.length}`);
+        console.log(`Webhook processado: ${docId} -> ${newStatus}. Assinaturas: ${rowCount}, registros promovidos: ${promovidos.length}`);
 
         return new Response(JSON.stringify({ success: true, rows: rowCount, promovidos: promovidos.length }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

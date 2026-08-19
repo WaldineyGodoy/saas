@@ -502,7 +502,15 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // dependências para o rascunho ser refeito quando as unidades
             // terminam de carregar; sem isso o termo ficaria com o texto
             // genérico mesmo tendo concessionária cadastrada.
-            setContractDraft(montarTextoContrato(subscriber, consumerUnits[0]?.concessionaria));
+            // Desconto e dia de vencimento também vêm da UC: a Cláusula 6
+            // nomeia o percentual e a 7.2 nomeia o dia do boleto. Deixar o
+            // padrão aqui faria o rascunho do CRM prometer 20% no dia 10 a
+            // quem está cadastrado com outro desconto ou outro vencimento.
+            const ucContrato = consumerUnits[0];
+            setContractDraft(montarTextoContrato(subscriber, ucContrato?.concessionaria, {
+                desconto: ucContrato?.desconto_assinante,
+                diaVencimento: ucContrato?.dia_vencimento ?? subscriber?.consolidated_due_day
+            }));
         }
     }, [subscriber?.id, activeTab, fetchSignatures, subscriber, consumerUnits]);
 

@@ -134,6 +134,10 @@ serve(async (req) => {
                 signer_type: signerType,
                 autentique_doc_id: documentId,
                 autentique_url: finalUrl,
+                // A coluna existia e nunca era preenchida: a tela do
+                // fornecedor lista contratos pelo nome, e sem isto toda
+                // linha aparecia com o rótulo genérico.
+                document_name: documentName,
                 status: 'pending',
                 metadata: { 
                     ...docData, 
