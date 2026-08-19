@@ -2661,9 +2661,9 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: '500' }}>
                                                                 {inv.consumer_units?.subscribers?.name}
                                                             </div>
-                                                            {inv.consumer_units?.titular_conta && (
+                                                            {inv.consumer_units?.titular_fatura?.name && (
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                                                    <span style={{ fontWeight: '600' }}>Titular: </span>{inv.consumer_units.titular_conta}
+                                                                    <span style={{ fontWeight: '600' }}>Titular: </span>{inv.consumer_units.titular_fatura.name}
                                                                 </div>
                                                             )}
                                                             {inv.consumer_units?.concessionaria && (
