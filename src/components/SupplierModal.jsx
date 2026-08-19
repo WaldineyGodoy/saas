@@ -2,13 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
+import { useBranding } from '../contexts/BrandingContext';
+import { fetchCpfCnpjData, fetchAddressByCep, createAutentiqueDocument, shortenLink, sendWhatsapp } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
-import { 
-    History, User, MapPin, Wallet, X, Save, Trash2, 
-    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download
+import {
+    History, User, MapPin, Wallet, X, Save, Trash2,
+    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
+    FileSignature, Loader2, Send, ExternalLink, Clock
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import ContratoFornecedor from './ContratoFornecedor';
+import { DEFAULTS_FORNECEDOR, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
@@ -16,6 +20,7 @@ import autoTable from 'jspdf-autotable';
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
     const { showAlert, showConfirm } = useUI();
+    const { branding } = useBranding();
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [activeTab, setActiveTab] = useState('geral');
@@ -55,6 +60,18 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [manualEntryCounterAccount, setManualEntryCounterAccount] = useState('2.1.4');
     const [counterAccounts, setCounterAccounts] = useState([]);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+    // --- Contrato de gestão -------------------------------------------------
+    // Espelha o fluxo do SubscriberModal: monta o PDF fora da tela, sobe para
+    // a Autentique e dispara o link pela Evolution API.
+    const [signatures, setSignatures] = useState([]);
+    const [loadingSignatures, setLoadingSignatures] = useState(false);
+    const [isCreatingContract, setIsCreatingContract] = useState(false);
+    const [signatureLink, setSignatureLink] = useState('');
+    const [contractOpts, setContractOpts] = useState(DEFAULTS_FORNECEDOR);
+    // Rascunho editável: o texto gerado pode ser ajustado antes de subir.
+    // Sem isso, corrigir uma vírgula exigia alterar o código e publicar.
+    const [contractDraft, setContractDraft] = useState('');
     const extratoPrintRef = useRef(null);
 
     const [formData, setFormData] = useState({
@@ -100,12 +117,212 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             fetchLinkedUsinas(supplier.id);
             fetchLedgerStatement();
+            fetchSignatures(supplier.id);
+            setSignatureLink(supplier.signature_link || '');
         }
     }, [supplier]);
 
     const fetchLinkedUsinas = async (supplierId) => {
-        const { data } = await supabase.from('usinas').select('id, name, status').eq('supplier_id', supplierId);
+        // O Anexo II lista as usinas do contrato, então precisamos de mais que
+        // id/name/status: sem UC geradora e potência o anexo sai vazio.
+        const { data } = await supabase
+            .from('usinas')
+            .select('id, name, status, unidade_geradora, potencia_kwp, concessionaria, modalidade_gd, gestao_percentual, address')
+            .eq('supplier_id', supplierId);
+
         setUsinas(data || []);
+
+        // A Remuneração Recorrente do contrato é a mesma taxa de gestão já
+        // cadastrada na usina. Digitá-la de novo aqui é como o contrato e o
+        // fechamento mensal acabam divergindo.
+        const gestao = Number(data?.[0]?.gestao_percentual);
+        if (gestao > 0) {
+            setContractOpts(prev => ({ ...prev, percentualRecorrente: gestao }));
+        }
+    };
+
+    const fetchSignatures = async (supplierId) => {
+        if (!supplierId) return;
+        setLoadingSignatures(true);
+        try {
+            const { data, error } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('signer_id', supplierId)
+                .eq('signer_type', 'supplier')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setSignatures(data || []);
+        } catch (error) {
+            console.error('Erro ao buscar assinaturas do fornecedor:', error);
+        } finally {
+            setLoadingSignatures(false);
+        }
+    };
+
+    /** Texto que será impresso: o rascunho editado, ou o gerado na hora. */
+    const textoContratoAtual = () =>
+        contractDraft || montarTextoContratoFornecedor(
+            { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } },
+            usinas,
+            contractOpts
+        );
+
+    /** O endereço mora achatado no formData e aninhado no registro. */
+    const enderecoDoForm = () => ({
+        cep: formData.cep,
+        logradouro: formData.rua,
+        rua: formData.rua,
+        numero: formData.numero,
+        complemento: formData.complemento,
+        bairro: formData.bairro,
+        municipio: formData.cidade,
+        cidade: formData.cidade,
+        uf: formData.uf
+    });
+
+    const mensagemContrato = (link) =>
+        `Olá ${formData.name}, aqui é a B2W Energia. ⚡\n\n` +
+        `Segue o Contrato de Administração e Gestão de Créditos Energéticos da sua usina para assinatura digital. 📄\n\n` +
+        `${link}\n\n` +
+        `Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
+
+    const handleSendContract = async () => {
+        if (!supplier?.id) {
+            showAlert('Salve o fornecedor antes de gerar o contrato.', 'warning');
+            return;
+        }
+        if (!formData.phone && !formData.email) {
+            showAlert('Cadastre telefone ou e-mail do fornecedor antes de enviar o contrato.', 'warning');
+            return;
+        }
+
+        setIsCreatingContract(true);
+        try {
+            // Congela o texto que está na tela para que o PDF capturado seja
+            // exatamente o que o usuário revisou.
+            const texto = textoContratoAtual();
+            setContractDraft(texto);
+
+            const pdfBase64 = await gerarPdfContratoFornecedorBase64();
+
+            const fileName = `Contrato_Gestao_${(formData.name || 'fornecedor').replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+
+            const result = await createAutentiqueDocument({
+                documentName: fileName,
+                fileBase64: pdfBase64,
+                signers: [
+                    {
+                        name: formData.name,
+                        email: formData.email || undefined,
+                        action: 'SIGN'
+                    }
+                ],
+                signerId: supplier.id,
+                signerType: 'supplier'
+            });
+
+            if (result.error) throw new Error(result.error);
+            if (!result?.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado.');
+
+            let finalLink = result.url;
+            try {
+                const shortRes = await shortenLink(
+                    result.url,
+                    `contrato-usina-${supplier.id.substring(0, 5)}-${Date.now().toString().slice(-4)}`,
+                    `Contrato de Gestão - ${formData.name}`
+                );
+                if (shortRes.success && shortRes.shortUrl) finalLink = shortRes.shortUrl;
+            } catch (shortErr) {
+                // Link longo assina igual: encurtar é conveniência, não requisito.
+                console.warn('Falha ao encurtar link do contrato:', shortErr);
+            }
+
+            await supabase.from('suppliers').update({ signature_link: finalLink }).eq('id', supplier.id);
+            setSignatureLink(finalLink);
+
+            await enviarLinkContrato(finalLink);
+
+            showAlert('Contrato gerado e enviado com sucesso!', 'success');
+            fetchSignatures(supplier.id);
+            addHistory('supplier', supplier.id, 'envio_contrato', {
+                document_name: fileName,
+                autentique_doc_id: result.documentId,
+                condicoes: contractOpts
+            });
+        } catch (error) {
+            console.error('Erro ao enviar contrato do fornecedor:', error);
+            showAlert('Erro ao enviar contrato: ' + error.message, 'error');
+        } finally {
+            setIsCreatingContract(false);
+        }
+    };
+
+    /**
+     * Dispara o link por WhatsApp e e-mail.
+     *
+     * Cada canal falha por conta própria: e-mail recusado não pode impedir
+     * o WhatsApp de sair, e nenhum dos dois invalida o contrato que já subiu
+     * para a Autentique.
+     */
+    const enviarLinkContrato = async (link) => {
+        const texto = mensagemContrato(link);
+
+        if (formData.phone) {
+            try {
+                let instanceName = 'default';
+                const { data: config } = await supabase
+                    .from('integrations_config')
+                    .select('variables')
+                    .eq('service_name', 'evolution_api')
+                    .single();
+                if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
+
+                await sendWhatsapp(formData.phone.replace(/\D/g, ''), texto, null, null, null, instanceName);
+            } catch (waErr) {
+                console.error('Erro ao enviar WhatsApp:', waErr);
+            }
+        }
+
+        if (formData.email) {
+            try {
+                await supabase.functions.invoke('send-email', {
+                    body: {
+                        to: formData.email,
+                        subject: 'Contrato de Gestão de Créditos Energéticos - B2W Energia',
+                        text: texto
+                    }
+                });
+            } catch (emailErr) {
+                console.error('Erro ao enviar E-mail:', emailErr);
+            }
+        }
+    };
+
+    const handleResendContractLink = async (sig) => {
+        const ok = await showConfirm('Deseja reenviar o link de assinatura para o fornecedor?', 'Reenviar Link');
+        if (!ok) return;
+
+        try {
+            let finalLink = sig.short_url || sig.autentique_url;
+
+            if (!sig.short_url) {
+                try {
+                    const shortRes = await shortenLink(sig.autentique_url, `reenvio-usina-${sig.id.substring(0, 5)}`, `Reenvio Contrato - ${formData.name}`);
+                    if (shortRes.success && shortRes.shortUrl) {
+                        finalLink = shortRes.shortUrl;
+                        await supabase.from('signatures').update({ short_url: finalLink }).eq('id', sig.id);
+                    }
+                } catch (e) {
+                    console.warn('Falha no encurtamento durante reenvio:', e);
+                }
+            }
+
+            await enviarLinkContrato(finalLink);
+            showAlert('Link reenviado com sucesso!', 'success');
+        } catch (error) {
+            showAlert('Erro ao reenviar link: ' + error.message, 'error');
+        }
     };
 
     const fetchLedgerStatement = async () => {
@@ -1132,6 +1349,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         { id: 'endereco', label: 'Endereço', icon: MapPin },
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet },
                         { id: 'extrato', label: 'Extrato', icon: ArrowUpDown },
+                        { id: 'contrato', label: 'Contrato', icon: FileSignature },
                         { id: 'historico', label: 'Histórico', icon: History }
                     ].map(tab => (
                         <button
@@ -1346,6 +1564,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             onChange={e => setFormData({ ...formData, status: e.target.value })}
                                         >
                                             <option value="ativacao">🟠 Em Ativação</option>
+                                            <option value="contrato_assinado">🔵 Contrato Assinado</option>
                                             <option value="ativo">🟢 Ativo</option>
                                             <option value="inativo">🔴 Inativo</option>
                                         </select>
@@ -1947,6 +2166,202 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             </div>
                         )}
 
+                        {activeTab === 'contrato' && (
+                            <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                                {!supplier ? (
+                                    <div style={{ ...sectionStyle, textAlign: 'center', color: '#64748b' }}>
+                                        Salve o fornecedor para gerar o Contrato de Gestão.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={sectionStyle}>
+                                            <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                                <FileSignature size={20} color="#3b82f6" /> Condições Comerciais
+                                            </h4>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                                {[
+                                                    { key: 'desconto', label: 'Desconto ao consumidor (%)', step: '0.01' },
+                                                    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)', step: '0.01' },
+                                                    { key: 'taxaAdmin', label: 'Taxa de administração (R$)', step: '0.01' },
+                                                    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)', step: '0.01' },
+                                                    { key: 'diaCorte', label: 'Dia de corte', step: '1' },
+                                                    { key: 'diaRepasse', label: 'Dia do repasse', step: '1' }
+                                                ].map(campo => (
+                                                    <div key={campo.key}>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
+                                                            {campo.label}
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            step={campo.step}
+                                                            min="0"
+                                                            value={contractOpts[campo.key]}
+                                                            onChange={e => {
+                                                                setContractOpts({ ...contractOpts, [campo.key]: e.target.value });
+                                                                // Condição alterada invalida o rascunho: o texto precisa
+                                                                // ser remontado com o número novo.
+                                                                setContractDraft('');
+                                                            }}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                ))}
+
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
+                                                        Foro
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={contractOpts.foro}
+                                                        onChange={e => { setContractOpts({ ...contractOpts, foro: e.target.value }); setContractDraft(''); }}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {usinas.length === 0 && (
+                                                <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.85rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                                    <AlertCircle size={18} />
+                                                    Nenhuma usina vinculada: o Anexo II sairá sem centrais geradoras.
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={sectionStyle}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                                    <Zap size={20} color="#3b82f6" /> Minuta
+                                                </h4>
+                                                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setContractDraft(montarTextoContratoFornecedor(
+                                                            { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } },
+                                                            usinas,
+                                                            contractOpts
+                                                        ))}
+                                                        style={{ padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
+                                                    >
+                                                        Gerar minuta
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isCreatingContract}
+                                                        onClick={handleSendContract}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                            padding: '0.6rem 1.2rem', background: isCreatingContract ? '#94a3b8' : '#3b82f6',
+                                                            color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700,
+                                                            cursor: isCreatingContract ? 'not-allowed' : 'pointer', fontSize: '0.85rem'
+                                                        }}
+                                                    >
+                                                        {isCreatingContract
+                                                            ? <><Loader2 size={16} className="spin-animation" /> Enviando…</>
+                                                            : <><Send size={16} /> Gerar e enviar para assinatura</>}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <textarea
+                                                value={textoContratoAtual()}
+                                                onChange={e => setContractDraft(e.target.value)}
+                                                spellCheck={false}
+                                                style={{
+                                                    width: '100%', minHeight: '340px', padding: '1rem',
+                                                    border: '1px solid #e2e8f0', borderRadius: '12px',
+                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                    fontSize: '0.78rem', lineHeight: 1.6, outline: 'none', resize: 'vertical'
+                                                }}
+                                            />
+                                            <p style={{ margin: '0.6rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                                O texto acima é o que será impresso no PDF enviado à Autentique. Alterar uma condição comercial acima remonta a minuta.
+                                            </p>
+                                        </div>
+
+                                        <div style={sectionStyle}>
+                                            <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                                <History size={20} color="#3b82f6" /> Contratos enviados
+                                            </h4>
+
+                                            {loadingSignatures ? (
+                                                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Carregando…</p>
+                                            ) : signatures.length === 0 ? (
+                                                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Nenhum contrato enviado para assinatura.</p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                    {signatures.map(sig => {
+                                                        const cor = sig.status === 'signed' ? '#16a34a'
+                                                            : sig.status === 'rejected' || sig.status === 'canceled' ? '#dc2626'
+                                                                : '#d97706';
+                                                        const Icone = sig.status === 'signed' ? CheckCircle
+                                                            : sig.status === 'pending' ? Clock : AlertCircle;
+                                                        return (
+                                                            <div key={sig.id} style={{
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                gap: '1rem', padding: '0.9rem 1rem', border: '1px solid #f1f5f9',
+                                                                borderRadius: '12px', flexWrap: 'wrap'
+                                                            }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
+                                                                    <Icone size={18} color={cor} />
+                                                                    <div style={{ minWidth: 0 }}>
+                                                                        <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {sig.document_name || 'Contrato de Gestão'}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '0.78rem', color: cor, fontWeight: 600 }}>
+                                                                            {sig.status === 'signed' ? 'Assinado'
+                                                                                : sig.status === 'pending' ? 'Aguardando assinatura'
+                                                                                    : sig.status === 'rejected' ? 'Recusado' : 'Cancelado'}
+                                                                            {' · '}
+                                                                            {new Date(sig.created_at).toLocaleDateString('pt-BR')}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                                    <a
+                                                                        href={sig.short_url || sig.autentique_url}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', color: '#3b82f6', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600 }}
+                                                                    >
+                                                                        <ExternalLink size={14} /> Abrir
+                                                                    </a>
+                                                                    {sig.status === 'pending' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleResendContractLink(sig)}
+                                                                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                                                        >
+                                                                            <Send size={14} /> Reenviar
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {signatureLink && (
+                                                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', color: '#64748b' }}>
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{signatureLink}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { navigator.clipboard.writeText(signatureLink); showAlert('Link copiado.', 'success'); }}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white', cursor: 'pointer', color: '#64748b' }}
+                                                    >
+                                                        <Copy size={13} /> Copiar
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'historico' && supplier && (
                             <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
@@ -2241,6 +2656,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     {renderHiddenExtratoDetail()}
                 </div>
             </div>
+
+            {/*
+              Folhas do contrato de gestão, fora da tela, prontas para o
+              html2canvas. Só são montadas na aba Contrato: manter 8 páginas A4
+              renderizadas o tempo todo pesa em todo fornecedor aberto, mesmo
+              em quem só veio conferir o extrato.
+            */}
+            {activeTab === 'contrato' && supplier && (
+                <ContratoFornecedor
+                    supplier={{ ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } }}
+                    usinas={usinas}
+                    branding={branding}
+                    texto={textoContratoAtual()}
+                />
+            )}
         </div>
         </>
     );
