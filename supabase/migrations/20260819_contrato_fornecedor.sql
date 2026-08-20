@@ -33,3 +33,14 @@ alter table public.suppliers
 alter table public.suppliers
     add constraint suppliers_status_check
     check (status = any (array['ativacao'::text, 'contrato_assinado'::text, 'ativo'::text, 'inativo'::text]));
+
+-- Condições comerciais do contrato.
+--
+-- Elas viviam só no estado do SupplierModal: dava para editar o desconto,
+-- gerar a minuta com o valor novo, e ao reabrir o fornecedor tudo voltava
+-- para o padrão de 20%. Da tela, isso aparece como "não salva".
+alter table public.suppliers
+    add column if not exists contract_terms jsonb;
+
+comment on column public.suppliers.contract_terms is
+    'Condições comerciais do Contrato de Gestão (desconto, percentualRecorrente, taxaAdmin, taxaRecuperacao, diaCorte, diaRepasse, foro).';

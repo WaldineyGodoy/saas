@@ -13,7 +13,7 @@ import {
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
 import { DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
-import { paraNumero } from '../lib/contratoBase';
+import { numeroBr, paraNumero } from '../lib/contratoBase';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
@@ -25,6 +25,21 @@ import autoTable from 'jspdf-autotable';
  * da mesma lista: duas cópias é como um campo novo entra na tela sem
  * entrar na checagem.
  */
+/**
+ * Condições vindas do banco no formato da tela.
+ *
+ * O jsonb guarda número (17.5) e os campos são texto em pt-BR, então sem
+ * esta conversão o desconto aparecia como "17.5" — com ponto, na tela de
+ * quem digita com vírgula.
+ */
+const condicoesParaTela = (termos) => {
+    const tela = { ...DEFAULTS_FORNECEDOR, ...(termos || {}) };
+    for (const chave of Object.keys(tela)) {
+        if (typeof tela[chave] === 'number') tela[chave] = numeroBr(tela[chave]);
+    }
+    return tela;
+};
+
 const CAMPOS_CONDICOES = [
     { key: 'desconto', label: 'Desconto ao consumidor (%)' },
     { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
@@ -132,14 +147,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 uf: supplier.address?.uf || ''
             });
 
-            fetchLinkedUsinas(supplier.id);
+            // Condições comerciais gravadas mandam sobre o padrão. Enquanto
+            // isto não existia, editar o desconto não sobrevivia a fechar o
+            // modal: a tela voltava para os 20% do DEFAULTS_FORNECEDOR.
+            setContractOpts(condicoesParaTela(supplier.contract_terms));
+
+            fetchLinkedUsinas(supplier.id, supplier.contract_terms);
             fetchLedgerStatement();
             fetchSignatures(supplier.id);
             setSignatureLink(supplier.signature_link || '');
         }
     }, [supplier]);
 
-    const fetchLinkedUsinas = async (supplierId) => {
+    const fetchLinkedUsinas = async (supplierId, termosGravados) => {
         // O Anexo II lista as usinas do contrato, então precisamos de mais que
         // id/name/status: sem UC geradora e potência o anexo sai vazio.
         const { data } = await supabase
@@ -152,8 +172,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         // A Remuneração Recorrente do contrato é a mesma taxa de gestão já
         // cadastrada na usina. Digitá-la de novo aqui é como o contrato e o
         // fechamento mensal acabam divergindo.
+        //
+        // Só serve de sugestão inicial: se o fornecedor já tem condições
+        // gravadas, elas mandam. Caso contrário esta consulta, que volta
+        // depois do carregamento, sobrescreveria o valor gravado.
         const gestao = Number(data?.[0]?.gestao_percentual);
-        if (gestao > 0) {
+        if (gestao > 0 && termosGravados?.percentualRecorrente === undefined) {
             setContractOpts(prev => ({ ...prev, percentualRecorrente: gestao }));
         }
     };
@@ -205,6 +229,23 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     );
 
     const textoContratoAtual = () => contractDraft || textoGerado;
+
+    /**
+     * Condições no formato que vai para o banco.
+     *
+     * Os campos são texto para aceitar a vírgula, então "17,5" precisa virar
+     * 17.5 antes de gravar — jsonb com string faria a próxima leitura
+     * depender de reinterpretar o formato. Campo ilegível não é gravado: o
+     * gerador cai no padrão e o valor volta a ser o do DEFAULTS.
+     */
+    const condicoesParaGravar = () => {
+        const gravar = { foro: contractOpts.foro };
+        for (const campo of CAMPOS_CONDICOES) {
+            const n = paraNumero(contractOpts[campo.key]);
+            if (Number.isFinite(n)) gravar[campo.key] = n;
+        }
+        return gravar;
+    };
 
     const mensagemContrato = (link) =>
         `Olá ${formData.name}, aqui é a B2W Energia. ⚡\n\n` +
@@ -289,7 +330,13 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 console.warn('Falha ao encurtar link do contrato:', shortErr);
             }
 
-            await supabase.from('suppliers').update({ signature_link: finalLink }).eq('id', supplier.id);
+            // As condições vão junto: o contrato que acabou de subir para
+            // assinatura foi montado com elas, e o banco não pode continuar
+            // dizendo outra coisa se ninguém apertou Salvar antes de enviar.
+            await supabase
+                .from('suppliers')
+                .update({ signature_link: finalLink, contract_terms: condicoesParaGravar() })
+                .eq('id', supplier.id);
             setSignatureLink(finalLink);
 
             await enviarLinkContrato(finalLink);
@@ -952,7 +999,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                     municipio: formData.cidade,
                     cidade: formData.cidade,
                     uf: formData.uf
-                }
+                },
+                contract_terms: condicoesParaGravar()
             };
 
             let result;
