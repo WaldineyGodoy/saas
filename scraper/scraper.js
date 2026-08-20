@@ -16,6 +16,7 @@ const fs = require('fs');
 require('dotenv').config();
 
 const { DRIVERS, resolverDriver } = require('./drivers');
+const { extrairDoArquivo } = require('./extrator');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
@@ -35,7 +36,7 @@ async function run() {
     // A leitura do dia D refere-se ao MÊS DA LEITURA (confirmado nos dados:
     // data_leitura 2026-07-09 -> mes_referencia 07/2026).
     // A concessionária publica a conta em até ~15 dias, às vezes atrasando mais.
-    const JANELA_INICIO_DIAS = 7;   // só procura a partir de D+7
+    const JANELA_INICIO_DIAS = 5;   // só procura a partir de D+5
     const JANELA_RETENTATIVA  = 7;  // repete a cada 7 dias enquanto indisponível
     const JANELA_DESISTIR_DIAS = 60; // depois disso é anomalia -> exige ação humana
 
@@ -112,7 +113,7 @@ async function run() {
         // Não filtra por dia de leitura: cada UC calcula seu próprio mês-alvo e
         // sua própria elegibilidade (ver calcularJanelaUC). Regra de negócio:
         // a concessionária tem até 15 dias para publicar a conta, então só faz
-        // sentido procurar a partir de D+7 da leitura, repetindo a cada 7 dias.
+        // sentido procurar a partir de D+5 da leitura, repetindo a cada 7 dias.
         modoJanela = true;
         targetedDays = [];
         currentMesRef = null; // definido POR UC
@@ -382,12 +383,38 @@ async function run() {
                                 // fatura é marcada com erro igual a uma falha de download.
                                 try {
                                     const storagePath = await uploadToSupabase(r.localPath, uc.numero_uc, r.fileName);
+
+                                    // Estágio 2: lê o PDF e completa a fatura. A leitura pode
+                                    // falhar sem que o download se perca — nesse caso a fatura
+                                    // fica gravada com o PDF e o motivo, para revisão.
+                                    let extraidos = { reading_status: 'processing', reading_error: null };
+                                    try {
+                                        const ex = await extrairDoArquivo(r.localPath, {
+                                            supabaseUrl: process.env.SUPABASE_URL,
+                                            supabaseKey: process.env.SUPABASE_KEY,
+                                            valorPortal: r.valor,
+                                            refAlvo: r.ref,
+                                        });
+                                        extraidos = ex.colunas;
+                                        if (ex.veredito.ok) {
+                                            console.log(`   [Extração] ${ex.colunas.consumo_kwh} kWh | compensado ${ex.colunas.consumo_compensado} | venc ${ex.colunas.vencimento_concessionaria} | R$ ${ex.veredito.totalPdf.toFixed(2)} confere com portal e código de barras`);
+                                        } else {
+                                            console.warn(`   [Extração] CONFERIR: ${ex.veredito.problemas.join('; ')}`);
+                                        }
+                                    } catch (exErr) {
+                                        console.error(`   [Extração] falhou:`, exErr.message);
+                                        extraidos = {
+                                            reading_status: 'error',
+                                            reading_error: `Falha na leitura do PDF: ${exErr.message}`.substring(0, 500),
+                                        };
+                                    }
+
                                     await upsertInvoice(uc, r.ref, {
                                         concessionaria_pdf_url: storagePath,
                                         status: 'sem_faturamento',
-                                        reading_status: 'processing',
                                         valor_concessionaria: r.valor,
                                         is_placeholder: false,
+                                        ...extraidos,
                                     });
                                     await updateUCStatus(uc.id, 'success');
                                 } catch (upErr) {
