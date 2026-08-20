@@ -20,7 +20,6 @@
  * de buscar a UC. Portais de concessionária única implementam isso como no-op.
  */
 
-const fs = require('fs');
 
 const LOGIN_URL = 'https://agenciavirtual.neoenergia.com/#/login';
 
@@ -463,61 +462,4 @@ module.exports = {
     },
 
     parseMesRef,
-
-    // ---------------------------------------------------------------------
-    // NÃO UTILIZADO ATUALMENTE. Extração de dados do PDF da Cosern; hoje quem
-    // faz esse papel é src/lib/energyBillParser.js no CRM. Mantido aqui porque,
-    // se voltar a ser usado, é específico do layout de fatura deste portal.
-    // ---------------------------------------------------------------------
-    async parseInvoicePdf(filePath) {
-        const pdf = require('pdf-parse');
-        const dataBuffer = fs.readFileSync(filePath);
-        try {
-            const data = await pdf(dataBuffer);
-            const text = data.text;
-
-            // Padrões Neoenergia Cosern
-            const consumptionMatch = text.match(/(?:Energia Ativa|Consumo Total|Total Consumo)[^\d]*(\d+)[^\d]*kWh/i) ||
-                                     text.match(/kWh[^\d]*(\d+)/i) ||
-                                     text.match(/(\d+)\s*kWh/i);
-
-            const cipMatch = text.match(/(?:CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d,.]+)/i) ||
-                             text.match(/Ilum\.?\s*P[uú]bl\.?[^\d]*([\d,.]+)/i);
-
-            const refMonthMatch = text.match(/Mês\s*Referência[:\s]*(\w{3}\/\d{2,4})|REF[:\s]*(\w{3}\/\d{2,4})/i);
-            const dueDateMatch = text.match(/Vencimento[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-            const totalAmountMatch = text.match(/Total\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)|Valor\s*a\s*Pagar[:\s]*R\$?\s*([\d,.]+)/i);
-            const readingDateMatch = text.match(/(?:Leitura\s*Atual|Data\s*da\s*Leitura)[:\s]*(\d{2}\/\d{2}\/\d{2,4})/i);
-            const othersMatch = text.match(/(?:Outros\s*Lançamentos|Adicionais)[:\s]*R\$?\s*([\d,.]+)/i);
-
-            let consumoKwh = 0;
-            if (consumptionMatch) {
-                consumoKwh = parseInt(consumptionMatch[1].replace(/\D/g, ''));
-            }
-
-            const formatDate = (raw) => {
-                if (!raw) return null;
-                const parts = raw.split('/');
-                if (parts.length < 2) return null;
-                const year = parts[2]?.length === 2 ? `20${parts[2]}` : parts[2];
-                return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            };
-
-            const result = {
-                consumoKwh,
-                cipValor: parseValor(cipMatch ? cipMatch[1] : null),
-                mesReferencia: refMonthMatch ? parseMesRef(refMonthMatch[1] || refMonthMatch[2]) : null,
-                vencimento: formatDate(dueDateMatch ? dueDateMatch[1] : null),
-                valorTotal: parseValor(totalAmountMatch ? totalAmountMatch[1] : null),
-                dataLeitura: formatDate(readingDateMatch ? readingDateMatch[1] : null),
-                outrosLancamentos: parseValor(othersMatch ? othersMatch[1] : null)
-            };
-
-            console.log(`      [Scanner PDF] Extração: MesRef=${result.mesReferencia}, Consumo=${result.consumoKwh} kWh, CIP=R$ ${result.cipValor}, Venc=${result.vencimento}, Total=R$ ${result.valorTotal}`);
-            return result;
-        } catch (err) {
-            console.error('      [Scanner PDF] Erro ao processar arquivo:', err.message);
-            return { consumoKwh: 0, cipValor: 0 };
-        }
-    },
 };

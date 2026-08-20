@@ -175,7 +175,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                             }
                             const cleanText = fullText.replace(/\s+/g, ' ');
 
-                            const parseValue = (v) => v ? parseFloat(v.replace('.', '').replace(',', '.')) : 0;
+                            const parseValue = (v) => v ? parseFloat(v.replace(/\./g, '').replace(',', '.')) : 0;
                             const parseConsumption = (raw) => {
                                 if (!raw) return 0;
                                 let cleaned = raw.trim();
@@ -205,7 +205,7 @@ export default function BatchInvoiceProcessor({ isOpen, onClose, usinaInfo, ucs,
                             }
                             
                             // Força a buscar TOTAL A PAGAR R$ 0,00 localmente caso o OCR perca (Ex. Fatura zerada)
-                            const totalAPagarMatch = cleanText.match(/TOTAL\s+A\s+PAGAR\s+R\$[^\d]*(\d{1,5},\d{2})/i);
+                            const totalAPagarMatch = cleanText.match(/TOTAL\s+A\s+PAGAR\s+R\$[^\d]*((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})/i);
                             if (totalAPagarMatch) {
                                 const val = parseValue(totalAPagarMatch[1]);
                                 parsedData.valor_a_pagar = val;
