@@ -9,7 +9,7 @@ import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
-import { montarTextoContrato, gerarPdfContratoBase64 } from '../lib/contrato';
+import { montarTextoContrato, gerarPdfContratoBase64, dividirEmPaginas } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -189,17 +189,31 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const fileName = `Contrato_${formData.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
 
+            // Quantas folhas o texto ocupa — o ContratoAdesao pagina o mesmo
+            // conteúdo, então a conta bate com o que foi para o PDF.
+            const paginasDoTermo = dividirEmPaginas(
+                contractDraft || montarTextoContrato(subscriber, consumerUnits[0]?.concessionaria, {
+                    desconto: consumerUnits[0]?.desconto_assinante,
+                    diaVencimento: consumerUnits[0]?.dia_vencimento ?? subscriber?.consolidated_due_day
+                })
+            ).length;
+
             // 4. Send to Autentique
             const result = await createAutentiqueDocument({
                 documentName: fileName,
                 fileBase64: pdfBase64,
                 signers: [
-                    { 
-                        name: formData.name, 
+                    {
+                        name: formData.name,
                         action: 'SIGN',
+                        // As páginas eram fixas em 3 e 4, de quando o termo
+                        // tinha quatro folhas. O termo consolidado tem o dobro,
+                        // e número fixo carimba a assinatura no meio de uma
+                        // cláusula. O bloco de assinatura fica no fim do texto
+                        // e a procuração é sempre a folha seguinte.
                         positions: [
-                            { x: 50, y: 82, z: 3 }, // Página 3 (Associado)
-                            { x: 50, y: 82, z: 4 }  // Página 4 (Procuração)
+                            { x: 50, y: 82, z: paginasDoTermo },      // fim do termo (Associado)
+                            { x: 50, y: 82, z: paginasDoTermo + 1 }   // procuração
                         ]
                     }
                 ],

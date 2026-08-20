@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
-import { DEFAULTS_FORNECEDOR, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
+import { DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
@@ -208,14 +208,24 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             const fileName = `Contrato_Gestao_${(formData.name || 'fornecedor').replace(/\s+/g, '_')}_${Date.now()}.pdf`;
 
+            // O bloco de assinatura fica no fim do texto, então a marca vai na
+            // última folha — que varia com o tamanho do contrato. Número fixo
+            // aqui coloca a assinatura no meio de uma cláusula.
+            const ultimaPagina = dividirEmPaginasFornecedor(texto).length;
+
             const result = await createAutentiqueDocument({
                 documentName: fileName,
                 fileBase64: pdfBase64,
                 signers: [
                     {
+                        // Sem `email`: com e-mail a Autentique entrega o
+                        // documento por conta dela e não devolve link público,
+                        // e a função cai num fallback que aponta para a página
+                        // de gestão do documento — 404 para quem vai assinar.
+                        // Quem entrega o link somos nós, por WhatsApp e e-mail.
                         name: formData.name,
-                        email: formData.email || undefined,
-                        action: 'SIGN'
+                        action: 'SIGN',
+                        positions: [{ x: 50, y: 82, z: ultimaPagina }]
                     }
                 ],
                 signerId: supplier.id,
@@ -224,6 +234,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             if (result.error) throw new Error(result.error);
             if (!result?.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado.');
+            if (result.signingLinkFound === false) {
+                throw new Error('A Autentique não devolveu link de assinatura para este documento. O documento foi criado, mas o link não pode ser enviado — verifique o documento no painel da Autentique.');
+            }
 
             let finalLink = result.url;
             try {

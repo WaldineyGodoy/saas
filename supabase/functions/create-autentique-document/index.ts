@@ -124,7 +124,17 @@ serve(async (req) => {
         }
 
         // 3. Fallback final
+        //
+        // Esta URL é a página de GESTÃO do documento, que só abre para quem
+        // está logado como dono — para o signatário ela responde 404. Ela já
+        // foi encurtada e enviada a um fornecedor real, que recebeu "página
+        // não encontrada". Continuamos gravando (o documento existe e
+        // precisa ser rastreável), mas devolvemos `signingLinkFound` para
+        // quem chamou poder recusar o envio em vez de mandar um link morto.
         const finalUrl = signingLink || `https://autentique.com.br/v2/documentos/${documentId}`;
+        if (!signingLink) {
+            console.error(`Autentique não devolveu link de assinatura para ${documentId}. Verifique se algum signatário foi criado com e-mail: nesse caso a entrega é feita pela Autentique e não há link público.`);
+        }
 
         // 4. Salvar na tabela signatures
         const { error: dbError } = await supabaseAdmin
@@ -148,7 +158,7 @@ serve(async (req) => {
 
         if (dbError) throw dbError;
 
-        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl }), {
+        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl, signingLinkFound: !!signingLink }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
