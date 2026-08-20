@@ -81,7 +81,7 @@ serve(async (req) => {
     
     // Iluminação Pública: Regex a prova de balas para lidar com quebras de linha ou espaçamentos malucos
     let iluminacao_publica = 0;
-    const cipMatch = fullText.match(/(?:Ilum[\s\S]{0,30}Municipal|Ilumina[çc][ãa]o[\s\S]{0,10}P[úu]blica|COSIP|CIP-MUNICIP)[\s\S]{0,40}?(\d{1,4},\d{2})/i);
+    const cipMatch = fullText.match(/(?:Ilum[\s\S]{0,30}Municipal|Ilumina[çc][ãa]o[\s\S]{0,10}P[úu]blica|COSIP|CIP-MUNICIP)[\s\S]{0,40}?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})/i);
     if (cipMatch) {
         iluminacao_publica = parseValue(cipMatch[1]);
     }
@@ -94,7 +94,7 @@ serve(async (req) => {
     
     // Total a Pagar: Pega a última ocorrência da palavra TOTAL seguida de um valor (geralmente é o valor final no rodapé)
     let valor_a_pagar = 0;
-    const totalAmountMatches = [...fullText.matchAll(/TOTAL[\s\S]{0,100}?(\d{1,5},\d{2})/gi)];
+    const totalAmountMatches = [...fullText.matchAll(/TOTAL[\s\S]{0,100}?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})/gi)];
     if (totalAmountMatches.length > 0) {
         valor_a_pagar = parseValue(totalAmountMatches[totalAmountMatches.length - 1][1]);
     } else {
@@ -132,14 +132,15 @@ serve(async (req) => {
 
     // Saldo atualizado de créditos (kWh)
     let saldo_kwh = 0;
-    const saldoMatch = fullText.match(/Saldo\s+atualizado\s+de\s+cr[eé]ditos\s*=\s*([\d.,]+)/i);
+    const saldoMatch = fullText.match(/Saldo\s+atualizado\s+de\s+cr[eé]ditos\s*=\s*([\d.,]+)/i) ||
+                      fullText.match(/Saldo\s+atual\s+total\s*=\s*([\d.,]+)/i);
     if (saldoMatch) {
         saldo_kwh = parseConsumption(saldoMatch[1]);
     }
 
     // Outros Lançamentos (Multas, Juros, IPCA, Acréscimos de Bandeira)
     let outros_lancamentos = 0;
-    const othersRegex = /(?:Juros|Multa|Atualiza[çc][ãa]o|Comp\.DIC|IPCA|Acr[ée]s\.?\s*(?:Band|Bd)\.?)[\s\S]{0,50}?(\d{1,4},\d{2}-?)/gi;
+    const othersRegex = /(?:Juros|Multa|Atualiza[çc][ãa]o|Comp\.DIC|IPCA|Acr[ée]s\.?\s*(?:Band|Bd)\.?)[\s\S]{0,50}?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}-?)/gi;
     const othersMatches = [...fullText.matchAll(othersRegex)];
     for (const match of othersMatches) {
         outros_lancamentos += parseValue(match[1]);
@@ -148,7 +149,7 @@ serve(async (req) => {
     // Parcelamentos
     let parcelamento = 0;
     let parcelamento_descricao = '';
-    const parcelamentoRegex = /(Parc\s*\d+\/\d+\s*\*?\d*|Parcelamento)[\s\S]{0,30}?(\d{1,4},\d{2}-?)/gi;
+    const parcelamentoRegex = /(Parc\s*\d+\/\d+\s*\*?\d*|Parcelamento)[\s\S]{0,30}?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}-?)/gi;
     const parcelamentoMatches = [...fullText.matchAll(parcelamentoRegex)];
     for (const match of parcelamentoMatches) {
         if (!parcelamento_descricao) parcelamento_descricao = match[1].trim();
