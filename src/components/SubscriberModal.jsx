@@ -1082,6 +1082,16 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
         
         // Helper to get discount/economy dynamically
+        // Uma UC pode entrar no consolidado sem conta no ciclo: a concessionária
+        // não publicou a fatura a tempo, ou o mês foi de conta mínima (sem PDF e
+        // sem boleto). Ela continua aparecendo no detalhamento — some da fatura
+        // seria pior, o assinante procuraria a UC e não acharia — mas no lugar do
+        // valor vai o motivo, e a conta entra no ciclo do mês seguinte.
+        const semFaturamentoNoPeriodo = (inv) =>
+            String(inv.status || '').toLowerCase() === 'sem_faturamento' ||
+            inv.valor_a_pagar === null ||
+            inv.valor_a_pagar === undefined;
+
         const getEconomiaValue = (inv) => {
             if (Number(inv.economia_reais) > 0) {
                 return Number(inv.economia_reais);
@@ -1308,7 +1318,11 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                     <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-dashed border-slate-100">
                                                         <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
                                                             <p className="text-[7px] font-bold text-slate-400 uppercase">Valor a Pagar</p>
-                                                            <p className="text-[11px] font-black text-[#003366]">{formatCurrency(inv.valor_a_pagar)}</p>
+                                                            {semFaturamentoNoPeriodo(inv) ? (
+                                                                <p className="text-[8px] font-bold text-slate-500 leading-tight">Sem faturamento no período</p>
+                                                            ) : (
+                                                                <p className="text-[11px] font-black text-[#003366]">{formatCurrency(inv.valor_a_pagar)}</p>
+                                                            )}
                                                         </div>
                                                         <div className="bg-[#5ead5c]/5 p-1.5 rounded border border-[#5ead5c]/10 text-right">
                                                             <p className="text-[7px] font-bold text-[#5ead5c] uppercase">Economia</p>
