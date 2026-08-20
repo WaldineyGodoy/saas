@@ -37,6 +37,31 @@ export const porExtenso = (n) => {
     return u === 0 ? DEZENAS[d] : `${DEZENAS[d]} e ${UNIDADES[u]}`;
 };
 
+/**
+ * Percentual por extenso, inclusive quebrado.
+ *
+ * `porExtenso` sozinho arredonda: 12,5 virava "treze", e o contrato saía
+ * com "12.5% (treze por cento)" — algarismo e extenso discordando. Num
+ * contrato prevalece o extenso, então uma taxa de 12,5% seria lida como
+ * 13%. Aqui 12,5 vira "doze vírgula cinco".
+ */
+export const percentualExtenso = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '';
+    if (Number.isInteger(v)) return porExtenso(v);
+
+    const [inteira, decimal] = String(v).split('.');
+    const casas = decimal.split('').map(d => porExtenso(Number(d))).join(' ');
+    return `${porExtenso(Number(inteira))} vírgula ${casas}`;
+};
+
+/** Número no formato daqui: 12.5 -> "12,5", 20 -> "20". */
+export const numeroBr = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '';
+    return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+};
+
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
@@ -45,6 +70,30 @@ export const dataPorExtenso = (data = new Date()) =>
 
 export const moeda = (valor) =>
     (Number(valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Lê um número digitado por gente daqui.
+ *
+ * `Number('17,5')` é NaN, e um `<input type="number">` nem deixa a vírgula
+ * ser digitada: devolve string vazia e o campo parece recusar o valor. Os
+ * campos de percentual do contrato são texto por isso, e a conversão mora
+ * aqui.
+ */
+export const paraNumero = (valor) => {
+    if (typeof valor === 'number') return valor;
+
+    const texto = String(valor ?? '').trim();
+    if (!texto) return NaN;
+
+    // "17,5" e "1.234,56" vêm do teclado brasileiro; "17.5" vem de quem
+    // digitou no teclado numérico ou colou de uma planilha em inglês.
+    const normalizado = texto.includes(',')
+        ? texto.replace(/\./g, '').replace(',', '.')
+        : texto;
+
+    const numero = Number(normalizado);
+    return Number.isFinite(numero) ? numero : NaN;
+};
 
 /** Caracteres que cabem numa linha justificada de 170mm em serif 11pt. */
 const CARACTERES_POR_LINHA = 95;

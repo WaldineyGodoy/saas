@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
@@ -160,14 +160,12 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }
     };
 
-    /** Texto que será impresso: o rascunho editado, ou o gerado na hora. */
-    const textoContratoAtual = () =>
-        contractDraft || montarTextoContratoFornecedor(
-            { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } },
-            usinas,
-            contractOpts
-        );
-
+    /**
+     * Texto que será impresso: o rascunho editado, ou o gerado na hora.
+     *
+     * Memoizado porque cada tecla digitada em qualquer campo do modal chega
+     * aqui, e remontar 16 mil caracteres a cada uma não tem por quê.
+     */
     /** O endereço mora achatado no formData e aninhado no registro. */
     const enderecoDoForm = () => ({
         cep: formData.cep,
@@ -180,6 +178,16 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         cidade: formData.cidade,
         uf: formData.uf
     });
+
+    const dadosContratante = { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } };
+
+    const textoGerado = useMemo(
+        () => montarTextoContratoFornecedor(dadosContratante, usinas, contractOpts),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [supplier, formData, usinas, contractOpts]
+    );
+
+    const textoContratoAtual = () => contractDraft || textoGerado;
 
     const mensagemContrato = (link) =>
         `Olá ${formData.name}, aqui é a B2W Energia. ⚡\n\n` +
@@ -2194,24 +2202,30 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                                                 {[
-                                                    { key: 'desconto', label: 'Desconto ao consumidor (%)', step: '0.01' },
-                                                    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)', step: '0.01' },
-                                                    { key: 'taxaAdmin', label: 'Taxa de administração (R$)', step: '0.01' },
-                                                    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)', step: '0.01' },
-                                                    { key: 'diaCorte', label: 'Dia de corte', step: '1' },
-                                                    { key: 'diaRepasse', label: 'Dia do repasse', step: '1' }
+                                                    { key: 'desconto', label: 'Desconto ao consumidor (%)' },
+                                                    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
+                                                    { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
+                                                    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
+                                                    { key: 'diaCorte', label: 'Dia de corte' },
+                                                    { key: 'diaRepasse', label: 'Dia do repasse' }
                                                 ].map(campo => (
                                                     <div key={campo.key}>
                                                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
                                                             {campo.label}
                                                         </label>
                                                         <input
-                                                            type="number"
-                                                            step={campo.step}
-                                                            min="0"
+                                                            // Texto, e não `type="number"`: o campo de número recusa a
+                                                            // vírgula do teclado brasileiro — ao digitar "17,5" o
+                                                            // navegador devolve string vazia, e o campo parece não
+                                                            // aceitar o valor. A conversão é feita por paraNumero().
+                                                            type="text"
+                                                            inputMode="decimal"
                                                             value={contractOpts[campo.key]}
                                                             onChange={e => {
-                                                                setContractOpts({ ...contractOpts, [campo.key]: e.target.value });
+                                                                // Só dígitos, vírgula e ponto: barra letra digitada por
+                                                                // engano sem brigar com quem está no meio de "17,".
+                                                                const limpo = e.target.value.replace(/[^\d.,]/g, '');
+                                                                setContractOpts({ ...contractOpts, [campo.key]: limpo });
                                                                 // Condição alterada invalida o rascunho: o texto precisa
                                                                 // ser remontado com o número novo.
                                                                 setContractDraft('');
@@ -2250,11 +2264,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                 <div style={{ display: 'flex', gap: '0.6rem' }}>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setContractDraft(montarTextoContratoFornecedor(
-                                                            { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } },
-                                                            usinas,
-                                                            contractOpts
-                                                        ))}
+                                                        onClick={() => setContractDraft(textoGerado)}
                                                         style={{ padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
                                                     >
                                                         Gerar minuta
@@ -2672,13 +2682,17 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
             {/*
               Folhas do contrato de gestão, fora da tela, prontas para o
-              html2canvas. Só são montadas na aba Contrato: manter 8 páginas A4
-              renderizadas o tempo todo pesa em todo fornecedor aberto, mesmo
-              em quem só veio conferir o extrato.
+              html2canvas.
+              Montadas só durante a geração do PDF, e não enquanto a aba está
+              aberta. São 12 folhas A4 que ninguém vê antes de clicar em
+              enviar; medido, o custo de redesenhá-las é de ~21ms, então isto
+              é higiene de DOM, não correção de lentidão.
+              O gerarPdfBase64 espera 1500ms antes de varrer o DOM, tempo de
+              sobra para o React montar isto.
             */}
-            {activeTab === 'contrato' && supplier && (
+            {isCreatingContract && supplier && (
                 <ContratoFornecedor
-                    supplier={{ ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } }}
+                    supplier={dadosContratante}
                     usinas={usinas}
                     branding={branding}
                     texto={textoContratoAtual()}

@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, paginarTexto, porExtenso } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso } from './contratoBase';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos — o
@@ -59,12 +59,19 @@ const tabelaUsinas = (usinas = []) => {
 export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) => {
     const p = { ...DEFAULTS_FORNECEDOR, ...Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined && v !== null && v !== '')) };
 
-    const desconto = Number(p.desconto);
-    const recorrente = Number(p.percentualRecorrente);
-    const taxaAdmin = Number(p.taxaAdmin);
-    const recuperacao = Number(p.taxaRecuperacao);
-    const diaCorte = Number(p.diaCorte);
-    const diaRepasse = Number(p.diaRepasse);
+    // Campo vazio ou ilegível cai no padrão, em vez de imprimir NaN no
+    // contrato. "17," no meio da digitação já vale 17.
+    const numero = (valor, padrao) => {
+        const n = paraNumero(valor);
+        return Number.isFinite(n) ? n : padrao;
+    };
+
+    const desconto = numero(p.desconto, DEFAULTS_FORNECEDOR.desconto);
+    const recorrente = numero(p.percentualRecorrente, DEFAULTS_FORNECEDOR.percentualRecorrente);
+    const taxaAdmin = numero(p.taxaAdmin, DEFAULTS_FORNECEDOR.taxaAdmin);
+    const recuperacao = numero(p.taxaRecuperacao, DEFAULTS_FORNECEDOR.taxaRecuperacao);
+    const diaCorte = numero(p.diaCorte, DEFAULTS_FORNECEDOR.diaCorte);
+    const diaRepasse = numero(p.diaRepasse, DEFAULTS_FORNECEDOR.diaRepasse);
 
     const a = supplier?.address || {};
     const cidadeUf = `${a.municipio || a.cidade || 'Natal'}/${a.uf || 'RN'}`;
@@ -108,14 +115,14 @@ CAPÍTULO III — DA REMUNERAÇÃO
 CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 5.1. A GESTORA fará jus a:
 (a) Remuneração Inicial — 100% (cem por cento) do Valor Integral da Primeira Fatura da Associação, devida apenas quanto a CONSUMIDORES captados pela GESTORA ou por seus corretores;
-(b) Remuneração Recorrente — ${recorrente}% (${porExtenso(recorrente)} por cento) sobre as faturas da Associação pagas pelo CONSUMIDOR;
+(b) Remuneração Recorrente — ${numeroBr(recorrente)}% (${percentualExtenso(recorrente)} por cento) sobre as faturas da Associação pagas pelo CONSUMIDOR;
 (c) Taxa de Administração — R$ ${moeda(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
 5.2. Definição de "captado pela GESTORA". Considera-se captado pela GESTORA o CONSUMIDOR cujo cadastro tenha sido originado por canal, link de indicação ou corretor da GESTORA, conforme registro do sistema de CRM da GESTORA na data da adesão.
 5.3. Cálculo do Valor Integral da Primeira Fatura: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
 5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente.
 5.5. Definições:
 (a) Tarifa de Aplicação — todas as componentes da tarifa de energia elétrica, incluindo impostos e tributos cobrados pela distribuidora na área de concessão;
-(b) Desconto — ${desconto}% (${porExtenso(desconto)} por cento) aplicado sobre a Tarifa de Aplicação, praticado para a área de concessão, conforme Anexo I;
+(b) Desconto — ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) aplicado sobre a Tarifa de Aplicação, praticado para a área de concessão, conforme Anexo I;
 (c) % Efetivamente Compensado — apurado pela fatura da distribuidora da unidade consumidora referente ao ciclo, documento que prevalece sobre qualquer relatório, portal ou estimativa em caso de divergência.
 5.6. Marcos de pagamento:
 (a) a Remuneração Inicial será paga integralmente na primeira fatura do CONSUMIDOR ou, sendo esta parcial, distribuída entre a primeira e a segunda, de forma que o total corresponda ao Valor Integral da Primeira Fatura;
@@ -136,7 +143,7 @@ CLÁUSULA 6 – DO RISCO DE INADIMPLÊNCIA
 
 CLÁUSULA 7 – DA COBRANÇA E DA TAXA DE RECUPERAÇÃO DE CRÉDITO
 7.1. A GESTORA executará, como obrigação de meio, a cobrança administrativa e extrajudicial dos CONSUMIDORES inadimplentes, compreendida no escopo da Taxa de Administração, observada a seguinte régua mínima, contada do vencimento: D+1, aviso automático com 2ª via; D+5, novo aviso com boleto atualizado; D+15, contato ativo e oferta de acordo; D+30, notificação formal e pedido de exclusão do rateio; D+45, negativação e protesto, mediante autorização; D+60, rescisão e medidas judiciais.
-7.2. Taxa de Recuperação de Crédito. Sobre todo valor principal recuperado de CONSUMIDOR cuja fatura tenha sido paga após 30 (trinta) dias do vencimento, a GESTORA fará jus a Taxa de Recuperação de Crédito de ${recuperacao}% (${porExtenso(recuperacao)} por cento), retida do repasse, cumulável com a Remuneração Recorrente.
+7.2. Taxa de Recuperação de Crédito. Sobre todo valor principal recuperado de CONSUMIDOR cuja fatura tenha sido paga após 30 (trinta) dias do vencimento, a GESTORA fará jus a Taxa de Recuperação de Crédito de ${numeroBr(recuperacao)}% (${percentualExtenso(recuperacao)} por cento), retida do repasse, cumulável com a Remuneração Recorrente.
 7.3. A Taxa de Recuperação de Crédito incide exclusivamente sobre valores efetivamente recuperados, não gerando crédito da GESTORA contra o CONTRATANTE em caso de não recuperação.
 7.4. Encargos moratórios. A multa moratória de 2% (dois por cento), os juros de 1% (um por cento) ao mês e a correção monetária cobrados dos CONSUMIDORES são, uma vez recebidos, repassados integralmente ao CONTRATANTE.
 7.5. Diferencial de desconto. Perdido pelo CONSUMIDOR o desconto por pagamento pontual previsto no Termo de Adesão, a diferença entre o valor cheio e o valor com desconto, quando efetivamente recebida, é repassada integralmente ao CONTRATANTE, sobre ela incidindo a Remuneração Recorrente.
@@ -153,9 +160,9 @@ CLÁUSULA 9 – DO CICLO DE APURAÇÃO E DOS REPASSES
 9.1. Definições:
 (a) Ciclo de Apuração — período de leitura da distribuidora ao qual se refere a energia compensada nas unidades consumidoras do rateio;
 (b) Compensação Financeira — data em que o pagamento do CONSUMIDOR é efetivamente liquidado e disponibilizado, livre e desembaraçado, em conta de titularidade da GESTORA;
-(c) Data de Corte — dia ${diaCorte} (${porExtenso(diaCorte)}) de cada mês;
+(c) Data de Corte — dia ${diaCorte} (${percentualExtenso(diaCorte)}) de cada mês;
 (d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
-9.2. A GESTORA efetuará o repasse até o dia ${diaRepasse} (${porExtenso(diaRepasse)}) de cada mês, considerando exclusivamente os pagamentos com Compensação Financeira ocorrida até a Data de Corte. Pagamentos compensados após a Data de Corte integram o ciclo seguinte.
+9.2. A GESTORA efetuará o repasse até o dia ${diaRepasse} (${percentualExtenso(diaRepasse)}) de cada mês, considerando exclusivamente os pagamentos com Compensação Financeira ocorrida até a Data de Corte. Pagamentos compensados após a Data de Corte integram o ciclo seguinte.
 9.3. Nenhum repasse será devido antes da Compensação Financeira. Boleto emitido, fatura vencida, energia injetada ou energia compensada na distribuidora não constituem, isolada ou conjuntamente, fato gerador do repasse.
 9.4. Junto ao repasse, a GESTORA enviará Demonstrativo de Repasse contendo, por unidade consumidora: energia injetada e efetivamente compensada, tarifa de aplicação, desconto, valor faturado, valor pago, data da compensação financeira e memória de todas as deduções.
 9.5. Estornos, chargebacks, pagamentos em duplicidade, devoluções e cancelamentos serão deduzidos do repasse imediatamente subsequente; sendo insuficiente o saldo, o CONTRATANTE restituirá a diferença em 10 (dez) dias.
@@ -188,10 +195,10 @@ CLÁUSULA 15 – DO FORO
 Fica eleito o foro da comarca de ${p.foro}, com renúncia a qualquer outro, por mais privilegiado que seja.
 
 ANEXO I — CONDIÇÕES COMERCIAIS
-- Desconto ao consumidor: ${desconto}%
-- Remuneração Recorrente: ${recorrente}%
+- Desconto ao consumidor: ${numeroBr(desconto)}%
+- Remuneração Recorrente: ${numeroBr(recorrente)}%
 - Taxa de Administração: R$ ${moeda(taxaAdmin)} por consumidor ativo/mês
-- Taxa de Recuperação de Crédito: ${recuperacao}% sobre o principal recuperado após D+30
+- Taxa de Recuperação de Crédito: ${numeroBr(recuperacao)}% sobre o principal recuperado após D+30
 - Data de Corte: dia ${diaCorte}
 - Data de Repasse: até o dia ${diaRepasse}
 

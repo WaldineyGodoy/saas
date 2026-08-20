@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, paginarTexto, porExtenso } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso } from './contratoBase';
 
 /**
  * Termo de adesão do assinante — fonte única.
@@ -57,8 +57,13 @@ export const montarTextoContrato = (subscriber, distribuidora, opts = {}) => {
     const fullAddress = enderecoCompleto(subscriber);
     const DIST = rotuloDistribuidora(distribuidora);
 
-    const desconto = Number(opts.desconto) > 0 ? Number(opts.desconto) : DESCONTO_PADRAO;
-    const diaVencimento = Number(opts.diaVencimento) > 0 ? Number(opts.diaVencimento) : DIA_VENCIMENTO_PADRAO;
+    // paraNumero porque o percentual pode chegar como "17,5" de um campo de
+    // texto; Number() sozinho devolveria NaN e o contrato imprimiria o padrão
+    // sem ninguém notar.
+    const descontoLido = paraNumero(opts.desconto);
+    const vencimentoLido = paraNumero(opts.diaVencimento);
+    const desconto = descontoLido > 0 ? descontoLido : DESCONTO_PADRAO;
+    const diaVencimento = vencimentoLido > 0 ? vencimentoLido : DIA_VENCIMENTO_PADRAO;
     const cidadeUf = `${subscriber?.cidade || 'Natal'}/${subscriber?.uf || 'RN'}`;
 
     return `TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA
@@ -85,7 +90,7 @@ CLÁUSULA 5 – DA CONTRIBUIÇÃO ASSOCIATIVA
 5.3. Não havendo compensação no ciclo, nada será cobrado no período.
 
 CLÁUSULA 6 – DO DESCONTO POR PAGAMENTO PONTUAL
-6.1. A ASSOCIAÇÃO concede ao ASSOCIADO desconto de ${desconto}% (${porExtenso(desconto)} por cento) sobre o valor cheio da contribuição definido na Cláusula 5.2, condicionado ao pagamento até a data de vencimento.
+6.1. A ASSOCIAÇÃO concede ao ASSOCIADO desconto de ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) sobre o valor cheio da contribuição definido na Cláusula 5.2, condicionado ao pagamento até a data de vencimento.
 6.2. O desconto constitui benefício concedido pela pontualidade, e não redução do preço contratado. Efetuado o pagamento após o vencimento, é devido o valor cheio da contribuição, equivalente à tarifa da distribuidora sem abatimento, sem que isso configure penalidade, multa ou sanção.
 6.3. O boleto ou instrumento de cobrança indicará, de forma destacada, o valor cheio, o valor com desconto e a data limite para fruição do desconto, na forma do art. 46 do Código de Defesa do Consumidor.
 6.4. O desconto é restabelecido automaticamente no ciclo seguinte à regularização, sem necessidade de requerimento.
@@ -161,9 +166,9 @@ CLÁUSULA 22 – DO FORO
 Fica eleito o foro do domicílio do ASSOCIADO, com renúncia a qualquer outro, por mais privilegiado que seja.
 
 ANEXO I – EXEMPLO DE CÁLCULO
-Exemplo ilustrativo, considerando desconto de ${desconto}% e energia compensada de 500 kWh a uma Tarifa de Aplicação de R$ 1,00/kWh com tributos:
+Exemplo ilustrativo, considerando desconto de ${numeroBr(desconto)}% e energia compensada de 500 kWh a uma Tarifa de Aplicação de R$ 1,00/kWh com tributos:
 - Valor cheio da contribuição (Cláusula 5.2): R$ 500,00
-- Desconto por pagamento até o vencimento (${desconto}%): R$ ${(500 * desconto / 100).toFixed(2).replace('.', ',')}
+- Desconto por pagamento até o vencimento (${numeroBr(desconto)}%): R$ ${(500 * desconto / 100).toFixed(2).replace('.', ',')}
 - Valor a pagar até o dia ${diaVencimento}: R$ ${(500 - 500 * desconto / 100).toFixed(2).replace('.', ',')}
 - Valor a pagar após o vencimento: R$ 500,00, acrescido de multa de 2% e juros de 1% ao mês
 Permanecem devidos diretamente à distribuidora, sem desconto: custo de disponibilidade, TUSD Fio B não compensável, iluminação pública e bandeiras tarifárias.
