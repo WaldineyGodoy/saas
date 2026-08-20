@@ -117,6 +117,28 @@ export const manageAsaasCustomer = async (data) => {
     return callFunction('manage-asaas-customer', data);
 };
 
+/**
+ * Tarifa de referência da tabela Concessionária (Configurações -> Conta de
+ * Energia -> Tarifas Concessionárias).
+ *
+ * Resolve por código IBGE quando a linha do município existe e, na falta,
+ * por concessionária + UF. O fallback importa: a tabela do RN tem 143 dos
+ * 167 municípios, e uma UC em município ausente ficava com tarifa zero para
+ * sempre — sem como corrigir, porque o campo na tela é somente leitura.
+ *
+ * Devolve null quando não há referência cadastrada.
+ */
+export const buscarTarifaReferencia = async (concessionaria, uf = null, ibge = null) => {
+    if (!concessionaria) return null;
+    const { data, error } = await supabase.rpc('fn_tarifa_referencia', {
+        p_concessionaria: concessionaria,
+        p_uf: uf || null,
+        p_ibge: ibge || null,
+    });
+    if (error) throw error;
+    return data?.[0] || null;
+};
+
 export const fetchOfferData = async (ibge) => {
     const { data, error } = await supabase
         .from('Concessionaria')

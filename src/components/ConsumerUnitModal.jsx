@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { salvarSenhaPortal, semSenha } from '../lib/api';
+import { salvarSenhaPortal, semSenha, buscarTarifaReferencia } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
@@ -59,6 +59,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // Senha em estado proprio: tempCredentials e carregado do banco e regravado
     // inteiro, e a senha nao pode fazer esse caminho de volta. Vazia = manter.
     const [tempSenha, setTempSenha] = useState('');
+    // Tarifa de referencia da tabela Concessionaria. O campo na tela e somente
+    // leitura de proposito -- a tarifa nao e' digitada, vem do cadastro em
+    // Configuracoes -> Conta de Energia. O que faltava era alguem buscar.
+    const [tarifaRef, setTarifaRef] = useState(null);
     const [isUcNumberLocked, setIsUcNumberLocked] = useState(true);
     const [usinaSearchTerm, setUsinaSearchTerm] = useState('');
     const [showUsinaDropdown, setShowUsinaDropdown] = useState(false);
@@ -382,6 +386,57 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             });
         }
     }, [consumerUnit?.id, consumerUnit?.subscriber_id, consumerUnit?.supplier_id]); // Stable dependencies
+
+    // Busca a tarifa de referencia sempre que a distribuidora ou a UF mudam.
+    // Se a UC estiver sem tarifa, aplica sozinha: zero ali nao e' uma escolha,
+    // e' o dado que nunca chegou -- e zerado o faturamento do assinante sai
+    // so' com a iluminacao publica.
+    useEffect(() => {
+        let cancelado = false;
+
+        const buscar = async () => {
+            if (!formData.concessionaria) {
+                setTarifaRef(null);
+                return;
+            }
+            try {
+                const ref = await buscarTarifaReferencia(formData.concessionaria, formData.uf);
+                if (cancelado) return;
+                setTarifaRef(ref);
+
+                if (ref && parseCurrency(formData.tarifa_concessionaria) === 0) {
+                    setFormData(prev => ({
+                        ...prev,
+                        tarifa_concessionaria: formatCurrency4(ref.tarifa_concessionaria),
+                        te: formatCurrency4(ref.te),
+                        tusd: formatCurrency4(ref.tusd)
+                    }));
+                }
+            } catch (err) {
+                if (!cancelado) {
+                    console.error('Falha ao buscar a tarifa de referencia:', err.message);
+                    setTarifaRef(null);
+                }
+            }
+        };
+
+        buscar();
+        return () => { cancelado = true; };
+    }, [formData.concessionaria, formData.uf]);
+
+    const tarifaBateComCadastro = () =>
+        !!tarifaRef &&
+        Math.abs(parseCurrency(formData.tarifa_concessionaria) - Number(tarifaRef.tarifa_concessionaria)) < 0.00005;
+
+    const aplicarTarifaReferencia = () => {
+        if (!tarifaRef) return;
+        setFormData(prev => ({
+            ...prev,
+            tarifa_concessionaria: formatCurrency4(tarifaRef.tarifa_concessionaria),
+            te: formatCurrency4(tarifaRef.te),
+            tusd: formatCurrency4(tarifaRef.tusd)
+        }));
+    };
 
     // Calculate Tarifa Minima automatically
     useEffect(() => {
@@ -2064,8 +2119,32 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#0369a1', marginBottom: '0.4rem' }}>Tarifa Concessionária</label>
                                                     <div style={{ padding: '0.7rem', background: '#fff', border: '1px solid #bae6fd', borderRadius: '8px', color: '#0369a1', fontWeight: 600 }}>
-                                                        {formData.tarifa_concessionaria || 'R$ 0,00'}
+                                                        {formData.tarifa_concessionaria || 'R$ 0,0000'}
                                                     </div>
+                                                    {tarifaRef ? (
+                                                        tarifaBateComCadastro() ? (
+                                                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.68rem', color: '#0369a1', opacity: 0.75 }}>
+                                                                Tarifas Concessionárias · {tarifaRef.origem}
+                                                            </p>
+                                                        ) : (
+                                                            <div style={{ marginTop: '0.35rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
+                                                                <span style={{ fontSize: '0.68rem', color: '#b45309' }}>
+                                                                    Cadastro diz {formatCurrency4(tarifaRef.tarifa_concessionaria)}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={aplicarTarifaReferencia}
+                                                                    style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.5rem', border: '1px solid #0369a1', borderRadius: '6px', background: '#fff', color: '#0369a1', cursor: 'pointer' }}
+                                                                >
+                                                                    Usar do cadastro
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    ) : (
+                                                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.68rem', color: '#b45309' }}>
+                                                            Sem tarifa cadastrada para esta distribuidora em Configurações → Conta de Energia.
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label style={{ display: 'block', fontSize: '0.75rem', color: '#0369a1', marginBottom: '0.4rem' }}>Mínima Estimada</label>
