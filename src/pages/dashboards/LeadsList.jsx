@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import LeadModal from '../../components/LeadModal';
 import SubscriberModal from '../../components/SubscriberModal';
 import { getTagColor } from '../../lib/tagHelpers';
+import LeadAgenda from '../../components/LeadAgenda';
 import {
     DndContext,
     PointerSensor,
@@ -347,13 +348,22 @@ export default function LeadsList() {
                         >
                             Kanban
                         </button>
+                        <button
+                            onClick={() => setViewMode('agenda')}
+                            className={`btn ${viewMode === 'agenda' ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{ borderRadius: 0, border: 'none' }}
+                        >
+                            Agenda
+                        </button>
                     </div>
                 </div>
             </div>
 
             {loading ? <p>Carregando...</p> : (
                 <>
-                    {viewMode === 'list' ? (
+                    {viewMode === 'agenda' ? (
+                        <LeadAgenda onLeadClick={(lead) => { setEditingLead(lead); setIsModalOpen(true); }} />
+                    ) : viewMode === 'list' ? (
                         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                             <div className="table-container">
                                 {filteredLeads.length === 0 ? (
