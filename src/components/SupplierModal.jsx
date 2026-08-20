@@ -13,9 +13,26 @@ import {
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
 import { DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
+import { paraNumero } from '../lib/contratoBase';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
+
+/**
+ * Condições comerciais do contrato de gestão.
+ *
+ * Fora do componente porque a validação de envio e o formulário precisam
+ * da mesma lista: duas cópias é como um campo novo entra na tela sem
+ * entrar na checagem.
+ */
+const CAMPOS_CONDICOES = [
+    { key: 'desconto', label: 'Desconto ao consumidor (%)' },
+    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
+    { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
+    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
+    { key: 'diaCorte', label: 'Dia de corte' },
+    { key: 'diaRepasse', label: 'Dia do repasse' }
+];
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
@@ -202,6 +219,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }
         if (!formData.phone && !formData.email) {
             showAlert('Cadastre telefone ou e-mail do fornecedor antes de enviar o contrato.', 'warning');
+            return;
+        }
+
+        // Condição em branco ou ilegível não pode ir para assinatura: o gerador
+        // cai no padrão para não imprimir NaN, e o contrato sairia prometendo
+        // 20% sem ninguém ver a troca. Foi assim que o campo de desconto
+        // pareceu "voltar para 20%".
+        const invalidos = CAMPOS_CONDICOES
+            .filter(campo => !Number.isFinite(paraNumero(contractOpts[campo.key])))
+            .map(campo => campo.label);
+
+        if (invalidos.length) {
+            showAlert(`Preencha com um número: ${invalidos.join(', ')}.`, 'warning');
             return;
         }
 
@@ -2201,14 +2231,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                             </h4>
 
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                                                {[
-                                                    { key: 'desconto', label: 'Desconto ao consumidor (%)' },
-                                                    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
-                                                    { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
-                                                    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
-                                                    { key: 'diaCorte', label: 'Dia de corte' },
-                                                    { key: 'diaRepasse', label: 'Dia do repasse' }
-                                                ].map(campo => (
+                                                {CAMPOS_CONDICOES.map(campo => (
                                                     <div key={campo.key}>
                                                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
                                                             {campo.label}
