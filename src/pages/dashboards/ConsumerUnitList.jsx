@@ -227,8 +227,8 @@ export default function ConsumerUnitList() {
                 .from('consumer_units')
                 .select(`
                     *,
-                    subscriber:subscriber_id (name, cpf_cnpj, portal_credentials),
-                    titular_fatura:titular_fatura_id (name, portal_credentials),
+                    subscriber:subscriber_id (name, cpf_cnpj),
+                    titular_fatura:titular_fatura_id (name),
                     supplier:supplier_id (name, cnpj, email, phone)
                 `)
                 .order('created_at', { ascending: false });

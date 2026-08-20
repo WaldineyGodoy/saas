@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { salvarSenhaPortal, semSenha } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
@@ -54,7 +55,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [selectedInvoiceForSummary, setSelectedInvoiceForSummary] = useState(null);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [editingCredentialsType, setEditingCredentialsType] = useState(null);
-    const [tempCredentials, setTempCredentials] = useState({ url: '', login: '', password: '' });
+    const [tempCredentials, setTempCredentials] = useState({ url: '', login: '' });
+    // Senha em estado proprio: tempCredentials e carregado do banco e regravado
+    // inteiro, e a senha nao pode fazer esse caminho de volta. Vazia = manter.
+    const [tempSenha, setTempSenha] = useState('');
     const [isUcNumberLocked, setIsUcNumberLocked] = useState(true);
     const [usinaSearchTerm, setUsinaSearchTerm] = useState('');
     const [showUsinaDropdown, setShowUsinaDropdown] = useState(false);
@@ -174,7 +178,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         bairro: '',
         cidade: '',
         uf: '',
-        portal_credentials: { url: '', login: '', password: '' },
+        portal_credentials: { url: '', login: '' },
         saldo_remanescente: false
     });
 
@@ -370,7 +374,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 bairro: consumerUnit.address?.bairro || '',
                 cidade: consumerUnit.address?.cidade || '',
                 uf: consumerUnit.address?.uf || '',
-                portal_credentials: consumerUnit.portal_credentials || { url: '', login: '', password: '' },
+                portal_credentials: semSenha(consumerUnit.portal_credentials) || { url: '', login: '' },
                 saldo_remanescente: !!consumerUnit.saldo_remanescente,
                 last_scraping_status: consumerUnit.last_scraping_status || 'pending',
                 last_scraping_at: consumerUnit.last_scraping_at || null,
@@ -412,14 +416,16 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     const openTitularCredentials = () => {
         const titular = subscribers.find(s => s.id === formData.titular_fatura_id);
-        setTempCredentials(titular?.portal_credentials || { url: '', login: '', password: '' });
+        setTempCredentials(semSenha(titular?.portal_credentials) || { url: '', login: '' });
+        setTempSenha('');
         setEditingCredentialsType('titular');
         setShowCredentialsModal(true);
     };
 
     const openUsinaCredentials = () => {
         const usina = usinas.find(u => u.id === formData.usina_id);
-        setTempCredentials(usina?.portal_credentials || { url: '', login: '', password: '' });
+        setTempCredentials(semSenha(usina?.portal_credentials) || { url: '', login: '' });
+        setTempSenha('');
         setEditingCredentialsType('usina');
         setShowCredentialsModal(true);
     };
@@ -1521,7 +1527,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                                                 ...prev, 
                                                                                 titular_fatura_id: s.id,
                                                                                 cpf_cnpj_fatura: prev.cpf_cnpj_fatura || s.cpf_cnpj,
-                                                                                portal_credentials: s.portal_credentials || prev.portal_credentials || { url: '', login: '', password: '' }
+                                                                                portal_credentials: semSenha(s.portal_credentials) || prev.portal_credentials || { url: '', login: '' }
                                                                             }));
                                                                             setTitularSearchTerm('');
                                                                             setShowTitularDropdown(false);
@@ -2504,12 +2510,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPassword ? "text" : "password"}
-                                        value={tempCredentials?.password || ''}
-                                        onChange={e => setTempCredentials({
-                                            ...tempCredentials,
-                                            password: e.target.value
-                                        })}
-                                        placeholder="••••••••"
+                                        value={tempSenha}
+                                        onChange={e => setTempSenha(e.target.value)}
+                                        placeholder="Preencha só para trocar a senha"
                                         style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
                                     />
                                     <button
@@ -2540,14 +2543,20 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             if (!formData.titular_fatura_id) return;
                                             const { error } = await supabase
                                                 .from('subscribers')
-                                                .update({ portal_credentials: tempCredentials })
+                                                .update({ portal_credentials: semSenha(tempCredentials) })
                                                 .eq('id', formData.titular_fatura_id);
 
                                             if (error) throw error;
 
+                                            // A senha vai cifrada, por fora da linha.
+                                            if (tempSenha) {
+                                                await salvarSenhaPortal('subscribers', formData.titular_fatura_id, tempSenha);
+                                                setTempSenha('');
+                                            }
+
                                             setSubscribers(prev => prev.map(s => 
                                                 s.id === formData.titular_fatura_id 
-                                                    ? { ...s, portal_credentials: tempCredentials }
+                                                    ? { ...s, portal_credentials: semSenha(tempCredentials) }
                                                     : s
                                             ));
                                             showAlert('Credenciais do titular salvas com sucesso!', 'success');
@@ -2555,14 +2564,20 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             if (!formData.usina_id) return;
                                             const { error } = await supabase
                                                 .from('usinas')
-                                                .update({ portal_credentials: tempCredentials })
+                                                .update({ portal_credentials: semSenha(tempCredentials) })
                                                 .eq('id', formData.usina_id);
 
                                             if (error) throw error;
 
+                                            // A senha vai cifrada, por fora da linha.
+                                            if (tempSenha) {
+                                                await salvarSenhaPortal('usinas', formData.usina_id, tempSenha);
+                                                setTempSenha('');
+                                            }
+
                                             setUsinas(prev => prev.map(u => 
                                                 u.id === formData.usina_id 
-                                                    ? { ...u, portal_credentials: tempCredentials }
+                                                    ? { ...u, portal_credentials: semSenha(tempCredentials) }
                                                     : u
                                             ));
                                             showAlert('Credenciais da usina salvas com sucesso!', 'success');

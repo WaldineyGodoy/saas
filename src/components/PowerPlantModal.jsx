@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
 import { 
@@ -369,7 +369,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         dia_leitura: '',
         rateio_type: 'prioridade',
         grupo_tarifario: 'B1 Residencial',
-        portal_credentials: { url: '', login: '', password: '' },
+        portal_credentials: { url: '', login: '' },
         short_url: '',
         modalidade_gd: 'GD1'
     });
@@ -710,10 +710,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 dia_leitura: usina.dia_leitura || '',
                 rateio_type: usina.rateio_type || 'prioridade',
                 grupo_tarifario: usina.grupo_tarifario || 'B1 Residencial',
-                portal_credentials: usina.portal_credentials || { url: '', login: '', password: '' },
+                portal_credentials: semSenha(usina.portal_credentials) || { url: '', login: '' },
                 short_url: usina.short_url || '',
                 modalidade_gd: usina.modalidade_gd || (['gd1', 'gd2', 'gd3'].includes(usina.modalidade) ? usina.modalidade.toUpperCase() : 'GD1')
             });
+            setSenhaPortal('');
+            setTemSenhaGuardada(!!usina.portal_password_secret_id);
             fetchLinkedUCs(usina.id);
         }
     }, [usina?.id]);
@@ -733,6 +735,10 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     };
 
     const [loadingUCs, setLoadingUCs] = useState(false);
+    // Fora do formData: o formData volta do banco e é regravado inteiro, e a
+    // senha não pode fazer esse caminho. Vazia = manter a que está no Vault.
+    const [senhaPortal, setSenhaPortal] = useState('');
+    const [temSenhaGuardada, setTemSenhaGuardada] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [activeFinanceTab, setActiveFinanceTab] = useState('lancamentos');
     const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -2189,7 +2195,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 cnpj_cpf: formData.cnpj_cpf,
                 rateio_type: formData.rateio_type,
                 grupo_tarifario: formData.grupo_tarifario,
-                portal_credentials: formData.portal_credentials,
+                portal_credentials: semSenha(formData.portal_credentials),
                 short_url: formData.short_url || null,
                 address: {
                     cep: formData.cep,
@@ -2213,6 +2219,17 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 const { data, error } = await supabase.from('usinas').insert(payload).select().single();
                 if (error) operationError = error;
                 else if (data) usinaId = data.id;
+            }
+
+            // A senha vai por fora, cifrada. Campo em branco não mexe na atual.
+            if (!operationError && usinaId && senhaPortal) {
+                try {
+                    await salvarSenhaPortal('usinas', usinaId, senhaPortal);
+                    setSenhaPortal('');
+                    setTemSenhaGuardada(true);
+                } catch (senhaErr) {
+                    console.error('Falha ao guardar a senha do portal:', senhaErr.message);
+                }
             }
 
             if (operationError) throw operationError;
@@ -4050,12 +4067,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                                             <div style={{ position: 'relative' }}>
                                                 <input
                                                     type={showPassword ? "text" : "password"}
-                                                    value={formData.portal_credentials?.password || ''}
-                                                    onChange={e => setFormData({
-                                                        ...formData,
-                                                        portal_credentials: { ...formData.portal_credentials, password: e.target.value }
-                                                    })}
-                                                    placeholder="••••••••"
+                                                    value={senhaPortal}
+                                                    onChange={e => setSenhaPortal(e.target.value)}
+                                                    placeholder={temSenhaGuardada ? 'Senha guardada — preencha só para trocar' : 'Senha do portal da concessionária'}
                                                     style={{ width: '100%', padding: '0.8rem 1rem', paddingRight: '3rem', border: '1px solid #fed7aa', borderRadius: '10px', fontSize: '1rem', outline: 'none' }}
                                                 />
                                                 <button

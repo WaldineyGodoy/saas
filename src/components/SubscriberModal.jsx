@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
@@ -128,8 +128,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
         cidade: '',
         uf: '',
         originator_id: '',
-        portal_credentials: { url: '', login: '', password: '' }
+        portal_credentials: { url: '', login: '' }
     });
+
+    // A senha do portal vive fora do formData de proposito: o formData é
+    // carregado do banco e regravado inteiro, e a senha não pode fazer esse
+    // caminho de volta. Vazia significa "manter a que já está no Vault".
+    const [senhaPortal, setSenhaPortal] = useState('');
+    const [temSenhaGuardada, setTemSenhaGuardada] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
@@ -576,8 +582,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 cidade: subscriber.cidade || '',
                 uf: subscriber.uf || '',
                 originator_id: subscriber.originator_id || '',
-                portal_credentials: subscriber.portal_credentials || { url: '', login: '', password: '' }
+                portal_credentials: semSenha(subscriber.portal_credentials) || { url: '', login: '' }
             });
+            setSenhaPortal('');
+            setTemSenhaGuardada(!!subscriber.portal_password_secret_id);
             setSignatureLink(subscriber.signature_link || '');
             fetchConsumerUnits(subscriber.id);
             fetchConsolidatedInvoices(subscriber.id);
@@ -1794,7 +1802,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
                 billing_mode: billingMode,
                 consolidated_due_day: parseInt(consolidatedDueDay),
-                portal_credentials: formData.portal_credentials
+                portal_credentials: semSenha(formData.portal_credentials)
             };
             if (asaasId) dataToSave.asaas_customer_id = asaasId;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
@@ -1816,6 +1824,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             }
 
             if (result.error) throw result.error;
+
+            // A senha vai por fora, cifrada. Campo em branco não mexe na atual.
+            if (senhaPortal) {
+                try {
+                    await salvarSenhaPortal('subscribers', result.data.id, senhaPortal);
+                    setSenhaPortal('');
+                    setTemSenhaGuardada(true);
+                } catch (senhaErr) {
+                    showAlert('Cliente salvo, mas a senha do portal não foi guardada: ' + senhaErr.message, 'warning');
+                }
+            }
 
             if (asaasSyncSuccess) {
                 showAlert('Cliente salvo e sincronizado com Asaas!', 'success');
@@ -3573,12 +3592,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPassword ? "text" : "password"}
-                                        value={formData.portal_credentials?.password || ''}
-                                        onChange={e => setFormData({
-                                            ...formData,
-                                            portal_credentials: { ...formData.portal_credentials, password: e.target.value }
-                                        })}
-                                        placeholder="••••••••"
+                                        value={senhaPortal}
+                                        onChange={e => setSenhaPortal(e.target.value)}
+                                        placeholder={temSenhaGuardada ? 'Senha guardada — preencha só para trocar' : 'Senha do portal da concessionária'}
                                         style={{ width: '100%', padding: '0.7rem', paddingRight: '2.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
                                     />
                                     <button

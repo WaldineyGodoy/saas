@@ -1,6 +1,33 @@
 import { supabase } from './supabase';
 
 /**
+ * Senha de portal de concessionária.
+ *
+ * A senha nunca vai na linha da entidade: quem a guarda é o Vault, e a linha
+ * fica só com a referência ao segredo. Antes disso ela morava em texto puro
+ * dentro de portal_credentials, e a policy da tabela é "tudo liberado para
+ * usuário logado" — ou seja, qualquer pessoa com acesso ao CRM lia a senha
+ * de todos os titulares pela API.
+ *
+ * Só o service_role consegue LER de volta (é o robô que precisa dela). A tela
+ * escreve e nunca mais vê o valor. String vazia apaga a senha guardada.
+ */
+export const salvarSenhaPortal = async (entidade, id, senha) => {
+    const { error } = await supabase.rpc('fn_set_portal_password', {
+        p_entidade: entidade,
+        p_id: id,
+        p_senha: senha ?? '',
+    });
+    if (error) throw error;
+};
+
+/** Tira a senha do objeto de credenciais antes de gravar a linha. */
+export const semSenha = (credenciais) => {
+    const { password, ...resto } = credenciais || {};
+    return resto;
+};
+
+/**
  * Busca endereço pelo CEP usando VIACEP
  */
 export const fetchAddressByCep = async (cep) => {

@@ -292,7 +292,8 @@ async function run() {
         if (!titulares[subId]) {
             titulares[subId] = {
                 subscriber: effectiveSub,
-                credentials: effectiveSub?.portal_credentials,
+                subscriberId: subId,
+                credenciaisDaLinha: effectiveSub?.portal_credentials,
                 escopos: {}
             };
         }
@@ -333,13 +334,15 @@ async function run() {
         // Processa cada grupo (Titular)
         for (const subId in titulares) {
             const group = titulares[subId];
-            const { subscriber, credentials: creds, escopos } = group;
+            const { subscriber, escopos } = group;
             const escoposList = Object.keys(escopos);
 
             if (escoposList.length === 0) continue;
 
             const allUcsCount = Object.values(escopos).reduce((acc, curr) => acc + curr.length, 0);
             console.log(`\n=== Processando Assinante: ${subscriber.name} (${allUcsCount} UCs em ${escoposList.length} ${driver.rotuloEscopo.toLowerCase()}(s)) ===`);
+
+            const creds = await carregarCredenciais(group.subscriberId, group.credenciaisDaLinha);
 
             if (!creds?.login || !creds?.password) {
                 console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
@@ -478,6 +481,34 @@ async function run() {
     } catch (rpcErr) {
         console.error('Falha ao chamar RPC de lembretes:', rpcErr.message);
     }
+}
+
+/**
+ * Credenciais do portal para um titular de fatura.
+ *
+ * A senha não vive mais na linha do assinante: fica cifrada no Vault, e a
+ * única forma de lê-la é a RPC abaixo, com EXECUTE concedido só ao
+ * service_role. Qualquer usuário logado no CRM enxerga a linha inteira do
+ * assinante — era por ali que a senha vazava.
+ *
+ * O fallback no jsonb cobre o intervalo entre esta versão e a migração dos
+ * segredos; depois dela o campo `password` já não existe.
+ */
+async function carregarCredenciais(subscriberId, credenciaisDaLinha) {
+    if (!subscriberId) return credenciaisDaLinha || null;
+
+    const { data, error } = await supabase.rpc('fn_get_portal_credentials', {
+        p_entidade: 'subscribers',
+        p_id: subscriberId,
+    });
+
+    if (error) {
+        console.warn(`[Faturista] RPC de credenciais falhou (${error.message}); usando o campo antigo.`);
+    } else if (data && data.length > 0 && data[0].senha) {
+        return { login: data[0].login, password: data[0].senha };
+    }
+
+    return credenciaisDaLinha || null;
 }
 
 /** Grava a fatura do mês-alvo da UC. `ref` no formato MM/AAAA. */
