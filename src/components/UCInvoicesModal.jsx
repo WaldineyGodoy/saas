@@ -38,7 +38,9 @@ export default function UCInvoicesModal({ uc, onClose }) {
                 .from('invoices')
                 .select('*')
                 .eq('uc_id', uc.id)
-                .neq('status', 'cancelado') // Ocultar faturas canceladas
+                // Faturas canceladas continuam listadas: em UC geradora a fatura
+                // é cancelada de propósito (não há o que cobrar do assinante),
+                // mas a conta da concessionária na mesma linha segue devida.
                 .order('mes_referencia', { ascending: false });
 
             if (error) throw error;
@@ -76,6 +78,34 @@ export default function UCInvoicesModal({ uc, onClose }) {
                 borderRadius: '99px',
                 fontSize: '0.75rem',
                 fontWeight: 600
+            }}>
+                <Icon size={12} /> {s.label}
+            </span>
+        );
+    };
+
+    // Badge da CONTA DE ENERGIA (energy_bill_status) — a obrigação com a
+    // concessionária, que independe do status da fatura ao assinante.
+    const getEnergyBadge = (inv) => {
+        const raw = (inv.energy_bill_status || 'pendente').toLowerCase().trim();
+        const map = {
+            'pendente': { color: '#475569', bg: '#f1f5f9', label: 'Pendente', icon: Clock },
+            'processing': { color: '#1e40af', bg: '#eff6ff', label: 'Baixada', icon: FileText },
+            'baixada': { color: '#1e40af', bg: '#eff6ff', label: 'Baixada', icon: FileText },
+            'processada': { color: '#3730a3', bg: '#eef2ff', label: 'Processada', icon: FileText },
+            'a_vencer': { color: '#854d0e', bg: '#fef9c3', label: 'A Vencer', icon: Clock },
+            'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasada', icon: AlertCircle },
+            'atrasada': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasada', icon: AlertCircle },
+            'pago': { color: '#166534', bg: '#dcfce7', label: 'Paga', icon: CheckCircle },
+            'error': { color: '#991b1b', bg: '#fee2e2', label: 'Indisponível', icon: AlertCircle },
+        };
+        const s = map[raw] || map['pendente'];
+        const Icon = s.icon;
+        return (
+            <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                padding: '0.2rem 0.6rem', background: s.bg, color: s.color,
+                borderRadius: '99px', fontSize: '0.75rem', fontWeight: 600
             }}>
                 <Icon size={12} /> {s.label}
             </span>
@@ -121,9 +151,8 @@ export default function UCInvoicesModal({ uc, onClose }) {
                             <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
                                 <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
                                     <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Mês Ref.</th>
-                                    <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Vencimento</th>
-                                    <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Valor</th>
-                                    <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</th>
+                                    <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Fatura (assinante)</th>
+                                    <th style={{ textAlign: 'left', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Conta de energia (concessionária)</th>
                                     <th style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>Ações</th>
                                 </tr>
                             </thead>
@@ -133,14 +162,27 @@ export default function UCInvoicesModal({ uc, onClose }) {
                                         <td style={{ padding: '0.75rem', fontSize: '0.9rem', color: '#334155', textTransform: 'capitalize' }}>
                                             {formatMonth(inv.mes_referencia)}
                                         </td>
-                                        <td style={{ padding: '0.75rem', fontSize: '0.9rem', color: '#334155' }}>
-                                            {inv.vencimento ? new Date(inv.vencimento).toLocaleDateString('pt-BR') : '-'}
-                                        </td>
-                                        <td style={{ padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: '#1e293b' }}>
-                                            {formatCurrency(inv.valor_a_pagar)}
-                                        </td>
-                                        <td style={{ padding: '0.75rem' }}>
+                                        {/* Coluna FATURA: cobrança ao assinante. Esmaecida quando
+                                            cancelada, para não competir com a conta de energia. */}
+                                        <td style={{ padding: '0.75rem', opacity: ['cancelado', 'cancelada'].includes(inv.status) ? 0.55 : 1 }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b' }}>
+                                                {formatCurrency(inv.valor_a_pagar)}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.3rem' }}>
+                                                venc. {inv.vencimento ? new Date(inv.vencimento).toLocaleDateString('pt-BR') : '-'}
+                                            </div>
                                             {getStatusBadge(inv.status)}
+                                        </td>
+                                        {/* Coluna CONTA DE ENERGIA: obrigação com a concessionária.
+                                            Sobrevive ao cancelamento da fatura. */}
+                                        <td style={{ padding: '0.75rem' }}>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b' }}>
+                                                {formatCurrency(inv.valor_concessionaria)}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.3rem' }}>
+                                                venc. {inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                                            </div>
+                                            {getEnergyBadge(inv)}
                                         </td>
                                         <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                                             <button

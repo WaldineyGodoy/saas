@@ -910,7 +910,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
                 const [energyRes, faturamentoRes, prodRes] = await Promise.all([
                     supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                    supabase.from('invoices').select('valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
+                    supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
                     supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
                 ]);
 
@@ -921,11 +921,21 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
                 totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
 
+                // A conta da UG já entra no fechamento como serviço 'Energia'
+                // (ugInvoiceValue, abaixo). Somá-la também em custo_disponibilidade
+                // contaria a mesma despesa duas vezes em fn_totais_fechamento, que
+                // faz custo_disponibilidade + manutencao + arrendamento + servicos.
+                const geradoraIds = new Set(
+                    selectedUCs.filter(u => u.tipo_unidade === 'geradora').map(u => u.id)
+                );
+
                 if (faturamentoRes.data) {
                     faturamentoRes.data.forEach(inv => {
                         const val = Number(inv.valor_a_pagar) || 0;
                         const concessionariaVal = Number(inv.valor_concessionaria) || 0;
-                        totalContasEnergia += concessionariaVal;
+                        if (!geradoraIds.has(inv.uc_id)) {
+                            totalContasEnergia += concessionariaVal;
+                        }
 
                         if (inv.status === 'pago') {
                             faturamentoPago += val;
@@ -972,11 +982,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             let ugInvoiceValue = 0;
             if (ugId) {
                 try {
+                    // Sem filtro de status: a fatura da UG é cancelada de propósito
+                    // (não se cobra do assinante), mas é dela que saem a energia
+                    // injetada e a conta a pagar à concessionária.
                     const { data: ugInvoice } = await supabase
                         .from('invoices')
                         .select('energia_injetada, valor_concessionaria')
                         .eq('uc_id', ugId)
                         .eq('mes_referencia', firstDay)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
                         .maybeSingle();
                     
                     if (ugInvoice?.energia_injetada) {

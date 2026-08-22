@@ -266,7 +266,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const filteredInvoices = invoices.filter(inv => {
-        if (['cancelado', 'cancelada'].includes(inv.status)) return false;
+        // Fatura e conta de energia são obrigações distintas que dividem a mesma
+        // linha: `status`/`valor_a_pagar` é a cobrança ao assinante, e
+        // `energy_bill_status`/`valor_concessionaria` é o que se deve à
+        // concessionária. Cancelar a cobrança não extingue a conta a pagar —
+        // por isso o descarte de canceladas vale só na aba Faturas.
+        if (activeTab === 'faturas' && ['cancelado', 'cancelada'].includes(inv.status)) return false;
         if (inv.parent_invoice_id) {
             if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
                 return false;
@@ -535,7 +540,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
     // Faturas/Contas list that ignores status filter for calculating totals dynamically
     const invoicesForTotals = invoices.filter(inv => {
-        if (['cancelado', 'cancelada'].includes(inv.status)) return false;
+        // Mesmo critério de filteredInvoices: na aba Contas de Energia a fatura
+        // cancelada continua contando, porque o valor devido à concessionária
+        // permanece devido.
+        if (activeTab === 'faturas' && ['cancelado', 'cancelada'].includes(inv.status)) return false;
         if (inv.parent_invoice_id) {
             if (!(activeTab === 'contas_energia' && viewMode === 'energy_list')) {
                 return false;
@@ -595,6 +603,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         titular_conta,
                         concessionaria,
                         modalidade,
+                        tipo_unidade,
                         status,
                         dia_vencimento,
                         tarifa_concessionaria,
@@ -675,6 +684,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const handleEmission = async (inv) => {
+        // Unidade geradora não gera cobrança ao assinante: a conta dela é despesa
+        // da usina, abatida no fechamento. Emitir boleto aqui seria cobrança indevida.
+        if (inv.consumer_units?.tipo_unidade === 'geradora') {
+            showAlert('Esta é uma Unidade Geradora: a conta dela é despesa da usina, não cobrança ao assinante. Boleto não emitido.', 'warning');
+            return;
+        }
         const confirm = await showConfirm(`Gerar boleto Asaas para a fatura de ${inv.consumer_units?.titular_conta}?`);
         if (!confirm) return;
         setGeneratingId(inv.id);
