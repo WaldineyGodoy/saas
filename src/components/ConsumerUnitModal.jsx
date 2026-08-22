@@ -154,6 +154,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         titular_fatura_id: '',
         cpf_cnpj_fatura: '',
         tipo_unidade: 'beneficiaria',
+        fatura_consumo_terceiro: false,
         dia_leitura: 1,
         modalidade: 'geracao_compartilhada',
         concessionaria: '',
@@ -343,6 +344,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 titular_fatura_id: consumerUnit.titular_fatura_id || '',
                 cpf_cnpj_fatura: consumerUnit.cpf_cnpj_fatura || '',
                 tipo_unidade: consumerUnit.tipo_unidade || 'beneficiaria',
+                fatura_consumo_terceiro: consumerUnit.fatura_consumo_terceiro || false,
                 dia_leitura: consumerUnit.dia_leitura || 1,
                 modalidade: consumerUnit.modalidade || 'geracao_compartilhada',
                 concessionaria: consumerUnit.concessionaria || '',
@@ -561,6 +563,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 titular_fatura_id: formData.titular_fatura_id || null,
                 cpf_cnpj_fatura: formData.cpf_cnpj_fatura,
                 tipo_unidade: formData.tipo_unidade,
+                // O CHECK no banco só aceita true em unidade geradora; trocar o
+                // tipo para beneficiária sem zerar aqui derrubaria o save.
+                fatura_consumo_terceiro: formData.tipo_unidade === 'geradora'
+                    ? !!formData.fatura_consumo_terceiro
+                    : false,
                 dia_leitura: Number(formData.dia_leitura),
                 modalidade: formData.modalidade,
                 concessionaria: formData.concessionaria,
@@ -587,6 +594,12 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             };
 
             if (!payload.subscriber_id && !payload.supplier_id) throw new Error('Assinante ou Fornecedor é obrigatório.');
+            // Sem assinante não há a quem cobrar: o flag ligaria o faturamento e
+            // a conta ficaria sem destinatário, saindo das despesas da usina sem
+            // entrar em lugar nenhum.
+            if (payload.fatura_consumo_terceiro && !payload.subscriber_id) {
+                throw new Error('Para faturar consumo de terceiro é preciso vincular o assinante que será cobrado.');
+            }
 
             let result;
             if (consumerUnit?.id) {
@@ -1970,6 +1983,26 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             >
                                                 {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                             </select>
+                                            {/* Telhado arrendado: a UC geradora mede a injeção da usina,
+                                                mas quem consome nela é o dono do telhado. Nesse caso a
+                                                conta da concessionária é cobrada dele, não abatida da usina. */}
+                                            {formData.tipo_unidade === 'geradora' && (
+                                                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginTop: '0.6rem', cursor: 'pointer' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!formData.fatura_consumo_terceiro}
+                                                        onChange={e => setFormData({ ...formData, fatura_consumo_terceiro: e.target.checked })}
+                                                        style={{ marginTop: '0.2rem', cursor: 'pointer' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.35 }}>
+                                                        <strong>Fatura consumo de terceiro</strong> (telhado arrendado)
+                                                        <br />
+                                                        <span style={{ color: '#94a3b8' }}>
+                                                            A conta da concessionária é cobrada do assinante vinculado, não abatida das despesas da usina. Exige assinante.
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            )}
                                         </div>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
