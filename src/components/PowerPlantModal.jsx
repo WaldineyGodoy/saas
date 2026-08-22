@@ -221,7 +221,12 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
                         textTransform: 'uppercase',
                         letterSpacing: '0.02em'
                     }}>
-                        {uc.tipo_unidade || 'Beneficiária'}
+                        {/* UG de telhado arrendado se comporta como geradora na
+                            geração e como beneficiária no faturamento — quem olha
+                            a lista precisa distinguir as duas. */}
+                        {isGeradora && uc.fatura_consumo_terceiro
+                            ? 'Geradora + consumo de terceiro'
+                            : (uc.tipo_unidade || 'Beneficiária')}
                     </span>
                     <span style={{ 
                         fontSize: '0.65rem', 
@@ -925,8 +930,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 // (ugInvoiceValue, abaixo). Somá-la também em custo_disponibilidade
                 // contaria a mesma despesa duas vezes em fn_totais_fechamento, que
                 // faz custo_disponibilidade + manutencao + arrendamento + servicos.
+                // A UG de telhado arrendado é exceção: quem paga a conta dela é o
+                // terceiro que consome, então ela entra em custo_disponibilidade
+                // como qualquer beneficiária e NÃO vira despesa da usina.
                 const geradoraIds = new Set(
-                    selectedUCs.filter(u => u.tipo_unidade === 'geradora').map(u => u.id)
+                    selectedUCs
+                        .filter(u => u.tipo_unidade === 'geradora' && !u.fatura_consumo_terceiro)
+                        .map(u => u.id)
                 );
 
                 if (faturamentoRes.data) {
@@ -998,7 +1008,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         injectedEnergy = Number(ugInvoice.energia_injetada);
                         console.log(`Energia injetada encontrada para a UG (${formData.unidade_geradora}):`, injectedEnergy);
                     }
-                    if (ugInvoice?.valor_concessionaria) {
+                    // A energia injetada vem da UG em qualquer caso — é a leitura do
+                    // medidor. Já o VALOR só é despesa da usina quando a UG não
+                    // abriga consumo de terceiro; em telhado arrendado a conta é
+                    // cobrada de quem consumiu.
+                    const ugFaturaTerceiro = !!(selectedUCs.find(u => u.id === ugId)
+                        || availableUCs.find(u => u.id === ugId))?.fatura_consumo_terceiro;
+
+                    if (ugInvoice?.valor_concessionaria && !ugFaturaTerceiro) {
                         ugInvoiceValue = Number(ugInvoice.valor_concessionaria);
                         console.log(`Valor da fatura (Energia) encontrado para a UG (${formData.unidade_geradora}):`, ugInvoiceValue);
                     }

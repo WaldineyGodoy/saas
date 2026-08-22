@@ -604,6 +604,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         concessionaria,
                         modalidade,
                         tipo_unidade,
+                        fatura_consumo_terceiro,
                         status,
                         dia_vencimento,
                         tarifa_concessionaria,
@@ -686,7 +687,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     const handleEmission = async (inv) => {
         // Unidade geradora não gera cobrança ao assinante: a conta dela é despesa
         // da usina, abatida no fechamento. Emitir boleto aqui seria cobrança indevida.
-        if (inv.consumer_units?.tipo_unidade === 'geradora') {
+        // Exceção: UG de telhado arrendado, onde quem consome é um terceiro e a
+        // conta é dele (fatura_consumo_terceiro).
+        if (inv.consumer_units?.tipo_unidade === 'geradora'
+            && !inv.consumer_units?.fatura_consumo_terceiro) {
             showAlert('Esta é uma Unidade Geradora: a conta dela é despesa da usina, não cobrança ao assinante. Boleto não emitido.', 'warning');
             return;
         }
