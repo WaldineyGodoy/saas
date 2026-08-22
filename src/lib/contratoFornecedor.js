@@ -27,6 +27,10 @@ export const DEFAULTS_FORNECEDOR = {
     diaCorte: 5,
     diaRepasse: 15,
     taxaRecuperacao: 8,
+    // Prazos pós-rescisão da Cláusula 13.2. Eram texto fixo; viraram campo
+    // porque entram em negociação contrato a contrato.
+    prazoTransferencia: 90,
+    prazoHonorarios: 180,
     foro: 'Caraí/MG'
 };
 
@@ -72,6 +76,8 @@ export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) 
     const recuperacao = numero(p.taxaRecuperacao, DEFAULTS_FORNECEDOR.taxaRecuperacao);
     const diaCorte = numero(p.diaCorte, DEFAULTS_FORNECEDOR.diaCorte);
     const diaRepasse = numero(p.diaRepasse, DEFAULTS_FORNECEDOR.diaRepasse);
+    const prazoTransferencia = numero(p.prazoTransferencia, DEFAULTS_FORNECEDOR.prazoTransferencia);
+    const prazoHonorarios = numero(p.prazoHonorarios, DEFAULTS_FORNECEDOR.prazoHonorarios);
 
     const a = supplier?.address || {};
     const cidadeUf = `${a.municipio || a.cidade || 'Natal'}/${a.uf || 'RN'}`;
@@ -184,8 +190,8 @@ Alteração legal ou regulatória que modifique de forma relevante a economicida
 
 CLÁUSULA 13 – DO PRAZO E DA RESCISÃO
 13.1. O presente Contrato vige por prazo indeterminado, sem multa rescisória para qualquer das Partes, bastando comunicado com 30 (trinta) dias de antecedência.
-13.2. Comunicada a rescisão, a GESTORA reserva-se o direito de: (a) dispor de até 90 (noventa) dias para a transferência dos CONSUMIDORES vinculados à central geradora; (b) receber os honorários referentes à energia compensada no período anterior à data da rescisão, em até 180 (cento e oitenta) dias.
-13.3. Durante os 90 (noventa) dias de transição permanecem integralmente vigentes as obrigações de faturamento, cobrança, repasse e remuneração previstas neste Contrato.
+13.2. Comunicada a rescisão, a GESTORA reserva-se o direito de: (a) dispor de até ${prazoTransferencia} (${percentualExtenso(prazoTransferencia)}) dias para a transferência dos CONSUMIDORES vinculados à central geradora; (b) receber os honorários referentes à energia compensada no período anterior à data da rescisão, em até ${prazoHonorarios} (${percentualExtenso(prazoHonorarios)}) dias.
+13.3. Durante os ${prazoTransferencia} (${percentualExtenso(prazoTransferencia)}) dias de transição permanecem integralmente vigentes as obrigações de faturamento, cobrança, repasse e remuneração previstas neste Contrato.
 13.4. Encerrado o Contrato, os créditos de energia eventualmente gerados e ainda não compensados permanecem de titularidade do CONTRATANTE, que poderá alocá-los livremente a partir do encerramento do período de transição. A GESTORA prestará as informações e providências junto à distribuidora necessárias ao remanejamento do rateio, não lhe cabendo qualquer obrigação de aquisição, indenização ou pagamento pelos créditos não compensados.
 
 CLÁUSULA 14 – DA ASSINATURA ELETRÔNICA

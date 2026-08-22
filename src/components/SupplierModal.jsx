@@ -46,7 +46,9 @@ const CAMPOS_CONDICOES = [
     { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
     { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
     { key: 'diaCorte', label: 'Dia de corte' },
-    { key: 'diaRepasse', label: 'Dia do repasse' }
+    { key: 'diaRepasse', label: 'Dia do repasse' },
+    { key: 'prazoTransferencia', label: 'Prazo de transferência (dias)' },
+    { key: 'prazoHonorarios', label: 'Prazo de honorários (dias)' }
 ];
 
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {

@@ -18,18 +18,35 @@ const UNIDADES = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 
 const DEZ_A_DEZENOVE = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
 const DEZENAS = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
 
+const CENTENAS = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos',
+    'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+
 /**
- * Escreve um inteiro de 0 a 100 por extenso.
+ * Escreve um inteiro de 0 a 999 por extenso.
  *
- * O contrato precisa do percentual em algarismo e por extenso — quando os
+ * O contrato precisa do número em algarismo e por extenso — quando os
  * dois divergem, prevalece o extenso (art. 12 da Lei do Cheque por
  * analogia, e é o que a jurisprudência aplica a contratos). Gerar o
  * extenso a partir do mesmo número elimina a divergência na origem.
+ *
+ * Ia só até 100, o que bastava para percentuais. Os prazos da Cláusula 13
+ * passam disso: 180 caía em DEZENAS[18] e o contrato sairia com
+ * "180 (undefined) dias".
  */
 export const porExtenso = (n) => {
     const v = Math.round(Number(n) || 0);
     if (v <= 0) return 'zero';
     if (v === 100) return 'cem';
+
+    if (v > 100) {
+        const c = Math.floor(v / 100);
+        const resto = v % 100;
+        if (c >= 1 && c <= 9) {
+            return resto === 0 ? CENTENAS[c] : `${CENTENAS[c]} e ${porExtenso(resto)}`;
+        }
+        return String(v);
+    }
+
     if (v < 10) return UNIDADES[v];
     if (v < 20) return DEZ_A_DEZENOVE[v - 10];
     const d = Math.floor(v / 10);
