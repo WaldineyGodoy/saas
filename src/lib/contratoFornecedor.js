@@ -79,6 +79,17 @@ export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) 
     const prazoTransferencia = numero(p.prazoTransferencia, DEFAULTS_FORNECEDOR.prazoTransferencia);
     const prazoHonorarios = numero(p.prazoHonorarios, DEFAULTS_FORNECEDOR.prazoHonorarios);
 
+    // A Cláusula 7.2.1 afirma que a fatura recuperada rende mais ao
+    // CONTRATANTE do que a paga em dia. Isso é verdade enquanto o desconto
+    // perdido pelo consumidor superar a taxa de recuperação, líquida da
+    // recorrente — com 20% e 10% sobra folga, mas num desconto de 5% a
+    // frase viraria uma declaração falsa dentro do contrato. Por isso é
+    // calculada, não escrita à mão.
+    const recuperadaRendeMais = desconto * (1 - recorrente / 100) >= recuperacao;
+    const comparativoRecuperacao = recuperadaRendeMais
+        ? ' Cumulada com a Remuneração Recorrente, o CONTRATANTE ainda assim recebe, na fatura recuperada, montante superior ao que receberia caso a mesma fatura tivesse sido paga pontualmente.'
+        : '';
+
     const a = supplier?.address || {};
     const cidadeUf = `${a.municipio || a.cidade || 'Natal'}/${a.uf || 'RN'}`;
     const distribuidora = usinas[0]?.concessionaria || 'a distribuidora local';
@@ -150,6 +161,7 @@ CLÁUSULA 6 – DO RISCO DE INADIMPLÊNCIA
 CLÁUSULA 7 – DA COBRANÇA E DA TAXA DE RECUPERAÇÃO DE CRÉDITO
 7.1. A GESTORA executará, como obrigação de meio, a cobrança administrativa e extrajudicial dos CONSUMIDORES inadimplentes, compreendida no escopo da Taxa de Administração, observada a seguinte régua mínima, contada do vencimento: D+1, aviso automático com 2ª via; D+5, novo aviso com boleto atualizado; D+15, contato ativo e oferta de acordo; D+30, notificação formal e pedido de exclusão do rateio; D+45, negativação e protesto, mediante autorização; D+60, rescisão e medidas judiciais.
 7.2. Taxa de Recuperação de Crédito. Sobre todo valor principal recuperado de CONSUMIDOR cuja fatura tenha sido paga após 30 (trinta) dias do vencimento, a GESTORA fará jus a Taxa de Recuperação de Crédito de ${numeroBr(recuperacao)}% (${percentualExtenso(recuperacao)} por cento), retida do repasse, cumulável com a Remuneração Recorrente.
+7.2.1. A Taxa de Recuperação de Crédito não onera o CONTRATANTE: incide sobre o valor cheio recebido em razão da perda, pelo CONSUMIDOR, do desconto por pagamento pontual previsto no Termo de Adesão, e não sobre a remuneração devida ao CONTRATANTE.${comparativoRecuperacao}
 7.3. A Taxa de Recuperação de Crédito incide exclusivamente sobre valores efetivamente recuperados, não gerando crédito da GESTORA contra o CONTRATANTE em caso de não recuperação.
 7.4. Encargos moratórios. A multa moratória de 2% (dois por cento), os juros de 1% (um por cento) ao mês e a correção monetária cobrados dos CONSUMIDORES são, uma vez recebidos, repassados integralmente ao CONTRATANTE.
 7.5. Diferencial de desconto. Perdido pelo CONSUMIDOR o desconto por pagamento pontual previsto no Termo de Adesão, a diferença entre o valor cheio e o valor com desconto, quando efetivamente recebida, é repassada integralmente ao CONTRATANTE, sobre ela incidindo a Remuneração Recorrente.
