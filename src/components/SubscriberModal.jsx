@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, shortenLink, cancelAsaasCharge } from '../lib/api';
+import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
@@ -73,6 +73,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [contractFile, setContractFile] = useState(null);
     const [signatureLink, setSignatureLink] = useState('');
     const [contractDraft, setContractDraft] = useState('');
+    const [cancelingSignature, setCancelingSignature] = useState(null);
 
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
@@ -281,6 +282,53 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             setIsCreatingContract(false);
         }
     };
+
+    /**
+     * Cancela o contrato na Autentique e marca a assinatura como cancelada.
+     *
+     * Mesmo motivo do lado do fornecedor: contrato pendente que ninguém vai
+     * assinar ficava "aguardando assinatura" para sempre no histórico do
+     * cliente, com o documento ainda assinável na Autentique.
+     */
+    const handleCancelContract = async (sig) => {
+        const ok = await showConfirm(
+            'Cancelar este contrato na Autentique? O link de assinatura deixa de valer e o documento é removido de lá. Não dá para desfazer.',
+            'Cancelar contrato'
+        );
+        if (!ok) return;
+
+        setCancelingSignature(sig.id);
+        try {
+            const res = await cancelAutentiqueDocument(sig.id);
+            if (res?.error) throw new Error(res.error);
+
+            showAlert(res?.jaCancelado ? 'Este contrato já estava cancelado.' : 'Contrato cancelado.', 'success');
+            if (sig.short_url === signatureLink || sig.autentique_url === signatureLink) setSignatureLink('');
+            fetchSignatures(subscriber.id);
+        } catch (error) {
+            showAlert('Erro ao cancelar contrato: ' + error.message, 'error');
+        } finally {
+            setCancelingSignature(null);
+        }
+    };
+
+    /**
+     * Texto que os dados do assinante produzem agora, para comparar com o
+     * rascunho na tela.
+     *
+     * Mesma armadilha do modal do fornecedor: o rascunho editado à mão vence
+     * o gerado, e sem aviso isso se parece com "o cadastro não atualizou".
+     */
+    const textoGeradoAssinante = useMemo(() => montarTextoContrato(
+        subscriber,
+        consumerUnits[0]?.concessionaria,
+        {
+            desconto: consumerUnits[0]?.desconto_assinante,
+            diaVencimento: consumerUnits[0]?.dia_vencimento ?? subscriber?.consolidated_due_day
+        }
+    ), [subscriber, consumerUnits]);
+
+    const minutaEditada = contractDraft !== '' && contractDraft !== textoGeradoAssinante;
 
     const handleResendContractLink = async (sig) => {
         const confirm = await showConfirm('Deseja reenviar os links de assinatura para o cliente?', 'Reenviar Links');
@@ -2957,9 +3005,30 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
 
                                     <div style={{ marginBottom: '1.5rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>
-                                            Minuta do Contrato (Para conferência)
-                                        </label>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 600, color: '#475569', flexWrap: 'wrap' }}>
+                                                Minuta do Contrato (Para conferência)
+                                                {minutaEditada && (
+                                                    <span style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                                        padding: '0.2rem 0.6rem', borderRadius: '999px',
+                                                        background: '#fffbeb', border: '1px solid #fde68a',
+                                                        color: '#92400e', fontSize: '0.72rem', fontWeight: 700
+                                                    }}>
+                                                        <AlertCircle size={13} /> editada à mão — não acompanha o cadastro
+                                                    </span>
+                                                )}
+                                            </label>
+                                            {minutaEditada && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setContractDraft(textoGeradoAssinante)}
+                                                    style={{ padding: '0.45rem 0.8rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}
+                                                >
+                                                    Descartar edições
+                                                </button>
+                                            )}
+                                        </div>
                                         <textarea
                                             value={contractDraft}
                                             onChange={(e) => setContractDraft(e.target.value)}
@@ -3155,6 +3224,27 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                         >
                                                             <RefreshCw size={18} />
                                                         </button>
+                                                        {sig.status === 'pending' && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={cancelingSignature === sig.id}
+                                                                onClick={() => handleCancelContract(sig)}
+                                                                title="Cancelar na Autentique e invalidar o link"
+                                                                style={{
+                                                                    padding: '0.6rem',
+                                                                    borderRadius: '8px',
+                                                                    border: '1px solid #fecaca',
+                                                                    background: '#fef2f2',
+                                                                    color: '#b91c1c',
+                                                                    cursor: cancelingSignature === sig.id ? 'not-allowed' : 'pointer',
+                                                                    transition: 'all 0.2s'
+                                                                }}
+                                                            >
+                                                                {cancelingSignature === sig.id
+                                                                    ? <Loader2 size={18} className="spin-animation" />
+                                                                    : <Ban size={18} />}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}

@@ -3,12 +3,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
 import { useBranding } from '../contexts/BrandingContext';
-import { fetchCpfCnpjData, fetchAddressByCep, createAutentiqueDocument, shortenLink, sendWhatsapp } from '../lib/api';
+import { fetchCpfCnpjData, fetchAddressByCep, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, sendWhatsapp } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import {
     History, User, MapPin, Wallet, X, Save, Trash2,
     CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
-    FileSignature, Loader2, Send, ExternalLink, Clock
+    FileSignature, Loader2, Send, ExternalLink, Clock, Ban
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
@@ -106,6 +106,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     // Rascunho editável: o texto gerado pode ser ajustado antes de subir.
     // Sem isso, corrigir uma vírgula exigia alterar o código e publicar.
     const [contractDraft, setContractDraft] = useState('');
+    const [cancelingSignature, setCancelingSignature] = useState(null);
     const extratoPrintRef = useRef(null);
 
     const [formData, setFormData] = useState({
@@ -405,6 +406,35 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             } catch (emailErr) {
                 console.error('Erro ao enviar E-mail:', emailErr);
             }
+        }
+    };
+
+    /**
+     * Cancela o contrato na Autentique e marca a assinatura como cancelada.
+     *
+     * O contrato pendente que ninguém vai assinar — enviado por engano, ou
+     * com link quebrado — ficava "aguardando assinatura" para sempre, e o
+     * documento seguia vivo do lado da Autentique.
+     */
+    const handleCancelContract = async (sig) => {
+        const ok = await showConfirm(
+            'Cancelar este contrato na Autentique? O link de assinatura deixa de valer e o documento é removido de lá. Não dá para desfazer.',
+            'Cancelar contrato'
+        );
+        if (!ok) return;
+
+        setCancelingSignature(sig.id);
+        try {
+            const res = await cancelAutentiqueDocument(sig.id);
+            if (res?.error) throw new Error(res.error);
+
+            showAlert(res?.jaCancelado ? 'Este contrato já estava cancelado.' : 'Contrato cancelado.', 'success');
+            if (sig.short_url === signatureLink || sig.autentique_url === signatureLink) setSignatureLink('');
+            fetchSignatures(supplier.id);
+        } catch (error) {
+            showAlert('Erro ao cancelar contrato: ' + error.message, 'error');
+        } finally {
+            setCancelingSignature(null);
         }
     };
 
@@ -2465,6 +2495,19 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                                             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                                                                         >
                                                                             <Send size={14} /> Reenviar
+                                                                        </button>
+                                                                    )}
+                                                                    {sig.status === 'pending' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={cancelingSignature === sig.id}
+                                                                            onClick={() => handleCancelContract(sig)}
+                                                                            title="Cancela na Autentique e invalida o link"
+                                                                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #fecaca', borderRadius: '10px', background: '#fef2f2', color: '#b91c1c', cursor: cancelingSignature === sig.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                                                        >
+                                                                            {cancelingSignature === sig.id
+                                                                                ? <><Loader2 size={14} className="spin-animation" /> Cancelando…</>
+                                                                                : <><Ban size={14} /> Cancelar</>}
                                                                         </button>
                                                                     )}
                                                                 </div>

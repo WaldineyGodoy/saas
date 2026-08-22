@@ -166,6 +166,14 @@ export const createAutentiqueDocument = async (payload) => {
     return callFunction('create-autentique-document', payload);
 };
 
+/**
+ * Cancela um contrato pendente na Autentique e marca a assinatura como
+ * cancelada. Exige admin — a função recusa a chave anônima.
+ */
+export const cancelAutentiqueDocument = async (signatureId) => {
+    return callFunction('cancel-autentique-document', { signatureId });
+};
+
 export const shortenLink = async (url, keyword = null, title = null) => {
     return callFunction('yourls-shorten', { url, keyword, title });
 };
