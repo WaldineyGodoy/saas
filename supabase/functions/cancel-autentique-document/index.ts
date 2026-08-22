@@ -133,11 +133,30 @@ serve(async (req) => {
                 : null;
 
         if (tabela) {
-            await supabaseAdmin
-                .from(tabela)
-                .update({ signature_link: null })
-                .eq('id', assinatura.signer_id)
-                .in('signature_link', [assinatura.short_url, assinatura.autentique_url].filter(Boolean));
+            // Limpa o atalho quando não sobra nenhum contrato pendente.
+            //
+            // Antes isto comparava `signature_link` com o short_url/autentique_url
+            // da assinatura — e nunca casava: no envio inicial o short_url fica
+            // nulo (só o reenvio o preenche) e o `signature_link` guarda o link
+            // do YOURLS. Resultado: cancelava o contrato e deixava no cadastro
+            // um link para documento apagado.
+            //
+            // "Não há pendente" é o critério certo de qualquer forma: o
+            // signature_link é o link que o cliente deve usar, e sem contrato
+            // pendente não existe link para usar.
+            const { count: pendentes } = await supabaseAdmin
+                .from('signatures')
+                .select('id', { count: 'exact', head: true })
+                .eq('signer_id', assinatura.signer_id)
+                .eq('signer_type', assinatura.signer_type)
+                .eq('status', 'pending');
+
+            if (!pendentes) {
+                await supabaseAdmin
+                    .from(tabela)
+                    .update({ signature_link: null })
+                    .eq('id', assinatura.signer_id);
+            }
 
             await supabaseAdmin.from('crm_history').insert({
                 entity_type: assinatura.signer_type,

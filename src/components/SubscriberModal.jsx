@@ -242,6 +242,14 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 .update({ signature_link: finalLink })
                 .eq('id', subscriber.id);
 
+            // O link curto também vai para a própria assinatura. Sem isto o
+            // short_url só era preenchido no reenvio, e nada ligava o registro
+            // ao link que o cliente recebeu.
+            await supabase
+                .from('signatures')
+                .update({ short_url: finalLink })
+                .eq('autentique_doc_id', result.documentId);
+
             setSignatureLink(finalLink);
 
             // 6. Send Notifications

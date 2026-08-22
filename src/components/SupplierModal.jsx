@@ -349,6 +349,14 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .from('suppliers')
                 .update({ signature_link: finalLink, contract_terms: condicoesParaGravar() })
                 .eq('id', supplier.id);
+
+            // O link curto também vai para a própria assinatura. Sem isto o
+            // short_url só era preenchido no reenvio, e nada ligava o registro
+            // ao link que o cliente recebeu.
+            await supabase
+                .from('signatures')
+                .update({ short_url: finalLink })
+                .eq('autentique_doc_id', result.documentId);
             setSignatureLink(finalLink);
 
             await enviarLinkContrato(finalLink);
