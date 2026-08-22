@@ -375,10 +375,39 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 .eq('id', sigId);
 
             if (error) throw error;
-            
-            showAlert('Status do contrato atualizado!', 'success');
+
+            // Espelha o autentique-webhook: contrato assinado promove o
+            // assinante. Este dropdown existe porque nem toda assinatura passa
+            // pela Autentique (gov.br, papel) — e, sem isto, o contrato ficava
+            // como assinado enquanto o assinante seguia parado em Ativação.
+            //
+            // Só avança quem está em 'ativacao': um assinante já 'ativo' não
+            // pode regredir. Recusa e cancelamento não mexem no status do
+            // assinante — o que fazer com um contrato recusado é decisão de
+            // gente, igual à regra do webhook.
+            let promovido = false;
+            if (newStatus === 'signed' && subscriber?.id) {
+                const { data: promovidos, error: promErr } = await supabase
+                    .from('subscribers')
+                    .update({ status: 'contrato_assinado' })
+                    .eq('id', subscriber.id)
+                    .eq('status', 'ativacao')
+                    .select('id');
+
+                if (promErr) throw promErr;
+
+                promovido = (promovidos?.length || 0) > 0;
+                if (promovido) setFormData(prev => ({ ...prev, status: 'contrato_assinado' }));
+            }
+
+            showAlert(
+                promovido
+                    ? 'Contrato marcado como assinado. Assinante promovido para "Contrato Assinado".'
+                    : 'Status do contrato atualizado!',
+                'success'
+            );
             fetchSignatures(subscriber.id);
-            addHistory('subscriber', subscriber.id, 'status_contrato_manual', { signature_id: sigId, status: newStatus });
+            addHistory('subscriber', subscriber.id, 'status_contrato_manual', { signature_id: sigId, status: newStatus, assinante_promovido: promovido });
         } catch (error) {
             console.error('Error updating signature status:', error);
             showAlert('Erro ao atualizar status: ' + error.message, 'error');
