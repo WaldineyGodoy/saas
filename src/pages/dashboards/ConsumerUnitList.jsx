@@ -76,6 +76,11 @@ function KanbanCard({ uc, onClick, isOverlay }) {
             <div style={{ fontSize: '0.9rem', color: 'var(--color-text-medium)', marginBottom: '0.2rem' }}>
                 {uc.subscriber?.name || 'Sem Assinante'}
             </div>
+            {uc.titular_fatura?.name && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginBottom: '0.2rem' }}>
+                    Titular Fatura: {uc.titular_fatura.name}
+                </div>
+            )}
             {uc.titular_conta && (
                 <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginBottom: '0.5rem', fontStyle: 'italic' }}>
                     Identificação: {uc.titular_conta}
