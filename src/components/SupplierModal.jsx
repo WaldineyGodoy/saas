@@ -233,6 +233,15 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const textoContratoAtual = () => contractDraft || textoGerado;
 
     /**
+     * A minuta na tela não é mais a que os campos produzem.
+     *
+     * Só acontece quando alguém digita no textarea: trocar uma condição
+     * limpa o rascunho. Mas, enquanto durar, a minuta ignora os campos — e
+     * sem aviso isso se parece exatamente com "o campo não salvou".
+     */
+    const minutaEditada = contractDraft !== '' && contractDraft !== textoGerado;
+
+    /**
      * Condições no formato que vai para o banco.
      *
      * Os campos são texto para aceitar a vírgula, então "17,5" precisa virar
@@ -2331,10 +2340,35 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
 
                                         <div style={sectionStyle}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', flexWrap: 'wrap' }}>
                                                     <Zap size={20} color="#3b82f6" /> Minuta
+                                                    {/*
+                                                      O rascunho editado à mão vence o texto gerado, e isso era
+                                                      invisível: dava para trocar uma condição, ver a minuta não
+                                                      mudar e concluir que o campo não salvou. Agora a tela diz
+                                                      qual dos dois está à frente, e oferece a saída.
+                                                    */}
+                                                    {minutaEditada && (
+                                                        <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                                            padding: '0.2rem 0.6rem', borderRadius: '999px',
+                                                            background: '#fffbeb', border: '1px solid #fde68a',
+                                                            color: '#92400e', fontSize: '0.72rem', fontWeight: 700
+                                                        }}>
+                                                            <AlertCircle size={13} /> editada à mão — não acompanha os campos
+                                                        </span>
+                                                    )}
                                                 </h4>
                                                 <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                    {minutaEditada && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setContractDraft('')}
+                                                            style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
+                                                        >
+                                                            Descartar edições
+                                                        </button>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() => setContractDraft(textoGerado)}
