@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { CreditCard, FileText, Calculator, DollarSign, Lightbulb, Zap, AlertCircle, Ban, CheckCircle, Send, Plus, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
-import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf, sendCombinedNotification } from '../lib/api';
+import { createAsaasCharge, cancelAsaasCharge, updateAsaasCharge, parseInvoice, mergePdf, sendCombinedNotification, recalcularFatura } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -1302,6 +1302,28 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
             if (result.data?.id) {
                 setLocalInvoiceId(result.data.id);
+            }
+
+            // O valor que FICA gravado vem do servidor, não desta tela.
+            // O cálculo aqui em cima continua existindo para o preview enquanto
+            // se digita, mas quem manda no número persistido é a
+            // fn_calcular_fatura -- uma fórmula só, usada também pelo robô.
+            //
+            // Fatura já cobrada a função recusa de propósito: recalcular mudaria
+            // em silêncio um valor que o assinante já recebeu como boleto.
+            if (result.data?.id && !result.data?.asaas_payment_id) {
+                try {
+                    const recalculado = await recalcularFatura(result.data.id);
+                    if (recalculado && Math.abs(Number(recalculado.valor_a_pagar) - Number(payload.valor_a_pagar)) > 0.01) {
+                        showAlert(
+                            `Valor ajustado pelo servidor para ${Number(recalculado.valor_a_pagar).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+                            'info'
+                        );
+                    }
+                } catch (recalcErro) {
+                    console.error('Falha ao recalcular a fatura no servidor:', recalcErro);
+                    showAlert('Fatura salva, mas o recálculo no servidor falhou: ' + recalcErro.message, 'warning');
+                }
             }
 
             setShowSuccess(true);

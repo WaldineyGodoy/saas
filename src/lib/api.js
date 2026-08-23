@@ -118,6 +118,26 @@ export const manageAsaasCustomer = async (data) => {
 };
 
 /**
+ * Recalcula o valor do assinante no servidor e persiste.
+ *
+ * A tela continua fazendo a conta enquanto o usuário digita — é o que dá o
+ * preview instantâneo — mas o número que FICA gravado vem daqui. Enquanto a
+ * fórmula viveu só no React, nenhum processo de servidor sabia calcular o
+ * valor, e as duas aritméticas podiam divergir sem ninguém perceber.
+ *
+ * Recusa faturas que já têm cobrança no Asaas: recalcular mudaria em silêncio
+ * um valor que o assinante já recebeu como boleto.
+ */
+export const recalcularFatura = async (invoiceId) => {
+    const { data, error } = await supabase.rpc('fn_calcular_fatura', {
+        p_invoice_id: invoiceId,
+        p_gravar: true,
+    });
+    if (error) throw error;
+    return data?.[0] || null;
+};
+
+/**
  * Tarifa de referência da tabela Concessionária (Configurações -> Conta de
  * Energia -> Tarifas Concessionárias).
  *

@@ -74,6 +74,32 @@ serve(async (req) => {
             if (!invs || invs.length === 0) 
                 throw new Error("Nenhuma fatura pendente/ativa e sem cobrança prévia encontrada para este assinante.");
 
+            // O consolidado é MENSAL. Sem recorte, esta varredura pegava toda
+            // fatura pendente do assinante — de qualquer mês — e somava tudo num
+            // boleto só: uma fatura antiga esquecida entrava na cobrança do mês
+            // atual sem ninguém ver.
+            //
+            // Havendo mais de um mês pendente, quem decide é uma pessoa: ou é
+            // atraso a tratar, ou é escolha de cobrar junto. A função não
+            // adivinha — recusa e diz quais são os meses.
+            if (!invoice_ids || invoice_ids.length === 0) {
+                const meses = [...new Set(invs.map((i) => i.mes_referencia))].sort();
+                if (meses.length > 1) {
+                    const legivel = meses.map((m) => String(m).slice(0, 7).split('-').reverse().join('/'));
+                    return new Response(
+                        JSON.stringify({
+                            error: [
+                                `Este assinante tem faturas pendentes de ${meses.length} meses diferentes: ${legivel.join(', ')}.`,
+                                '',
+                                'Cobrar tudo junto num boleto só pode não ser o que você quer. Escolha as faturas do ciclo na tela do assinante e emita de lá.',
+                            ].join(String.fromCharCode(10)),
+                            meses: legivel,
+                        }),
+                        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 422 }
+                    );
+                }
+            }
+
             invoicesToCharge = invs;
             subscriber = invs[0].consumer_units?.subscriber;
 
@@ -216,7 +242,15 @@ serve(async (req) => {
         let dueDate = customDueDate;
         if (!dueDate && invoicesToCharge[0]) {
             const refMonth = invoicesToCharge[0].mes_referencia;
-            const dueDay = invoicesToCharge[0].consumer_units?.dia_vencimento;
+
+            // No consolidado o dia vem do ASSINANTE. Antes saía do
+            // dia_vencimento da primeira fatura que a consulta devolvesse — e a
+            // ordem não é determinística, então o vencimento do boleto mudava
+            // conforme o dia. Na Guanabara as 8 UCs têm dias 1, 5, 5, 10, 16,
+            // 20, 20 e 20, com consolidated_due_day = 5.
+            const dueDay = isConsolidated
+                ? (subscriber.consolidated_due_day || invoicesToCharge[0].consumer_units?.dia_vencimento)
+                : invoicesToCharge[0].consumer_units?.dia_vencimento;
             if (refMonth && dueDay) {
                 const [yStr, mStr] = refMonth.split('-');
                 let year = parseInt(yStr, 10);

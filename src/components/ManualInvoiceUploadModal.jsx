@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Upload, FileText, CheckCircle, AlertCircle, X, Search, Check, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
+import { recalcularFatura } from '../lib/api';
 import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -208,6 +209,19 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
                 .single();
 
             if (dbError) throw dbError;
+
+            // O upload manual gravava valor_a_pagar = total da conta da
+            // concessionaria. Isso so esta certo quando a UC nao compensa; se
+            // compensa, o assinante paga a energia com desconto e o numero e
+            // outro. Quem decide isso agora e a fn_calcular_fatura, a mesma que
+            // o robo usa.
+            if (newInvoice?.id && !newInvoice?.asaas_payment_id) {
+                try {
+                    await recalcularFatura(newInvoice.id);
+                } catch (recalcErro) {
+                    console.error('Falha ao recalcular a fatura no servidor:', recalcErro);
+                }
+            }
 
             // Update UC status so the robot knows it was successful
             const { error: ucError } = await supabase
