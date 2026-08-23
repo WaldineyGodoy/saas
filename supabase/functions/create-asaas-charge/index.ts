@@ -90,6 +90,54 @@ serve(async (req) => {
 
         if (!subscriber) throw new Error("Assinante não encontrado.");
 
+        // ------------------------------------------------------------------
+        // Portões de auditoria.
+        //
+        // Até aqui as conferências da extração só MARCAVAM a fatura: nada
+        // impedia alguém de faturar uma que não conferiu. Este é o ponto onde
+        // isso passa a valer, porque é o único lugar do sistema que cria
+        // cobrança — individual ou consolidada.
+        //
+        // Um bloqueio em qualquer fatura derruba a emissão inteira. No
+        // consolidado isso é de propósito: cobrar o assinante deixando de fora
+        // a UC que reprovou daria um boleto silenciosamente menor.
+        // ------------------------------------------------------------------
+        const bloqueios = [];
+        const avisos = [];
+
+        for (const inv of invoicesToCharge) {
+            const { data: achados, error: auditErr } = await supabase
+                .rpc('fn_auditar_fatura', { p_invoice_id: inv.id });
+
+            if (auditErr) {
+                throw new Error(`Falha ao auditar a fatura ${inv.id}: ${auditErr.message}`);
+            }
+
+            const uc = inv.consumer_units?.numero_uc || inv.uc_id;
+            for (const achado of achados || []) {
+                const linha = `UC ${uc}: ${achado.mensagem}`;
+                if (achado.severidade === 'bloqueio') bloqueios.push(linha);
+                else avisos.push(linha);
+            }
+        }
+
+        if (bloqueios.length > 0) {
+            console.warn('[Asaas Charge] Emissão barrada pelos portões:', bloqueios);
+            return new Response(
+                JSON.stringify({
+                    error: ['Emissão barrada pela auditoria:', ''].concat(bloqueios).join(String.fromCharCode(10)),
+                    bloqueios,
+                    avisos,
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 422 }
+            );
+        }
+
+        if (avisos.length > 0) {
+            console.log('[Asaas Charge] Emitindo com avisos:', avisos);
+        }
+
+
 
         console.log(`[Asaas Charge] isSandbox: ${isSandbox}, asaasUrl: ${asaasUrl}`);
         console.log(`[Asaas Charge] subscriber: ${subscriber.name} (${subscriber.cpf_cnpj}), existing customer ID: ${subscriber.asaas_customer_id}`);
