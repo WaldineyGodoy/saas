@@ -359,15 +359,21 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 .eq('autentique_doc_id', result.documentId);
             setSignatureLink(finalLink);
 
-            await enviarLinkContrato(finalLink);
+            const envio = await enviarLinkContrato(finalLink);
 
-            showAlert('Contrato gerado e enviado com sucesso!', 'success');
+            showAlert(
+                algumCanalFalhou(envio)
+                    ? `Contrato criado, mas houve falha no envio. ${resumoEnvio(envio)}`
+                    : `Contrato gerado e enviado. ${resumoEnvio(envio)}`,
+                algumCanalFalhou(envio) ? 'warning' : 'success'
+            );
             fetchSignatures(supplier.id);
             addHistory('supplier', supplier.id, 'envio_contrato', {
                 document_name: fileName,
                 autentique_doc_id: result.documentId,
-                condicoes: contractOpts
-            });
+                condicoes: contractOpts,
+                envio
+            }, `Contrato enviado para assinatura. ${resumoEnvio(envio)}`);
         } catch (error) {
             console.error('Erro ao enviar contrato do fornecedor:', error);
             showAlert('Erro ao enviar contrato: ' + error.message, 'error');
@@ -377,16 +383,22 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     };
 
     /**
-     * Dispara o link por WhatsApp e e-mail.
+     * Dispara o link por WhatsApp e e-mail e devolve o resultado de cada canal.
      *
-     * Cada canal falha por conta própria: e-mail recusado não pode impedir
-     * o WhatsApp de sair, e nenhum dos dois invalida o contrato que já subiu
-     * para a Autentique.
+     * Cada canal falha por conta própria: e-mail recusado não pode impedir o
+     * WhatsApp de sair, e nenhum dos dois invalida o contrato que já subiu
+     * para a Autentique. Só que falhar em silêncio virou problema — se o
+     * WhatsApp não saísse, nada aparecia em lugar nenhum, e a única forma de
+     * descobrir era perguntar ao cliente. Agora o resultado sobe para o
+     * histórico do fornecedor.
      */
     const enviarLinkContrato = async (link) => {
         const texto = mensagemContrato(link);
+        const resultado = { whatsapp: null, email: null };
 
-        if (formData.phone) {
+        if (!formData.phone) {
+            resultado.whatsapp = 'não enviado (sem telefone cadastrado)';
+        } else {
             try {
                 let instanceName = 'default';
                 const { data: config } = await supabase
@@ -397,25 +409,43 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
 
                 await sendWhatsapp(formData.phone.replace(/\D/g, ''), texto, null, null, null, instanceName);
+                resultado.whatsapp = 'enviado';
             } catch (waErr) {
                 console.error('Erro ao enviar WhatsApp:', waErr);
+                resultado.whatsapp = `falhou: ${waErr.message}`;
             }
         }
 
-        if (formData.email) {
+        if (!formData.email) {
+            resultado.email = 'não enviado (sem e-mail cadastrado)';
+        } else {
             try {
-                await supabase.functions.invoke('send-email', {
+                // `functions.invoke` devolve o erro em `error`, não lança. Sem
+                // checar isto, e-mail recusado passava como enviado.
+                const { error } = await supabase.functions.invoke('send-email', {
                     body: {
                         to: formData.email,
                         subject: 'Contrato de Gestão de Créditos Energéticos - B2W Energia',
                         text: texto
                     }
                 });
+                if (error) throw error;
+                resultado.email = 'enviado';
             } catch (emailErr) {
                 console.error('Erro ao enviar E-mail:', emailErr);
+                resultado.email = `falhou: ${emailErr.message}`;
             }
         }
+
+        return resultado;
     };
+
+    /** Frase do histórico e do alerta, a partir do resultado dos canais. */
+    const resumoEnvio = (envio) =>
+        `WhatsApp: ${envio.whatsapp} · E-mail: ${envio.email}`;
+
+    const algumCanalFalhou = (envio) =>
+        String(envio.whatsapp).startsWith('falhou') || String(envio.email).startsWith('falhou');
 
     /**
      * Cancela o contrato na Autentique e marca a assinatura como cancelada.
@@ -465,8 +495,13 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 }
             }
 
-            await enviarLinkContrato(finalLink);
-            showAlert('Link reenviado com sucesso!', 'success');
+            const envio = await enviarLinkContrato(finalLink);
+            showAlert(
+                algumCanalFalhou(envio) ? `Falha no reenvio. ${resumoEnvio(envio)}` : `Link reenviado. ${resumoEnvio(envio)}`,
+                algumCanalFalhou(envio) ? 'warning' : 'success'
+            );
+            addHistory('supplier', supplier.id, 'reenvio_contrato', { signature_id: sig.id, envio },
+                `Link de assinatura reenviado. ${resumoEnvio(envio)}`);
         } catch (error) {
             showAlert('Erro ao reenviar link: ' + error.message, 'error');
         }

@@ -261,33 +261,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             // 6. Send Notifications
             const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
             
-            // WhatsApp
-            try {
-                let instanceName = 'default';
-                const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
-                if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
-                
-                await sendWhatsapp(formData.phone.replace(/\D/g, ''), messageWithLink, null, null, null, instanceName);
-            } catch (waErr) {
-                console.error('Erro ao enviar WhatsApp:', waErr);
-            }
+            const envio = await enviarLinkAssinatura(messageWithLink);
 
-            // Email (optional/default)
-            try {
-                await supabase.functions.invoke('send-email', {
-                    body: {
-                        to: formData.email,
-                        subject: 'Contrato de Adesão - B2W Energia',
-                        text: messageWithLink
-                    }
-                });
-            } catch (emailErr) {
-                console.error('Erro ao enviar E-mail:', emailErr);
-            }
-
-            showAlert('Contrato gerado e enviado com sucesso!', 'success');
+            showAlert(
+                algumCanalFalhou(envio)
+                    ? `Contrato criado, mas houve falha no envio. ${resumoEnvio(envio)}`
+                    : `Contrato gerado e enviado. ${resumoEnvio(envio)}`,
+                algumCanalFalhou(envio) ? 'warning' : 'success'
+            );
             fetchSignatures(subscriber.id);
-            addHistory('subscriber', subscriber.id, 'envio_contrato', { document_name: fileName, autentique_doc_id: result.documentId });
+            addHistory('subscriber', subscriber.id, 'envio_contrato',
+                { document_name: fileName, autentique_doc_id: result.documentId, envio },
+                `Contrato enviado para assinatura. ${resumoEnvio(envio)}`);
 
         } catch (error) {
             console.error('Error sending contract:', error);
@@ -296,6 +281,67 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             setIsCreatingContract(false);
         }
     };
+
+    /**
+     * Dispara o link por WhatsApp e e-mail e devolve o resultado de cada canal.
+     *
+     * Os dois falham por conta própria — um canal recusado não pode derrubar
+     * o outro nem invalidar o contrato que já subiu para a Autentique. Só que
+     * falhar em silêncio virou problema: se o WhatsApp não saísse, nada
+     * aparecia em lugar nenhum e a única forma de descobrir era perguntar ao
+     * cliente. Agora o resultado sobe para o histórico.
+     */
+    const enviarLinkAssinatura = async (texto) => {
+        const resultado = { whatsapp: null, email: null };
+
+        if (!formData.phone) {
+            resultado.whatsapp = 'não enviado (sem telefone cadastrado)';
+        } else {
+            try {
+                let instanceName = 'default';
+                const { data: config } = await supabase
+                    .from('integrations_config')
+                    .select('variables')
+                    .eq('service_name', 'evolution_api')
+                    .single();
+                if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
+
+                await sendWhatsapp(formData.phone.replace(/\D/g, ''), texto, null, null, null, instanceName);
+                resultado.whatsapp = 'enviado';
+            } catch (waErr) {
+                console.error('Erro ao enviar WhatsApp:', waErr);
+                resultado.whatsapp = `falhou: ${waErr.message}`;
+            }
+        }
+
+        if (!formData.email) {
+            resultado.email = 'não enviado (sem e-mail cadastrado)';
+        } else {
+            try {
+                // `functions.invoke` devolve o erro em `error`, não lança. Sem
+                // checar isto, e-mail recusado passava como enviado.
+                const { error } = await supabase.functions.invoke('send-email', {
+                    body: {
+                        to: formData.email,
+                        subject: 'Contrato de Adesão - B2W Energia',
+                        text: texto
+                    }
+                });
+                if (error) throw error;
+                resultado.email = 'enviado';
+            } catch (emailErr) {
+                console.error('Erro ao enviar E-mail:', emailErr);
+                resultado.email = `falhou: ${emailErr.message}`;
+            }
+        }
+
+        return resultado;
+    };
+
+    const resumoEnvio = (envio) => `WhatsApp: ${envio.whatsapp} · E-mail: ${envio.email}`;
+
+    const algumCanalFalhou = (envio) =>
+        String(envio.whatsapp).startsWith('falhou') || String(envio.email).startsWith('falhou');
 
     /**
      * Cancela o contrato na Autentique e marca a assinatura como cancelada.
@@ -367,15 +413,15 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             const messageWithLink = `Olá ${formData.name}, bem vindo a B2W Energia. ⚡\n\nA partir de agora vc começa a economizar na sua conta de energia 💰\n\nPor favor, assine digitalmente para darmos prosseguimento à ativação da sua conta ✍️\n\nsegue link para assinatura do seu contrato de energia: 📄\n\n${finalLink}\n\num resumo do contrato e como funciona a energia por assinatura, vc pode acessar em: 🔗\n\nhttps://b2wenergia.com.br/contrato`;
             
-            // WhatsApp
-            let instanceName = 'default';
-            const { data: config } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
-            if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
+            const envio = await enviarLinkAssinatura(messageWithLink);
 
-            await sendWhatsapp(formData.phone.replace(/\D/g, ''), messageWithLink, null, null, null, instanceName);
-            
-            showAlert('Links de assinatura reenviados!', 'success');
-            addHistory('subscriber', subscriber.id, 'reenvio_contrato', { document_name: sig.document_name });
+            showAlert(
+                algumCanalFalhou(envio) ? `Falha no reenvio. ${resumoEnvio(envio)}` : `Link reenviado. ${resumoEnvio(envio)}`,
+                algumCanalFalhou(envio) ? 'warning' : 'success'
+            );
+            addHistory('subscriber', subscriber.id, 'reenvio_contrato',
+                { document_name: sig.document_name, envio },
+                `Link de assinatura reenviado. ${resumoEnvio(envio)}`);
         } catch (error) {
             showAlert('Erro ao reenviar: ' + error.message, 'error');
         }
