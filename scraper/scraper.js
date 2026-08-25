@@ -139,6 +139,7 @@ async function run() {
             dia_leitura,
             dia_vencimento,
             status,
+            data_desligamento,
             last_scraping_status,
             last_scraping_at,
             subscriber:subscriber_id (
@@ -424,7 +425,7 @@ async function run() {
                                         };
                                     }
 
-                                    await upsertInvoice(uc, r.ref, {
+                                    const { data: gravada } = await upsertInvoice(uc, r.ref, {
                                         concessionaria_pdf_url: storagePath,
                                         status: 'sem_faturamento',
                                         valor_concessionaria: r.valor,
@@ -432,6 +433,7 @@ async function run() {
                                         ...extraidos,
                                     });
                                     await updateUCStatus(uc.id, 'success');
+                                    await registrarSuspeitaDesligamento(uc, gravada?.id);
                                 } catch (upErr) {
                                     console.error(`   [Faturista] Falha ao guardar o PDF:`, upErr.message);
                                     await upsertInvoice(uc, r.ref, {
@@ -531,7 +533,62 @@ async function upsertInvoice(uc, ref, campos) {
         mes_referencia: `${year}-${String(month).padStart(2, '0')}-01`,
         reading_checked_at: new Date().toISOString(),
         ...campos
-    }, { onConflict: 'uc_id,mes_referencia' });
+    }, { onConflict: 'uc_id,mes_referencia' }).select('id').single();
+}
+
+/**
+ * Desligamento de UC na concessionária.
+ *
+ * O assinante pede o desligamento direto na concessionária e a B2W só descobre
+ * depois — foi o que aconteceu com a UC 7029990055, cujo medidor parou em
+ * 29/04/2026 e a Cosern seguiu emitindo conta de períodos posteriores.
+ *
+ * O sinal está nos dados que o robô já traz: ciclo de leitura curto encerrando
+ * a série da UC é assinatura de leitura de encerramento. Quando a suspeita
+ * dispara, fica registrada no histórico da UC para alguém conferir no portal e
+ * gravar a data — a partir daí a auditoria barra conta de período posterior.
+ *
+ * Não é prova: ciclo curto também acontece quando a concessionária remaneja o
+ * calendário. Por isso registra e avisa, em vez de gravar a data sozinho.
+ */
+async function registrarSuspeitaDesligamento(uc, invoiceId) {
+    if (!invoiceId || uc.data_desligamento) return;
+
+    const { data, error } = await supabase.rpc('fn_suspeita_desligamento', { p_invoice_id: invoiceId });
+    if (error) {
+        console.warn(`   [Faturista] Não foi possível checar desligamento: ${error.message}`);
+        return;
+    }
+
+    const s = data?.[0];
+    if (!s?.suspeita) return;
+
+    const aviso = `UC ${uc.numero_uc}: última conta com ciclo de ${s.dias_ciclo} dias contra mediana de ${s.mediana} em ${s.ciclos} faturas. Possível desligamento na concessionária — conferir no portal e registrar data_desligamento.`;
+    console.warn(`   [ATENÇÃO] ${aviso}`);
+
+    // Idempotente: não repete o mesmo aviso todo dia para a mesma fatura.
+    const { data: jaAvisado } = await supabase
+        .from('crm_history')
+        .select('id')
+        .eq('entity_id', uc.id)
+        .eq('metadata->>evento', 'suspeita_desligamento')
+        .eq('metadata->>invoice_id', invoiceId)
+        .limit(1);
+
+    if (jaAvisado && jaAvisado.length > 0) return;
+
+    await supabase.from('crm_history').insert({
+        entity_type: 'consumer_unit',
+        entity_id: uc.id,
+        content: aviso,
+        metadata: {
+            evento: 'suspeita_desligamento',
+            invoice_id: invoiceId,
+            dias_ciclo: s.dias_ciclo,
+            mediana: s.mediana,
+            ciclos: s.ciclos,
+        },
+    });
 }
 
 async function updateUCStatus(ucId, status, errorMsg = null) {
