@@ -7,7 +7,7 @@ import {
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
     Loader2, Trash2, Smartphone as PhoneIcon, MessageCircle, FileText, Smartphone as MobileIcon,
     History as HistoryIcon, DollarSign, Globe, MapPin, Building2, CreditCard,
-    Filter, Clock, Ban, AlertCircle, CheckCircle, Info, Lock, Unlock
+    Filter, Clock, Ban, AlertCircle, CheckCircle, Info, Lock, Unlock, Power
 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -73,6 +73,22 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         const number = Number(val);
         if (isNaN(number)) return '';
         return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    // Data ISO (AAAA-MM-DD) no formato brasileiro, sem passar pelo fuso: montar
+    // um Date com a string crua joga o dia para tras em fuso negativo.
+    const formatarData = (iso) => {
+        if (!iso) return '';
+        const [a, m, d] = String(iso).slice(0, 10).split('-');
+        return `${d}/${m}/${a}`;
+    };
+
+    // O acompanhamento vale ate o fim do dia da data informada.
+    const acompanhamentoVigente = (iso) => {
+        if (!iso) return false;
+        const hoje = new Date();
+        const hojeISO = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+        return String(iso).slice(0, 10) >= hojeISO;
     };
 
     const formatCurrency4 = (val) => {
@@ -183,6 +199,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         cidade: '',
         uf: '',
         portal_credentials: { url: '', login: '' },
+        data_desligamento: '',
+        desligamento_origem: '',
+        acompanhar_conta_ate: '',
         saldo_remanescente: false
     });
 
@@ -379,6 +398,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 cidade: consumerUnit.address?.cidade || '',
                 uf: consumerUnit.address?.uf || '',
                 portal_credentials: semSenha(consumerUnit.portal_credentials) || { url: '', login: '' },
+                data_desligamento: consumerUnit.data_desligamento || '',
+                desligamento_origem: consumerUnit.desligamento_origem || '',
+                acompanhar_conta_ate: consumerUnit.acompanhar_conta_ate || '',
                 saldo_remanescente: !!consumerUnit.saldo_remanescente,
                 last_scraping_status: consumerUnit.last_scraping_status || 'pending',
                 last_scraping_at: consumerUnit.last_scraping_at || null,
@@ -644,7 +666,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     uf: formData.uf
                 },
                 // portal_credentials move to subscriber
-                saldo_remanescente: formData.saldo_remanescente
+                saldo_remanescente: formData.saldo_remanescente,
+                data_desligamento: formData.data_desligamento || null,
+                desligamento_origem: formData.desligamento_origem || null,
+                acompanhar_conta_ate: formData.acompanhar_conta_ate || null
             };
 
             if (!payload.subscriber_id && !payload.supplier_id) throw new Error('Assinante ou Fornecedor é obrigatório.');
@@ -2392,8 +2417,65 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             )}
                                         </div>
 
+                                        {/* Desligamento na concessionaria -- rodape da secao */}
+                                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', marginTop: '1.25rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                                <Power size={18} color="#dc2626" />
+                                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Desligamento na concessionária</h4>
+                                            </div>
+                                            <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                O assinante pode pedir o desligamento direto na concessionária, sem avisar. Registrando a data aqui,
+                                                a auditoria passa a <strong>barrar</strong> conta cujo período comece nessa data ou depois — é consumo
+                                                que não é dele. Conta que atravessa a data vira aviso, para rateio proporcional.
+                                            </p>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data do desligamento</label>
+                                                    <input
+                                                        type="date"
+                                                        value={formData.data_desligamento || ''}
+                                                        onChange={e => setFormData({ ...formData, data_desligamento: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Como foi descoberto</label>
+                                                    <select
+                                                        value={formData.desligamento_origem || ''}
+                                                        onChange={e => setFormData({ ...formData, desligamento_origem: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
+                                                    >
+                                                        <option value="">—</option>
+                                                        <option value="portal">Visto no portal da concessionária</option>
+                                                        <option value="leitura_curta">Inferido pelo ciclo de encerramento</option>
+                                                        <option value="concessionaria">Informado pela concessionária</option>
+                                                        <option value="manual">Informado pelo assinante</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Acompanhar contas até</label>
+                                                    <input
+                                                        type="date"
+                                                        value={formData.acompanhar_conta_ate || ''}
+                                                        onChange={e => setFormData({ ...formData, acompanhar_conta_ate: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            {formData.data_desligamento && (
+                                                <p style={{ margin: '0.85rem 0 0', fontSize: '0.78rem', color: '#0369a1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
+                                                    {!formData.acompanhar_conta_ate
+                                                        ? 'Sem data de acompanhamento o robô não busca mais conta desta UC. Ao salvar, o sistema sugere 90 dias (cerca de três ciclos) a partir do desligamento ou da descoberta.'
+                                                        : acompanhamentoVigente(formData.acompanhar_conta_ate)
+                                                            ? 'O robô continua buscando conta desta UC até ' + formatarData(formData.acompanhar_conta_ate) + '. Depois disso ela sai da fila sozinha.'
+                                                            : 'O acompanhamento venceu em ' + formatarData(formData.acompanhar_conta_ate) + ' — o robô não busca mais conta desta UC. Estenda a data para voltar a acompanhar.'}
+                                                </p>
+                                            )}
+                                        </div>
+
                                     </div>
                                 </div>
+
                             )}
 
                             {/* Tab Content: Comunicados */}
