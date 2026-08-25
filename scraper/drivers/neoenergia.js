@@ -290,7 +290,12 @@ module.exports = {
      */
     async capturarFatura(page, uc, mesRefAlvo, ctx) {
         const { log, downloadDir } = ctx;
-        const paddedUC = uc.numero_uc.toString().padStart(12, '0');
+        // O cadastro guarda o numero em formatos diferentes: uns so com
+        // digitos ("7030003955"), outros formatados ("2.236.346.032-16"), e ha
+        // ate um com espaco na frente. O portal sempre exibe 12 digitos, sem
+        // pontuacao. Normalizar antes de buscar e antes de casar o card.
+        const digitosUC = uc.numero_uc.toString().replace(/\D/g, '');
+        const paddedUC = digitosUC.padStart(12, '0');
 
         // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
         await irPara(page, ROTAS.meusImoveis);
@@ -298,7 +303,7 @@ module.exports = {
 
         const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
         await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
-        await ucSearchInput.fill(uc.numero_uc); // com trim nativo
+        await ucSearchInput.fill(digitosUC);
 
         // Clica em Pesquisar
         const pesquisarBtn = page.locator('button', { hasText: 'Pesquisar' }).first();
@@ -309,14 +314,28 @@ module.exports = {
         }
         await page.waitForTimeout(4000);
 
-        // Clica no card (div.row no li)
-        const ucCardRow = page.locator('li', { hasText: paddedUC }).locator('div.row').first();
-        if (await ucCardRow.count() > 0) {
+        // Casa por DIGITO, nao por substring literal. O hasText comparava o
+        // texto do cadastro com o do portal: numero formatado nunca casava, e a
+        // UC caia em "card nao visivel" mesmo existindo na concessionaria.
+        const itens = page.locator('li');
+        const totalItens = await itens.count();
+        let ucCardRow = null;
+
+        for (let i = 0; i < totalItens; i++) {
+            const item = itens.nth(i);
+            const digitosDoItem = (await item.innerText().catch(() => '')).replace(/\D/g, '');
+            if (digitosDoItem.includes(paddedUC)) {
+                ucCardRow = item.locator('div.row').first();
+                break;
+            }
+        }
+
+        if (ucCardRow && await ucCardRow.count() > 0) {
             await ucCardRow.click({ force: true });
             log(`   [Faturista] Card UC ${paddedUC} clicado. Portal deve redirecionar...`);
             await page.waitForTimeout(4000); // Aguarda o redirect autônomo do portal
         } else {
-            throw new Error('Unidade não encontrada no painel da concessionária (card não visível).');
+            throw new Error(`Unidade ${paddedUC} não encontrada no painel da concessionária (nenhum card com esse número entre os ${totalItens} listados).`);
         }
 
         // Fase 4: Lista de Faturas (consultar-debitos)
