@@ -161,6 +161,18 @@ async function run() {
         query = query.or(DRIVERS.map(d => `concessionaria.ilike.${d.matchConcessionaria}`).join(','));
     }
 
+    // UC encerrada nao gera mais conta. Tentar todo dia gasta sessao no portal,
+    // marca erro vermelho no Calendario de Leituras e -- pior -- grava
+    // last_scraping_at, o que joga a UC para o fim da janela de retentativa de
+    // 7 dias.
+    //
+    // As demais entram MESMO sem faturamento ativo (aguardando_conexao,
+    // vinculado, sem_geracao, ativacao...): a concessionaria pode emitir conta
+    // antes de a UC estar faturando, e essa conta e justamente o aviso de que
+    // alguma coisa mudou. Decisao do dono em 25/08/2026.
+    const STATUS_ENCERRADOS = ['cancelado', 'cancelado_inadimplente', 'desconectado'];
+    query = query.not('status', 'in', `(${STATUS_ENCERRADOS.join(',')})`);
+
     if (targetedDays.length > 0) {
         query = query.in('dia_leitura', targetedDays);
     }
