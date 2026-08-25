@@ -205,3 +205,51 @@ grant execute on function public.fn_suspeita_desligamento(uuid) to authenticated
 --
 -- Regressao contra as 48 faturas ja cobradas: nenhum bloqueio novo.
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 5. Ate quando acompanhar a conta de uma UC encerrada
+--
+-- UC encerrada sai da fila do robo. Mas depois do desligamento a concessionaria
+-- ainda emite: a conta final proporcional (devida) e, as vezes, contas de
+-- periodo posterior (indevidas). Sem acompanhar, ninguem descobre; acompanhando
+-- para sempre, o robo fica consultando conta desligada imaginando erro.
+--
+-- O prazo e EXPLICITO por UC, nao uma formula escondida no codigo: quem olha o
+-- cadastro ve ate quando aquela UC esta sendo acompanhada e muda se precisar.
+--
+-- Padrao de 90 dias (~3 ciclos) a partir do desligamento ou da descoberta, o
+-- que for mais tarde -- nao adianta uma janela que vence antes de alguem saber
+-- que o desligamento existiu:
+--   ciclo 1: a conta final proporcional, devida
+--   ciclos 2 e 3: margem para conta indevida aparecer e ser contestada
+-- Passado isso, se ainda vier conta, o caso e juridico e nao de robo.
+-- ---------------------------------------------------------------------------
+alter table public.consumer_units
+    add column if not exists acompanhar_conta_ate date;
+
+comment on column public.consumer_units.acompanhar_conta_ate is
+    'Ate quando o robo continua buscando conta de uma UC encerrada. Vazio = nao acompanha. Padrao ao registrar desligamento: +90 dias (~3 ciclos).';
+
+create or replace function public.fn_default_acompanhamento_desligamento()
+returns trigger
+language plpgsql as $$
+begin
+    if NEW.data_desligamento is not null
+       and NEW.acompanhar_conta_ate is null
+       and (TG_OP = 'INSERT' or OLD.data_desligamento is distinct from NEW.data_desligamento) then
+        NEW.acompanhar_conta_ate := greatest(
+            NEW.data_desligamento,
+            coalesce(NEW.desligamento_detectado_em::date, NEW.data_desligamento)
+        ) + 90;
+    end if;
+    return NEW;
+end;
+$$;
+
+drop trigger if exists tr_default_acompanhamento on public.consumer_units;
+create trigger tr_default_acompanhamento
+    before insert or update on public.consumer_units
+    for each row execute function public.fn_default_acompanhamento_desligamento();
+
+comment on function public.fn_default_acompanhamento_desligamento() is
+    'Sugere acompanhar_conta_ate ao registrar desligamento. So preenche se estiver vazio -- decisao humana sempre prevalece.';

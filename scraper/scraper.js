@@ -140,6 +140,7 @@ async function run() {
             dia_vencimento,
             status,
             data_desligamento,
+            acompanhar_conta_ate,
             last_scraping_status,
             last_scraping_at,
             subscriber:subscriber_id (
@@ -171,8 +172,21 @@ async function run() {
     // vinculado, sem_geracao, ativacao...): a concessionaria pode emitir conta
     // antes de a UC estar faturando, e essa conta e justamente o aviso de que
     // alguma coisa mudou. Decisao do dono em 25/08/2026.
+    // UC encerrada sai da fila -- MENOS enquanto houver acompanhamento aberto.
+    //
+    // Depois do desligamento a concessionaria ainda emite: a conta final
+    // proporcional, que e devida, e as vezes contas de periodo posterior, que
+    // nao sao. Sem acompanhar, ninguem descobre. Acompanhando para sempre, o
+    // robo fica consultando conta desligada imaginando erro.
+    //
+    // O prazo e explicito por UC em acompanhar_conta_ate (padrao 90 dias, ~3
+    // ciclos, a partir do desligamento ou da descoberta). Vencido, a UC sai
+    // sozinha -- se ainda vier conta, o caso e juridico e nao de robo.
     const STATUS_ENCERRADOS = ['cancelado', 'cancelado_inadimplente', 'desconectado'];
-    query = query.not('status', 'in', `(${STATUS_ENCERRADOS.join(',')})`);
+    const hojeISO = hojeUTC.toISOString().slice(0, 10);
+    query = query.or(
+        `status.not.in.(${STATUS_ENCERRADOS.join(',')}),acompanhar_conta_ate.gte.${hojeISO}`
+    );
 
     if (targetedDays.length > 0) {
         query = query.in('dia_leitura', targetedDays);
