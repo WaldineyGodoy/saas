@@ -206,6 +206,17 @@ async function run() {
             uc.numero_uc = String(uc.numero_uc).trim();
         }
 
+        // Sem titular não há login de portal: o agrupamento é por titular das
+        // credenciais, então uma UC sem `titular_fatura` nem `subscriber` cria
+        // um grupo com titular nulo e derruba o lote inteiro. Barrar aqui, antes
+        // da fila, deixa a UC visível no CRM com o motivo em vez de matar as
+        // outras 24.
+        if (!uc.titular_fatura && !uc.subscriber) {
+            console.error(`[Faturista] ERRO: UC ${uc.numero_uc} não tem titular da fatura nem assinante. Pulando.`);
+            await updateUCStatus(uc.id, 'error', 'UC sem titular da fatura e sem assinante: não há credenciais de portal para acessá-la.');
+            continue;
+        }
+
         uc.driver = resolverDriver(uc.concessionaria);
         if (!uc.driver) {
             console.error(`[Faturista] ERRO: Nenhum driver para a concessionária "${uc.concessionaria}" (UC ${uc.numero_uc}). Pulando.`);
@@ -336,7 +347,9 @@ async function run() {
 
     const totalTitulares = Object.values(porDriver)
         .reduce((n, g) => n + Object.keys(g.titulares).length, 0);
-    console.log(`[Faturista] Iniciando processamento de ${allUcs.length} UCs em ${totalTitulares} contas de titular.`);
+    // ucsToScrape, não allUcs: o log anterior anunciava as 25 UCs consultadas
+    // enquanto o agente ia processar 3, o que fazia a saída parecer travada.
+    console.log(`[Faturista] Iniciando processamento de ${ucsToScrape.length} UCs em ${totalTitulares} contas de titular.`);
 
     // 4. Um navegador por driver — as exigências de anti-bot são do portal,
     //    não do orquestrador (ver launchOptions/contextOptions do driver).
@@ -367,12 +380,15 @@ async function run() {
             if (escoposList.length === 0) continue;
 
             const allUcsCount = Object.values(escopos).reduce((acc, curr) => acc + curr.length, 0);
-            console.log(`\n=== Processando Assinante: ${subscriber.name} (${allUcsCount} UCs em ${escoposList.length} ${driver.rotuloEscopo.toLowerCase()}(s)) ===`);
+            // Defesa em profundidade: a UC sem titular já foi barrada antes da
+            // fila, mas o nome não pode ser o que derruba um lote de 25.
+            const nomeTitular = subscriber?.name || `(titular ${subId} sem cadastro)`;
+            console.log(`\n=== Processando Assinante: ${nomeTitular} (${allUcsCount} UCs em ${escoposList.length} ${driver.rotuloEscopo.toLowerCase()}(s)) ===`);
 
             const creds = await carregarCredenciais(group.subscriberId, group.credenciaisDaLinha);
 
             if (!creds?.login || !creds?.password) {
-                console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${subscriber.name}`);
+                console.error(`Status: ERRO - Credenciais não encontradas para o assinante ${nomeTitular}`);
                 for (const escopo in escopos) {
                     for (const uc of escopos[escopo]) {
                         await updateUCStatus(uc.id, 'error', 'Credenciais de acesso não configuradas.');
