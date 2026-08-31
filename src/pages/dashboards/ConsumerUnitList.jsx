@@ -173,6 +173,7 @@ export default function ConsumerUnitList() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [sortBy, setSortBy] = useState('recentes');
 
     const [viewMode, setViewMode] = useState('list');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -189,20 +190,38 @@ export default function ConsumerUnitList() {
         })
     );
 
-    const filteredUnits = units.filter(u => {
-        if (statusFilter && u.status !== statusFilter) return false;
-        if (!searchTerm) return true;
-        const lower = searchTerm.toLowerCase();
-        return (
-            u.numero_uc?.toLowerCase().includes(lower) ||
-            u.subscriber?.name?.toLowerCase().includes(lower) ||
-            u.titular_fatura?.name?.toLowerCase().includes(lower) ||
-            u.titular_conta?.toLowerCase().includes(lower) ||
-            u.concessionaria?.toLowerCase().includes(lower) ||
-            u.address?.cidade?.toLowerCase().includes(lower) ||
-            u.status?.toLowerCase().includes(lower)
-        );
-    });
+    const filteredUnits = [...units]
+        .filter(u => {
+            if (statusFilter && u.status !== statusFilter) return false;
+            if (!searchTerm) return true;
+            const lower = searchTerm.toLowerCase();
+            return (
+                u.numero_uc?.toLowerCase().includes(lower) ||
+                u.subscriber?.name?.toLowerCase().includes(lower) ||
+                u.titular_fatura?.name?.toLowerCase().includes(lower) ||
+                u.titular_conta?.toLowerCase().includes(lower) ||
+                u.concessionaria?.toLowerCase().includes(lower) ||
+                u.address?.cidade?.toLowerCase().includes(lower) ||
+                u.status?.toLowerCase().includes(lower)
+            );
+        })
+        .sort((a, b) => {
+            if (sortBy === 'uc') {
+                return (a.numero_uc || '').localeCompare(b.numero_uc || '');
+            }
+            if (sortBy === 'assinante') {
+                const nameA = a.subscriber?.name || a.titular_conta || '';
+                const nameB = b.subscriber?.name || b.titular_conta || '';
+                return nameA.localeCompare(nameB);
+            }
+            if (sortBy === 'status') {
+                const statusA = getStatusBadgeStyle(a.status).label || '';
+                const statusB = getStatusBadgeStyle(b.status).label || '';
+                return statusA.localeCompare(statusB);
+            }
+            // default/recentes
+            return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
 
     useEffect(() => {
         fetchUnits();
@@ -466,6 +485,25 @@ export default function ConsumerUnitList() {
                             {KANBAN_STATUSES.map(s => (
                                 <option key={s.status} value={s.status}>{s.label}</option>
                             ))}
+                        </select>
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            style={{
+                                padding: '0.6rem 1rem',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                fontSize: '0.9rem',
+                                background: 'white',
+                                color: '#1e293b',
+                                outline: 'none',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="recentes">Mais Recentes</option>
+                            <option value="uc">Por UC</option>
+                            <option value="assinante">Por Assinante</option>
+                            <option value="status">Por Status</option>
                         </select>
                     </div>
 
