@@ -188,6 +188,15 @@ async function run() {
         `status.not.in.(${STATUS_ENCERRADOS.join(',')}),acompanhar_conta_ate.gte.${hojeISO}`
     );
 
+    // Transferencia de titularidade em curso: a UC esta trocando de codigo de
+    // cliente e de titular, entao nao ha login que a alcance -- o robo so
+    // conseguiria gravar erro e empurrar a UC para o fim da janela de
+    // retentativa. Sai da fila SEM a excecao de acompanhar_conta_ate, que
+    // existe para a conta final de UC encerrada e nao se aplica aqui.
+    // Decisao do dono em 31/08/2026.
+    const STATUS_SEM_ACESSO = ['em_transf_titularidade'];
+    query = query.not('status', 'in', `(${STATUS_SEM_ACESSO.join(',')})`);
+
     if (targetedDays.length > 0) {
         query = query.in('dia_leitura', targetedDays);
     }
