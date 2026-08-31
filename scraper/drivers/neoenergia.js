@@ -416,7 +416,18 @@ module.exports = {
                 b.click();
                 return true;
             });
-            if (!clicouDownload) throw new Error('Botão Download não encontrado na tela.');
+            if (!clicouDownload) {
+                // Confirmado no portal em 31/08/2026: há conta parcelada que o
+                // portal lista sem oferecer download (UC 7030004455, 07/2026),
+                // e outra que baixa normalmente (UC 7030004579). Nesse primeiro
+                // caso a fatura existe e o valor está na linha — devolver isso
+                // vale muito mais que estourar e gravar zero.
+                if (ehParcelada) {
+                    log(`   [Faturista] Fatura [${parsedRef}] parcelada e sem botão Download nesta tela. Registrando pelo valor da lista.`);
+                    return { resultado: 'parcelada', ref: parsedRef, valor: valorDaLinha(rowText) };
+                }
+                throw new Error('Botão Download não encontrado na tela.');
+            }
 
             // 3. Modal de motivo
             log(`   [Faturista] Modal de motivo de download. Escolhendo opção...`);
