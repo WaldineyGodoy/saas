@@ -38,6 +38,53 @@ const getEnergyStatus = (inv) => {
     return ebStatus;
 };
 
+/**
+ * Decompoe a fatura a partir do que esta gravado.
+ *
+ * CUIDADO com consumo_reais: ele JA E LIQUIDO de desconto. A fn_calcular_fatura
+ * grava "energia compensada COM desconto + tarifa minima". Tres pontos desta
+ * tela tratavam esse numero como bruto e aplicavam os 20% de novo -- a UC
+ * 7030004129 aparecia com "Consumo total R$ 757,05" menos "R$ 151,41",
+ * fechando R$ 724,62, que nao era nem o cobrado nem o devido.
+ *
+ * O desconto verdadeiro esta em economia_reais, gravado pela mesma funcao que
+ * calculou o valor. Derivar dele, em vez de recalcular, mantem a tela e o
+ * boleto contando a mesma historia.
+ */
+const decomporFatura = (dados, descontoPadrao = 0) => {
+    const num = (v) => Number(v) || 0;
+
+    const consumoKwh = num(dados.consumo_kwh);
+    const compensadoKwh = num(dados.consumo_compensado);
+    const naoCompensadoKwh = Math.max(0, consumoKwh - compensadoKwh);
+
+    const consumoReais = num(dados.consumo_reais);
+    const ip = num(dados.iluminacao_publica);
+    const parcelamento = num(dados.parcelamento);
+    const valorConcessionaria = num(dados.valor_concessionaria);
+
+    let tarifaMinima = num(dados.tarifa_minima);
+    let outros = num(dados.outros_lancamentos);
+
+    // Compatibilidade com faturas antigas que nao separavam os encargos.
+    const sobra = valorConcessionaria - consumoReais - ip - parcelamento;
+    if (sobra > 0 && tarifaMinima === 0 && outros === 0) outros = sobra;
+
+    const desconto = num(dados.economia_reais);
+    const compensadaComDesconto = Math.max(0, consumoReais - tarifaMinima);
+    const compensadaBruta = compensadaComDesconto + desconto;
+
+    return {
+        consumoKwh, compensadoKwh, naoCompensadoKwh,
+        compensadaBruta, desconto, compensadaComDesconto,
+        tarifaMinima, ip, outros, parcelamento,
+        total: compensadaBruta - desconto + tarifaMinima + ip + outros + parcelamento,
+        percentualDesconto: compensadaBruta > 0
+            ? Math.round((desconto / compensadaBruta) * 100)
+            : num(descontoPadrao),
+    };
+};
+
 export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, onPaymentSuccess, onViewInvoice, onOpenSandbox }) {
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
@@ -756,21 +803,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         // Recalcular Valor do Assinante (Boleto)
         if (['consumo_reais', 'iluminacao_publica', 'tarifa_minima', 'outros_lancamentos', 'parcelamento', 'consumo_compensado', 'valor_concessionaria', 'consumo_kwh'].includes(field)) {
             const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
-            const consumoReais = Number(newData.consumo_reais) || 0;
-            const consumoKwh = Number(newData.consumo_kwh) || 0;
-            const consumoCompensadoKwh = Number(newData.consumo_compensado) || 0;
-            const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : (consumoCompensadoKwh > 0 ? 1 : 0);
-            const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
-            
-            const grossValue = 
-                consumoReais + 
-                (Number(newData.iluminacao_publica) || 0) + 
-                (Number(newData.tarifa_minima) || 0) + 
-                (Number(newData.outros_lancamentos) || 0) + 
-                (Number(newData.parcelamento) || 0);
-            
-            const baseValue = Math.max(grossValue, Number(newData.valor_concessionaria) || 0);
-            newData.valor_a_pagar = Math.max(0, baseValue - valorDesconto).toFixed(2);
+            // consumo_reais ja vem liquido de desconto -- ver decomporFatura.
+            const d = decomporFatura(newData, discount);
+            newData.valor_a_pagar = Math.max(0, d.total).toFixed(2);
         }
         
         setEditData(newData);
@@ -1579,12 +1614,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             // Se a concessionária não compensou por erro, a B2W deve editar a fatura manualmente e informar o valor.
                             const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
                             
-                            const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
-                            const valorCompensadaReais = consumoReais * proportionCompensated;
-                            const valorDesconto = valorCompensadaReais * (discount / 100);
-
-                            // O Boleto Unificado é o Valor Bruto da conta (Consumo + IP + Encargos) MENOS o desconto da energia.
-                            const calcConcessionariaSum = (consumoReais - valorDesconto) + ip + finalTarifaMinima + finalOutros + parcelamentoVal;
+                            const d = decomporFatura(invoice, discount);
+                            const valorDesconto = d.desconto;
+                            const compensadaBruta = d.compensadaBruta;
+                            const consumoNaoCompensadoKwh = d.naoCompensadoKwh;
+                            const calcConcessionariaSum = d.total;
 
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
@@ -1600,12 +1634,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>
                                                     <div>
-                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Consumo total</span>
+                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Energia compensada</span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoKwh} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoCompensadoKwh} kwh</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>
-                                                    {formatCurrency(consumoReais)}
+                                                    {formatCurrency(compensadaBruta)}
                                                 </td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1620,7 +1654,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Excedentes</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoNaoCompensadoKwh > 0 ? `${consumoNaoCompensadoKwh} kwh` : '—'}</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalTarifaMinima)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1914,10 +1948,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     finalOutros = calcOutros;
                                                 }
                                                 const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
-                                                const proportionCompensated = consumoKwh > 0 ? Math.min(1, consumoCompensadoKwh / consumoKwh) : 1;
-                                                const valorDesconto = (consumoReais * proportionCompensated) * (discount / 100);
-                                                
-                                                return (consumoReais - valorDesconto) + ip + finalTarifaMinima + finalOutros + parcelamentoVal;
+                                                return decomporFatura(invoice, discount).total;
                                             })())}
                                         </span>
                                     )}
