@@ -228,6 +228,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         data_desligamento: '',
         desligamento_origem: '',
         acompanhar_conta_ate: '',
+        numero_uc_anterior: '',
+        titular_anterior_id: '',
+        data_troca_titularidade: '',
         saldo_remanescente: false
     });
 
@@ -430,6 +433,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 data_desligamento: consumerUnit.data_desligamento || '',
                 desligamento_origem: consumerUnit.desligamento_origem || '',
                 acompanhar_conta_ate: consumerUnit.acompanhar_conta_ate || '',
+                numero_uc_anterior: consumerUnit.numero_uc_anterior || '',
+                titular_anterior_id: consumerUnit.titular_anterior_id || '',
+                data_troca_titularidade: consumerUnit.data_troca_titularidade || '',
                 saldo_remanescente: !!consumerUnit.saldo_remanescente,
                 last_scraping_status: consumerUnit.last_scraping_status || 'pending',
                 last_scraping_at: consumerUnit.last_scraping_at || null,
@@ -703,7 +709,10 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 saldo_remanescente: formData.saldo_remanescente,
                 data_desligamento: formData.data_desligamento || null,
                 desligamento_origem: formData.desligamento_origem || null,
-                acompanhar_conta_ate: formData.acompanhar_conta_ate || null
+                acompanhar_conta_ate: formData.acompanhar_conta_ate || null,
+                numero_uc_anterior: formData.numero_uc_anterior || null,
+                titular_anterior_id: formData.titular_anterior_id || null,
+                data_troca_titularidade: formData.data_troca_titularidade || null
             };
 
             if (!payload.subscriber_id && !payload.supplier_id) throw new Error('Assinante ou Fornecedor é obrigatório.');
@@ -2558,6 +2567,54 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     />
                                                 </div>
                                             </div>
+                                            {/* Troca de titularidade: de onde esta UC veio.
+                                                Na TT a concessionaria emite numero novo e o registro e
+                                                editado no lugar, apagando do cadastro a identidade
+                                                anterior. Mas a conta final do periodo pre-troca sai no
+                                                portal sob o numero e o titular ANTIGOS, e e devida. */}
+                                            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.6rem' }}>
+                                                    Troca de titularidade (origem desta UC)
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Número da UC anterior</label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData.numero_uc_anterior || ''}
+                                                            onChange={e => setFormData({ ...formData, numero_uc_anterior: e.target.value })}
+                                                            placeholder="Ex.: 7030765324"
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Titular anterior</label>
+                                                        <select
+                                                            value={formData.titular_anterior_id || ''}
+                                                            onChange={e => setFormData({ ...formData, titular_anterior_id: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', background: '#fff' }}
+                                                        >
+                                                            <option value="">—</option>
+                                                            {subscribers.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Data da troca</label>
+                                                        <input
+                                                            type="date"
+                                                            value={formData.data_troca_titularidade || ''}
+                                                            onChange={e => setFormData({ ...formData, data_troca_titularidade: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {formData.numero_uc_anterior && (
+                                                    <p style={{ margin: '0.7rem 0 0', fontSize: '0.78rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
+                                                        A conta final do período anterior sai no portal sob a UC {formData.numero_uc_anterior}, acessível pela credencial do titular anterior. Para o robô buscá-la, cadastre essa UC antiga como registro próprio, com status Desconectado e prazo em "Acompanhar contas até".
+                                                    </p>
+                                                )}
+                                            </div>
+
                                             {formData.data_desligamento && (
                                                 <p style={{ margin: '0.85rem 0 0', fontSize: '0.78rem', color: '#0369a1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '0.6rem 0.8rem', lineHeight: 1.5 }}>
                                                     {!formData.acompanhar_conta_ate
