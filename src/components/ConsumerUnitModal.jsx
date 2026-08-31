@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { salvarSenhaPortal, semSenha, buscarTarifaReferencia } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
@@ -20,6 +20,14 @@ import SubscriberModal from './SubscriberModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
+    // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
+    // concessionaria ainda emite a conta final proporcional, que e devida. O
+    // prazo de acompanhamento e o que mantem essa UC na fila, e passava
+    // despercebido por estar numa aba distante do botao de status.
+    const [pedirAcompanhamento, setPedirAcompanhamento] = useState(false);
+    const [dataAcompanhamento, setDataAcompanhamento] = useState('');
+    const statusAnterior = useRef(null);
+
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
     const [subscribers, setSubscribers] = useState([]);
@@ -77,6 +85,21 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     // Data ISO (AAAA-MM-DD) no formato brasileiro, sem passar pelo fuso: montar
     // um Date com a string crua joga o dia para tras em fuso negativo.
+    // Dispara o pedido de prazo quando o status MUDA para encerrado. Comparar
+    // com o valor anterior evita abrir o modal so por abrir uma UC ja encerrada.
+    useEffect(() => {
+        const ENCERRADOS = ['desconectado', 'cancelado', 'cancelado_inadimplente'];
+        const antes = statusAnterior.current;
+        statusAnterior.current = formData.status;
+        if (antes === null || antes === formData.status) return;
+        if (ENCERRADOS.includes(formData.status) && !formData.acompanhar_conta_ate) {
+            const d = new Date();
+            d.setDate(d.getDate() + 90); // ~3 ciclos de faturamento
+            setDataAcompanhamento(d.toISOString().split('T')[0]);
+            setPedirAcompanhamento(true);
+        }
+    }, [formData.status]);
+
     const formatarData = (iso) => {
         if (!iso) return '';
         const [a, m, d] = String(iso).slice(0, 10).split('-');
@@ -178,7 +201,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         titular_fatura_id: '',
         cpf_cnpj_fatura: '',
         tipo_unidade: 'beneficiaria',
-        fatura_consumo_terceiro: false,
+        // null = ainda nao decidido. Vira escolha obrigatoria quando o tipo
+        // for geradora (ver validacao no submit).
+        fatura_consumo_terceiro: null,
         dia_leitura: 1,
         modalidade: 'geracao_compartilhada',
         concessionaria: '',
@@ -371,7 +396,9 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 titular_fatura_id: consumerUnit.titular_fatura_id || '',
                 cpf_cnpj_fatura: consumerUnit.cpf_cnpj_fatura || '',
                 tipo_unidade: consumerUnit.tipo_unidade || 'beneficiaria',
-                fatura_consumo_terceiro: consumerUnit.fatura_consumo_terceiro || false,
+                // ?? e nao ||: false gravado no banco e uma decisao tomada, nao
+                // ausencia de decisao -- so null/undefined significam "nao decidido".
+                fatura_consumo_terceiro: consumerUnit.fatura_consumo_terceiro ?? null,
                 dia_leitura: consumerUnit.dia_leitura || 1,
                 modalidade: consumerUnit.modalidade || 'geracao_compartilhada',
                 concessionaria: consumerUnit.concessionaria || '',
@@ -649,7 +676,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 // O CHECK no banco só aceita true em unidade geradora; trocar o
                 // tipo para beneficiária sem zerar aqui derrubaria o save.
                 fatura_consumo_terceiro: formData.tipo_unidade === 'geradora'
-                    ? !!formData.fatura_consumo_terceiro
+                    ? formData.fatura_consumo_terceiro === true
                     : false,
                 dia_leitura: Number(formData.dia_leitura),
                 modalidade: formData.modalidade,
@@ -683,6 +710,14 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             // Sem assinante não há a quem cobrar: o flag ligaria o faturamento e
             // a conta ficaria sem destinatário, saindo das despesas da usina sem
             // entrar em lugar nenhum.
+            // A partir do cancelamento automatico da fatura de UG, este campo decide
+            // sozinho se alguem sera cobrado. Deixar em branco nao pode significar
+            // "nao cobrar" por inercia -- a escolha tem de ser explicita.
+            if (formData.tipo_unidade === 'geradora'
+                && formData.fatura_consumo_terceiro !== true
+                && formData.fatura_consumo_terceiro !== false) {
+                throw new Error('Em unidade geradora, informe se ela fatura consumo de terceiro (Sim ou Nao).');
+            }
             if (payload.fatura_consumo_terceiro && !payload.subscriber_id) {
                 throw new Error('Para faturar consumo de terceiro é preciso vincular o assinante que será cobrado.');
             }
@@ -2071,23 +2106,51 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                             </select>
                                             {/* Telhado arrendado: a UC geradora mede a injeção da usina,
                                                 mas quem consome nela é o dono do telhado. Nesse caso a
-                                                conta da concessionária é cobrada dele, não abatida da usina. */}
+                                                conta da concessionária é cobrada dele, não abatida da usina.
+
+                                                Sim/Não em vez de caixa de marcar, e sem valor inicial:
+                                                a partir do cancelamento automático de fatura de UG, este
+                                                campo é o único ponto que decide se alguém será cobrado.
+                                                Uma caixa desmarcada por inércia significaria "não cobrar",
+                                                sem que ninguém tivesse decidido isso. */}
                                             {formData.tipo_unidade === 'geradora' && (
-                                                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginTop: '0.6rem', cursor: 'pointer' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!formData.fatura_consumo_terceiro}
-                                                        onChange={e => setFormData({ ...formData, fatura_consumo_terceiro: e.target.checked })}
-                                                        style={{ marginTop: '0.2rem', cursor: 'pointer' }}
-                                                    />
-                                                    <span style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.35 }}>
-                                                        <strong>Fatura consumo de terceiro</strong> (telhado arrendado)
+                                                <div style={{ marginTop: '0.6rem', padding: '0.7rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
+                                                    <div style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.35, marginBottom: '0.5rem' }}>
+                                                        <strong>Fatura consumo de terceiro?</strong> (telhado arrendado)
                                                         <br />
-                                                        <span style={{ color: '#94a3b8' }}>
-                                                            A conta da concessionária é cobrada do assinante vinculado, não abatida das despesas da usina. Exige assinante.
+                                                        <span style={{ color: '#92400e' }}>
+                                                            <strong>Sim</strong>: a conta da concessionária é cobrada do assinante vinculado (exige assinante).
+                                                            <br />
+                                                            <strong>Não</strong>: a fatura ao assinante é cancelada automaticamente e a conta vira despesa da usina.
                                                         </span>
-                                                    </span>
-                                                </label>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        {[{ v: true, l: 'Sim' }, { v: false, l: 'Não' }].map(opt => {
+                                                            const ativo = formData.fatura_consumo_terceiro === opt.v;
+                                                            return (
+                                                                <button
+                                                                    key={opt.l}
+                                                                    type="button"
+                                                                    onClick={() => setFormData({ ...formData, fatura_consumo_terceiro: opt.v })}
+                                                                    style={{
+                                                                        flex: 1, padding: '0.5rem', borderRadius: '6px', cursor: 'pointer',
+                                                                        fontWeight: 700, fontSize: '0.85rem',
+                                                                        border: ativo ? '2px solid #d97706' : '1px solid #e2e8f0',
+                                                                        background: ativo ? '#d97706' : 'white',
+                                                                        color: ativo ? 'white' : '#64748b'
+                                                                    }}
+                                                                >
+                                                                    {opt.l}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {formData.fatura_consumo_terceiro === null && (
+                                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600 }}>
+                                                            Escolha obrigatória para unidade geradora.
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                         <div>
@@ -2915,6 +2978,57 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     }}
                     onPaymentSuccess={fetchUCInvoices}
                 />
+            )}
+
+            {/* Prazo de acompanhamento da conta final. Depois do desligamento a
+                concessionaria ainda emite a conta proporcional -- e as vezes contas
+                de periodo posterior, que nao sao devidas. Sem prazo, a UC sai da
+                fila do robo na hora e ninguem descobre. */}
+            {pedirAcompanhamento && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, backdropFilter: 'blur(4px)' }}>
+                    <div style={{ background: 'white', borderRadius: '12px', width: '90%', maxWidth: '480px', padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '0.6rem' }}>
+                            Até quando acompanhar a conta desta UC?
+                        </h3>
+                        <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.45, marginBottom: '1rem' }}>
+                            UC encerrada sai da fila do robô. Mas a concessionária ainda emite a
+                            <strong> conta final proporcional</strong>, que é devida. Informe até quando
+                            continuar buscando — depois dessa data ela sai sozinha.
+                        </p>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem' }}>
+                            Acompanhar conta até
+                        </label>
+                        <input
+                            type="date"
+                            value={dataAcompanhamento}
+                            onChange={e => setDataAcompanhamento(e.target.value)}
+                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '0.4rem' }}
+                        />
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '1.2rem' }}>
+                            Sugestão: 90 dias (cerca de 3 ciclos de faturamento).
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setPedirAcompanhamento(false)}
+                                style={{ padding: '0.6rem 1rem', background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                Não acompanhar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFormData(prev => ({ ...prev, acompanhar_conta_ate: dataAcompanhamento }));
+                                    setPedirAcompanhamento(false);
+                                }}
+                                disabled={!dataAcompanhamento}
+                                style={{ padding: '0.6rem 1rem', background: dataAcompanhamento ? 'var(--color-blue, #2563eb)' : '#cbd5e1', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 700, cursor: dataAcompanhamento ? 'pointer' : 'not-allowed' }}
+                            >
+                                Confirmar prazo
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
