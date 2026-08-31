@@ -76,6 +76,17 @@ function formatDoc(v) {
     return v;
 }
 
+/**
+ * Marca de conta parcelada na linha do portal.
+ *
+ * A Neoenergia parcela de forma UNILATERAL: quando não consegue faturar a
+ * conta no prazo, emite a fatura e já a parcela, para cumprir o prazo de
+ * emissão da ANEEL. Não é acordo pedido pelo cliente e não é sinal de
+ * inadimplência — e, principalmente, a fatura EXISTE (é dela que saem consumo
+ * e energia compensada, necessários para faturar o assinante da B2W).
+ */
+const PADRAO_PARCELADA = /PARCELAD|PARCELAMENTO|ACORDO/i;
+
 function parseMesRef(texto) {
     const months = {
         'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN': '06',
@@ -282,8 +293,9 @@ module.exports = {
      * Fases 3 a 5 — abre a UC, procura a fatura do mês-alvo e baixa o PDF.
      *
      * Retorna (nunca grava no banco — isso é responsabilidade do orquestrador):
-     *   { resultado: 'baixada',        ref, valor, localPath }
+     *   { resultado: 'baixada',        ref, valor, parcelada, localPath }
      *   { resultado: 'conta_minima',   ref, valor }
+     *   { resultado: 'parcelada',      ref, valor }   // existe, sem download aqui
      *   { resultado: 'falha_download', ref, erro }
      *   { resultado: 'nao_disponivel' }
      * Lança em erro estrutural (UC não encontrada, botão ausente).
@@ -345,6 +357,9 @@ module.exports = {
 
         const checkboxes = await page.locator('mat-checkbox[id^="checkItem-"]').all();
         let falhaDownload = null;
+        // Diagnóstico: quando o alvo não é encontrado, saber o que ESTAVA na tela
+        // vale mais que o palpite. Sem isso, "não disponível" some sem rastro.
+        const refsVistas = [];
 
         for (const cb of checkboxes) {
             // Sobe na árvore até achar o bloco que contém a REFERÊNCIA (padrão MES/ANO).
@@ -360,9 +375,21 @@ module.exports = {
             }).catch((e) => { log('   [DIAG] erro no evaluate: ' + e.message); return ''; });
 
             const parsedRef = parseMesRef(rowText);
+            if (parsedRef) refsVistas.push(parsedRef);
             if (parsedRef !== mesRefAlvo) continue;
 
             log(`   [Faturista] Fatura [${parsedRef}] localizada na tabela!`);
+
+            // A Neoenergia parcela de forma UNILATERAL: quando não consegue
+            // faturar no prazo, emite a conta e já a parcela para cumprir o
+            // prazo da ANEEL. Ou seja, parcelada NÃO quer dizer acordo do
+            // cliente e NÃO quer dizer ausência de fatura — o PDF existe e é
+            // dele que saem consumo e energia compensada. Por isso o download
+            // segue normalmente; 'parcelada' é só uma etiqueta a mais.
+            const ehParcelada = PADRAO_PARCELADA.test(rowText);
+            if (ehParcelada) {
+                log(`   [Faturista] Fatura [${parsedRef}] está PARCELADA. Baixando mesmo assim.`);
+            }
 
             // CONTA MÍNIMA não gera PDF nem boleto — a concessionária acumula o
             // valor para o mês seguinte. Insistir no download é perda de tempo.
@@ -455,6 +482,7 @@ module.exports = {
                     resultado: 'baixada',
                     ref: parsedRef,
                     valor: valorDaLinha(rowText),
+                    parcelada: ehParcelada,
                     localPath,
                     fileName
                 };
@@ -471,6 +499,32 @@ module.exports = {
         }
 
         if (falhaDownload) return falhaDownload;
+
+        // Nenhum checkbox casou com o mês-alvo. Antes de dizer "não disponível",
+        // procurar a referência no texto da tela: a lista do portal ordena
+        // vencidas -> a vencer -> parceladas -> pagas, e nem toda linha
+        // oferece checkbox de 2ª via. Se a conta existe mas não é baixável,
+        // registrar o valor é muito melhor que gravar zero.
+        const achadoNoTexto = await page.evaluate((alvoRegex) => {
+            const blocos = [...document.querySelectorAll('div,li,tr')]
+                .map(el => (el.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(t => t.length > 20 && t.length < 600);
+            return blocos.find(t => new RegExp(alvoRegex, 'i').test(t)) || null;
+        }, mesRefAlvo.replace('/', '\\/')).catch(() => null);
+
+        if (achadoNoTexto) {
+            const refTexto = parseMesRef(achadoNoTexto);
+            if (refTexto === mesRefAlvo && PADRAO_PARCELADA.test(achadoNoTexto)) {
+                log(`   [Faturista] Fatura [${mesRefAlvo}] existe como PARCELADA, sem opção de download nesta tela.`);
+                return {
+                    resultado: 'parcelada',
+                    ref: mesRefAlvo,
+                    valor: valorDaLinha(achadoNoTexto),
+                };
+            }
+        }
+
+        log(`   [Faturista] Referência ${mesRefAlvo} não encontrada. Disponíveis na tela: ${refsVistas.length ? refsVistas.join(', ') : '(nenhuma)'}`);
         return { resultado: 'nao_disponivel' };
     },
 

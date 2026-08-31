@@ -287,18 +287,23 @@ async function run() {
         // Number(mm) já aponta para o mês seguinte (o construtor é 0-indexed).
         const fimMes = new Date(Date.UTC(Number(yyyy), Number(mm), 1)).toISOString().slice(0, 10);
 
+        // Duas razões para não voltar ao portal: o PDF já está guardado, OU a
+        // conta foi parcelada. No parcelamento a fatura some da lista de
+        // débitos baixáveis, então insistir a cada 7 dias até desistir aos 60
+        // só gasta sessão e pinta a UC de vermelho no Calendário.
         const { data: existingInvoices } = await supabase
             .from('invoices')
-            .select('id, concessionaria_pdf_url')
+            .select('id, concessionaria_pdf_url, energy_bill_status')
             .eq('uc_id', uc.id)
             .gte('mes_referencia', inicioMes)
             .lt('mes_referencia', fimMes)
-            .not('concessionaria_pdf_url', 'is', null)
+            .or('concessionaria_pdf_url.not.is.null,energy_bill_status.eq.parcelada')
             .limit(1);
 
         if (existingInvoices && existingInvoices.length > 0) {
-            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] já existe. Pulando scrape.`);
-            if (uc.last_scraping_status !== 'success') {
+            const motivo = existingInvoices[0].concessionaria_pdf_url ? 'já existe' : 'parcelada pela concessionária';
+            console.log(`[Código] UC ${uc.numero_uc}: Fatura [${uc.mesRefAlvo}] ${motivo}. Pulando scrape.`);
+            if (existingInvoices[0].concessionaria_pdf_url && uc.last_scraping_status !== 'success') {
                 await updateUCStatus(uc.id, 'success', 'Fatura detectada via consulta de banco de dados.');
             }
         } else {
@@ -469,6 +474,10 @@ async function run() {
                                         status: 'sem_faturamento',
                                         valor_concessionaria: r.valor,
                                         is_placeholder: false,
+                                        // A conta baixou normalmente; parcelada é
+                                        // etiqueta da forma de pagamento imposta pela
+                                        // concessionária, não impedimento de leitura.
+                                        ...(r.parcelada ? { energy_bill_status: 'parcelada' } : {}),
                                         ...extraidos,
                                     });
                                     await updateUCStatus(uc.id, 'success');
@@ -493,6 +502,21 @@ async function run() {
                                 });
                                 await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
 
+                            } else if (r.resultado === 'parcelada') {
+                                // A conta existe e o valor é conhecido, mas não há PDF
+                                // para baixar nesta tela. Gravar zero seria pior que
+                                // gravar o valor: some a obrigação com a concessionária.
+                                console.log(`   Fatura [${r.ref}] parcelada pela concessionária — registrada sem PDF (R$ ${r.valor}).`);
+                                await upsertInvoice(uc, r.ref, {
+                                    status: 'sem_faturamento',
+                                    energy_bill_status: 'parcelada',
+                                    valor_concessionaria: r.valor,
+                                    reading_status: 'error',
+                                    reading_error: '[ATENCAO] Conta parcelada pela concessionaria e sem PDF nesta tela. Valor lido da lista de debitos. Lancar as parcelas e anexar a fatura manualmente para liberar a leitura de energia compensada.',
+                                    is_placeholder: true,
+                                });
+                                await updateUCStatus(uc.id, 'not_available', 'Conta parcelada pela concessionária: sem PDF para download nesta tela.');
+
                             } else {
                                 console.log('   Fatura não disponível no portal ainda.');
                                 await updateUCStatus(uc.id, 'not_available', 'Hoje é dia de leitura, mas a fatura ainda não foi postada no portal.');
@@ -505,7 +529,7 @@ async function run() {
                     } // end ucs loop
                 } // end escopos loop
             } catch (groupErr) {
-                console.error(`Erro Crítico no Grupo ${subscriber.name}:`, groupErr.message);
+                console.error(`Erro Crítico no Grupo ${nomeTitular}:`, groupErr.message);
                 for (const escopo in escopos) {
                     for (const uc of escopos[escopo]) {
                         await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
