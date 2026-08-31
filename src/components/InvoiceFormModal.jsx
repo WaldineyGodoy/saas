@@ -365,11 +365,21 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
 
         if (!confirmed) return;
 
-        const deleteConcessionaria = await showConfirm(
-            'Deseja excluir também a conta de energia da concessionária vinculada? (Se escolher NÃO, a conta será mantida com status "Sem Faturamento" e você poderá refaturá-la).', 
-            'Excluir Conta de Energia?', 
-            'Sim, Excluir Tudo', 
-            'Não, Apenas Refaturar'
+        // A conta de energia NUNCA é excluída aqui. Fatura e conta de energia são
+        // obrigações distintas na mesma linha: cancelar a cobrança do assinante
+        // não extingue o que se deve à concessionária. A opção "Excluir Tudo"
+        // que existia neste ponto apagava a linha inteira e levava junto valor,
+        // vencimento e PDF -- sem deixar rastro, porque DELETE não era logado.
+        // Perdeu a conta de 07/2026 da UC 7029875701 em 31/08/2026.
+        //
+        // Restam os dois desfechos legítimos, e ambos preservam a linha:
+        //   Cancelar   -> status 'cancelado', conta segue visível e devida
+        //   Refaturar  -> status 'sem_faturamento', pronta para nova cobrança
+        const apenasRefaturar = await showConfirm(
+            'A conta de energia da concessionária será preservada nos dois casos.\n\nCancelar a cobrança do assinante, ou devolver a fatura para refaturamento?',
+            'Cancelar ou Refaturar?',
+            'Devolver para Refaturamento',
+            'Cancelar a Fatura'
         );
 
         isSubmitting.current = true;
@@ -381,30 +391,32 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 await cancelAsaasCharge(invoice.id);
             }
 
-            if (deleteConcessionaria) {
-                // Delete completely from database
+            // Os campos do Asaas são limpos nos dois casos: o boleto acabou de
+            // ser cancelado lá, manter linha digitável e PIX seria oferecer
+            // pagamento de uma cobrança que não existe mais.
+            const limpaAsaas = {
+                asaas_status: null,
+                asaas_payment_id: null,
+                asaas_boleto_url: null,
+                asaas_pdf_storage_url: null,
+                linha_digitavel: null,
+                pix_string: null
+            };
+
+            if (apenasRefaturar) {
                 const { error } = await supabase
                     .from('invoices')
-                    .delete()
+                    .update({ status: 'sem_faturamento', ...limpaAsaas })
                     .eq('id', invoice.id);
                 if (error) throw error;
-                showAlert('Fatura e conta de energia excluídas com sucesso!', 'success');
+                showAlert('Fatura devolvida para refaturamento. A conta de energia foi preservada!', 'success');
             } else {
-                // Reset status to sem_faturamento and clear asaas fields in database
                 const { error } = await supabase
                     .from('invoices')
-                    .update({
-                        status: 'sem_faturamento',
-                        asaas_status: null,
-                        asaas_payment_id: null,
-                        asaas_boleto_url: null,
-                        asaas_pdf_storage_url: null,
-                        linha_digitavel: null,
-                        pix_string: null
-                    })
+                    .update({ status: 'cancelado', ...limpaAsaas })
                     .eq('id', invoice.id);
                 if (error) throw error;
-                showAlert('Cobrança cancelada. A conta de energia foi preservada para refaturamento!', 'success');
+                showAlert('Fatura cancelada. A conta de energia continua devida e visível em Contas de Energia.', 'success');
             }
 
             if (onSave) onSave();
