@@ -28,6 +28,58 @@ const TOLERANCIA = 0.01;
  *
  * É a única conferência do valor que não depende do nosso regex.
  */
+/**
+ * Digito verificador de um bloco da linha digitavel de arrecadacao.
+ *
+ * O 3o digito do codigo diz qual modulo rege os DVs: 6 ou 7 -> modulo 10,
+ * 8 ou 9 -> modulo 11. As contas da Cosern usam modulo 11.
+ */
+function dvBloco(base, modulo) {
+    let soma = 0;
+    if (modulo === 11) {
+        let peso = 2;
+        for (let i = base.length - 1; i >= 0; i--) {
+            soma += Number(base[i]) * peso;
+            peso = peso === 9 ? 2 : peso + 1;
+        }
+        const dv = 11 - (soma % 11);
+        return (dv === 0 || dv === 10 || dv === 11) ? 0 : dv;
+    }
+    let peso = 2;
+    for (let i = base.length - 1; i >= 0; i--) {
+        let p = Number(base[i]) * peso;
+        if (p > 9) p = Math.floor(p / 10) + (p % 10);
+        soma += p;
+        peso = peso === 2 ? 1 : 2;
+    }
+    const resto = soma % 10;
+    return resto === 0 ? 0 : 10 - resto;
+}
+
+/**
+ * O numero capturado é mesmo um código de arrecadação?
+ *
+ * Importa porque o regex que extrai a linha digitável pode ancorar num "8"
+ * espúrio e trazer dígitos a mais na frente — foi o que aconteceu com a UC
+ * 7030004455, que veio com "800" antes do código e produziu um valor de
+ * R$ 387.000.001,03. Sem essa checagem, lixo capturado vira "os valores
+ * divergem", e uma conta correta nasce marcada como problema.
+ *
+ * Os quatro blocos de 12 dígitos têm DV no último dígito. Se os quatro fecham,
+ * o número é um código; se não fecham, não é.
+ */
+function codigoDeBarrasValido(linhaDigitavel) {
+    const d = String(linhaDigitavel || '').replace(/\D/g, '');
+    if (d.length !== 48) return false;
+
+    const modulo = ['8', '9'].includes(d[2]) ? 11 : 10;
+    for (let b = 0; b < 4; b++) {
+        const bloco = d.substr(b * 12, 12);
+        if (Number(bloco[11]) !== dvBloco(bloco.slice(0, 11), modulo)) return false;
+    }
+    return true;
+}
+
 function valorDoCodigoDeBarras(linhaDigitavel) {
     const d = String(linhaDigitavel || '').replace(/\D/g, '');
 
@@ -66,6 +118,7 @@ async function lerPdf(pdfBuffer, { supabaseUrl, supabaseKey }) {
  */
 function conferir(campos, { valorPortal, refAlvo }) {
     const problemas = [];
+    const avisos = [];
     const totalPdf = Number(campos.valor_a_pagar) || 0;
 
     if (totalPdf <= 0) {
@@ -79,11 +132,23 @@ function conferir(campos, { valorPortal, refAlvo }) {
         }
     }
 
-    const valorBarras = valorDoCodigoDeBarras(campos.linha_digitavel);
-    if (valorBarras == null) {
-        problemas.push('codigo de barras ausente ou ilegivel');
-    } else if (totalPdf > 0 && Math.abs(valorBarras - totalPdf) > TOLERANCIA) {
-        problemas.push(`codigo de barras R$ ${valorBarras.toFixed(2)} != PDF R$ ${totalPdf.toFixed(2)}`);
+    // Codigo de barras: tres desfechos diferentes, e misturar os dois ultimos
+    // faz conta correta nascer marcada como problema.
+    //
+    //   codigo valido e valor bate  -> a melhor confirmacao que existe
+    //   codigo valido e valor NAO bate -> divergencia real, bloqueia
+    //   codigo ausente ou ilegivel  -> aviso: nao da para confirmar por aqui,
+    //                                  mas isso nao acusa a conta de nada
+    let valorBarras = null;
+    if (!campos.linha_digitavel) {
+        avisos.push('codigo de barras nao encontrado no PDF');
+    } else if (!codigoDeBarrasValido(campos.linha_digitavel)) {
+        avisos.push('codigo de barras ilegivel (digito verificador nao fecha) - conferencia por ele nao foi possivel');
+    } else {
+        valorBarras = valorDoCodigoDeBarras(campos.linha_digitavel);
+        if (valorBarras != null && totalPdf > 0 && Math.abs(valorBarras - totalPdf) > TOLERANCIA) {
+            problemas.push(`codigo de barras R$ ${valorBarras.toFixed(2)} != PDF R$ ${totalPdf.toFixed(2)}`);
+        }
     }
 
     // refAlvo chega como MM/AAAA; a parse-invoice devolve AAAA-MM.
@@ -99,7 +164,7 @@ function conferir(campos, { valorPortal, refAlvo }) {
         problemas.push('data de leitura ausente');
     }
 
-    return { ok: problemas.length === 0, problemas, valorBarras, totalPdf };
+    return { ok: problemas.length === 0, problemas, avisos, valorBarras, totalPdf };
 }
 
 const numero = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
@@ -141,9 +206,13 @@ async function extrairFatura(pdfBuffer, { supabaseUrl, supabaseKey, valorPortal,
         colunas: {
             ...paraInvoice(campos),
             reading_status: veredito.ok ? 'success' : 'error',
-            reading_error: veredito.ok
-                ? null
-                : `[CONFERIR] ${veredito.problemas.join('; ')}`,
+            // Aviso nao derruba a conta: fica registrado para quem for olhar,
+            // sem marcar como problema o que so nao pode ser confirmado.
+            reading_error: veredito.problemas.length > 0
+                ? `[CONFERIR] ${veredito.problemas.join('; ')}`
+                : veredito.avisos.length > 0
+                    ? `[AVISO] ${veredito.avisos.join('; ')}`
+                    : null,
         },
     };
 }
@@ -155,6 +224,7 @@ async function extrairDoArquivo(caminho, opcoes) {
 
 module.exports = {
     TOLERANCIA,
+    codigoDeBarrasValido,
     valorDoCodigoDeBarras,
     conferir,
     paraInvoice,

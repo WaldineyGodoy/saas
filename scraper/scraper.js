@@ -481,6 +481,7 @@ async function run() {
                                         ...extraidos,
                                     });
                                     await updateUCStatus(uc.id, 'success');
+                                    await calcularValorDoAssinante(uc, gravada?.id);
                                     await registrarSuspeitaDesligamento(uc, gravada?.id);
                                 } catch (upErr) {
                                     console.error(`   [Faturista] Falha ao guardar o PDF:`, upErr.message);
@@ -597,6 +598,41 @@ async function upsertInvoice(uc, ref, campos) {
         reading_checked_at: new Date().toISOString(),
         ...campos
     }, { onConflict: 'uc_id,mes_referencia' }).select('id').single();
+}
+
+/**
+ * Fecha o valor que o assinante deve.
+ *
+ * O robô traz quantidades — kWh, compensado, CIP, outras despesas — e nada
+ * disso vira dinheiro sozinho. Sem esta chamada a fatura fica com os
+ * quantitativos certos e valor zerado, e a tela oferece ao assinante apenas o
+ * repasse fixo: a UC 7030004455 saiu por R$ 38,12 (IP 36,94 + outros 1,18)
+ * quando o devido eram R$ 303,75. Esse tipo de erro nao parece defeito, parece
+ * uma conta baixa -- e por isso passa.
+ *
+ * A conta e a mesma que a tela faz, mas mora no banco: uma formula so, usada
+ * pelo robo e pelo formulario. Ela tambem congela na fatura a tarifa e o
+ * desconto usados, para o faturamento historico continuar reproduzivel quando
+ * o cadastro mudar.
+ */
+async function calcularValorDoAssinante(uc, invoiceId) {
+    if (!invoiceId) return;
+
+    const { data, error } = await supabase.rpc('fn_calcular_fatura', {
+        p_invoice_id: invoiceId,
+        p_gravar: true,
+    });
+
+    if (error) {
+        console.error(`   [Faturista] Falha ao calcular o valor do assinante: ${error.message}`);
+        return;
+    }
+
+    const r = data?.[0];
+    if (!r) return;
+
+    const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    console.log(`   [Faturamento] assinante paga ${brl(r.valor_a_pagar)} | economia ${brl(r.economia_reais)}`);
 }
 
 /**

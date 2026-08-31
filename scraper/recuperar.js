@@ -12,6 +12,7 @@
  *   node recuperar.js --aplicar    # grava
  *   node recuperar.js --uc 7030765324 --aplicar
  *   node recuperar.js --todas --aplicar   # inclui as que já têm consumo
+ *   node recuperar.js --invoice <id> --aplicar   # uma fatura especifica
  */
 
 const { createClient } = require('@supabase/supabase-js');
@@ -25,6 +26,10 @@ const args = process.argv.slice(2);
 const APLICAR = args.includes('--aplicar');
 const TODAS = args.includes('--todas');
 const UC_ALVO = args.includes('--uc') ? args[args.indexOf('--uc') + 1] : null;
+// Mira uma fatura especifica. Util para reprocessar um caso sem arrastar as
+// antigas junto -- fatura velha costuma ter URL de PDF que nao responde mais,
+// e regravar em massa marcaria como erro dado historico que esta certo.
+const INVOICE_ALVO = args.includes('--invoice') ? args[args.indexOf('--invoice') + 1] : null;
 const LIMITE = args.includes('--limite') ? parseInt(args[args.indexOf('--limite') + 1], 10) : 200;
 
 const brl = (v) => `R$ ${Number(v || 0).toFixed(2)}`;
@@ -53,8 +58,12 @@ async function run() {
         .limit(LIMITE);
 
     // O alvo natural é a fatura que nunca passou pela extração.
-    if (!TODAS) query = query.is('consumo_kwh', null);
-    if (UC_ALVO) query = query.eq('consumer_units.numero_uc', UC_ALVO);
+    if (INVOICE_ALVO) {
+        query = query.eq('id', INVOICE_ALVO);
+    } else {
+        if (!TODAS) query = query.is('consumo_kwh', null);
+        if (UC_ALVO) query = query.eq('consumer_units.numero_uc', UC_ALVO);
+    }
 
     const { data: faturas, error } = await query;
     if (error) throw error;
@@ -93,6 +102,9 @@ async function run() {
                 conferir++;
                 console.log(`! ${etiqueta}  CONFERIR: ${ex.veredito.problemas.join('; ')}`);
             }
+            if (ex.veredito.avisos.length > 0) {
+                console.log(`    aviso: ${ex.veredito.avisos.join('; ')}`);
+            }
             console.log(`    ${resumo}`);
 
             if (APLICAR) {
@@ -101,7 +113,17 @@ async function run() {
                     .update({ ...c, reading_checked_at: new Date().toISOString() })
                     .eq('id', f.id);
                 if (upErr) throw new Error(`gravação: ${upErr.message}`);
-                console.log('    gravado.');
+
+                // Quantidade nao vira dinheiro sozinha: fecha o valor do
+                // assinante com a mesma formula que o robo e a tela usam.
+                const { data: calc, error: calcErr } = await supabase
+                    .rpc('fn_calcular_fatura', { p_invoice_id: f.id, p_gravar: true });
+                if (calcErr) {
+                    console.log(`    gravado, mas o calculo falhou: ${calcErr.message}`);
+                } else {
+                    const r = calc?.[0];
+                    console.log(`    gravado. Assinante paga ${brl(r?.valor_a_pagar)} | economia ${brl(r?.economia_reais)}`);
+                }
             }
         } catch (err) {
             falhou++;
