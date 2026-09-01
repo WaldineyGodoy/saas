@@ -99,7 +99,11 @@ export const moeda = (valor) =>
 export const paraNumero = (valor) => {
     if (typeof valor === 'number') return valor;
 
-    const texto = String(valor ?? '').trim();
+    // O símbolo da moeda vem junto quando o valor sai de um campo já
+    // formatado — "R$ 100.000,00" é o que o modal da usina guarda em
+    // `valor_investido`. Sem tirar o prefixo, o Number dá NaN e o contrato
+    // imprime R$ 0,00 no valor do empreendimento sem reclamar de nada.
+    const texto = String(valor ?? '').replace(/[^\d.,-]/g, '').trim();
     if (!texto) return NaN;
 
     // "17,5" e "1.234,56" vêm do teclado brasileiro; "17.5" vem de quem

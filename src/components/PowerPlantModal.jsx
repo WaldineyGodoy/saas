@@ -311,8 +311,15 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
  * lista: duas cópias é como um campo novo entra na tela sem entrar no que
  * é salvo.
  */
+/**
+ * Campos do compra e venda editáveis aqui.
+ *
+ * `valorTotal` não está na lista de propósito: o valor do empreendimento é
+ * o Valor Investido da aba Dados. Ter os dois seria duas verdades para o
+ * mesmo número, e o contrato sairia com o valor de um enquanto o painel da
+ * usina mostra o outro.
+ */
 const CAMPOS_COMPRA_VENDA = [
-    { key: 'valorTotal', label: 'Valor total (R$)' },
     { key: 'parcela1', label: '1a parcela, assinatura (R$)' },
     { key: 'parcela2', label: '2a parcela, equipamentos (R$)' },
     { key: 'parcela3', label: '3a parcela, vistoria (R$)' },
@@ -480,13 +487,28 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         servicoOM
     });
 
-    const textoContratoAtual = () => contractDraft || contratoAtual.montar(contextoContrato(), contractOpts);
+    /**
+     * O valor do empreendimento é o Valor Investido da usina.
+     *
+     * Ele mora em `formData.valor_investido` já formatado ("R$ 100.000,00"),
+     * então entra aqui convertido: o gerador aceita string, mas quem lê o
+     * campo cru sem tirar o "R$" recebe NaN e imprime R$ 0,00.
+     */
+    const valorInvestidoNumero = () => parseCurrency(formData.valor_investido);
 
-    const minutaEditada = contractDraft !== '' && contractDraft !== contratoAtual.montar(contextoContrato(), contractOpts);
+    const opcoesContrato = () => ({ ...contractOpts, valorTotal: valorInvestidoNumero() });
+
+    const textoContratoAtual = () => contractDraft || contratoAtual.montar(contextoContrato(), opcoesContrato());
+
+    const minutaEditada = contractDraft !== '' && contractDraft !== contratoAtual.montar(contextoContrato(), opcoesContrato());
 
     const condicoesParaGravar = () => {
         const gravar = {};
         for (const [chave, padrao] of Object.entries(DEFAULTS_USINA)) {
+            // `valorTotal` é derivado de `valor_investido`; gravá-lo aqui
+            // criaria uma cópia que envelhece sozinha assim que alguém
+            // corrigir o valor investido na aba Dados.
+            if (chave === 'valorTotal') continue;
             const bruto = contractOpts[chave];
             if (typeof padrao === 'number') {
                 const n = paraNumero(bruto);
@@ -506,6 +528,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         if (!fornecedor.phone && !fornecedor.email) { showAlert('O fornecedor não tem telefone nem e-mail cadastrado.', 'warning'); return; }
         if (tipoContrato === 'arrendamento' && !areaArrendada) {
             showAlert('Vincule uma área arrendada à usina antes de gerar o contrato de arrendamento.', 'warning');
+            return;
+        }
+        // Compra e venda sem preço é contrato de compra por R$ 0,00 — e este
+        // sai assinado pela Autentique, sem ninguém reler antes.
+        if (tipoContrato === 'compra_venda' && valorInvestidoNumero() <= 0) {
+            showAlert('Preencha o Valor Investido na aba Financeiro: o contrato de compra e venda sairia com preço de R$ 0,00.', 'warning');
             return;
         }
 
@@ -4498,8 +4526,33 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             </p>
                                         </div>
 
-                                        {tipoContrato === 'compra_venda' && (
-                                            <div style={{ marginTop: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                        {tipoContrato === 'compra_venda' && (() => {
+                                            const total = valorInvestidoNumero();
+                                            const somaParcelas = parseCurrency(contractOpts.parcela1) + parseCurrency(contractOpts.parcela2) + parseCurrency(contractOpts.parcela3);
+                                            // Diferença de centavo é arredondamento, não erro de digitação.
+                                            const divergeParcelas = total > 0 && somaParcelas > 0 && Math.abs(somaParcelas - total) > 0.01;
+                                            return (
+                                        <>
+                                            <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: total > 0 ? '#f8fafc' : '#fffbeb', border: `1px solid ${total > 0 ? '#e2e8f0' : '#fde68a'}`, borderRadius: '10px' }}>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#475569' }}>Valor total do empreendimento</div>
+                                                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: total > 0 ? '#0f172a' : '#92400e', margin: '0.2rem 0' }}>
+                                                    {total > 0 ? `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'não informado'}
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.78rem', color: total > 0 ? '#94a3b8' : '#92400e' }}>
+                                                    {total > 0
+                                                        ? 'Vem de Valor Investido, na aba Financeiro. Para mudar o valor do contrato, mude lá.'
+                                                        : 'Preencha Valor Investido na aba Financeiro: sem ele o contrato de compra e venda não é enviado.'}
+                                                </p>
+                                            </div>
+
+                                            {divergeParcelas && (
+                                                <div style={{ marginTop: '0.75rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                                    <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                                    As três parcelas somam R$ {somaParcelas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} e o valor total é R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. O contrato sai com as duas contas.
+                                                </div>
+                                            )}
+
+                                            <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                                                 {CAMPOS_COMPRA_VENDA.map(campo => (
                                                     <div key={campo.key}>
                                                         <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>{campo.label}</label>
@@ -4516,7 +4569,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     </div>
                                                 ))}
                                             </div>
-                                        )}
+                                        </>
+                                            );
+                                        })()}
 
                                         {tipoContrato === 'om' && (
                                             <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', fontSize: '0.83rem', color: '#0369a1' }}>
@@ -4525,9 +4580,12 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             </div>
                                         )}
 
-                                        {tipoContrato === 'arrendamento' && !areaArrendada && (
+                                        {tipoContrato !== 'om' && !areaArrendada && (
                                             <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
-                                                <AlertCircle size={18} /> Sem área vinculada, o contrato de arrendamento sai com os campos do imóvel em branco.
+                                                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                                                {tipoContrato === 'arrendamento'
+                                                    ? 'Sem área vinculada, o contrato de arrendamento sai com os campos do imóvel em branco.'
+                                                    : 'Sem área vinculada, as cláusulas 14 e 15 do compra e venda saem com o imóvel, o proprietário e o aluguel em branco.'}
                                             </div>
                                         )}
                                     </div>

@@ -97,6 +97,16 @@ export const montarCompraVenda = ({ usina, supplier, area } = {}, opts = {}) => 
     const potModulo = num(usina?.potencia_modulos_w);
     const potInversor = num(usina?.potencia_inversor_w);
     const valorTotal = num(p.valorTotal) || num(usina?.valor_investido);
+
+    // Opção de compra do imóvel sem preço é opção por R$ 0,00: bastaria ao
+    // INVESTIDOR notificar dentro do prazo para reivindicar a área de
+    // graça. Campo vazio, então, é ausência de opção — não opção gratuita.
+    const precoOpcao = num(p.valorOpcaoImovel);
+    const opcaoImovel = precoOpcao > 0
+        ? `15.1. O INTERVENIENTE ANUENTE, na qualidade de proprietário, outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14, pelo preço de R$ ${moeda(precoOpcao)}, exercível em até 12 (doze) meses da assinatura deste Contrato, mediante notificação escrita.
+15.2. Findo o prazo sem exercício, nova alienação dependerá de acordo entre proprietário e INVESTIDOR.`
+        : `15.1. Este Contrato não outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14.
+15.2. Eventual aquisição da área dependerá de acordo entre o INVESTIDOR e o proprietário, formalizado em instrumento próprio.`;
     const prazo = num(p.prazoExecucao, 180);
     const prazoReduzido = num(p.prazoExecucaoReduzido, 90);
     const foro = ou(p.foro || area?.comarca || cidadeUfDe(usina), cidadeUfDe(usina));
@@ -197,13 +207,12 @@ CAPÍTULO V — ÁREA, O&M E SEGURO
 
 CLÁUSULA 14 – DO ARRENDAMENTO DA ÁREA
 14.1. A usina será instalada em área de ${areaM2 ? `${numeroBr(areaM2)} m²` : '_______ m²'} objeto de Contrato de Arrendamento celebrado entre o INVESTIDOR e o INTERVENIENTE ANUENTE, que integra este instrumento como Anexo II.
-14.2. Valor do arrendamento: R$ ${moeda(aluguel)} mensais, reajustados anualmente na forma do respectivo contrato. Prazo: 10 (dez) anos, renovável por igual período.
+14.2. Valor do arrendamento: ${aluguel ? `R$ ${moeda(aluguel)}` : 'R$ _______'} mensais, reajustados anualmente na forma do respectivo contrato. Prazo: 10 (dez) anos, renovável por igual período.
 14.3. O INVESTIDOR declara ter recebido e lido o Contrato de Arrendamento, inclusive suas cláusulas de multa rescisória, de vigência em caso de alienação e de propriedade da usina, antes da assinatura deste.
 14.4. Declaração de parte relacionada. O INVESTIDOR declara ciência de que a área é de propriedade de sócio ou pessoa ligada ao GRUPO B2W, e que as condições praticadas correspondem a valores de mercado para a região e finalidade.
 
 CLÁUSULA 15 – DA OPÇÃO DE COMPRA DO IMÓVEL
-15.1. O INTERVENIENTE ANUENTE, na qualidade de proprietário, outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14, pelo preço de R$ ${moeda(num(p.valorOpcaoImovel))}, exercível em até 12 (doze) meses da assinatura deste Contrato, mediante notificação escrita.
-15.2. Findo o prazo sem exercício, nova alienação dependerá de acordo entre proprietário e INVESTIDOR.
+${opcaoImovel}
 
 CLÁUSULA 16 – DA OPERAÇÃO E MANUTENÇÃO
 16.1. A CONTRATADA oferece serviços de operação e manutenção da usina, de contratação facultativa, regidos por Contrato de Administração e Manutenção (O&M) próprio, com prazo inicial de 12 (doze) meses.
@@ -321,7 +330,7 @@ CLÁUSULA 2 – DO PRAZO
 2.2. Ao término, renova-se automaticamente por mais 10 (dez) anos, salvo oposição escrita de qualquer das Partes com antecedência mínima de 90 (noventa) dias.
 
 CLÁUSULA 3 – DO VALOR E DO REAJUSTE
-3.1. O valor mensal é de R$ ${moeda(aluguel)}, pago até o dia ${dia} (${porExtenso(dia)}) de cada mês, referente ao mês anterior de utilização${area?.mes_inicio ? `, com início em ${area.mes_inicio}` : ''}.
+3.1. O valor mensal é de ${aluguel ? `R$ ${moeda(aluguel)}` : 'R$ _______'}, pago até o dia ${dia} (${porExtenso(dia)}) de cada mês, referente ao mês anterior de utilização${area?.mes_inicio ? `, com início em ${area.mes_inicio}` : ''}.
 3.2. O valor será corrigido anualmente, na data de aniversário do início do pagamento, pela variação acumulada do ${indice}, ou, na sua extinção, por índice que o substitua.
 3.3. O atraso no pagamento sujeita o ARRENDATÁRIO a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção monetária.
 
