@@ -112,6 +112,26 @@ export const paraNumero = (valor) => {
     return Number.isFinite(numero) ? numero : NaN;
 };
 
+/**
+ * Código curto e determinístico do conteúdo do contrato.
+ *
+ * Vai no rodapé de todas as folhas. Serve para amarrar as páginas ao mesmo
+ * documento: folha de outra versão do contrato carrega outro código, então
+ * substituir ou remover página deixa rastro. É marcador de integridade, não
+ * hash criptográfico — a prova da assinatura continua sendo a da Autentique.
+ */
+export const identificadorDocumento = (texto = '') => {
+    const fnv = (semente) => {
+        let h = semente;
+        for (let i = 0; i < texto.length; i++) {
+            h ^= texto.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+        }
+        return h.toString(36).toUpperCase().padStart(7, '0');
+    };
+    return `${fnv(0x811c9dc5)}-${fnv(0x1000193)}`;
+};
+
 /** Caracteres que cabem numa linha justificada de 170mm em serif 11pt. */
 const CARACTERES_POR_LINHA = 95;
 

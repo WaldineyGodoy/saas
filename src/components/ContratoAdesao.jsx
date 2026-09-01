@@ -1,5 +1,5 @@
 import { dividirEmPaginas, montarTextoContrato } from '../lib/contrato';
-import { corpoContrato, tituloContrato } from '../lib/contratoBase';
+import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
 import { FolhaContrato } from './FolhaContrato';
 
 /**
@@ -23,11 +23,23 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
     });
 
     const paginas = dividirEmPaginas(conteudo);
+    const identificador = identificadorDocumento(conteudo);
+    const TITULO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
+    // A procuração é a última folha, depois do corpo do termo.
+    const totalFolhas = paginas.length + 1;
 
     return (
         <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm', zIndex: -1 }}>
             {paginas.map((parte, i) => (
-                <FolhaContrato key={i} contrato="adesao" branding={branding}>
+                <FolhaContrato
+                    key={i}
+                    contrato="adesao"
+                    branding={branding}
+                    titulo={TITULO}
+                    pagina={i + 1}
+                    total={totalFolhas}
+                    identificador={identificador}
+                >
                     {i === 0 && (
                         <h1 style={tituloContrato}>TERMO DE INGRESSO E ADESÃO À ASSOCIAÇÃO DE GERAÇÃO COMPARTILHADA</h1>
                     )}
@@ -35,7 +47,14 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
                 </FolhaContrato>
             ))}
 
-            <FolhaContrato contrato="adesao" branding={branding}>
+            <FolhaContrato
+                contrato="adesao"
+                branding={branding}
+                titulo={TITULO}
+                pagina={totalFolhas}
+                total={totalFolhas}
+                identificador={identificador}
+            >
                 <h1 style={{ ...tituloContrato, marginBottom: '12mm' }}>PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO</h1>
 
                 <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' }}>

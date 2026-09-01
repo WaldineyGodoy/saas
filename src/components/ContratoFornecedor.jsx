@@ -1,5 +1,5 @@
 import { dividirEmPaginasFornecedor, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
-import { corpoContrato, tituloContrato } from '../lib/contratoBase';
+import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
 import { FolhaContrato } from './FolhaContrato';
 
 /**
@@ -14,13 +14,23 @@ import { FolhaContrato } from './FolhaContrato';
 export default function ContratoFornecedor({ supplier, usinas = [], branding, texto, opts = {} }) {
     const conteudo = texto || montarTextoContratoFornecedor(supplier, usinas, opts);
     const paginas = dividirEmPaginasFornecedor(conteudo);
+    const identificador = identificadorDocumento(conteudo);
+    const TITULO = 'Contrato de Administração e Gestão de Créditos Energéticos';
 
     return (
         <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm', zIndex: -1 }}>
             {paginas.map((parte, i) => (
-                <FolhaContrato key={i} contrato="fornecedor" branding={branding}>
+                <FolhaContrato
+                    key={i}
+                    contrato="fornecedor"
+                    branding={branding}
+                    titulo={TITULO}
+                    pagina={i + 1}
+                    total={paginas.length}
+                    identificador={identificador}
+                >
                     {i === 0 && (
-                        <h1 style={tituloContrato}>Contrato de Administração e Gestão de Créditos Energéticos</h1>
+                        <h1 style={tituloContrato}>{TITULO}</h1>
                     )}
                     <div style={corpoContrato}>{parte}</div>
                 </FolhaContrato>
