@@ -112,6 +112,9 @@ CLÁUSULA 2 – DA NATUREZA DA CONTRATAÇÃO E DA AUSÊNCIA DE GARANTIA
 2.4. As Partes declaram, para os fins do art. 265 do Código Civil, que não há solidariedade entre a GESTORA e os CONSUMIDORES, tampouco entre a GESTORA e o CONTRATANTE, quanto a qualquer obrigação pecuniária dos CONSUMIDORES.
 2.5. Os valores arrecadados dos CONSUMIDORES são recebidos pela GESTORA em caráter de mera intermediação, por conta e ordem do CONTRATANTE, não integrando receita própria da GESTORA, ressalvada a parcela correspondente à sua remuneração.
 2.6. Nenhuma disposição deste Contrato poderá ser interpretada como garantia, pela GESTORA, de (i) rentabilidade, (ii) volume de energia compensada, (iii) ocupação integral da capacidade de rateio da usina, ou (iv) recebimento de qualquer fatura.
+2.7. Grupo econômico. O CONTRATANTE declara ciência de que a GESTORA integra o mesmo grupo econômico de sociedades que podem figurar, em contratos autônomos, como incorporadora e construtora da central geradora, como prestadora de operação e manutenção, e de que a área onde a usina se encontra instalada pode ser de propriedade de sócio ou pessoa ligada ao grupo. As condições praticadas em cada contrato correspondem a valores de mercado.
+2.8. Independência dos contratos. Este Contrato é autônomo em relação aos contratos de compra e venda, de arrendamento e de operação e manutenção eventualmente celebrados. O inadimplemento ou a rescisão de qualquer deles não autoriza, por si, a suspensão, a compensação ou a retenção de obrigações deste Contrato, por nenhuma das Partes.
+2.9. A GESTORA não responde por obrigações de construção, entrega, garantia de obra, manutenção ou disponibilização da área, ainda que assumidas por sociedade do mesmo grupo; e nenhuma dessas sociedades responde pelas obrigações da GESTORA previstas neste Contrato.
 
 CAPÍTULO II — DOS SERVIÇOS
 
@@ -126,6 +129,7 @@ CLÁUSULA 4 – DAS OBRIGAÇÕES DO CONTRATANTE
 4.2. Outorgar procuração para representação da unidade geradora e das unidades consumidoras nos canais de atendimento da distribuidora, on-line e presencial.
 4.3. Manter a central geradora em operação regular, comunicando à GESTORA, com a maior antecedência possível, paradas programadas, sinistros ou restrições operativas.
 4.4. Manter atualizados os dados cadastrais e bancários para repasse.
+4.5. Comunicar à GESTORA, com antecedência mínima de 30 (trinta) dias, a alienação da usina ou das quotas da sociedade titular, e exigir do adquirente a assunção deste Contrato mediante termo de sub-rogação. Recusando-se o adquirente, a alienação poderá ocorrer, ficando o CONTRATANTE obrigado a denunciar este Contrato na forma da Cláusula 13, respeitados os prazos de aviso prévio e de transição.
 
 CAPÍTULO III — DA REMUNERAÇÃO
 
@@ -179,7 +183,7 @@ CLÁUSULA 9 – DO CICLO DE APURAÇÃO E DOS REPASSES
 (a) Ciclo de Apuração — período de leitura da distribuidora ao qual se refere a energia compensada nas unidades consumidoras do rateio;
 (b) Compensação Financeira — data em que o pagamento do CONSUMIDOR é efetivamente liquidado e disponibilizado, livre e desembaraçado, em conta de titularidade da GESTORA;
 (c) Data de Corte — dia ${diaCorte} (${percentualExtenso(diaCorte)}) de cada mês;
-(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
+(d) Valor de Repasse — total compensado financeiramente no ciclo, deduzidos: Remuneração Inicial, Remuneração Recorrente, Taxa de Administração, Taxa de Recuperação de Crédito, os encargos da distribuidora relativos à unidade geradora na forma da Cláusula 9.9, tributos retidos na fonte, tarifas bancárias e de meio de pagamento, estornos e ajustes de ciclos anteriores.
 9.2. A GESTORA efetuará o repasse até o dia ${diaRepasse} (${percentualExtenso(diaRepasse)}) de cada mês, considerando exclusivamente os pagamentos com Compensação Financeira ocorrida até a Data de Corte. Pagamentos compensados após a Data de Corte integram o ciclo seguinte.
 9.3. Nenhum repasse será devido antes da Compensação Financeira. Boleto emitido, fatura vencida, energia injetada ou energia compensada na distribuidora não constituem, isolada ou conjuntamente, fato gerador do repasse.
 9.4. Junto ao repasse, a GESTORA enviará Demonstrativo de Repasse contendo, por unidade consumidora: energia injetada e efetivamente compensada, tarifa de aplicação, desconto, valor faturado, valor pago, data da compensação financeira e memória de todas as deduções.
@@ -187,6 +191,7 @@ CLÁUSULA 9 – DO CICLO DE APURAÇÃO E DOS REPASSES
 9.6. Sobre valores não recebidos dos CONSUMIDORES não incidem juros, correção ou encargos em favor do CONTRATANTE.
 9.7. O repasse será feito exclusivamente em conta bancária de titularidade do CONTRATANTE, indicada por escrito. Alteração de conta somente produz efeitos após confirmação por dois canais distintos, correndo por conta do CONTRATANTE os prejuízos decorrentes de dados por ele informados de forma incorreta ou desatualizada.
 9.8. O CONTRATANTE terá 10 (dez) dias contados do recebimento do Demonstrativo para impugná-lo de forma fundamentada; decorrido o prazo sem manifestação, o repasse será tido por líquido, certo e quitado.
+9.9. Encargos da distribuidora. Os encargos devidos à distribuidora em razão da unidade geradora — custo de disponibilidade, demanda contratada, TUSD-G e a parcela não compensável da TUSD Fio B — são de responsabilidade do CONTRATANTE. A GESTORA poderá pagá-los por conta e ordem do CONTRATANTE e deduzi-los do repasse, hipótese em que juntará ao Demonstrativo a fatura da distribuidora e o comprovante de pagamento. A GESTORA não é responsável pelo pagamento desses encargos quando não houver repasse suficiente no ciclo, caso em que o CONTRATANTE os quitará diretamente.
 
 CAPÍTULO VI — DISPOSIÇÕES GERAIS
 
