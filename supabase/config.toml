@@ -3,13 +3,13 @@
 verify_jwt = false
 
 [functions.create-asaas-charge]
-verify_jwt = false
+verify_jwt = true
 
 [functions.update-asaas-charge]
-verify_jwt = false
+verify_jwt = true
 
 [functions.cancel-asaas-charge]
-verify_jwt = false
+verify_jwt = true
 
 [functions.manage-asaas-customer]
 verify_jwt = false

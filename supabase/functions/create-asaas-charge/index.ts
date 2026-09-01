@@ -1,23 +1,40 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    try {
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+    const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
+    // ------------------------------------------------------------------
+    // Portão de identidade, antes de ler o corpo.
+    //
+    // Esta era a única das três funções financeiras sem ele: cancelar e
+    // alterar cobrança exigiam sessão de administrador, mas CRIAR cobrança
+    // real aceitava a chave anon — que viaja no bundle público do front.
+    // Quem tivesse a URL do projeto podia emitir boleto em nome da B2W.
+    //
+    // A assimetria apareceu em 01/09/2026: duas cobranças de verdade foram
+    // criadas com a chave anon, e nem cancelá-las nem corrigir a data era
+    // possível pelo mesmo caminho. O portão da auditoria barra fatura
+    // inconsistente; não barra desconhecido.
+    // ------------------------------------------------------------------
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return new Response(
+            JSON.stringify({ error: auth.error }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: auth.status }
+        )
+    }
+
+    try {
         const { invoice_id, subscriber_id, invoice_ids, dueDate: customDueDate } = await req.json()
 
         const { data: configData, error: configError } = await supabase
@@ -71,7 +88,7 @@ serve(async (req) => {
 
             const { data: invs, error: invsErr } = await query;
             if (invsErr) throw invsErr;
-            if (!invs || invs.length === 0) 
+            if (!invs || invs.length === 0)
                 throw new Error("Nenhuma fatura pendente/ativa e sem cobrança prévia encontrada para este assinante.");
 
             // O consolidado é MENSAL. Sem recorte, esta varredura pegava toda
@@ -163,8 +180,6 @@ serve(async (req) => {
             console.log('[Asaas Charge] Emitindo com avisos:', avisos);
         }
 
-
-
         console.log(`[Asaas Charge] isSandbox: ${isSandbox}, asaasUrl: ${asaasUrl}`);
         console.log(`[Asaas Charge] subscriber: ${subscriber.name} (${subscriber.cpf_cnpj}), existing customer ID: ${subscriber.asaas_customer_id}`);
 
@@ -198,7 +213,7 @@ serve(async (req) => {
                 notificationDisabled: true
             };
             console.log(`[Asaas Charge] Buscando/Criando cliente com cpfCnpj: ${customerData.cpfCnpj}`);
-            
+
             let foundInAsaas = false;
             if (customerData.cpfCnpj) {
                 const searchRes = await fetch(`${asaasUrl}/customers?cpfCnpj=${customerData.cpfCnpj}`, { headers: { access_token: asaasKey } });
@@ -226,7 +241,7 @@ serve(async (req) => {
                 asaasCustomerId = createData.id;
                 console.log(`[Asaas Charge] Novo cliente criado com ID: ${asaasCustomerId}`);
             }
-            
+
             if (asaasCustomerId) {
                 console.log(`[Asaas Charge] Atualizando ID do cliente no banco de dados: ${asaasCustomerId}`);
                 await supabase.from('subscribers').update({ asaas_customer_id: asaasCustomerId }).eq('id', subscriber.id);
@@ -238,7 +253,7 @@ serve(async (req) => {
         }
 
         const totalValue = invoicesToCharge.reduce((acc, inv) => acc + Number(inv.valor_a_pagar || 0), 0);
-        
+
         let dueDate = customDueDate;
         if (!dueDate && invoicesToCharge[0]) {
             const refMonth = invoicesToCharge[0].mes_referencia;
@@ -255,26 +270,26 @@ serve(async (req) => {
                 const [yStr, mStr] = refMonth.split('-');
                 let year = parseInt(yStr, 10);
                 let month = parseInt(mStr, 10);
-                
+
                 let nextMonth = month + 1;
                 let nextYear = year;
                 if (nextMonth > 12) {
                     nextMonth = 1;
                     nextYear = year + 1;
                 }
-                
+
                 const formattedDay = String(dueDay).padStart(2, '0');
                 let formattedMonth = String(nextMonth).padStart(2, '0');
-                
+
                 let calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`;
-                
+
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const [curY, curM, curD] = today.toISOString().split('T')[0].split('-');
                 const todayObj = new Date(Number(curY), Number(curM) - 1, Number(curD));
-                
+
                 const calcDateObj = new Date(nextYear, nextMonth - 1, dueDay);
-                
+
                 if (calcDateObj < todayObj) {
                     nextMonth += 1;
                     if (nextMonth > 12) {
@@ -284,7 +299,7 @@ serve(async (req) => {
                     formattedMonth = String(nextMonth).padStart(2, '0');
                     calculatedDateStr = `${nextYear}-${formattedMonth}-${formattedDay}`;
                 }
-                
+
                 dueDate = calculatedDateStr;
             } else {
                 dueDate = invoicesToCharge[0].vencimento;
@@ -306,13 +321,13 @@ serve(async (req) => {
                 formattedRef = `${parts[1]}/${parts[0]}`;
             }
             description = `Fatura Consolidada - ${invoicesToCharge.length} UCs\nRef: ${formattedRef}\n`;
-            
+
             const ucLines = invoicesToCharge.map(inv => {
                 const ucNum = inv.consumer_units?.numero_uc || 'N/A';
                 const titular = inv.consumer_units?.titular_conta || 'N/A';
                 const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh}kWh` : '0kWh';
                 const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado}kWh` : '0kWh';
-                
+
                 const addrObj = inv.consumer_units?.address;
                 let addrShort = '';
                 if (addrObj) {
@@ -320,16 +335,16 @@ serve(async (req) => {
                     const num = addrObj.numero || '';
                     addrShort = ` | ${street}${num ? `, ${num}` : ''}`;
                 }
-                
+
                 return `- UC ${ucNum} - ${titular}${addrShort} (${cons} | Comp: ${comp})`;
             }).join('\n');
-            
+
             description += ucLines;
         } else {
             const inv = invoicesToCharge[0];
             const titularConta = inv.consumer_units?.titular_conta || 'N/A';
             const ucNum = inv.consumer_units?.numero_uc || 'N/A';
-            
+
             // Formatar endereço completo da UC
             const addrObj = inv.consumer_units?.address;
             let addressStr = 'N/A';
@@ -339,23 +354,23 @@ serve(async (req) => {
                 const neighborhood = addrObj.bairro || '';
                 const city = addrObj.cidade || '';
                 const state = addrObj.uf || '';
-                
+
                 const parts = [];
                 if (street) parts.push(num ? `${street}, ${num}` : street);
                 if (neighborhood) parts.push(neighborhood);
                 if (city) parts.push(state ? `${city}/${state}` : city);
                 addressStr = parts.join(' - ');
             }
-            
+
             let formattedRef = 'N/A';
             if (inv.mes_referencia) {
                 const parts = inv.mes_referencia.split('-');
                 formattedRef = `${parts[1]}/${parts[0]}`;
             }
-            
+
             const cons = inv.consumo_kwh !== null && inv.consumo_kwh !== undefined ? `${inv.consumo_kwh} kWh` : '0 kWh';
             const comp = inv.consumo_compensado !== null && inv.consumo_compensado !== undefined ? `${inv.consumo_compensado} kWh` : '0 kWh';
-            
+
             description = `Identificação: ${titularConta} | UC: ${ucNum} | Ref: ${formattedRef}\nEndereço: ${addressStr}\nConsumo: ${cons} | Compensado: ${comp}`;
         }
 
@@ -427,7 +442,7 @@ serve(async (req) => {
             entity_type: 'invoice',
             entity_id: id,
             action: 'payment_issued',
-            details: { asaas_id: chargeData.id, consolidated: isConsolidated, value: totalValue }
+            details: { asaas_id: chargeData.id, consolidated: isConsolidated, value: totalValue, emitido_por: auth.userId }
         }));
 
         if (isConsolidated) {
@@ -435,7 +450,7 @@ serve(async (req) => {
                 entity_type: 'consolidated_invoice',
                 entity_id: consolidatedId,
                 action: 'created',
-                details: { asaas_id: chargeData.id, total_value: totalValue, invoices_count: invoiceIds.length }
+                details: { asaas_id: chargeData.id, total_value: totalValue, invoices_count: invoiceIds.length, emitido_por: auth.userId }
             });
         }
 
@@ -453,34 +468,3 @@ serve(async (req) => {
         )
     }
 })
-
-// Função auxiliar para baixar o PDF do Asaas com retentativas
-async function downloadAsaasPdf(url: string, apiKey: string): Promise<ArrayBuffer | null> {
-    let retries = 5;
-    const headers = { 
-        'access_token': apiKey,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    };
-
-    while (retries > 0) {
-        try {
-            const res = await fetch(url, { headers });
-            if (res.ok) {
-                const contentType = res.headers.get('content-type');
-                if (contentType && contentType.includes('application/pdf')) {
-                    return await res.arrayBuffer();
-                } else if (contentType && contentType.includes('text/html')) {
-                    console.warn(`Asaas retornou HTML (página de carregamento). Retentando em 5s... (${retries} restantes)`);
-                }
-            } else {
-                console.warn(`Erro ao baixar PDF (Status ${res.status}). Retentando...`);
-            }
-        } catch (err) {
-            console.error('Erro de rede na captura do PDF:', err.message);
-        }
-        
-        await new Promise(r => setTimeout(r, 5000)); // Espera 5s entre retentativas
-        retries--;
-    }
-    return null;
-}
