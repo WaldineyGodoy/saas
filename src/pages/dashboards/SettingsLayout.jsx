@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette, Mail, Zap, Bell } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail, Zap, Bell, MapPin, Wrench } from 'lucide-react';
 
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
 import CustomizationSettings from '../settings/CustomizationSettings';
 import EnergyAccountSettings from '../settings/EnergyAccountSettings';
 import NotificationHubSettings from '../settings/NotificationHubSettings';
+import LeasedAreasSettings from '../settings/LeasedAreasSettings';
+import ServicesSettings from '../settings/ServicesSettings';
 
 export default function SettingsLayout() {
     const [activeTab, setActiveTab] = useState('users');
@@ -16,6 +18,8 @@ export default function SettingsLayout() {
 
         { id: 'financial', label: 'Integração Financeira', icon: CreditCard, desc: 'Gateways de Pagamento' },
         { id: 'energy', label: 'Conta de Energia', icon: Zap, desc: 'Regras de Faturamento' },
+        { id: 'areas', label: 'Áreas Arrendadas', icon: MapPin, desc: 'Terrenos das usinas e seus arrendantes' },
+        { id: 'servicos', label: 'Serviços', icon: Wrench, desc: 'Valores padrão de O&M' },
         { id: 'branding', label: 'Padronização', icon: Palette, desc: 'Identidade Visual e Marca' },
         { id: 'autentique', label: 'Assinatura Eletrônica', icon: Code, desc: 'Configuração Autentique' },
     ];
@@ -31,6 +35,10 @@ export default function SettingsLayout() {
                 return <IntegrationSettings serviceName="financial_api" title="Integração Financeira" description="Gateways de Pagamento (Asaas, etc)" />;
             case 'energy':
                 return <EnergyAccountSettings />;
+            case 'areas':
+                return <LeasedAreasSettings />;
+            case 'servicos':
+                return <ServicesSettings />;
             case 'branding':
                 return <CustomizationSettings />;
             case 'autentique':
