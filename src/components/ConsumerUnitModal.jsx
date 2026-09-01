@@ -189,6 +189,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         // null = ainda nao decidido. Vira escolha obrigatoria quando o tipo
         // for geradora (ver validacao no submit).
         fatura_consumo_terceiro: null,
+        nao_faturavel: false,
         dia_leitura: 1,
         modalidade: 'geracao_compartilhada',
         concessionaria: '',
@@ -405,6 +406,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 // ?? e nao ||: false gravado no banco e uma decisao tomada, nao
                 // ausencia de decisao -- so null/undefined significam "nao decidido".
                 fatura_consumo_terceiro: consumerUnit.fatura_consumo_terceiro ?? null,
+                nao_faturavel: consumerUnit.nao_faturavel || false,
                 dia_leitura: consumerUnit.dia_leitura || 1,
                 modalidade: consumerUnit.modalidade || 'geracao_compartilhada',
                 concessionaria: consumerUnit.concessionaria || '',
@@ -687,6 +689,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                 fatura_consumo_terceiro: formData.tipo_unidade === 'geradora'
                     ? formData.fatura_consumo_terceiro === true
                     : false,
+                nao_faturavel: !!formData.nao_faturavel,
                 dia_leitura: Number(formData.dia_leitura),
                 modalidade: formData.modalidade,
                 concessionaria: formData.concessionaria,
@@ -2164,6 +2167,27 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                     )}
                                                 </div>
                                             )}
+                                        </div>
+                                        {/* UC que nunca gera cobranca ao assinante -- caso da
+                                            conta saldo da propria associacao, onde emitir boleto
+                                            seria a B2W cobrando de si mesma. Vira bloqueio em
+                                            fn_auditar_fatura, entao a emissao automatica respeita
+                                            sem depender de alguem lembrar. */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Faturamento</label>
+                                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.55rem 0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', background: formData.nao_faturavel ? '#fef2f2' : 'white' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!formData.nao_faturavel}
+                                                    onChange={e => setFormData({ ...formData, nao_faturavel: e.target.checked })}
+                                                    style={{ marginTop: '0.15rem', cursor: 'pointer' }}
+                                                />
+                                                <span style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.3 }}>
+                                                    <strong>Não faturável</strong>
+                                                    <br />
+                                                    <span style={{ color: '#94a3b8' }}>Nunca gera cobrança ao assinante.</span>
+                                                </span>
+                                            </label>
                                         </div>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Ligação</label>
