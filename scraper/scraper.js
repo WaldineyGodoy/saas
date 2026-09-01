@@ -483,6 +483,7 @@ async function run() {
                                     await updateUCStatus(uc.id, 'success');
                                     await calcularValorDoAssinante(uc, gravada?.id);
                                     await registrarSuspeitaDesligamento(uc, gravada?.id);
+                                    await guardarContasExtras(uc, r, gravada?.id);
                                 } catch (upErr) {
                                     console.error(`   [Faturista] Falha ao guardar o PDF:`, upErr.message);
                                     await upsertInvoice(uc, r.ref, {
@@ -590,6 +591,53 @@ async function carregarCredenciais(subscriberId, credenciaisDaLinha) {
 }
 
 /** Grava a fatura do mês-alvo da UC. `ref` no formato MM/AAAA. */
+/**
+ * Guarda as contas ADICIONAIS que o portal trouxe na mesma referencia.
+ *
+ * A concessionaria emite mais de uma conta com o mesmo mes de referencia
+ * quando o ciclo e partido -- troca de titularidade, religacao, refaturamento.
+ * Verificado em 31/08/2026 na UC 7030765391: 08/2026 com dois periodos,
+ * 09/07-10/08 (R$ 1.700,90) e 10/08-21/08 (R$ 509,06, a conta final da TT).
+ *
+ * `invoices` tem UNIQUE (uc_id, mes_referencia): so cabe uma por mes. Gravar a
+ * segunda por upsert SOBRESCREVERIA a primeira em silencio -- pior que nao
+ * baixar. Entao aqui o PDF vai para o Storage (nada se perde) e a fatura
+ * gravada recebe um aviso legivel, para o auditor lancar a outra a mao.
+ *
+ * A chave de `invoices` precisa incluir o periodo para isso deixar de ser
+ * manual; enquanto nao inclui, o minimo e nao perder o documento nem o aviso.
+ */
+async function guardarContasExtras(uc, r, invoiceId) {
+    const extras = r.extras || [];
+    if (extras.length === 0) return;
+
+    const descricoes = [];
+    for (const extra of extras) {
+        let caminho = null;
+        try {
+            caminho = await uploadToSupabase(extra.localPath, uc.numero_uc, extra.fileName);
+        } catch (e) {
+            console.error(`   [Faturista] Falha ao guardar PDF da conta extra: ${e.message}`);
+        }
+        const venc = extra.vencimentoPortal || 'sem vencimento';
+        descricoes.push(`R$ ${extra.valor} venc ${venc}${caminho ? ' -> ' + caminho : ' (PDF nao salvo)'}`);
+        console.log(`   [Faturista] Conta extra em ${r.ref}: R$ ${extra.valor} venc ${venc}`);
+    }
+
+    const aviso = `[ATENCAO] A concessionaria emitiu ${extras.length + 1} contas na referencia ${r.ref}. `
+        + `Esta linha e a primeira (R$ ${r.valor} venc ${r.vencimentoPortal || '?'}). `
+        + `Nao cabe mais de uma conta por mes na mesma UC, entao a(s) outra(s) NAO foram lancadas: `
+        + descricoes.join(' ; ')
+        + `. Conferir e lancar manualmente.`;
+
+    if (!invoiceId) return;
+    const { error } = await supabase
+        .from('invoices')
+        .update({ reading_status: 'error', reading_error: aviso.substring(0, 1000) })
+        .eq('id', invoiceId);
+    if (error) console.error(`   [Faturista] Falha ao registrar aviso de conta extra: ${error.message}`);
+}
+
 async function upsertInvoice(uc, ref, campos) {
     const [month, year] = ref.split('/').map(Number);
     return supabase.from('invoices').upsert({

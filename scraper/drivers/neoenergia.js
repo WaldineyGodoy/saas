@@ -293,7 +293,7 @@ module.exports = {
      * Fases 3 a 5 — abre a UC, procura a fatura do mês-alvo e baixa o PDF.
      *
      * Retorna (nunca grava no banco — isso é responsabilidade do orquestrador):
-     *   { resultado: 'baixada',        ref, valor, parcelada, localPath }
+     *   { resultado: 'baixada',        ref, valor, parcelada, vencimentoPortal, localPath, extras[] }
      *   { resultado: 'conta_minima',   ref, valor }
      *   { resultado: 'parcelada',      ref, valor }   // existe, sem download aqui
      *   { resultado: 'falha_download', ref, erro }
@@ -357,6 +357,12 @@ module.exports = {
 
         const checkboxes = await page.locator('mat-checkbox[id^="checkItem-"]').all();
         let falhaDownload = null;
+        // A concessionaria emite mais de uma conta com a MESMA referencia quando
+        // o ciclo e partido -- troca de titularidade, religacao, refaturamento.
+        // Verificado em 31/08/2026 na UC 7030765391: 08/2026 com dois periodos,
+        // 09/07-10/08 (R$ 1.700,90) e 10/08-21/08 (R$ 509,06, a conta final da
+        // TT). Parar na primeira tornava a segunda invisivel para o robo.
+        const capturas = [];
         // Diagnóstico: quando o alvo não é encontrado, saber o que ESTAVA na tela
         // vale mais que o palpite. Sem isso, "não disponível" some sem rastro.
         const refsVistas = [];
@@ -402,6 +408,15 @@ module.exports = {
 
             // 1. Marca o checkbox via JS (o <input> do Material é invisível;
             //    click({force:true}) do Playwright não registra no Angular).
+            //    Desmarca os demais antes: com mais de uma conta na mesma
+            //    referencia, a marca da volta anterior continuaria ativa e o
+            //    portal geraria um PDF com as duas juntas.
+            await page.evaluate(() => {
+                document.querySelectorAll('mat-checkbox input').forEach((i) => {
+                    if (i.checked) i.click();
+                });
+            });
+            await page.waitForTimeout(800);
             await cb.evaluate((el) => {
                 const i = el.querySelector('input');
                 if (i && !i.checked) i.click();
@@ -489,14 +504,19 @@ module.exports = {
                 }).catch(() => {});
                 await page.waitForTimeout(1500);
 
-                return {
-                    resultado: 'baixada',
+                // Acumula em vez de retornar: pode haver outra conta com a
+                // mesma referencia mais abaixo na lista.
+                capturas.push({
                     ref: parsedRef,
                     valor: valorDaLinha(rowText),
                     parcelada: ehParcelada,
+                    // O vencimento e o que distingue duas contas da mesma
+                    // referencia -- e o que o orquestrador usa para saber se ja
+                    // tem esta conta no banco.
+                    vencimentoPortal: (rowText.match(/VENCIMENTO(\d{2}\/\d{2}\/\d{2})/) || [])[1] || null,
                     localPath,
                     fileName
-                };
+                });
             } catch (downloadErr) {
                 console.error(`   [Faturista] Falha ao baixar o PDF:`, downloadErr.message);
 
@@ -507,6 +527,16 @@ module.exports = {
                 // Não interrompe o loop: comportamento preservado do código original.
                 falhaDownload = { resultado: 'falha_download', ref: parsedRef, erro: downloadErr.message };
             }
+        }
+
+        // Baixou pelo menos uma: a primeira e o resultado principal (comportamento
+        // de sempre) e as demais vao em `extras`, para o orquestrador registrar.
+        if (capturas.length > 0) {
+            if (capturas.length > 1) {
+                const resumo = capturas.map(c => `venc ${c.vencimentoPortal || '?'} R$ ${c.valor}`).join(' | ');
+                log(`   [Faturista] ATENCAO: ${capturas.length} contas na referencia ${mesRefAlvo} -> ${resumo}`);
+            }
+            return { resultado: 'baixada', ...capturas[0], extras: capturas.slice(1) };
         }
 
         if (falhaDownload) return falhaDownload;
