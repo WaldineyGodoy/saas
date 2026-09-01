@@ -25,11 +25,43 @@ const VAZIO = {
     coordenadas: '',
     area_m2: '',
     valor_aluguel: '',
+    repasse_tipo: 'percentual',
+    repasse_valor: '',
     dia_pagamento: 5,
     mes_inicio: '',
     indice_reajuste: 'IPCA',
     comarca: '',
     observacoes: ''
+};
+
+/**
+ * Quanto do aluguel vai ao arrendante e quanto fica com o grupo.
+ *
+ * O aluguel é o que a Associação arrecada de quem ocupa a área (o
+ * investidor). O repasse é o que sai no split para o dono da área. A
+ * diferença remunera a intermediação — por isso repasse maior que o
+ * aluguel é erro de digitação, não um negócio possível.
+ */
+const dinheiro = (v) => `R$ ${(Number(String(v ?? '').replace(',', '.')) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+export const calcularRepasse = (aluguel, tipo, valor) => {
+    const base = Number(String(aluguel ?? '').replace(',', '.')) || 0;
+    const bruto = valor === '' || valor === null || valor === undefined
+        ? null
+        : Number(String(valor).replace(',', '.'));
+
+    if (bruto === null || !Number.isFinite(bruto)) {
+        return { definido: false, repasse: 0, retido: base, percentual: 0 };
+    }
+
+    const repasse = tipo === 'fixo' ? bruto : base * (bruto / 100);
+    return {
+        definido: true,
+        repasse,
+        retido: base - repasse,
+        percentual: base > 0 ? (repasse / base) * 100 : 0,
+        excede: repasse > base + 0.005
+    };
 };
 
 const card = {
@@ -43,6 +75,7 @@ const card = {
 
 const rotulo = { display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' };
 const campo = { width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' };
+const ajuda = { margin: '0.35rem 0 0 0', fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.35 };
 const grade = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' };
 
 export default function LeasedAreasSettings() {
@@ -109,6 +142,10 @@ export default function LeasedAreasSettings() {
                 coordenadas: editando.coordenadas || null,
                 area_m2: editando.area_m2 === '' ? null : Number(editando.area_m2),
                 valor_aluguel: editando.valor_aluguel === '' ? null : Number(String(editando.valor_aluguel).replace(',', '.')),
+                repasse_tipo: editando.repasse_tipo === 'fixo' ? 'fixo' : 'percentual',
+                // Nulo é "repasse ainda não definido", que é diferente de zero:
+                // zero significa que nada vai ao arrendante.
+                repasse_valor: editando.repasse_valor === '' || editando.repasse_valor === null ? null : Number(String(editando.repasse_valor).replace(',', '.')),
                 dia_pagamento: editando.dia_pagamento === '' ? null : Number(editando.dia_pagamento),
                 mes_inicio: editando.mes_inicio || null,
                 indice_reajuste: editando.indice_reajuste || 'IPCA',
@@ -207,7 +244,10 @@ export default function LeasedAreasSettings() {
                                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
                                             {a.arrendante_nome || 'arrendante não informado'}
                                             {a.area_m2 ? ` · ${a.area_m2} m²` : ''}
-                                            {a.valor_aluguel ? ` · R$ ${Number(a.valor_aluguel).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês` : ''}
+                                            {a.valor_aluguel ? ` · ${dinheiro(a.valor_aluguel)}/mês` : ''}
+                                            {a.repasse_valor !== null && a.repasse_valor !== undefined
+                                                ? ` · repasse ${dinheiro(calcularRepasse(a.valor_aluguel, a.repasse_tipo, a.repasse_valor).repasse)}`
+                                                : ''}
                                             {a.matricula ? ` · matrícula ${a.matricula}` : ''}
                                         </div>
                                         <div style={{ fontSize: '0.78rem', color: usinas.length ? '#166534' : '#94a3b8', marginTop: '0.2rem' }}>
@@ -294,7 +334,31 @@ export default function LeasedAreasSettings() {
                             <div style={card}>
                                 <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '0.95rem' }}>Condições do arrendamento</h4>
                                 <div style={grade}>
-                                    <div><label style={rotulo}>Aluguel mensal (R$)</label><input style={campo} value={editando.valor_aluguel} onChange={e => setCampo('valor_aluguel', e.target.value)} placeholder="600,00" /></div>
+                                    <div>
+                                        <label style={rotulo}>Aluguel mensal (R$)</label>
+                                        <input style={campo} value={editando.valor_aluguel} onChange={e => setCampo('valor_aluguel', e.target.value)} placeholder="600,00" />
+                                        <p style={ajuda}>Cobrado de quem ocupa a área e arrecadado pela Associação.</p>
+                                    </div>
+                                    <div>
+                                        <label style={rotulo}>Repasse ao arrendante</label>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <select
+                                                style={{ ...campo, width: '96px', flexShrink: 0, padding: '0.65rem 0.4rem' }}
+                                                value={editando.repasse_tipo || 'percentual'}
+                                                onChange={e => setCampo('repasse_tipo', e.target.value)}
+                                            >
+                                                <option value="percentual">%</option>
+                                                <option value="fixo">R$ fixo</option>
+                                            </select>
+                                            <input
+                                                style={campo}
+                                                value={editando.repasse_valor ?? ''}
+                                                onChange={e => setCampo('repasse_valor', e.target.value.replace(/[^\d.,]/g, ''))}
+                                                placeholder={editando.repasse_tipo === 'fixo' ? '420,00' : '70'}
+                                            />
+                                        </div>
+                                        <p style={ajuda}>Sai no split para o dono da área. A diferença fica com o grupo pela intermediação.</p>
+                                    </div>
                                     <div><label style={rotulo}>Dia de pagamento</label><input style={campo} value={editando.dia_pagamento} onChange={e => setCampo('dia_pagamento', e.target.value)} /></div>
                                     <div><label style={rotulo}>Início do pagamento</label><input style={campo} value={editando.mes_inicio} onChange={e => setCampo('mes_inicio', e.target.value)} placeholder="Março/2026" /></div>
                                     <div>
@@ -305,6 +369,18 @@ export default function LeasedAreasSettings() {
                                             <option value="IGPM limitado ao IPCA + 3 p.p.">IGPM com teto no IPCA + 3 p.p.</option>
                                         </select>
                                     </div>
+                                    {(() => {
+                                        const r = calcularRepasse(editando.valor_aluguel, editando.repasse_tipo, editando.repasse_valor);
+                                        if (!r.definido) return null;
+                                        return (
+                                            <div style={{ gridColumn: '1 / -1', padding: '0.85rem 1rem', background: r.excede ? '#fffbeb' : '#f8fafc', border: `1px solid ${r.excede ? '#fde68a' : '#e2e8f0'}`, borderRadius: '10px', fontSize: '0.83rem', color: r.excede ? '#92400e' : '#475569' }}>
+                                                {r.excede
+                                                    ? `O repasse de ${dinheiro(r.repasse)} é maior que o aluguel de ${dinheiro(editando.valor_aluguel)}: o grupo pagaria ${dinheiro(-r.retido)} por mês para intermediar.`
+                                                    : `Do aluguel de ${dinheiro(editando.valor_aluguel)}, vão ${dinheiro(r.repasse)} ao arrendante e ficam ${dinheiro(r.retido)} com o grupo${r.percentual ? ` (${(100 - r.percentual).toFixed(1).replace('.', ',')}% de intermediação)` : ''}.`}
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div style={{ gridColumn: '1 / -1' }}>
                                         <label style={rotulo}>Observações</label>
                                         <textarea style={{ ...campo, minHeight: '70px', resize: 'vertical' }} value={editando.observacoes} onChange={e => setCampo('observacoes', e.target.value)} />
