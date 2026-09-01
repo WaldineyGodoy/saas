@@ -85,21 +85,6 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
 
     // Data ISO (AAAA-MM-DD) no formato brasileiro, sem passar pelo fuso: montar
     // um Date com a string crua joga o dia para tras em fuso negativo.
-    // Dispara o pedido de prazo quando o status MUDA para encerrado. Comparar
-    // com o valor anterior evita abrir o modal so por abrir uma UC ja encerrada.
-    useEffect(() => {
-        const ENCERRADOS = ['desconectado', 'cancelado', 'cancelado_inadimplente'];
-        const antes = statusAnterior.current;
-        statusAnterior.current = formData.status;
-        if (antes === null || antes === formData.status) return;
-        if (ENCERRADOS.includes(formData.status) && !formData.acompanhar_conta_ate) {
-            const d = new Date();
-            d.setDate(d.getDate() + 90); // ~3 ciclos de faturamento
-            setDataAcompanhamento(d.toISOString().split('T')[0]);
-            setPedirAcompanhamento(true);
-        }
-    }, [formData.status]);
-
     const formatarData = (iso) => {
         if (!iso) return '';
         const [a, m, d] = String(iso).slice(0, 10).split('-');
@@ -233,6 +218,24 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         data_troca_titularidade: '',
         saldo_remanescente: false
     });
+
+    // Precisa vir DEPOIS da declaracao de formData: como const, le-la
+    // acima da declaracao cai na TDZ e o modal quebra em producao com
+    // "can't access lexical declaration before initialization".
+    // Dispara o pedido de prazo quando o status MUDA para encerrado. Comparar
+    // com o valor anterior evita abrir o modal so por abrir uma UC ja encerrada.
+    useEffect(() => {
+        const ENCERRADOS = ['desconectado', 'cancelado', 'cancelado_inadimplente'];
+        const antes = statusAnterior.current;
+        statusAnterior.current = formData.status;
+        if (antes === null || antes === formData.status) return;
+        if (ENCERRADOS.includes(formData.status) && !formData.acompanhar_conta_ate) {
+            const d = new Date();
+            d.setDate(d.getDate() + 90); // ~3 ciclos de faturamento
+            setDataAcompanhamento(d.toISOString().split('T')[0]);
+            setPedirAcompanhamento(true);
+        }
+    }, [formData.status]);
 
     useEffect(() => {
         fetchSubscribers();
