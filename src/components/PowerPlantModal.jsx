@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { addMonths, subMonths, endOfMonth, format, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp, shortenLink, salvarSenhaPortal, semSenha, createAutentiqueDocument, cancelAutentiqueDocument } from '../lib/api';
 import IrradianceChart from './IrradianceChart';
 import { useUI } from '../contexts/UIContext';
 import { 
@@ -9,9 +9,12 @@ import {
     GripVertical, Key, Eye, EyeOff, Download, FileText, Maximize2, Minimize2, 
     LayoutDashboard, Activity, Wallet2, Link, Globe, AlertCircle, Calendar, CheckCircle, RefreshCcw, MessageSquare,
     Paperclip, Send, Loader2, Info, History, Clock, User, Mail, Smartphone, Search, CreditCard,
-    Percent, SlidersHorizontal, ArrowUpDown, Check, Building2, UploadCloud
+    Percent, SlidersHorizontal, ArrowUpDown, Check, Building2, UploadCloud, FileSignature, Ban, ExternalLink
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import ContratoUsina from './ContratoUsina';
+import { CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
+import { paraNumero } from '../lib/contratoBase';
 import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
 import {
@@ -301,6 +304,26 @@ const SortableUCItem = ({ uc, index, onToggle, geracaoEstimada, onPreview, subsc
     );
 };
 
+/**
+ * Campos do compra e venda editáveis na tela.
+ *
+ * Fora do componente porque a gravação e o formulário precisam da mesma
+ * lista: duas cópias é como um campo novo entra na tela sem entrar no que
+ * é salvo.
+ */
+const CAMPOS_COMPRA_VENDA = [
+    { key: 'valorTotal', label: 'Valor total (R$)' },
+    { key: 'parcela1', label: '1a parcela, assinatura (R$)' },
+    { key: 'parcela2', label: '2a parcela, equipamentos (R$)' },
+    { key: 'parcela3', label: '3a parcela, vistoria (R$)' },
+    { key: 'prazoExecucao', label: 'Prazo de execução (dias)' },
+    { key: 'prazoExecucaoReduzido', label: 'Prazo com parecer (dias)' },
+    { key: 'amperagem', label: 'Padrão de entrada (A)' },
+    { key: 'limiteReforco', label: 'Limite de reforço de rede (R$)' },
+    { key: 'valorOpcaoImovel', label: 'Opção de compra do imóvel (R$)' },
+    { key: 'qtdInversores', label: 'Quantidade de inversores' }
+];
+
 export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
     const { branding } = useBranding();
@@ -361,6 +384,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         servicos_contratados: [],
         service_values: {}, // JSONB for values
         gestao_percentual: '',
+        leased_area_id: '',
         cep: '',
         rua: '',
         numero: '',
@@ -391,6 +415,214 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
     const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
     const [isUCsModified, setIsUCsModified] = useState(!usina);
+
+    // --- Contratos por usina -------------------------------------------
+    // Compra e venda, arrendamento e O&M são cada um sobre ESTA usina. O
+    // signatário continua sendo o fornecedor (a SPE); o que muda é o objeto.
+    const [tipoContrato, setTipoContrato] = useState('compra_venda');
+    const [contractOpts, setContractOpts] = useState(DEFAULTS_USINA);
+    const [contractDraft, setContractDraft] = useState('');
+    const [areaArrendada, setAreaArrendada] = useState(null);
+    const [servicoOM, setServicoOM] = useState(null);
+    const [areasDisponiveis, setAreasDisponiveis] = useState([]);
+    const [assinaturas, setAssinaturas] = useState([]);
+    const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
+    const [enviandoContrato, setEnviandoContrato] = useState(false);
+    const [cancelandoAssinatura, setCancelandoAssinatura] = useState(null);
+
+    const contratoAtual = CONTRATOS_USINA.find(c => c.tipo === tipoContrato) || CONTRATOS_USINA[0];
+
+    const carregarDadosContrato = useCallback(async (usinaId, leasedAreaId) => {
+        try {
+            const [{ data: areas }, { data: om }] = await Promise.all([
+                supabase.from('leased_areas').select('*').order('nome'),
+                supabase.from('service_defaults').select('valores').eq('codigo', 'om').maybeSingle()
+            ]);
+            setAreasDisponiveis(areas || []);
+            setAreaArrendada((areas || []).find(a => a.id === leasedAreaId) || null);
+            setServicoOM(om?.valores || null);
+
+            if (!usinaId) return;
+            setCarregandoAssinaturas(true);
+            const { data: sigs } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('usina_id', usinaId)
+                .order('created_at', { ascending: false });
+            setAssinaturas(sigs || []);
+        } catch (e) {
+            console.error('Erro ao carregar dados de contrato:', e);
+        } finally {
+            setCarregandoAssinaturas(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'contratos') {
+            carregarDadosContrato(usina?.id, formData.leased_area_id);
+        }
+    }, [activeTab, usina?.id, formData.leased_area_id, carregarDadosContrato]);
+
+    useEffect(() => {
+        // Condições gravadas mandam sobre o padrão, como no modal do
+        // fornecedor. Trocar de tipo de contrato NÃO recarrega: os campos
+        // são os mesmos e recarregar apagaria o que a pessoa acabou de
+        // digitar ao só espiar outro contrato.
+        if (usina?.contract_terms) {
+            setContractOpts({ ...DEFAULTS_USINA, ...usina.contract_terms });
+        }
+    }, [usina?.id, usina?.contract_terms]);
+
+    const contextoContrato = () => ({
+        usina: { ...usina, ...formData, address: { rua: formData.rua, numero: formData.numero, bairro: formData.bairro, cidade: formData.cidade, uf: formData.uf, cep: formData.cep } },
+        supplier: suppliers.find(f => f.id === formData.supplier_id) || null,
+        area: areaArrendada,
+        servicoOM
+    });
+
+    const textoContratoAtual = () => contractDraft || contratoAtual.montar(contextoContrato(), contractOpts);
+
+    const minutaEditada = contractDraft !== '' && contractDraft !== contratoAtual.montar(contextoContrato(), contractOpts);
+
+    const condicoesParaGravar = () => {
+        const gravar = {};
+        for (const [chave, padrao] of Object.entries(DEFAULTS_USINA)) {
+            const bruto = contractOpts[chave];
+            if (typeof padrao === 'number') {
+                const n = paraNumero(bruto);
+                if (Number.isFinite(n)) gravar[chave] = n;
+            } else if (bruto !== undefined && bruto !== null) {
+                gravar[chave] = bruto;
+            }
+        }
+        return gravar;
+    };
+
+    const enviarContratoUsina = async () => {
+        if (!usina?.id) { showAlert('Salve a usina antes de gerar o contrato.', 'warning'); return; }
+
+        const fornecedor = suppliers.find(f => f.id === formData.supplier_id);
+        if (!fornecedor) { showAlert('Vincule um fornecedor à usina antes de gerar o contrato.', 'warning'); return; }
+        if (!fornecedor.phone && !fornecedor.email) { showAlert('O fornecedor não tem telefone nem e-mail cadastrado.', 'warning'); return; }
+        if (tipoContrato === 'arrendamento' && !areaArrendada) {
+            showAlert('Vincule uma área arrendada à usina antes de gerar o contrato de arrendamento.', 'warning');
+            return;
+        }
+
+        setEnviandoContrato(true);
+        try {
+            const texto = textoContratoAtual();
+            setContractDraft(texto);
+
+            const pdfBase64 = await gerarPdfContratoUsinaBase64();
+            const fileName = `${contratoAtual.rotulo.replace(/\s+/g, '_')}_${(usina.name || 'usina').replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+
+            const result = await createAutentiqueDocument({
+                documentName: fileName,
+                fileBase64: pdfBase64,
+                // Sem `email`: com e-mail a Autentique entrega por conta dela e
+                // não devolve link público, e a função cai num fallback que
+                // aponta para a página de gestão do documento — 404 para quem
+                // vai assinar. Quem entrega o link somos nós.
+                signers: [{ name: fornecedor.name, action: 'SIGN' }],
+                signerId: fornecedor.id,
+                signerType: 'supplier'
+            });
+
+            if (result.error) throw new Error(result.error);
+            if (!result?.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado.');
+            if (result.signingLinkFound === false) {
+                throw new Error('A Autentique não devolveu link de assinatura. O documento foi criado, mas o link não pode ser enviado — verifique no painel dela.');
+            }
+
+            let finalLink = result.url;
+            try {
+                const short = await shortenLink(result.url, `${tipoContrato}-${usina.id.substring(0, 5)}-${Date.now().toString().slice(-4)}`, `${contratoAtual.rotulo} - ${usina.name}`);
+                if (short.success && short.shortUrl) finalLink = short.shortUrl;
+            } catch (e) {
+                console.warn('Falha ao encurtar link:', e);
+            }
+
+            // Carimba o objeto e o tipo na assinatura: é o que faz a aba
+            // desta usina mostrar só os contratos dela.
+            await supabase.from('signatures')
+                .update({ short_url: finalLink, usina_id: usina.id, document_type: tipoContrato })
+                .eq('autentique_doc_id', result.documentId);
+
+            await supabase.from('usinas').update({ contract_terms: condicoesParaGravar() }).eq('id', usina.id);
+
+            const envio = await enviarLinkContratoUsina(fornecedor, finalLink);
+
+            showAlert(
+                envio.falhou ? `Contrato criado, mas houve falha no envio. ${envio.resumo}` : `Contrato gerado e enviado. ${envio.resumo}`,
+                envio.falhou ? 'warning' : 'success'
+            );
+            addHistory('usina', usina.id, 'envio_contrato',
+                { document_name: fileName, autentique_doc_id: result.documentId, tipo: tipoContrato, envio },
+                `${contratoAtual.rotulo} enviado para assinatura. ${envio.resumo}`);
+            carregarDadosContrato(usina.id, formData.leased_area_id);
+        } catch (e) {
+            console.error('Erro ao enviar contrato da usina:', e);
+            showAlert('Erro ao enviar contrato: ' + e.message, 'error');
+        } finally {
+            setEnviandoContrato(false);
+        }
+    };
+
+    /** Cada canal falha por conta própria, e o resultado vai para o histórico. */
+    const enviarLinkContratoUsina = async (fornecedor, link) => {
+        const texto = `Olá ${fornecedor.name}, aqui é a B2W Energia. ⚡
+
+Segue o ${contratoAtual.rotulo} referente à usina ${usina?.name || ''} para assinatura digital. 📄
+
+${link}
+
+Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
+        const r = { whatsapp: null, email: null };
+
+        if (!fornecedor.phone) r.whatsapp = 'não enviado (sem telefone cadastrado)';
+        else {
+            try {
+                let instanceName = 'default';
+                const { data: cfg } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+                if (cfg?.variables?.instance_name) instanceName = cfg.variables.instance_name;
+                await sendWhatsapp(fornecedor.phone.replace(/\D/g, ''), texto, null, null, null, instanceName);
+                r.whatsapp = 'enviado';
+            } catch (e) { console.error('WhatsApp:', e); r.whatsapp = `falhou: ${e.message}`; }
+        }
+
+        if (!fornecedor.email) r.email = 'não enviado (sem e-mail cadastrado)';
+        else {
+            try {
+                // functions.invoke devolve o erro em `error`, não lança.
+                const { error } = await supabase.functions.invoke('send-email', {
+                    body: { to: fornecedor.email, subject: `${contratoAtual.rotulo} - B2W Energia`, text: texto }
+                });
+                if (error) throw error;
+                r.email = 'enviado';
+            } catch (e) { console.error('E-mail:', e); r.email = `falhou: ${e.message}`; }
+        }
+
+        r.resumo = `WhatsApp: ${r.whatsapp} · E-mail: ${r.email}`;
+        r.falhou = String(r.whatsapp).startsWith('falhou') || String(r.email).startsWith('falhou');
+        return r;
+    };
+
+    const cancelarContratoUsina = async (sig) => {
+        const ok = await showConfirm('Cancelar este contrato na Autentique? O link deixa de valer e o documento é removido de lá. Não dá para desfazer.', 'Cancelar contrato');
+        if (!ok) return;
+        setCancelandoAssinatura(sig.id);
+        try {
+            const res = await cancelAutentiqueDocument(sig.id);
+            if (res?.error) throw new Error(res.error);
+            showAlert(res?.jaCancelado ? 'Este contrato já estava cancelado.' : 'Contrato cancelado.', 'success');
+            carregarDadosContrato(usina.id, formData.leased_area_id);
+        } catch (e) {
+            showAlert('Erro ao cancelar contrato: ' + e.message, 'error');
+        } finally {
+            setCancelandoAssinatura(null);
+        }
+    };
 
     const addHistory = async (type, id, action, details = {}, customContent = null) => {
         if (!id) return;
@@ -702,6 +934,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 servicos_contratados: usina.servicos_contratados || [],
                 service_values: usina.service_values || {},
                 gestao_percentual: usina.gestao_percentual || '',
+                leased_area_id: usina.leased_area_id || '',
                 cep: usina.address?.cep || '',
                 rua: usina.address?.rua || '',
                 numero: usina.address?.numero || '',
@@ -2222,6 +2455,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 servicos_contratados: formData.servicos_contratados,
                 service_values: formData.service_values,
                 gestao_percentual: Number(formData.gestao_percentual),
+                // String vazia num campo uuid é erro do Postgres, não "sem valor".
+                leased_area_id: formData.leased_area_id || null,
                 ibge_code: formData.ibge_code,
                 unidade_geradora: formData.unidade_geradora,
                 cnpj_cpf: formData.cnpj_cpf,
@@ -2383,6 +2618,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet2 },
                         { id: 'ucs', label: 'UCs & Rateio', icon: Link },
                         { id: 'portal', label: 'Portal', icon: Globe },
+                        { id: 'contratos', label: 'Contratos', icon: FileSignature },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageSquare }
                     ].map(tab => (
                         <button
@@ -4218,6 +4454,162 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     )}
 
                     {/* Tab Content: Comunicados / Histórico */}
+                    {activeTab === 'contratos' && (
+                        <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                            {!usina ? (
+                                <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>Salve a usina para gerar contratos.</div>
+                            ) : (
+                                <>
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                            <FileSignature size={20} color="#3b82f6" /> Contrato a gerar
+                                        </h4>
+                                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                                            {CONTRATOS_USINA.map(c => (
+                                                <button
+                                                    key={c.tipo}
+                                                    type="button"
+                                                    onClick={() => { setTipoContrato(c.tipo); setContractDraft(''); }}
+                                                    style={{
+                                                        padding: '0.6rem 1.1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.85rem',
+                                                        border: tipoContrato === c.tipo ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                                                        background: tipoContrato === c.tipo ? '#eff6ff' : 'white',
+                                                        color: tipoContrato === c.tipo ? '#1d4ed8' : '#64748b',
+                                                        fontWeight: tipoContrato === c.tipo ? 700 : 500
+                                                    }}
+                                                >
+                                                    {c.rotulo}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Área arrendada desta usina</label>
+                                            <select
+                                                style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                                                value={formData.leased_area_id || ''}
+                                                onChange={e => { setFormData({ ...formData, leased_area_id: e.target.value }); setContractDraft(''); }}
+                                            >
+                                                <option value="">— nenhuma vinculada —</option>
+                                                {areasDisponiveis.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                                            </select>
+                                            <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                                Cadastre em Configurações, Áreas Arrendadas. O contrato de arrendamento sai daqui; salve a usina para gravar o vínculo.
+                                            </p>
+                                        </div>
+
+                                        {tipoContrato === 'compra_venda' && (
+                                            <div style={{ marginTop: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                                                {CAMPOS_COMPRA_VENDA.map(campo => (
+                                                    <div key={campo.key}>
+                                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>{campo.label}</label>
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', outline: 'none', boxSizing: 'border-box' }}
+                                                            value={contractOpts[campo.key] ?? ''}
+                                                            onChange={e => {
+                                                                setContractOpts({ ...contractOpts, [campo.key]: e.target.value.replace(/[^\d.,]/g, '') });
+                                                                setContractDraft('');
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {tipoContrato === 'om' && (
+                                            <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', fontSize: '0.83rem', color: '#0369a1' }}>
+                                                Os valores do O&amp;M vêm de Configurações, seção Serviços
+                                                {servicoOM ? ' (R$ ' + Number(servicoOM.valorModulo || 0).toFixed(2).replace('.', ',') + ' por módulo).' : '.'}
+                                            </div>
+                                        )}
+
+                                        {tipoContrato === 'arrendamento' && !areaArrendada && (
+                                            <div style={{ marginTop: '1rem', padding: '0.85rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                                <AlertCircle size={18} /> Sem área vinculada, o contrato de arrendamento sai com os campos do imóvel em branco.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', flexWrap: 'wrap' }}>
+                                                Minuta
+                                                {minutaEditada && (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.2rem 0.6rem', borderRadius: '999px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '0.72rem', fontWeight: 700 }}>
+                                                        <AlertCircle size={13} /> editada à mão, não acompanha os campos
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                                {minutaEditada && (
+                                                    <button type="button" onClick={() => setContractDraft('')} style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                                        Descartar edições
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    disabled={enviandoContrato}
+                                                    onClick={enviarContratoUsina}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: enviandoContrato ? '#94a3b8' : '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: enviandoContrato ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+                                                >
+                                                    {enviandoContrato ? <><Loader2 size={16} className="spin-animation" /> Enviando...</> : <><Send size={16} /> Gerar e enviar</>}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <textarea
+                                            value={textoContratoAtual()}
+                                            onChange={e => setContractDraft(e.target.value)}
+                                            spellCheck={false}
+                                            style={{ width: '100%', minHeight: '320px', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.76rem', lineHeight: 1.6, outline: 'none', resize: 'vertical' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                            <History size={20} color="#3b82f6" /> Contratos desta usina
+                                        </h4>
+                                        {carregandoAssinaturas ? (
+                                            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Carregando...</p>
+                                        ) : assinaturas.length === 0 ? (
+                                            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Nenhum contrato enviado para assinatura.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                                {assinaturas.map(sig => {
+                                                    const cor = sig.status === 'signed' ? '#16a34a' : (sig.status === 'rejected' || sig.status === 'canceled') ? '#dc2626' : '#d97706';
+                                                    const rotuloTipo = (CONTRATOS_USINA.find(c => c.tipo === sig.document_type) || {}).rotulo || sig.document_type || 'Contrato';
+                                                    return (
+                                                        <div key={sig.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '0.9rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', flexWrap: 'wrap' }}>
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1e293b' }}>{rotuloTipo}</div>
+                                                                <div style={{ fontSize: '0.78rem', color: cor, fontWeight: 600 }}>
+                                                                    {sig.status === 'signed' ? 'Assinado' : sig.status === 'pending' ? 'Aguardando assinatura' : sig.status === 'rejected' ? 'Recusado' : 'Cancelado'}
+                                                                    {' - '}{new Date(sig.created_at).toLocaleDateString('pt-BR')}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                                <a href={sig.short_url || sig.autentique_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', color: '#3b82f6', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                                    <ExternalLink size={14} /> Abrir
+                                                                </a>
+                                                                {sig.status === 'pending' && (
+                                                                    <button type="button" disabled={cancelandoAssinatura === sig.id} onClick={() => cancelarContratoUsina(sig)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #fecaca', borderRadius: '10px', background: '#fef2f2', color: '#b91c1c', cursor: cancelandoAssinatura === sig.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                                        {cancelandoAssinatura === sig.id ? <><Loader2 size={14} className="spin-animation" /> Cancelando...</> : <><Ban size={14} /> Cancelar</>}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {activeTab === 'comunicacao' && (
                         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
@@ -4637,6 +5029,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     }}
                 />
             )}
+            {enviandoContrato && usina && (
+                <ContratoUsina
+                    texto={textoContratoAtual()}
+                    titulo={contratoAtual.titulo}
+                    branding={branding}
+                />
+            )}
+
         </div>
     );
 }
