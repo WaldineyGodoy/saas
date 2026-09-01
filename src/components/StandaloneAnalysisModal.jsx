@@ -1147,7 +1147,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         fileName: descriptiveFileName,
                         subscriberId: subData.id,
                         ucId: currentUc?.id || invoiceData.uc_id,
-                        profileId: profile?.id
+                        profileId: profile?.id,
+                        invoiceId: invoiceData.id
                     });
                     showAlert('Notificações enviadas com sucesso!', 'success');
                 }

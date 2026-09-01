@@ -468,7 +468,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                 fileName: fileName,
                 subscriberId: subscriber?.id,
                 ucId: inv.uc_id, // Registro na UC para histórico
-                profileId: profile?.id
+                profileId: profile?.id,
+                invoiceId: inv.id
             });
 
             showAlert('Notificações reenviadas com sucesso!', 'success');
@@ -1081,7 +1082,8 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
                                     fileName: descriptiveFileName,
                                     subscriberId: subData.id,
                                     ucId: currentInv.uc_id,
-                                    profileId: profile?.id
+                                    profileId: profile?.id,
+                                    invoiceId: currentInv.id
                                 });
                                 showAlert('Notificações enviadas com sucesso!', 'success');
                                 console.log('Notification sent successfully');

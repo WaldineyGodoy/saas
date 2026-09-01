@@ -1108,7 +1108,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 subscriberId: subscriber.id,
                 ucId: !isConsolidated ? invoice.uc_id : null, // Novo: Registro na UC
                 profileId: profile?.id,
-                isConsolidated: isConsolidated
+                isConsolidated: isConsolidated,
+                invoiceId: invoice.id
             });
 
             if (notifRes.emailRes?.error || notifRes.waRes?.error) {
@@ -2690,7 +2691,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                                 fileName: fileName,
                                                                                 subscriberId: subscriber.id,
                                                                                 profileId: profile?.id,
-                                                                                isConsolidated: true
+                                                                                isConsolidated: true,
+                                                                                invoiceId: newCons.id
                                                                             });
                                                                             showAlert('Notificações consolidadas enviadas com sucesso!', 'success');
                                                                         }

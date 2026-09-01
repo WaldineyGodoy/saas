@@ -263,7 +263,11 @@ export const sendCombinedNotification = async ({
     subscriberId,
     ucId = null, // Novo: ID da UC para registro de histórico
     profileId,
-    isConsolidated = false
+    isConsolidated = false,
+    // Id da fatura (ou do consolidado) que este PDF cobre. Sem ele a fatura
+    // fica marcada como NAO enviada e o enviador autonomo a manda de novo --
+    // ver o comentario em marcarComoEnviada.
+    invoiceId = null
 }) => {
     try {
         const { data: configs } = await supabase
@@ -339,6 +343,31 @@ https://app.b2wenergia.com.br
                 ).catch(e => ({ error: e.message })) : Promise.resolve({ skipped: true });
 
                 const [emailRes, waRes] = await Promise.all([emailPromise, waPromise]);
+
+                // ------------------------------------------------------------
+                // Marca a fatura como entregue.
+                //
+                // Esta tela emite e envia no mesmo clique, e por anos foi o
+                // unico caminho de entrega -- entao ninguem precisava anotar
+                // que o envio aconteceu. Com o enviador autonomo isso mudou:
+                // fatura sem `fatura_enviada_em` continua na fila dele, e o
+                // robo manda um segundo PDF ao cliente no dia seguinte.
+                //
+                // Aconteceu de verdade em 01/09/2026 com as duas faturas da
+                // Brigitte Caturano: reemitidas pela tela, enviadas na hora, e
+                // ainda assim de pe na fila.
+                //
+                // So marca se algum canal saiu. Falha total mantem na fila,
+                // que e onde a fatura deve estar.
+                const algumCanalSaiu = !emailRes.error || !(waRes.error || waRes.skipped);
+                if (invoiceId && algumCanalSaiu) {
+                    await supabase.rpc('fn_marcar_fatura_enviada', {
+                        p_tipo: isConsolidated ? 'consolidada' : 'individual',
+                        p_id: invoiceId,
+                        p_invoice_ids: null,
+                        p_erro: null
+                    });
+                }
 
                 const historyPromises = [];
                 

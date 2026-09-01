@@ -735,7 +735,8 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                     fileName: fileName,
                     subscriberId: subId,
                     ucId: resolvedUcId,
-                    profileId: profile?.id
+                    profileId: profile?.id,
+                    invoiceId: invoice.id
                 });
                 showAlert('Faturamento gerado, PDF combinado mesclado e notificações enviadas com sucesso!', 'success');
             } else {
