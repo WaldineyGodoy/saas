@@ -1,0 +1,63 @@
+name: Enviador de Faturas
+
+# Entrega ao assinante o que já tem boleto emitido e ainda não saiu.
+#
+# Roda depois do faturista (08:00 UTC, até 45 min): às 11:00 UTC / 08:00 BRT o
+# que foi baixado de madrugada e faturado já está de pé. O robô não emite
+# cobrança nenhuma — só entrega o que existe.
+#
+# Diferente do faturista, aqui NÃO é preciso Xvfb: o Chromium só renderiza a
+# nossa própria página de demonstrativo, não enfrenta o WAF de portal nenhum.
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # diariamente às 08:00 BRT
+  workflow_dispatch:
+    inputs:
+      simular:
+        description: 'Só simular (não envia nada)'
+        type: boolean
+        required: false
+        default: true
+      limite:
+        description: 'Máximo de faturas nesta execução'
+        required: false
+        default: '30'
+
+jobs:
+  enviar:
+    name: Entregar faturas pendentes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: npm install
+
+      - name: Install Playwright Chromium
+        working-directory: scraper
+        run: npx playwright install chromium --with-deps
+
+      # No disparo manual o padrão é SIMULAR: quem quiser enviar de verdade
+      # desmarca a caixa. No agendado, envia — é o robô fazendo o trabalho.
+      - name: Enviar faturas
+        working-directory: scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          ARGS="--limite ${{ github.event.inputs.limite || '30' }}"
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.simular }}" = "false" ]; then
+            ARGS="$ARGS --aplicar"
+          fi
+          echo "node enviador.js $ARGS"
+          node enviador.js $ARGS
