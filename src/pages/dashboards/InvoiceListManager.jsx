@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { valorDoCodigoDeBarras } from '../../lib/codigoBarras';
 import { createAsaasCharge } from '../../lib/api';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import InvoiceHistoryModal from '../../components/InvoiceHistoryModal';
@@ -714,8 +715,33 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
     };
 
     const handlePayBill = async (inv) => {
-        const utilityValue = (Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0);
-        
+        // O que se paga a concessionaria e a CONTA INTEIRA.
+        //
+        // Isto somava tarifa_minima + iluminacao + outros e deixava a energia
+        // de fora. Em 27 das 30 contas em aberto o botao pagaria menos do que
+        // a conta -- na UC 1.984.366.032-02 (08/2026) seriam R$ 961,59 numa
+        // conta de R$ 6.591,56. As tres que batiam eram coincidencia: faturas
+        // parceladas com consumo_reais zerado.
+        const utilityValue = Number(inv.valor_concessionaria) || 0;
+
+        if (utilityValue <= 0) {
+            showAlert('Conta sem valor apurado. Confira a fatura antes de pagar.', 'warning');
+            return;
+        }
+
+        // Conferencia gratuita: o valor a debitar esta dentro do proprio codigo
+        // de barras. Divergiu, alguma leitura esta errada e nao se paga nenhuma
+        // das duas.
+        const valorBarras = valorDoCodigoDeBarras(inv.linha_digitavel);
+        if (valorBarras !== null && Math.abs(valorBarras - utilityValue) > 0.02) {
+            showAlert(
+                `O código de barras cobra ${formatCurrency(valorBarras)}, mas a conta registrada é ${formatCurrency(utilityValue)}. `
+                + 'Confira a conta antes de pagar — não é seguro pagar por nenhum dos dois valores.',
+                'error'
+            );
+            return;
+        }
+
         const confirm = await showConfirm(`Deseja pagar a conta de energia da concessionária no valor de ${formatCurrency(utilityValue)}?`);
         if (!confirm) return;
 

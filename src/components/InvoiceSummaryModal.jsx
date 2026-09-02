@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { deriveReadingStatus } from '../lib/readingStatus';
 import { X, FileText, CreditCard, ExternalLink, Info, CheckCircle2, AlertCircle, Pencil, Trash2, Save, RotateCcw, Clock, Loader2, Search, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { valorDoCodigoDeBarras } from '../lib/codigoBarras';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { createAsaasCharge, cancelAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
@@ -337,6 +338,20 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const handlePay = async () => {
         const utilityValue = Number(invoice.valor_concessionaria) || ((Number(invoice.iluminacao_publica) || 0) + (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0) + (Number(invoice.consumo_reais) || 0));
 
+        // O valor a debitar esta dentro do proprio codigo de barras
+        // (arrecadacao FEBRABAN, posicoes 5 a 15). Divergiu do que o CRM
+        // registrou, alguma das duas leituras esta errada e nao se paga por
+        // nenhuma das duas.
+        const valorBarras = valorDoCodigoDeBarras(invoice.linha_digitavel);
+        if (valorBarras !== null && Math.abs(valorBarras - utilityValue) > 0.02) {
+            showAlert(
+                `O código de barras cobra ${formatCurrency(valorBarras)}, mas a conta registrada é ${formatCurrency(utilityValue)}. `
+                + 'Confira a conta antes de pagar.',
+                'error'
+            );
+            return;
+        }
+
         const confirmed = await showConfirm(`Deseja pagar a conta de energia da concessionária no valor de ${formatCurrency(utilityValue)}?`, 'Confirmar Pagamento');
         if (!confirmed) return;
 
@@ -360,9 +375,13 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                 // Update local status - IMPORTANT: Also update energy_bill_status to 'pago'
                 const { error: updateError } = await supabase
                     .from('invoices')
-                    .update({ 
-                        status: 'pago', 
-                        asaas_status: 'PAID',
+                    .update({
+                        // NAO mexer em `status` nem em `asaas_status` aqui.
+                        // Sao a cobranca AO ASSINANTE; quem acabou de ser pago
+                        // foi a concessionaria. Marcar 'pago' tira a fatura da
+                        // fila de faturamento como se tivesse sido recebida e
+                        // injeta recebimento fantasma no Livro Razao -- ja
+                        // contaminou o razao duas vezes por este caminho.
                         energy_bill_status: 'pago',
                         reading_status: 'success',
                         reading_checked_at: new Date().toISOString()
