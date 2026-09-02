@@ -74,11 +74,39 @@ const decomporFatura = (dados, descontoPadrao = 0) => {
     const compensadaComDesconto = Math.max(0, consumoReais - tarifaMinima);
     const compensadaBruta = compensadaComDesconto + desconto;
 
+    const total = compensadaBruta - desconto + tarifaMinima + ip + outros + parcelamento;
+
+    // Confere a composicao -- mas so onde existe invariante.
+    //
+    // SEM compensacao o assinante paga a conta da concessionaria (repasse):
+    // ai a soma das linhas TEM que dar `valor_concessionaria`. Foi assim que a
+    // UC 7030765391 (08/2026) se denunciou: `consumo_reais` nulo fez a tabela
+    // exibir R$ 73,44 -- so iluminacao publica e encargos -- para uma conta de
+    // R$ 509,06, com os R$ 435,62 da energia sumindo sem aviso. Na UC vizinha
+    // 7030765324 o erro era o oposto: R$ 6.021,32 numa conta de R$ 1.954,82.
+    //
+    // COM compensacao nao ha invariante nenhum: o assinante paga a energia
+    // compensada com desconto, e a conta da concessionaria fica so com Fio B,
+    // iluminacao e encargos. Divergir e o normal -- em 01/09/2026 eram 51 das
+    // 75 faturas com conta. Alertar nelas seria pintar de vermelho a base
+    // inteira e ensinar todo mundo a ignorar o alerta.
+    // So vale como defeito se existe conta. Registro vazio -- conta que a
+    // concessionaria nunca postou -- tambem tem `consumo_reais` nulo, e ali
+    // "nao calculada" e o estado correto, nao um alerta. Sao 8 na base.
+    const naoApurada = (dados.consumo_reais === null || dados.consumo_reais === undefined)
+        && valorConcessionaria > 0;
+    const semCompensacaoNaConta = compensadoKwh === 0 && valorConcessionaria > 0;
+    const diferenca = semCompensacaoNaConta ? valorConcessionaria - total : 0;
+
     return {
         consumoKwh, compensadoKwh, naoCompensadoKwh,
         compensadaBruta, desconto, compensadaComDesconto,
         tarifaMinima, ip, outros, parcelamento,
-        total: compensadaBruta - desconto + tarifaMinima + ip + outros + parcelamento,
+        total,
+        valorConcessionaria,
+        naoApurada,
+        diferenca,
+        confere: !naoApurada && (!semCompensacaoNaConta || Math.abs(diferenca) <= 0.02),
         percentualDesconto: compensadaBruta > 0
             ? Math.round((desconto / compensadaBruta) * 100)
             : num(descontoPadrao),
@@ -1621,6 +1649,17 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             const consumoNaoCompensadoKwh = d.naoCompensadoKwh;
                             const calcConcessionariaSum = d.total;
 
+                            // Sem compensacao a energia nao foi compensada coisa
+                            // nenhuma -- e consumo puro, pago a tarifa cheia. A
+                            // tabela chamava tudo de "energia compensada" e
+                            // mostrava "0 kwh" ao lado do valor, enquanto os kWh
+                            // reais apareciam na linha da tarifa minima, essa com
+                            // R$ 0,00. Na UC 7030765391 dava "0 kwh / R$ 435,62"
+                            // e "421 kwh / R$ 0,00" na linha de baixo.
+                            const semCompensacao = d.compensadoKwh === 0 && compensadaBruta > 0;
+                            const rotuloEnergia = semCompensacao ? 'Energia (sem compensação)' : 'Energia compensada';
+                            const qtdEnergia = semCompensacao ? d.consumoKwh : d.compensadoKwh;
+
                             return (
                                 <div style={{ marginBottom: '1.5rem' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem' }}>
@@ -1635,15 +1674,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>
                                                     <div>
-                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>Energia compensada</span>
+                                                        <span style={{ color: '#1e293b', fontWeight: '600' }}>{rotuloEnergia}</span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoCompensadoKwh} kwh</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{qtdEnergia} kwh</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>
                                                     {formatCurrency(compensadaBruta)}
                                                 </td>
                                             </tr>
-                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <tr style={{ borderBottom: '1px solid #f1f5f9', display: valorDesconto > 0 ? undefined : 'none' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Energia Compensada Desc. {discount}% -</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>- {consumoCompensadoKwh} kwh</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#16a34a', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>- {formatCurrency(valorDesconto)}</td>
@@ -1655,7 +1694,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Excedentes</td>
-                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{consumoNaoCompensadoKwh > 0 ? `${consumoNaoCompensadoKwh} kwh` : '—'}</td>
+                                                <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{finalTarifaMinima > 0 && consumoNaoCompensadoKwh > 0 ? `${consumoNaoCompensadoKwh} kwh` : '—'}</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalTarifaMinima)}</td>
                                             </tr>
                                             <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1673,10 +1712,29 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f8fafc' }}>
                                                 <td style={{ padding: '0.75rem 0 0.75rem 0.5rem', fontSize: '0.85rem', color: '#0f172a', fontWeight: '800', verticalAlign: 'middle' }}>Total de Lançamentos</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
-                                                <td style={{ padding: '0.75rem 0.5rem 0.75rem 0', fontSize: '0.9rem', color: '#0f172a', fontWeight: '800', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(calcConcessionariaSum)}</td>
+                                                <td style={{ padding: '0.75rem 0.5rem 0.75rem 0', fontSize: '0.9rem', color: d.confere ? '#0f172a' : '#b91c1c', fontWeight: '800', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(calcConcessionariaSum)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
+
+                                    {!d.confere && (
+                                        <div style={{
+                                            marginTop: '0.75rem', padding: '0.75rem 0.9rem',
+                                            background: '#fef2f2', border: '1px solid #fecaca',
+                                            borderRadius: '10px', fontSize: '0.8rem', color: '#7f1d1d'
+                                        }}>
+                                            <strong style={{ display: 'block', marginBottom: '0.25rem' }}>
+                                                {d.naoApurada
+                                                    ? 'Fatura ainda não calculada.'
+                                                    : 'A composição não fecha com a conta da concessionária.'}
+                                            </strong>
+                                            {d.naoApurada
+                                                ? 'A energia não tem valor apurado, então a soma abaixo é apenas parcial.'
+                                                : `Soma das linhas ${formatCurrency(d.total)} contra ${formatCurrency(d.valorConcessionaria)} da conta — diferença de ${formatCurrency(Math.abs(d.diferenca))}. Esta UC não teve compensação no período, então as duas deveriam ser iguais.`}
+                                            {' '}Não emita boleto por este número.
+                                        </div>
+                                    )}
+
                                     <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
                                         * A composição reflete o desconto de {discount}% aplicado sobre a energia compensada.
                                     </div>
