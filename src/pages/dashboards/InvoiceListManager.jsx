@@ -609,6 +609,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         dia_vencimento,
                         tarifa_concessionaria,
                         desconto_assinante,
+                        nao_faturavel,
                         address,
                         subscribers!consumer_units_subscriber_id_fkey(id, name, email, phone, cpf_cnpj),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(id, name, email, phone, cpf_cnpj)
@@ -2356,7 +2357,20 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                         {/* 8. Vr. da Fatura + Boleto */}
                                                         <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '100px' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-                                                                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
+                                                                {/*
+                                                                    R$ 0,00 sozinho na coluna parece defeito de tela.
+                                                                    Nas UCs sombra de troca de titularidade o zero e
+                                                                    deliberado -- a conta final e do novo titular --, e
+                                                                    dizer isso evita que alguem "conserte" recalculando.
+                                                                */}
+                                                                {factValue === 0 && inv.consumer_units?.nao_faturavel ? (
+                                                                    <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '0.75rem', lineHeight: 1.2 }}>
+                                                                        Não faturável
+                                                                        <div style={{ fontWeight: 500, color: '#a78bfa', fontSize: '0.68rem' }}>R$ 0,00</div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{formatCurrency(factValue)}</div>
+                                                                )}
                                                                 {inv.asaas_boleto_url && inv.status !== 'pago' && (
                                                                     <a 
                                                                         href={inv.asaas_boleto_url} 
@@ -2564,7 +2578,11 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                                                 {inv.consumer_units.titular_fatura.name}
                                                             </div>
                                                         )}
-                                                        <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>{formatCurrency(inv.valor_a_pagar)}</div>
+                                                        <div style={{ fontWeight: 'bold', color: 'var(--color-blue)', marginTop: '0.5rem' }}>
+                                                            {Number(inv.valor_a_pagar) === 0 && inv.consumer_units?.nao_faturavel
+                                                                ? <span style={{ color: '#7c3aed', fontSize: '0.78rem' }}>Não faturável</span>
+                                                                : formatCurrency(inv.valor_a_pagar)}
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>

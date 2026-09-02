@@ -1692,7 +1692,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', textAlign: 'center', verticalAlign: 'middle' }}>—</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(ip)}</td>
                                             </tr>
-                                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <tr style={{ borderBottom: '1px solid #f1f5f9', display: finalTarifaMinima > 0 ? undefined : 'none' }}>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#64748b', fontWeight: '500', verticalAlign: 'middle' }}>Tarifa Mínima / Excedentes</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'center', verticalAlign: 'middle' }}>{finalTarifaMinima > 0 && consumoNaoCompensadoKwh > 0 ? `${consumoNaoCompensadoKwh} kwh` : '—'}</td>
                                                 <td style={{ padding: '0.75rem 0', fontSize: '0.85rem', color: '#1e293b', fontWeight: '700', textAlign: 'right', verticalAlign: 'middle' }}>{formatCurrency(finalTarifaMinima)}</td>
@@ -1809,20 +1809,23 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     color: branding?.primary_color || '#003366'
                                                 }} 
                                             />
-                                        ) : formatCurrency((() => {
-                                            const valDb = Number(invoice.valor_concessionaria) || 0;
-                                            const consumoReais = Number(invoice.consumo_reais) || 0;
-                                            const ip = Number(invoice.iluminacao_publica) || 0;
-                                            const outros = (Number(invoice.tarifa_minima) || 0) + (Number(invoice.outros_lancamentos) || 0);
-                                            const compKwh = Number(invoice.consumo_compensado) || 0;
-                                            const grossValue = consumoReais + ip + outros + (Number(invoice.parcelamento) || 0);
-                                            // Se não houve compensação (0 kWh) e o valor no BD for estranhamente menor que o consumo bruto,
-                                            // corrige a exibição forçando o Valor Bruto (já que a concessionária cobrou o total sem descontos).
-                                            if (compKwh === 0 && valDb < consumoReais) {
-                                                return grossValue;
-                                            }
-                                            return valDb;
-                                        })())}
+                                        ) : (
+                                            // O valor da conta e um FATO: esta impresso no PDF da
+                                            // concessionaria e confere com o codigo de barras. Nao se
+                                            // recalcula.
+                                            //
+                                            // Aqui havia um "conserto de exibicao" que, quando o
+                                            // consumo apurado ficava maior que a conta, trocava a conta
+                                            // pela soma das parcelas. Em vez de corrigir, escondia erro
+                                            // de extracao: a UC 7030765324 (08/2026) tinha
+                                            // consumo_reais em R$ 5.629,97 e esta secao exibia
+                                            // R$ 6.021,32 no lugar dos R$ 1.954,82 reais da conta.
+                                            // Quem conferisse contra o PDF via numeros diferentes.
+                                            //
+                                            // Divergencia agora aparece como alerta na composicao, que
+                                            // e onde ela deve ser resolvida.
+                                            formatCurrency(Number(invoice.valor_concessionaria) || 0)
+                                        )}
                                     </span>
 
                                     {!isEditing && (
@@ -1985,30 +1988,31 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                         />
                                     ) : (
                                         <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--color-blue)' }}>
-                                            {formatCurrency(isEditing ? editData.valor_a_pagar : (() => {
-                                                const dbValorA_Pagar = Number(invoice.valor_a_pagar) || 0;
-                                                // Se o valor salvo no banco de dados for diferente do valor concessionária e maior que 0, assumimos que é o valor final (pode ter sido sobrescrito manualmente pelo usuário)
-                                                if (dbValorA_Pagar !== Number(invoice.valor_concessionaria) && dbValorA_Pagar > 0) {
-                                                    return dbValorA_Pagar;
-                                                }
-                                                const discount = invoice.desconto_aplicado !== undefined ? invoice.desconto_aplicado : (consumerUnit?.desconto_assinante || 0);
-                                                const consumoKwh = Number(invoice.consumo_kwh) || 0;
-                                                const consumoReais = Number(invoice.consumo_reais) || 0;
-                                                const ip = Number(invoice.iluminacao_publica) || 0;
-                                                const parcelamentoVal = Number(invoice.parcelamento) || 0;
-                                                const tarifaMinimaVal = Number(invoice.tarifa_minima) || 0;
-                                                const outrosVal = Number(invoice.outros_lancamentos) || 0;
-                                                const valorConcessionaria = Number(invoice.valor_concessionaria) || 0;
-                                                let calcOutros = valorConcessionaria - consumoReais - ip - parcelamentoVal;
-                                                
-                                                let finalTarifaMinima = tarifaMinimaVal;
-                                                let finalOutros = outrosVal;
-                                                if (calcOutros > 0 && tarifaMinimaVal === 0 && outrosVal === 0) {
-                                                    finalOutros = calcOutros;
-                                                }
-                                                const consumoCompensadoKwh = Number(invoice.consumo_compensado) || 0;
-                                                return decomporFatura(invoice, discount).total;
-                                            })())}
+                                            {/*
+                                                O que o assinante paga e o que esta GRAVADO em
+                                                valor_a_pagar -- e o numero que a fn_calcular_fatura
+                                                apurou e que vai para o boleto. A tela nao recalcula.
+
+                                                Antes, quando valor_a_pagar era 0 ou coincidia com o
+                                                valor da conta, esta secao ignorava o gravado e exibia
+                                                uma conta propria. Nas UCs sombra de troca de
+                                                titularidade -- valor_a_pagar 0 de proposito, porque a
+                                                conta final e do novo titular -- a lista mostrava
+                                                R$ 0,00 e o modal R$ 509,06 para a mesma fatura.
+                                            */}
+                                            {formatCurrency(isEditing ? editData.valor_a_pagar : (Number(invoice.valor_a_pagar) || 0))}
+                                        </span>
+                                    )}
+
+                                    {/* Zero sem explicacao parece defeito. Diz qual dos dois zeros e. */}
+                                    {!isEditing && Number(invoice.valor_a_pagar) === 0 && (
+                                        <span style={{
+                                            fontSize: '0.72rem', fontWeight: 700, textAlign: 'right',
+                                            color: consumerUnit?.nao_faturavel ? '#7c3aed' : '#94a3b8'
+                                        }}>
+                                            {consumerUnit?.nao_faturavel
+                                                ? 'UC não faturável — conta não é cobrada do assinante'
+                                                : 'Fatura ainda não calculada'}
                                         </span>
                                     )}
 
