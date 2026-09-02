@@ -138,10 +138,11 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         { value: 'cancelado_inadimplente', label: 'Cancelado (Inadimplente)' }
     ];
 
-    const modalidadeOptions = [
-        { value: 'auto_consumo_remoto', label: 'Auto Consumo Remoto' },
-        { value: 'geracao_compartilhada', label: 'Geração Compartilhada' }
-    ];
+    const rotuloModalidade = (m) => (
+        m === 'auto_consumo_remoto' ? 'Auto Consumo Remoto'
+        : m === 'geracao_compartilhada' ? 'Geração Compartilhada'
+        : '—'
+    );
 
     const tipoLigacaoOptions = [
         { value: 'monofasico', label: 'Monofásico' },
@@ -691,7 +692,13 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                     : false,
                 nao_faturavel: !!formData.nao_faturavel,
                 dia_leitura: Number(formData.dia_leitura),
-                modalidade: formData.modalidade,
+                // `modalidade` NAO vai mais no payload. Quem decide ACR ou GC e a
+                // usina, e o gatilho tr_uc_modalidade_titularidade deriva no banco.
+                // Este campo nunca teve <select> na tela -- a constante
+                // modalidadeOptions foi declarada e jamais renderizada --, entao
+                // toda UC nascia 'geracao_compartilhada' e cada salvamento
+                // reescrevia o padrao por cima. Em 02/09/2026, 9 das 21 UCs
+                // vinculadas discordavam da modalidade da propria usina.
                 concessionaria: formData.concessionaria,
                 tipo_ligacao: formData.tipo_ligacao,
                 franquia: Number(formData.franquia),
@@ -1954,10 +1961,23 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                                                             {/* Background accent line */}
                                                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: '#f59e0b' }}></div>
                                                             
+                                                            {/* A modalidade e da USINA, nao da UC: e ela que define se a
+                                                                compensacao e autoconsumo remoto ou geracao compartilhada.
+                                                                Mostrada aqui, ao lado da usina, para deixar claro de onde vem.
+                                                                Em ACR, o banco recusa vincular UC cujo titular na
+                                                                concessionaria seja diferente do titular da unidade geradora. */}
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.25rem' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                     <Building2 size={18} color="#f59e0b" style={{ minWidth: '18px' }} />
                                                                     <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b' }}>{usina.name}</h5>
+                                                                    <span style={{
+                                                                        fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.03em',
+                                                                        textTransform: 'uppercase', padding: '0.15rem 0.45rem',
+                                                                        borderRadius: '999px', background: '#fef3c7', color: '#92400e',
+                                                                        border: '1px solid #fde68a', whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        {rotuloModalidade(usina.modalidade)}
+                                                                    </span>
                                                                 </div>
                                                                 <button
                                                                     type="button"
