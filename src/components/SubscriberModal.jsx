@@ -6,6 +6,7 @@ import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
+import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -44,13 +45,28 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const [totalUnpaidGlobal, setTotalUnpaidGlobal] = useState(0);
     const [invoiceMonthFilter, setInvoiceMonthFilter] = useState('all');
     
+    // Vencimento sugerido do consolidado.
+    //
+    // Antes nascia sempre em hoje + 2 dias corridos, ignorando o
+    // `consolidated_due_day` do assinante — que e o campo que a pessoa edita
+    // logo acima, na propria tela, e que a Edge Function usa quando o boleto sai
+    // pela lista de assinantes. Dois controles para a mesma decisao, um deles
+    // salvo e ignorado: em 03/09/2026 o dia estava configurado em 8 e o seletor
+    // sugeriu 07/09, que ainda por cima e feriado.
+    //
+    // Agora o dia configurado manda. So o piso de 2 dias e o desvio de dia nao
+    // util o deslocam — e nesse caso o pulo respeita feriado bancario, nao so
+    // fim de semana.
     const [specificDueDate, setSpecificDueDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 2);
-        while (d.getDay() === 0 || d.getDay() === 6) {
-            d.setDate(d.getDate() + 1);
-        }
-        return d;
+        const minimo = new Date();
+        minimo.setDate(minimo.getDate() + 2);
+
+        const diaConfigurado = subscriber?.consolidated_due_day;
+        const alvo = diaConfigurado
+            ? proximaOcorrenciaDoDia(diaConfigurado, minimo)
+            : minimo;
+
+        return proximoDiaUtil(alvo);
     });
     const [showDueDatePicker, setShowDueDatePicker] = useState(false);
     const [calendarViewDate, setCalendarViewDate] = useState(() => new Date());
@@ -2567,8 +2583,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                 
                                                                 for(let d=1; d<=daysInMonth; d++) {
                                                                     const date = new Date(y, m, d);
-                                                                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                                                                    const isValid = !isWeekend && date >= minValid;
+                                                                    // Feriado bancario tambem sai: boleto que vence com banco
+                                                                    // fechado so compensa no dia seguinte.
+                                                                    const isValid = ehDiaUtil(date) && date >= minValid;
                                                                     const isSelected = specificDueDate.getDate() === d && specificDueDate.getMonth() === m && specificDueDate.getFullYear() === y;
                                                                     
                                                                     cells.push(
