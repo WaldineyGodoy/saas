@@ -1,0 +1,79 @@
+name: Emissor de Faturas
+
+# Cria a cobrança do ciclo fechado. Roda entre o faturista e o enviador:
+#
+#   08:00 UTC  faturista  baixa as contas da concessionária
+#   10:00 UTC  emissor    emite o boleto do ciclo que fechou   <-- este
+#   11:00 UTC  enviador   entrega ao assinante
+#
+# A hora é deliberada: uma folga de duas horas depois do faturista para que a
+# leitura da manhã já esteja no banco, e uma hora antes do enviador para que o
+# boleto emitido hoje saia hoje.
+#
+# IMPORTANTE — o agendado NÃO aplica.
+#
+# O enviador entrega o que já existe; este cria dinheiro. Enquanto o ciclo de
+# vida da emissão automática não tiver rodado algumas semanas em simulação,
+# emitir sozinho de madrugada é apostar que a guarda está certa sem ninguém ter
+# conferido. O agendado roda em simulação e deixa o log; emitir de verdade é
+# disparo manual com a caixa desmarcada. Quando houver confiança, troca-se a
+# condição no passo final — uma linha.
+
+on:
+  schedule:
+    - cron: '0 10 * * *'   # diariamente às 07:00 BRT
+  workflow_dispatch:
+    inputs:
+      simular:
+        description: 'Só simular (não cria cobrança)'
+        type: boolean
+        required: false
+        default: true
+      limite:
+        description: 'Máximo de ciclos nesta execução'
+        required: false
+        default: '10'
+      teto:
+        description: 'Valor máximo de um boleto (R$)'
+        required: false
+        default: '50000'
+
+jobs:
+  emitir:
+    name: Emitir cobranças de ciclo fechado
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: npm install
+
+      - name: Emitir faturas
+        working-directory: scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          # Opcional: se não existir, o login cai para SUPABASE_KEY. A chave só
+          # serve de `apikey` para a requisição chegar no GoTrue; quem prova
+          # identidade é o access_token do robô que volta do login.
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Identidade própria do robô. Sem ela o portão requireAdmin barra, e é
+          # assim que tem que ser — service_role no Authorization anularia a proteção.
+          ROBO_EMAIL: ${{ secrets.ROBO_EMAIL }}
+          ROBO_SENHA: ${{ secrets.ROBO_SENHA }}
+        run: |
+          ARGS="--limite ${{ github.event.inputs.limite || '10' }} --teto ${{ github.event.inputs.teto || '50000' }}"
+          if [ "${{ github.event.inputs.simular }}" = "false" ]; then
+            ARGS="$ARGS --aplicar"
+          fi
+          echo "node emissor.js $ARGS"
+          node emissor.js $ARGS
