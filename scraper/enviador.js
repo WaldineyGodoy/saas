@@ -460,7 +460,46 @@ async function enviarUm(item, navegador, contexto) {
 }
 
 // ---------------------------------------------------------------------- main
-async function run() {
+// ------------------------------------------------------------------ rastro
+/**
+ * Registro da execução, no mesmo formato do emissor.
+ *
+ * Em 04/09/2026 nem o emissor nem o enviador escreviam nada ao rodar, e quando
+ * nada saiu foi impossível saber se tinham sido acionados. `envio_tentativas`
+ * respondia só pela fatura; não respondia pelo robô.
+ */
+const origemDaExecucao = () =>
+    process.env.GITHUB_ACTIONS === 'true' ? (process.env.GITHUB_EVENT_NAME || 'ci') : 'local';
+
+async function abrirExecucao() {
+    const { data, error } = await supabase
+        .from('robo_execucoes')
+        .insert({ robo: 'enviador', aplicou: APLICAR, detalhe: { origem: origemDaExecucao() } })
+        .select('id')
+        .single();
+    if (error) {
+        console.log(`[aviso] não consegui registrar a execução: ${error.message}`);
+        return null;
+    }
+    return data.id;
+}
+
+/** Fecha pela RPC, para os dois carimbos virem do relógio do banco. */
+async function fecharExecucao(id, campos = {}) {
+    if (!id) return;
+    const { error } = await supabase.rpc('fn_fechar_execucao_robo', {
+        p_id: id,
+        p_processados: campos.processados ?? 0,
+        p_sucesso: campos.sucesso ?? 0,
+        p_falha: campos.falha ?? 0,
+        p_bloqueados: campos.bloqueados ?? 0,
+        p_erro: campos.erro ?? null,
+        p_detalhe: campos.detalhe ?? null,
+    });
+    if (error) console.log(`[aviso] não consegui fechar o registro: ${error.message}`);
+}
+
+async function run(execucaoId) {
     console.log(`\nEnviador de faturas — ${APLICAR ? 'ENVIO REAL' : 'SIMULAÇÃO (use --aplicar para enviar)'}`);
 
     const { data: fila, error } = await supabase.rpc('fn_fila_envio_faturas', { p_limite: LIMITE });
@@ -473,6 +512,9 @@ async function run() {
 
     if (itens.length === 0) {
         console.log('Nada na fila. Toda fatura com boleto já foi entregue.\n');
+        await fecharExecucao(execucaoId, {
+            detalhe: { origem: origemDaExecucao(), motivo: 'fila vazia' },
+        });
         return;
     }
 
@@ -525,6 +567,14 @@ async function run() {
     console.log(`\nResumo: ${Object.entries(contagem)
         .filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(', ') || 'nada a fazer'}\n`);
 
+    await fecharExecucao(execucaoId, {
+        processados: contagem.enviado + contagem.simulado + contagem.falhou + contagem.erro,
+        sucesso: contagem.enviado + contagem.simulado,
+        falha: contagem.falhou + contagem.erro,
+        bloqueados: contagem.pulado,
+        detalhe: { origem: origemDaExecucao(), contagem },
+    });
+
     if (contagem.falhou > 0 || contagem.erro > 0) process.exitCode = 1;
 }
 
@@ -535,8 +585,13 @@ module.exports = { montarHtml, moeda, dataBR };
 // So roda quando chamado direto. Sem esta guarda, um `require` deste arquivo
 // para inspecionar o demonstrativo dispararia a fila inteira.
 if (require.main === module) {
-    run().catch((e) => {
-        console.error('Erro fatal no enviador:', e.message);
-        process.exit(1);
-    });
+    // O registro abre ANTES de tudo que pode falhar, para que morte precoce
+    // também deixe rastro.
+    abrirExecucao().then((id) =>
+        run(id).catch(async (e) => {
+            console.error('Erro fatal no enviador:', e.message);
+            await fecharExecucao(id, { erro: String(e.message).slice(0, 1000) });
+            process.exit(1);
+        })
+    );
 }

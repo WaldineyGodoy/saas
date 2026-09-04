@@ -9,9 +9,20 @@ name: Enviador de Faturas
 # Diferente do faturista, aqui NÃO é preciso Xvfb: o Chromium só renderiza a
 # nossa própria página de demonstrativo, não enfrenta o WAF de portal nenhum.
 
+# O AGENDAMENTO SAIU DAQUI em 04/09/2026, junto com o do emissor. Quem agenda
+# agora é o pg_cron (`enviador-diario`, 11:23 UTC), que chama este workflow pela
+# API do GitHub.
+#
+# Por que o runner continua: o que quebrou foi o AGENDADOR do GitHub — parou de
+# disparar por dias, sem aviso e sem rastro — enquanto o executor seguiu
+# saudável. E o Chromium que renderiza o demonstrativo não roda em Edge
+# Function. Trocar o renderizador para desenhar o PDF na mão mudaria a aparência
+# de um documento que já vai para o cliente; não vale o risco para consertar uma
+# peça que não está quebrada.
+#
+# Só o `workflow_dispatch` existe aqui. Não reintroduza `schedule:` sem tirar o
+# job do banco, ou a fila será percorrida duas vezes por dia.
 on:
-  schedule:
-    - cron: '23 11 * * *'  # 08:23 BRT — fora do topo da hora, faixa congestionada do GitHub
   workflow_dispatch:
     inputs:
       simular:
@@ -56,7 +67,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           ARGS="--limite ${{ github.event.inputs.limite || '30' }}"
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.simular }}" = "false" ]; then
+          if [ "${{ github.event.inputs.simular }}" = "false" ]; then
             ARGS="$ARGS --aplicar"
           fi
           echo "node enviador.js $ARGS"
