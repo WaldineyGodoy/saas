@@ -23,12 +23,18 @@ name: Emissor de Faturas
 # só libera ciclo fechado, o robô reconfere no banco imediatamente antes de
 # emitir, a auditoria barra severidade 'erro', e há teto de itens e de valor.
 #
-# Para voltar a travar, apague a condição `github.event_name == 'schedule'` no
-# passo final.
+# Como aqui só existe disparo manual, emitir de verdade é desmarcar "Só
+# simular". O padrão continua sendo simular.
 
+# O AGENDAMENTO SAIU DAQUI em 04/09/2026. Quem agenda agora é o pg_cron
+# (`emissor-diario`, 10:17 UTC), depois de o `schedule` deste repositório parar
+# de disparar por dias sem aviso e sem deixar rastro diagnosticável.
+#
+# Este workflow continua existindo como porta MANUAL — ter duas maneiras de
+# disparar a mesma ação é barato, e a idempotência (`asaas_payment_id`) impede a
+# segunda de cobrar de novo. Reativar o cron aqui criaria dois agendadores para
+# a mesma emissão, então não reintroduza `schedule:` sem tirar o do banco.
 on:
-  schedule:
-    - cron: '17 10 * * *'  # 07:17 BRT — fora do topo da hora, faixa congestionada do GitHub
   workflow_dispatch:
     inputs:
       simular:
@@ -79,7 +85,7 @@ jobs:
           ROBO_SENHA: ${{ secrets.ROBO_SENHA }}
         run: |
           ARGS="--limite ${{ github.event.inputs.limite || '10' }} --teto ${{ github.event.inputs.teto || '50000' }}"
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.simular }}" = "false" ]; then
+          if [ "${{ github.event.inputs.simular }}" = "false" ]; then
             ARGS="$ARGS --aplicar"
           fi
           echo "node emissor.js $ARGS"

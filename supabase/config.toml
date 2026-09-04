@@ -47,3 +47,10 @@ verify_jwt = false
 # Chamada pela página pública de adesão, que roda como visitante anônimo.
 [functions.onboarding-finalizar]
 verify_jwt = false
+
+# O emissor cria cobranca real. `verify_jwt` sozinho nao protege — a chave anon
+# e um JWT valido e publico — entao a funcao tem portao proprio: token do cron
+# lido do Vault, ou sessao de administrador. O verify_jwt fica ligado como
+# camada externa, e o pg_cron manda a chave anon junto do token.
+[functions.emissor]
+verify_jwt = true
