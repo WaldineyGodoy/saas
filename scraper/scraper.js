@@ -824,4 +824,69 @@ async function uploadToSupabase(localPath, ucNumber, fileName) {
 }
 
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
-run();
+
+// ---------------------------------------------------------------------------
+// Registro da execução, no mesmo formato do emissor e do enviador.
+//
+// `last_scraping_status` responde por UC e só guarda o ÚLTIMO valor — foi por
+// isso que, em 04/09/2026, não deu para saber se o faturista tinha rodado nos
+// dias anteriores: as rodadas recentes sobrescreveram o histórico e o resto era
+// suposição. Aqui fica uma linha por execução, com origem e erro.
+//
+// A linha abre ANTES do `run()`, então morte precoce também deixa rastro.
+// ---------------------------------------------------------------------------
+const origemDaExecucao = () =>
+    process.env.GITHUB_ACTIONS === 'true' ? (process.env.GITHUB_EVENT_NAME || 'ci') : 'local';
+
+(async () => {
+    let execId = null;
+    try {
+        const { data } = await supabase
+            .from('robo_execucoes')
+            .insert({ robo: 'faturista', aplicou: true, detalhe: { origem: origemDaExecucao() } })
+            .select('id')
+            .single();
+        execId = data?.id ?? null;
+    } catch (e) {
+        console.log(`[aviso] não consegui registrar a execução: ${e.message}`);
+    }
+
+    const fechar = (campos) =>
+        execId
+            ? supabase.rpc('fn_fechar_execucao_robo', {
+                  p_id: execId,
+                  p_processados: campos.processados ?? 0,
+                  p_sucesso: campos.sucesso ?? 0,
+                  p_falha: campos.falha ?? 0,
+                  p_bloqueados: 0,
+                  p_erro: campos.erro ?? null,
+                  p_detalhe: campos.detalhe ?? null,
+              }).then(() => {}, () => {})
+            : Promise.resolve();
+
+    const inicio = new Date().toISOString();
+
+    try {
+        await run();
+
+        // Conta pelo que ficou gravado nas UCs nesta janela — o próprio dado que
+        // o faturista existe para produzir, em vez de um contador paralelo.
+        const { data: ucs } = await supabase
+            .from('consumer_units')
+            .select('last_scraping_status')
+            .gte('last_scraping_at', inicio);
+
+        const total = (ucs || []).length;
+        const ok = (ucs || []).filter((u) => u.last_scraping_status === 'success').length;
+        await fechar({
+            processados: total,
+            sucesso: ok,
+            falha: total - ok,
+            detalhe: { origem: origemDaExecucao() },
+        });
+    } catch (e) {
+        console.error('Erro fatal no faturista:', e.message);
+        await fechar({ erro: String(e.message).slice(0, 1000), detalhe: { origem: origemDaExecucao() } });
+        process.exitCode = 1;
+    }
+})();

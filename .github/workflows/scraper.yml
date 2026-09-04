@@ -1,17 +1,19 @@
 name: Neoenergia Invoice Scraper
 
+# O AGENDAMENTO SAIU DAQUI em 04/09/2026, junto com o do emissor e o do
+# enviador. Quem agenda agora é o pg_cron (`faturista-diario`, 08:07 UTC), que
+# chama este workflow pela API do GitHub.
+#
+# Motivo: o `schedule` deste repositório parou de disparar por dias, sem aviso e
+# sem rastro. O faturista ficou 2 dias e meio sem rodar e ninguém percebeu —
+# nenhuma leitura nova entrou, e sem leitura o emissor não tem ciclo para fechar.
+#
+# O runner continua aqui porque o Chromium precisa de Xvfb e `headless: false`
+# para passar pelo WAF (Akamai) da Neoenergia. Edge Function não roda navegador.
+#
+# Não reintroduza `schedule:` sem tirar o job do banco, ou o portal será varrido
+# duas vezes por dia.
 on:
-  # ⏸️ AGENDAMENTO PAUSADO — reativar só depois que um disparo manual
-  #    (workflow_dispatch) baixar pelo menos 1 fatura com sucesso NO CI.
-  #
-  #    O robô já funciona na máquina local (validado 06/08/2026, UCs 7029875701
-  #    e 7030004129). O que falta provar aqui é se o IP do GitHub Actions passa
-  #    pelo WAF (Akamai) da Neoenergia — IPs de datacenter costumam ser tratados
-  #    com mais rigor que IP residencial.
-  #
-  #    Para reativar: descomentar as duas linhas abaixo.
-  schedule:
-    - cron: '0 8 * * *' # Diariamente às 05:00 BRT (08:00 UTC)
   workflow_dispatch:
     inputs:
       target_days:
