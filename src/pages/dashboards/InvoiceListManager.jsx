@@ -65,10 +65,19 @@ export const resolveEnergyStatus = (inv) => {
         return ebStatus;
     }
     
-    if (ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
+    // 'atrasado' no masculino pertence ao vocabulario de `invoices.status`, mas
+    // ja foi gravado em `energy_bill_status` -- e ali nenhum leitor o conhecia.
+    // O badge caia no fallback e mostrava PENDENTE, e no kanban o card sumia da
+    // tela inteira, porque so existe coluna para as chaves conhecidas. Uma conta
+    // vencida ha nove dias exibida como pendente e pior do que nao exibida.
+    if (['a_vencer', 'atrasada', 'atrasado'].includes(ebStatus)) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const dueDate = inv.vencimento_concessionaria ? new Date(inv.vencimento_concessionaria) : null;
+        // Cai para `vencimento` como o InvoiceSummaryModal faz, e ancora ao meio-dia:
+        // 'YYYY-MM-DD' puro e lido como meia-noite UTC, que em BRT cai no dia
+        // anterior e marcaria como atrasada uma conta que vence hoje.
+        const dueStr = inv.vencimento_concessionaria || inv.vencimento;
+        const dueDate = dueStr ? new Date(dueStr + 'T12:00:00') : null;
         if (dueDate && dueDate < today) {
             return 'atrasada';
         }

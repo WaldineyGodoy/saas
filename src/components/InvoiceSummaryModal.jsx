@@ -33,7 +33,9 @@ const getEnergyStatus = (inv) => {
     const dueDate = dueDateStr ? new Date(dueDateStr + 'T12:00:00') : null;
     const isPastDue = dueDate && dueDate < today;
 
-    if (ebStatus === 'pendente' || ebStatus === 'a_vencer' || ebStatus === 'atrasada') {
+    // 'atrasado' e valor de `invoices.status` que vazou para `energy_bill_status`;
+    // sem ele nesta lista a conta vencida era rotulada como pendente.
+    if (['pendente', 'a_vencer', 'atrasada', 'atrasado'].includes(ebStatus)) {
         return isPastDue ? 'atrasada' : 'a_vencer';
     }
     return ebStatus;
