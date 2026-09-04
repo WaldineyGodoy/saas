@@ -359,13 +359,27 @@ https://app.b2wenergia.com.br
                 //
                 // So marca se algum canal saiu. Falha total mantem na fila,
                 // que e onde a fatura deve estar.
-                const algumCanalSaiu = !emailRes.error || !(waRes.error || waRes.skipped);
+                //
+                // Os canais vao SEPARADOS. `fatura_enviada_em` continua
+                // significando "algum canal saiu", que e do que a fila do
+                // enviador depende -- mas ele nunca respondeu "o WhatsApp foi?".
+                // Em 01/09/2026 a tela chegou a dizer "notificacao via WhatsApp
+                // enviada" numa entrega em que so o e-mail tinha saido, porque o
+                // carimbo unico nao distingue. `enviado_whatsapp_em` e
+                // `enviado_email_em` passam a distinguir.
+                const emailOk = !emailRes.error;
+                const waOk = !waRes.error && !waRes.skipped;
+                const algumCanalSaiu = emailOk || waOk;
                 if (invoiceId && algumCanalSaiu) {
                     await supabase.rpc('fn_marcar_fatura_enviada', {
                         p_tipo: isConsolidated ? 'consolidada' : 'individual',
                         p_id: invoiceId,
                         p_invoice_ids: null,
-                        p_erro: null
+                        p_erro: null,
+                        p_whatsapp_ok: waOk,
+                        p_whatsapp_erro: waOk ? null : (waRes.error || (waRes.skipped ? 'sem telefone' : null)),
+                        p_email_ok: emailOk,
+                        p_email_erro: emailOk ? null : emailRes.error
                     });
                 }
 

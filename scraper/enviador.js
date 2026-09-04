@@ -419,24 +419,26 @@ async function enviarUm(item, navegador, contexto) {
         resultados.email = 'sem e-mail';
     }
 
-    const algumSaiu = resultados.whatsapp === 'enviado' || resultados.email === 'enviado';
+    const waOk = resultados.whatsapp === 'enviado';
+    const emailOk = resultados.email === 'enviado';
+    const algumSaiu = waOk || emailOk;
 
     // 5. marcação e histórico
-    if (algumSaiu) {
-        await supabase.rpc('fn_marcar_fatura_enviada', {
-            p_tipo: item.tipo,
-            p_id: item.id,
-            p_invoice_ids: item.invoice_ids,
-            p_erro: null,
-        });
-    } else {
-        await supabase.rpc('fn_marcar_fatura_enviada', {
-            p_tipo: item.tipo,
-            p_id: item.id,
-            p_invoice_ids: item.invoice_ids,
-            p_erro: `WhatsApp ${resultados.whatsapp} | E-mail ${resultados.email}`,
-        });
-    }
+    //
+    // Os canais vão SEPARADOS. `fatura_enviada_em` continua significando "algum
+    // canal saiu" — é dele que a fila do enviador depende — mas ele nunca
+    // respondeu "o WhatsApp foi?", e essa pergunta apareceu três vezes numa
+    // semana. Agora `enviado_whatsapp_em` e `enviado_email_em` respondem.
+    await supabase.rpc('fn_marcar_fatura_enviada', {
+        p_tipo: item.tipo,
+        p_id: item.id,
+        p_invoice_ids: item.invoice_ids,
+        p_erro: algumSaiu ? null : `WhatsApp ${resultados.whatsapp} | E-mail ${resultados.email}`,
+        p_whatsapp_ok: waOk,
+        p_whatsapp_erro: waOk ? null : resultados.whatsapp,
+        p_email_ok: emailOk,
+        p_email_erro: emailOk ? null : resultados.email,
+    });
 
     await supabase.from('crm_history').insert({
         entity_type: 'subscriber',
