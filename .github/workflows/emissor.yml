@@ -10,14 +10,21 @@ name: Emissor de Faturas
 # leitura da manhã já esteja no banco, e uma hora antes do enviador para que o
 # boleto emitido hoje saia hoje.
 #
-# IMPORTANTE — o agendado NÃO aplica.
+# O agendado APLICA — decisão do dono do sistema em 04/09/2026.
 #
-# O enviador entrega o que já existe; este cria dinheiro. Enquanto o ciclo de
-# vida da emissão automática não tiver rodado algumas semanas em simulação,
-# emitir sozinho de madrugada é apostar que a guarda está certa sem ninguém ter
-# conferido. O agendado roda em simulação e deixa o log; emitir de verdade é
-# disparo manual com a caixa desmarcada. Quando houver confiança, troca-se a
-# condição no passo final — uma linha.
+# Nasceu travado: o enviador entrega o que já existe, este cria dinheiro, e eu
+# queria semanas de simulação antes de soltar. A simulação de 03/09 passou
+# limpa — bloqueou o ciclo vazio de 06/2026, liberou os dois fechados, provou o
+# login do robô e o papel admin — e o dono pediu o processo sem intervenção.
+# Registro que a recomendação era esperar mais; a decisão de não esperar é dele
+# e está tomada com o resultado à vista.
+#
+# O que segura o risco não é a simulação, é a guarda: `fn_fila_emissao_faturas`
+# só libera ciclo fechado, o robô reconfere no banco imediatamente antes de
+# emitir, a auditoria barra severidade 'erro', e há teto de itens e de valor.
+#
+# Para voltar a travar, apague a condição `github.event_name == 'schedule'` no
+# passo final.
 
 on:
   schedule:
@@ -72,7 +79,7 @@ jobs:
           ROBO_SENHA: ${{ secrets.ROBO_SENHA }}
         run: |
           ARGS="--limite ${{ github.event.inputs.limite || '10' }} --teto ${{ github.event.inputs.teto || '50000' }}"
-          if [ "${{ github.event.inputs.simular }}" = "false" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.simular }}" = "false" ]; then
             ARGS="$ARGS --aplicar"
           fi
           echo "node emissor.js $ARGS"
