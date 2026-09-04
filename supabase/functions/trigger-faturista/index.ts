@@ -1,96 +1,70 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "npm:@supabase/supabase-js@2.45.0"
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
+/**
+ * Disparo manual do faturista, pela tela.
+ *
+ * ------------------------------------------------------------------- o portão
+ *
+ * Esta função não tinha portão NENHUM: `verify_jwt = false` e nenhuma
+ * verificação no corpo. Quem soubesse a URL acionava o robô — que consome CI e
+ * entra no portal da concessionária com as credenciais dos clientes.
+ *
+ * `requireAdmin`, e não `requireUser`: os papéis do sistema incluem `lead`,
+ * `supplier`, `originator` e `subscriber`, que são pessoas de fora. Exigir
+ * apenas "sessão válida" deixaria um assinante disparar a varredura do portal.
+ *
+ * --------------------------------------------------------------- o repositório
+ *
+ * O default apontava para `WaldineyGodoy/faturista`, mas o workflow vive em
+ * `saas`. Disparo manual que não fazia nada tinha essa cara.
+ *
+ * Agora não há repositório nem token aqui: quem dispara é
+ * `fn_disparar_faturista`, no banco, que lê o PAT do Vault. Uma implementação
+ * só do disparo, um token só, e o acionamento fica registrado em
+ * `robo_execucoes` do mesmo jeito que o do pg_cron — antes, disparo pela tela
+ * não deixava rastro nenhum.
+ */
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  try {
-    const { type, value } = await req.json()
+    const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    // Validação básica
-    if (!type || !value) {
-      console.error('Trigger Error: Missing fields', { type, value })
-      throw new Error('Tipo (type) e Valor (value) são obrigatórios para disparar a extração.')
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return new Response(JSON.stringify({ error: auth.error }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: auth.status })
     }
 
-    // Configurações do GitHub (espera-se que estejam nos Secrets do Supabase)
-    const GH_TOKEN = Deno.env.get('GH_TOKEN')
-    const GH_OWNER = Deno.env.get('GH_REPO_OWNER') || 'WaldineyGodoy'
-    const GH_REPO = Deno.env.get('GH_REPO_NAME') || 'faturista'
+    try {
+        const { value } = await req.json()
 
-    console.log('Triggering GitHub Action...', { owner: GH_OWNER, repo: GH_REPO, type, value })
+        if (!value) {
+            throw new Error('Informe o alvo: AAAA-MM-DD (um dia), AAAA-MM (mês inteiro) ou "5,12" (dias do mês corrente).')
+        }
 
-    if (!GH_TOKEN) {
-      console.error('Trigger Error: GH_TOKEN NOT SET')
-      throw new Error('GH_TOKEN não configurado no Supabase. Use: npx supabase secrets set GH_TOKEN=sua_chave')
-    }
-
-    // Disparamos o GitHub Repository Dispatch
-    // NOTA: O event_type 'trigger-scraper' deve existir no seu arquivo .github/workflows/main.yml
-    const response = await fetch(
-      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `token ${GH_TOKEN}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'Supabase-Edge-Function'
-        },
-        body: JSON.stringify({
-          event_type: 'trigger-scraper',
-          client_payload: {
-            type,
-            value,
-            triggered_by: 'CRM-B2W'
-          }
+        const { data: requestId, error } = await supabase.rpc('fn_disparar_faturista', {
+            p_target_days: String(value),
         })
-      }
-    )
+        if (error) throw new Error(error.message)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      const status = response.status
-      console.error(`GitHub API Error: ${status}`, errorText)
-      
-      // Se for 404, pode ser owner/repo errado ou falta de permissão no token
-      if (status === 404) {
-        throw new Error(`Repositório não encontrado ou Token sem permissão (404). Verifique se ${GH_OWNER}/${GH_REPO} está correto.`)
-      }
-      
-      throw new Error(`Erro no GitHub (${status}): ${errorText}`)
+        return new Response(
+            JSON.stringify({
+                message: 'Faturista acionado.',
+                target: `alvo: ${value}`,
+                request_id: requestId,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        )
+    } catch (err) {
+        return new Response(
+            JSON.stringify({ error: (err as Error).message }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        )
     }
-
-    return new Response(
-      JSON.stringify({ 
-        message: 'Robô no GitHub acionado com sucesso!', 
-        target: `${GH_OWNER}/${GH_REPO}`,
-        status: response.status 
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
-      }
-    )
-
-  } catch (err) {
-    console.error('Final Trigger Error:', err.message)
-    return new Response(
-      JSON.stringify({ 
-        error: err.message,
-        details: 'Verifique os logs da função no painel do Supabase para mais detalhes.'
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 // Usamos 500 para erros fatais, 400 para validação
-      }
-    )
-  }
 })

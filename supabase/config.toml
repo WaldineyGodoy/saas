@@ -26,8 +26,11 @@ verify_jwt = false
 [functions.transfer-asaas-pix]
 verify_jwt = false
 
+# Aciona o robo que entra no portal da concessionaria com credencial de
+# cliente. Nao tinha portao nenhum ate 04/09/2026. O portao de verdade e o
+# requireAdmin dentro da funcao; isto aqui e a camada externa.
 [functions.trigger-faturista]
-verify_jwt = false
+verify_jwt = true
 
 [functions.asaas-webhook]
 verify_jwt = false
