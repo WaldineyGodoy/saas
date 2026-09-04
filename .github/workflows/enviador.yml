@@ -11,7 +11,7 @@ name: Enviador de Faturas
 
 on:
   schedule:
-    - cron: '0 11 * * *'   # diariamente às 08:00 BRT
+    - cron: '23 11 * * *'  # 08:23 BRT — fora do topo da hora, faixa congestionada do GitHub
   workflow_dispatch:
     inputs:
       simular:

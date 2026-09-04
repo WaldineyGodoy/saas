@@ -226,8 +226,57 @@ function escolherUmCicloPorAssinante(fila) {
     return [...porAssinante.values()].sort((a, b) => String(a.ciclo).localeCompare(String(b.ciclo)));
 }
 
+// ------------------------------------------------------------------ rastro
+/**
+ * Registro da execução, gravado com service_role.
+ *
+ * Independente do login do robô DE PROPÓSITO. Em 04/09/2026 o emissor não
+ * emitiu e não deu para saber se sequer rodou: sem rastro no banco, "o cron não
+ * disparou" e "disparou e morreu autenticando" ficaram indistinguíveis, e a
+ * resposta dependia de abrir o GitHub Actions. Como esta linha é escrita antes
+ * do login, falha de credencial agora também aparece aqui.
+ */
+async function abrirExecucao() {
+    // Marca a origem: sem isso, execução local e execução agendada ficam
+    // indistinguíveis na tabela, e a pergunta que originou tudo isto — "o cron
+    // disparou?" — continuaria sem resposta.
+    const origem = process.env.GITHUB_ACTIONS === 'true'
+        ? (process.env.GITHUB_EVENT_NAME || 'ci')
+        : 'local';
+
+    const { data, error } = await supabase
+        .from('robo_execucoes')
+        .insert({ robo: 'emissor', aplicou: APLICAR, detalhe: { origem } })
+        .select('id')
+        .single();
+    if (error) {
+        console.log(`[aviso] não consegui registrar a execução: ${error.message}`);
+        return null;
+    }
+    return data.id;
+}
+
+/**
+ * Fecha pela RPC, não por update direto, para o `concluido_em` sair do relógio
+ * do BANCO — o mesmo que carimbou o início. Fechando pelo relógio da máquina do
+ * runner, um desvio de poucos segundos já produz duração negativa.
+ */
+async function fecharExecucao(id, campos = {}) {
+    if (!id) return;
+    const { error } = await supabase.rpc('fn_fechar_execucao_robo', {
+        p_id: id,
+        p_processados: campos.processados ?? 0,
+        p_sucesso: campos.sucesso ?? 0,
+        p_falha: campos.falha ?? 0,
+        p_bloqueados: campos.bloqueados ?? 0,
+        p_erro: campos.erro ?? null,
+        p_detalhe: campos.detalhe ?? null,
+    });
+    if (error) console.log(`[aviso] não consegui fechar o registro: ${error.message}`);
+}
+
 // --------------------------------------------------------------------- run
-async function run() {
+async function run(execucaoId) {
     console.log(APLICAR ? '=== EMISSOR (APLICANDO) ===' : '=== EMISSOR (simulação) ===');
 
     const { data: fila, error } = await supabase.rpc('fn_fila_emissao_faturas', { p_limite: 200 });
@@ -246,6 +295,10 @@ async function run() {
 
     if (!candidatos.length) {
         console.log('\nNada a emitir.');
+        await fecharExecucao(execucaoId, {
+            bloqueados: bloqueados.length,
+            detalhe: { motivo: 'fila sem ciclo pronto' },
+        });
         return;
     }
 
@@ -313,13 +366,35 @@ async function run() {
     if (!APLICAR && emitidos > 0) {
         console.log('Nada foi criado. Rode com --aplicar para emitir de verdade.');
     }
+
+    await fecharExecucao(execucaoId, {
+        processados: emitidos + falhas,
+        sucesso: emitidos,
+        falha: falhas,
+        bloqueados: bloqueados.length,
+        detalhe: {
+            origem: process.env.GITHUB_ACTIONS === 'true'
+                ? (process.env.GITHUB_EVENT_NAME || 'ci') : 'local',
+            ciclos: candidatos.slice(0, LIMITE).map((i) => ({
+                assinante: i.subscriber_name,
+                ciclo: String(i.ciclo).slice(0, 7),
+                total: Number(i.total),
+            })),
+        },
+    });
 }
 
 module.exports = { escolherUmCicloPorAssinante, moeda, mesBR, dataBR };
 
 if (require.main === module) {
-    run().catch((e) => {
-        console.error('ERRO:', e.message);
-        process.exit(1);
-    });
+    // O registro abre ANTES de qualquer coisa que possa falhar — inclusive o
+    // login. Execução que morre cedo deixa a linha aberta com o erro, e é isso
+    // que responde "o robô rodou?" sem precisar do GitHub.
+    abrirExecucao().then((id) =>
+        run(id).catch(async (e) => {
+            console.error('ERRO:', e.message);
+            await fecharExecucao(id, { erro: String(e.message).slice(0, 1000) });
+            process.exit(1);
+        })
+    );
 }
