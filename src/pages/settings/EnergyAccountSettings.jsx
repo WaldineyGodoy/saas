@@ -22,7 +22,7 @@ export default function EnergyAccountSettings() {
         'B1 Residencial': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
         'B2 Rural': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
         'B3 Comercial': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 },
-        'Grupo A': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0 }
+        'Grupo A': { te: 0, tusd: 0, fio_b: 0, tarifa_concessionaria: 0, desconto_assinante: 0, demanda_geracao: 0, demanda_contratada: 0 }
     });
 
     useEffect(() => {
@@ -140,7 +140,9 @@ export default function EnergyAccountSettings() {
                 tusd: cons.TUSD_A || 0,
                 fio_b: cons["Fio B_A"] || 0,
                 tarifa_concessionaria: cons["Tarifa Concessionaria_A"] || 0,
-                desconto_assinante: cons["Desconto Assinante_A"] || 0
+                desconto_assinante: cons["Desconto Assinante_A"] || 0,
+                demanda_geracao: cons["Demanda Geracao"] || 0,
+                demanda_contratada: cons["Demanda Contratada"] || 0
             },
             // Tributos nao sao por grupo tarifario: valem para a concessionaria
             // inteira. Vazio fica vazio, nunca zero: a pagina da usina precisa
@@ -180,6 +182,8 @@ export default function EnergyAccountSettings() {
                     "Fio B_A": modalData['Grupo A'].fio_b,
                     "Tarifa Concessionaria_A": modalData['Grupo A'].tarifa_concessionaria,
                     "Desconto Assinante_A": modalData['Grupo A'].desconto_assinante,
+                    "Demanda Geracao": modalData['Grupo A'].demanda_geracao,
+                    "Demanda Contratada": modalData['Grupo A'].demanda_contratada,
                     "ICMS":   modalData.tributos.icms   === '' ? null : Number(modalData.tributos.icms),
                     "PIS":    modalData.tributos.pis    === '' ? null : Number(modalData.tributos.pis),
                     "COFINS": modalData.tributos.cofins === '' ? null : Number(modalData.tributos.cofins)
@@ -506,6 +510,36 @@ export default function EnergyAccountSettings() {
                                         />
                                     </div>
                                 </div>
+                                {activeTab === 'Grupo A' && (
+                                    <>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem' }}>Demanda de Geração</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>R$</div>
+                                                <input 
+                                                    type="number"
+                                                    step="0.0001"
+                                                    value={modalData[activeTab].demanda_geracao}
+                                                    onChange={e => handleModalInputChange('demanda_geracao', parseFloat(e.target.value) || 0)}
+                                                    style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem' }}>Demanda Contratada</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>R$</div>
+                                                <input 
+                                                    type="number"
+                                                    step="0.0001"
+                                                    value={modalData[activeTab].demanda_contratada}
+                                                    onChange={e => handleModalInputChange('demanda_contratada', parseFloat(e.target.value) || 0)}
+                                                    style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 2.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             <div style={{ background: '#f0fdf4', padding: '1.5rem', borderRadius: '20px', border: '1px solid #dcfce7', marginBottom: '2rem' }}>
