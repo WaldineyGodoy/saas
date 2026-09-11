@@ -157,9 +157,21 @@ código.
 | `assina_contrato` | `terceiro` sim; demais não |
 | `rateio_tipo` | `percentual` \| `fixo` |
 | `rateio_valor` | |
-| `forma_pagamento` | `pix` \| `boleto` |
+| `forma_pagamento` | `pix` \| `boleto` — **por beneficiário, não por área** |
 | `pix_key`, `pix_key_type` | só quando `pix` |
 | `ativo` | |
+
+**O trilho é do beneficiário.** Uma mesma área pode ter um arrendante recebendo por PIX e
+outro por boleto da imobiliária. Não é caso de exceção: é o arranjo normal quando a terra
+tem dois donos e só um delegou a cobrança. Consequências que o plano precisa tratar:
+
+- **Pagamento parcial é estado legítimo, não erro.** Uma competência pode estar paga para
+  um beneficiário e pendente para o outro. A tela mostra por beneficiário; "a área foi
+  paga" não é uma pergunta que o sistema responde.
+- **Os dois trilhos têm tempos diferentes.** O PIX confirma em segundos; o boleto no Asaas
+  é agendado e confirma depois. Um não pode esperar o outro.
+- **O boleto tem dependência externa.** Não se paga antes da linha digitável chegar da
+  imobiliária, e ela chega a cada competência. Daí o status `aguardando_boleto` em 4.2.
 
 Migração de dados: o arrendante gravado em linha em `leased_areas` vira a primeira linha
 desta tabela, `tipo = 'terceiro'`, `assina_contrato = true`. As colunas
@@ -184,7 +196,7 @@ que responde "o Marcos recebeu julho?" sem garimpar lançamento contábil.
 | `beneficiary_id`, `usina_id`, `competencia` | chave natural |
 | `valor`, `vencimento` | |
 | `origem` | `fornecedor` \| `b2w_pre_operacao` |
-| `status` | `a_pagar` \| `enfileirado` \| `pago` \| `falhou` |
+| `status` | `a_pagar` \| `aguardando_boleto` \| `enfileirado` \| `pago` \| `falhou` |
 | `forma_pagamento` | herdada do beneficiário no momento do pagamento |
 | `linha_digitavel` | **só quando boleto**, ver 4.3 |
 | `financial_transfer_id` | quando PIX |
@@ -356,3 +368,5 @@ torto. Não bloqueia esta spec, mas precisa de decisão própria.
 7. Rodar o reconhecimento duas vezes para a mesma competência não duplica lançamento
    (`external_id`).
 8. Pagar boleto com valor divergente da linha digitável é recusado antes de chamar o Asaas.
+9. Uma área com um beneficiário em PIX e outro em boleto paga os dois de forma
+   independente: a falha ou o atraso de um não impede nem desfaz o outro.
