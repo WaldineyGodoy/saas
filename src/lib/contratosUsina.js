@@ -82,6 +82,54 @@ const ou = (valor, alternativa = '_______________') => {
 /** Qualificação da B2W Projetos, idêntica nos três instrumentos. */
 const B2W_PROJETOS = 'B2W PROJETOS & SOLUÇÕES SOLARES LTDA, CNPJ 34.999.115/0002-34, com sede na Av. Olavo Lacerda Montenegro, 467, Lj 6, Parque das Nações, Parnamirim/RN, CEP 59158-400';
 
+/**
+ * Quem assina o contrato como arrendante.
+ *
+ * Beneficiário do pagamento não é a mesma coisa que arrendante do contrato. A
+ * imobiliária recebe no lugar do proprietário e não arrenda nada; a B2W é a
+ * ARRENDATÁRIA, e se entrasse aqui o documento teria a mesma empresa nos dois
+ * polos. O filtro, portanto, é `assina_contrato`, não o fato de receber.
+ *
+ * O campo antigo `arrendante_nome` continua valendo como último recurso: área
+ * sem beneficiário cadastrado gera contrato com o dado legado, que é melhor
+ * que contrato sem signatário.
+ */
+const arrendantesDe = (area) => {
+    const lista = (area?.beneficiarios || [])
+        .filter(b => b.ativo !== false && b.assina_contrato && b.tipo === 'terceiro');
+    if (lista.length) return lista;
+    if (area?.arrendante_nome) {
+        return [{ nome: area.arrendante_nome, doc: area.arrendante_doc, endereco: area.arrendante_endereco }];
+    }
+    return [];
+};
+
+const nomesArrendantes = (area) => {
+    const lista = arrendantesDe(area);
+    if (!lista.length) return `${ou(null)}, CPF/CNPJ ${ou(null)}`;
+    return lista.map(b => `${ou(b.nome)}, CPF/CNPJ ${ou(b.doc)}`).join('; ');
+};
+
+const qualificaArrendantes = (area) => {
+    const lista = arrendantesDe(area);
+    if (!lista.length) return `${ou(null)}, CPF/CNPJ ${ou(null)}, residente/sediado em ${ou(null)}`;
+    return lista
+        .map(b => `${ou(b.nome)}, CPF/CNPJ ${ou(b.doc)}, residente/sediado em ${enderecoDe({ address: b.endereco })}`)
+        .join('; ');
+};
+
+const LINHA_ASSINATURA = '________________________________________';
+
+const blocoAssinaturas = (area, papel) => {
+    const lista = arrendantesDe(area);
+    const assinantes = lista.length ? lista : [{ nome: null, doc: null }];
+    // Um bloco por arrendante: terra com dois donos tem duas assinaturas, e
+    // uma linha só deixaria um deles de fora do documento.
+    return assinantes
+        .map(b => [LINHA_ASSINATURA, ou(b.nome), `CPF/CNPJ ${ou(b.doc)} — ${papel}`].join('\n'))
+        .join('\n\n');
+};
+
 const qualificaInvestidor = (supplier) =>
     `${ou(supplier?.name)}, CNPJ/CPF ${ou(supplier?.cnpj)}, com sede/endereço em ${enderecoDe(supplier)}, neste ato representada por ${ou(supplier?.legal_partner_name)}, CPF ${ou(supplier?.legal_partner_cpf)}`;
 
@@ -114,9 +162,7 @@ export const montarCompraVenda = ({ usina, supplier, area } = {}, opts = {}) => 
     const areaM2 = num(area?.area_m2);
     const aluguel = num(area?.valor_aluguel);
 
-    const proprietario = area?.arrendante_nome
-        ? `${area.arrendante_nome}, CPF/CNPJ ${ou(area.arrendante_doc)}`
-        : '_______________, CPF/CNPJ _______________';
+    const proprietario = nomesArrendantes(area);
 
     return `CONTRATO DE COMPRA E VENDA DE USINA FOTOVOLTAICA E PRESTAÇÃO DE SERVIÇOS DE IMPLANTAÇÃO
 
@@ -280,9 +326,7 @@ ________________________________________
 B2W PROJETOS & SOLUÇÕES SOLARES LTDA
 CNPJ 34.999.115/0002-34 — Contratada
 
-________________________________________
-${area?.arrendante_nome || '_______________'}
-CPF/CNPJ ${ou(area?.arrendante_doc)} — Interveniente Anuente
+${blocoAssinaturas(area, 'Interveniente Anuente')}
 
 TESTEMUNHAS:
 
@@ -316,7 +360,7 @@ export const montarArrendamento = ({ usina, supplier, area } = {}, opts = {}) =>
 
     return `CONTRATO DE ARRENDAMENTO DE ÁREA PARA GERAÇÃO DISTRIBUÍDA
 
-(I). ARRENDANTE: ${ou(area?.arrendante_nome)}, CPF/CNPJ ${ou(area?.arrendante_doc)}, residente/sediado em ${enderecoDe({ address: area?.arrendante_endereco })};
+(I). ARRENDANTE: ${qualificaArrendantes(area)};
 
 (II). ARRENDATÁRIO: ${qualificaInvestidor(supplier)}.
 
@@ -390,9 +434,7 @@ CLÁUSULA 13 – DO FORO
 
 ${cidadeUfDe(area)}, ${dataPorExtenso()}.
 
-________________________________________
-${ou(area?.arrendante_nome)}
-CPF/CNPJ ${ou(area?.arrendante_doc)} — Arrendante
+${blocoAssinaturas(area, 'Arrendante')}
 
 ________________________________________
 ${ou(supplier?.name)}
