@@ -21,7 +21,9 @@ const campo = { width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', b
 export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConcluir }) {
     const { showAlert, showConfirm } = useUI();
     const [ocupado, setOcupado] = useState(false);
-    const [boleto, setBoleto] = useState('');
+    // Boleto já guardado na fila anual da imobiliária chega junto com o
+    // repasse: o campo nasce preenchido e ninguém redigita 47 dígitos.
+    const [boleto, setBoleto] = useState(linha.linha_digitavel || '');
 
     const trilho = beneficiario?.forma_pagamento || linha.forma_pagamento;
 

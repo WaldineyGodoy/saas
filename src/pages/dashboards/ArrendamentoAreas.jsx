@@ -5,6 +5,7 @@ import { MapPin, Plus, Save, X, Trash2, Search, Landmark, Users, AlertTriangle, 
 import { ratear, num, dinheiro, competenciaLegivel } from '../../lib/rateioArrendamento';
 import { conferirChavePix } from '../../lib/pixChave';
 import RepasseAcoes from '../../components/RepasseAcoes';
+import BoletosDoBeneficiario from '../../components/BoletosDoBeneficiario';
 
 /**
  * Áreas arrendadas — cadastro na seção Arrendamento.
@@ -537,9 +538,16 @@ export default function ArrendamentoAreas() {
 
                                             {b.forma_pagamento === 'boleto' && (
                                                 <div style={{ gridColumn: '1 / -1' }}>
-                                                    <p style={{ ...ajuda, color: '#64748b' }}>
-                                                        A linha digitável é colada na fila de pagamentos a cada competência, porque muda todo mês.
-                                                    </p>
+                                                    {b.id ? (
+                                                        <BoletosDoBeneficiario
+                                                            beneficiario={b}
+                                                            aoMudar={() => carregarRepasses(editando.id)}
+                                                        />
+                                                    ) : (
+                                                        <p style={{ ...ajuda, color: '#64748b' }}>
+                                                            Salve a área primeiro. Depois você cola aqui os 12 boletos do ano de uma vez.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             )}
 
