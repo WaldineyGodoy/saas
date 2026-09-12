@@ -62,7 +62,7 @@ export default function BillingList() {
         try {
             const { data: usinaData, error: usinaError } = await supabase
                 .from('usinas')
-                .select('supplier:suppliers ( pix_key, pix_key_type, name )')
+                .select('name, supplier:suppliers ( pix_key, pix_key_type, name )')
                 .eq('id', billing.usina_id)
                 .single();
 
@@ -73,9 +73,13 @@ export default function BillingList() {
 
             const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
                 body: {
+                    // O destino e' identificado pela usina; a Edge Function
+                    // resolve usinas.supplier_id -> suppliers.pix_key. Mandar a
+                    // chave PIX daqui nao adianta mais: ela e' ignorada de
+                    // proposito, porque destino vindo do cliente foi o que
+                    // permitiu disparar PIX para qualquer chave.
                     value: billing.saldo_receber,
-                    pix_key: supplier.pix_key,
-                    pix_key_type: supplier.pix_key_type,
+                    usinaId: billing.usina_id,
                     description: `Pagamento Energia - ${billing.mes_referencia} - ${usinaData.name}`,
                     operationType: 'PIX'
                 }

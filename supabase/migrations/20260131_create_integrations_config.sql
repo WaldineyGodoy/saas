@@ -14,9 +14,19 @@ CREATE TABLE IF NOT EXISTS integrations_config (
 -- Enable RLS
 ALTER TABLE integrations_config ENABLE ROW LEVEL SECURITY;
 
--- Policies (Restrict access to Admins ideally, but for now allow authenticated)
-CREATE POLICY "Enable all for authenticated users" 
-ON integrations_config FOR ALL 
-TO authenticated 
-USING (true)
-WITH CHECK (true);
+-- Policy: somente administradores.
+--
+-- A versao original desta migration liberava para qualquer `authenticated`
+-- com USING (true). Como o onboarding publico cria login para leads e
+-- assinantes, "authenticated" inclui qualquer visitante que se cadastrou --
+-- e esta tabela guarda a chave de producao da Asaas em texto puro.
+--
+-- A producao ja foi corrigida a mao; este arquivo ficou para tras. Um
+-- `db reset` reintroduziria o buraco em silencio.
+DROP POLICY IF EXISTS "Enable all for authenticated users" ON integrations_config;
+
+CREATE POLICY integrations_config_admin_only
+ON integrations_config FOR ALL
+TO authenticated
+USING (public.check_user_is_admin(auth.uid()))
+WITH CHECK (public.check_user_is_admin(auth.uid()));

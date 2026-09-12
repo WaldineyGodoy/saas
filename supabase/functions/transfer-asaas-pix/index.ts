@@ -1,39 +1,91 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const json = (body: unknown, status: number) => new Response(
+    JSON.stringify(body),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
+)
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+    // Portão de identidade ANTES de ler o corpo da requisição.
+    //
+    // verify_jwt=true no config.toml não bastaria: a chave anon é um JWT
+    // assinado e público, e passa pelo gateway. Só auth.getUser prova usuário.
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return json({ error: auth.error }, auth.status)
+    }
+
     try {
         const body = await req.json()
         const amount = body.amount ?? body.value
-        const pixKey = body.pixKey ?? body.pix_key
-        const pixKeyType = body.pixKeyType ?? body.pix_key_type
         const description = body.description
         const usinaId = body.usinaId ?? body.usina_id
         const supplierId = body.supplierId ?? body.supplier_id
-        const destinationType = body.destinationType ?? (supplierId ? 'supplier' : 'usina')
-        const destinationId = supplierId ?? usinaId
 
-        // 1. Validation
-        if (!amount || !pixKey) {
-            throw new Error('Missing required fields: amount or pixKey')
+        if (!amount || Number(amount) <= 0) {
+            throw new Error('Valor da transferencia ausente ou nao positivo.')
         }
 
-        // 2. Initialize Supabase Client
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-        const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+        // O destino vem do cadastro, nunca do corpo da requisicao. pixKey e
+        // pixKeyType enviados pelo cliente sao ignorados de proposito: aceitar
+        // destino arbitrario foi o que transformou esta funcao num saque.
+        let destinationType: string
+        let destinationId: string
+        let supplierRow: { pix_key: string | null; pix_key_type: string | null } | null = null
+
+        if (supplierId) {
+            destinationType = 'supplier'
+            destinationId = supplierId
+            const { data } = await supabase
+                .from('suppliers')
+                .select('pix_key, pix_key_type')
+                .eq('id', supplierId)
+                .single()
+            supplierRow = data
+        } else if (usinaId) {
+            destinationType = 'usina'
+            destinationId = usinaId
+            const { data: usina } = await supabase
+                .from('usinas')
+                .select('supplier_id')
+                .eq('id', usinaId)
+                .single()
+            if (!usina?.supplier_id) {
+                throw new Error('Usina sem fornecedor vinculado - nao ha destino cadastrado.')
+            }
+            const { data } = await supabase
+                .from('suppliers')
+                .select('pix_key, pix_key_type')
+                .eq('id', usina.supplier_id)
+                .single()
+            supplierRow = data
+        } else {
+            throw new Error('Informe supplierId ou usinaId. Transferencia sem destino cadastrado nao e permitida.')
+        }
+
+        if (!supplierRow?.pix_key) {
+            throw new Error('Destino sem chave PIX cadastrada.')
+        }
+
+        const pixKey = supplierRow.pix_key
+        const pixKeyType = supplierRow.pix_key_type
 
         // 2.5 Anti-Fraud Throttle (2 minutes)
-        if (destinationId) {
+        // Sem `if`: destinationId e obrigatorio desde a validacao acima. O
+        // throttle antigo vivia dentro de um `if (destinationId)` e quem
+        // omitisse o destino pulava a protecao inteira.
+        {
             const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
             const { data: recentTransfers } = await supabase
                 .from('financial_transfers')
@@ -119,7 +171,8 @@ serve(async (req) => {
                 destination_type: destinationType,
                 destination_id: destinationId,
                 status: dbStatus,
-                asaas_transfer_id: transferId
+                asaas_transfer_id: transferId,
+                requested_by: auth.userId
             })
             .select()
             .single();

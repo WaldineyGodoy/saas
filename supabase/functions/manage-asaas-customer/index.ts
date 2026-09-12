@@ -1,25 +1,32 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from "../_shared/cors.ts"
+import { requireAdmin } from "../_shared/auth.ts"
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Portao de identidade antes de ler o corpo. verify_jwt=true no
+    // config.toml nao basta: a chave anon e um JWT valido e publico.
+    const auth = await requireAdmin(req, supabase)
+    if (!auth.ok) {
+        return new Response(
+            JSON.stringify({ error: auth.error }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: auth.status }
+        )
+    }
+
     try {
         const payload = await req.json()
         const { test, name, cpfCnpj, email, phone, address, addressNumber, province, postalCode } = payload
-
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
 
         const { data: configData, error: configError } = await supabase
             .from('integrations_config')
@@ -39,7 +46,10 @@ serve(async (req) => {
             throw new Error(`Configurações de ${isSandbox ? 'Sandbox' : 'Produção'} incompletas.`);
         }
 
-        console.log(`Config found: URL=${asaasUrl}, Key=${asaasKey.substring(0, 10)}...`);
+        // A chave nunca vai para o log. Dez caracteres nao abrem a conta, mas
+        // confirmam ambiente e prefixo para quem ja tem um fragmento, e os logs
+        // de Edge Function ficam retidos e legiveis no painel do projeto.
+        console.log(`Config found: URL=${asaasUrl}`);
 
         if (test) {
             console.log('Testando conexão Asaas...');
