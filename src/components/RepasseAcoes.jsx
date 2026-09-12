@@ -72,6 +72,22 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
 
             if (error || data?.error) throw new Error(data?.error || error.message);
 
+            // Prende a transferência ao repasse. É esse elo que faz o webhook
+            // do Asaas, ao confirmar o token, achar o repasse e marcá-lo pago.
+            // Sem ele a confirmação chega em financial_transfers e morre ali.
+            if (data?.transferId) {
+                const { data: tr } = await supabase
+                    .from('financial_transfers')
+                    .select('id')
+                    .eq('asaas_transfer_id', data.transferId)
+                    .maybeSingle();
+                if (tr?.id) {
+                    await supabase.from('arrendamento_pagamentos')
+                        .update({ financial_transfer_id: tr.id })
+                        .eq('id', linha.id);
+                }
+            }
+
             // O Asaas devolve PENDING quando a transferência ainda espera a
             // autorização por token. Marcar 'pago' aí lançaria a saída no razão
             // antes de o dinheiro sair, e o Banco Asaas passaria a mentir.
