@@ -1,32 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
-import { MapPin, Plus, Save, X, Trash2, Search, Building2, Landmark } from 'lucide-react';
+import { MapPin, Plus, Save, X, Trash2, Search, Landmark, Users, AlertTriangle } from 'lucide-react';
+import { ratear, num, dinheiro } from '../../lib/rateioArrendamento';
 
 /**
  * Áreas arrendadas — cadastro em Configurações.
  *
- * A área é entidade própria, não campo da usina: tem dono, matrícula e
- * vida independente. Pode receber outra usina, pode ser vendida, e o
- * arrendante pode ser sócio do grupo ou terceiro. Daqui saem os dados do
- * Contrato de Arrendamento, e o vínculo com um fornecedor faz o aluguel
- * entrar no split de pagamentos como saída recorrente da usina.
+ * A área é entidade própria, não campo da usina: tem dono, matrícula e vida
+ * independente. Pode receber outra usina e pode ser vendida.
+ *
+ * Quem recebe o dinheiro mora em `leased_area_beneficiaries`, não aqui. São
+ * coisas diferentes: o dono da terra assina o contrato e recebe; a imobiliária
+ * recebe e não assina; a B2W retém margem e nem recebe nem assina, porque o
+ * dinheiro já está na conta dela.
+ *
+ * O fornecedor NÃO é cadastrado: ele vem de `usinas.leased_area_id`. Uma área
+ * pode abrigar duas usinas, e aí um campo de fornecedor aqui passaria a mentir.
  */
 
 const VAZIO = {
     nome: '',
-    arrendante_nome: '',
-    arrendante_doc: '',
-    arrendante_endereco: { cep: '', rua: '', numero: '', bairro: '', cidade: '', uf: '' },
-    supplier_id: '',
     matricula: '',
     cartorio: '',
     endereco: { cep: '', rua: '', numero: '', bairro: '', cidade: '', uf: '' },
     coordenadas: '',
     area_m2: '',
     valor_aluguel: '',
-    repasse_tipo: 'percentual',
-    repasse_valor: '',
     dia_pagamento: 5,
     mes_inicio: '',
     indice_reajuste: 'IPCA',
@@ -34,34 +34,18 @@ const VAZIO = {
     observacoes: ''
 };
 
-/**
- * Quanto do aluguel vai ao arrendante e quanto fica com o grupo.
- *
- * O aluguel é o que a Associação arrecada de quem ocupa a área (o
- * investidor). O repasse é o que sai no split para o dono da área. A
- * diferença remunera a intermediação — por isso repasse maior que o
- * aluguel é erro de digitação, não um negócio possível.
- */
-const dinheiro = (v) => `R$ ${(Number(String(v ?? '').replace(',', '.')) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-export const calcularRepasse = (aluguel, tipo, valor) => {
-    const base = Number(String(aluguel ?? '').replace(',', '.')) || 0;
-    const bruto = valor === '' || valor === null || valor === undefined
-        ? null
-        : Number(String(valor).replace(',', '.'));
-
-    if (bruto === null || !Number.isFinite(bruto)) {
-        return { definido: false, repasse: 0, retido: base, percentual: 0 };
-    }
-
-    const repasse = tipo === 'fixo' ? bruto : base * (bruto / 100);
-    return {
-        definido: true,
-        repasse,
-        retido: base - repasse,
-        percentual: base > 0 ? (repasse / base) * 100 : 0,
-        excede: repasse > base + 0.005
-    };
+const BENEF_VAZIO = {
+    nome: '',
+    doc: '',
+    tipo: 'terceiro',
+    assina_contrato: true,
+    rateio_tipo: 'percentual',
+    rateio_valor: '',
+    forma_pagamento: '',
+    pix_key: '',
+    pix_key_type: 'CPF',
+    endereco: { cep: '', rua: '', numero: '', bairro: '', cidade: '', uf: '' },
+    ativo: true
 };
 
 const card = {
@@ -78,28 +62,44 @@ const campo = { width: '100%', padding: '0.65rem', border: '1px solid #e2e8f0', 
 const ajuda = { margin: '0.35rem 0 0 0', fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.35 };
 const grade = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' };
 
+const TIPO_ROTULO = {
+    terceiro: 'Arrendante (dono da terra)',
+    intermediario: 'Imobiliária / intermediário',
+    casa: 'B2W (margem de intermediação)'
+};
+
 export default function LeasedAreasSettings() {
     const { showAlert, showConfirm } = useUI();
     const [areas, setAreas] = useState([]);
-    const [fornecedores, setFornecedores] = useState([]);
+    const [benefPorArea, setBenefPorArea] = useState({});
     const [usinasPorArea, setUsinasPorArea] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [busca, setBusca] = useState('');
     const [editando, setEditando] = useState(null);
+    const [benefs, setBenefs] = useState([]);
+    const [removidos, setRemovidos] = useState([]);
 
     const carregar = useCallback(async () => {
         setLoading(true);
         try {
-            const [{ data: as }, { data: fs }, { data: us }] = await Promise.all([
+            const [{ data: as, error: e1 }, { data: bs, error: e2 }, { data: us, error: e3 }] = await Promise.all([
                 supabase.from('leased_areas').select('*').order('nome'),
-                supabase.from('suppliers').select('id, name').order('name'),
+                supabase.from('leased_area_beneficiaries').select('*').order('created_at'),
                 supabase.from('usinas').select('id, name, leased_area_id').not('leased_area_id', 'is', null)
             ]);
-            setAreas(as || []);
-            setFornecedores(fs || []);
+            // supabase-js devolve { data, error } e nunca lança: sem este teste
+            // a tela mostraria lista vazia como se não houvesse cadastro.
+            if (e1 || e2 || e3) throw (e1 || e2 || e3);
 
-            // Quantas usinas cada área abriga — impede apagar área em uso.
+            setAreas(as || []);
+
+            const porArea = {};
+            for (const b of bs || []) {
+                porArea[b.leased_area_id] = [...(porArea[b.leased_area_id] || []), b];
+            }
+            setBenefPorArea(porArea);
+
             const mapa = {};
             for (const u of us || []) {
                 mapa[u.leased_area_id] = [...(mapa[u.leased_area_id] || []), u.name];
@@ -115,38 +115,78 @@ export default function LeasedAreasSettings() {
 
     useEffect(() => { carregar(); }, [carregar]);
 
-    const abrir = (area) => setEditando(area ? {
-        ...VAZIO, ...area,
-        arrendante_endereco: { ...VAZIO.arrendante_endereco, ...(area.arrendante_endereco || {}) },
-        endereco: { ...VAZIO.endereco, ...(area.endereco || {}) },
-        supplier_id: area.supplier_id || ''
-    } : { ...VAZIO });
+    const abrir = (area) => {
+        setRemovidos([]);
+        if (area) {
+            setEditando({ ...VAZIO, ...area, endereco: { ...VAZIO.endereco, ...(area.endereco || {}) } });
+            setBenefs((benefPorArea[area.id] || []).map(b => ({
+                ...BENEF_VAZIO, ...b,
+                rateio_valor: b.rateio_valor ?? '',
+                forma_pagamento: b.forma_pagamento || '',
+                pix_key: b.pix_key || '',
+                pix_key_type: b.pix_key_type || 'CPF',
+                endereco: { ...BENEF_VAZIO.endereco, ...(b.endereco || {}) }
+            })));
+        } else {
+            setEditando({ ...VAZIO });
+            setBenefs([{ ...BENEF_VAZIO, rateio_valor: 100 }]);
+        }
+    };
+
+    const setCampo = (chave, valor) => setEditando(prev => ({ ...prev, [chave]: valor }));
+    const setEnd = (chave, valor) => setEditando(prev => ({ ...prev, endereco: { ...prev.endereco, [chave]: valor } }));
+
+    const setBenef = (i, chave, valor) => setBenefs(prev => prev.map((b, j) => {
+        if (j !== i) return b;
+        const novo = { ...b, [chave]: valor };
+        // A B2W é a arrendatária: se entrasse como arrendante, o contrato teria
+        // a mesma empresa nos dois polos. E ela não recebe nada, porque o
+        // dinheiro já está na conta dela.
+        if (chave === 'tipo') {
+            if (valor !== 'terceiro') novo.assina_contrato = false;
+            if (valor === 'casa') {
+                novo.forma_pagamento = '';
+                novo.pix_key = '';
+            }
+        }
+        if (chave === 'forma_pagamento' && valor !== 'pix') novo.pix_key = '';
+        return novo;
+    }));
+
+    const setBenefEnd = (i, chave, valor) => setBenefs(prev => prev.map((b, j) =>
+        j === i ? { ...b, endereco: { ...b.endereco, [chave]: valor } } : b));
+
+    const addBenef = () => setBenefs(prev => [...prev, { ...BENEF_VAZIO, assina_contrato: true, rateio_valor: '' }]);
+
+    const removerBenef = (i) => setBenefs(prev => {
+        const alvo = prev[i];
+        if (alvo?.id) setRemovidos(r => [...r, alvo.id]);
+        return prev.filter((_, j) => j !== i);
+    });
+
+    const previa = editando ? ratear(editando.valor_aluguel, benefs) : null;
 
     const salvar = async () => {
         if (!editando.nome?.trim()) {
             showAlert('Dê um nome à área para poder identificá-la depois.', 'warning');
             return;
         }
+        if (!previa.valido) {
+            showAlert('O rateio ainda não fecha:\n\n' + previa.problemas.join('\n'), 'warning');
+            return;
+        }
+
         setSaving(true);
         try {
             const payload = {
                 nome: editando.nome.trim(),
-                arrendante_nome: editando.arrendante_nome || null,
-                arrendante_doc: editando.arrendante_doc || null,
-                arrendante_endereco: editando.arrendante_endereco,
-                // String vazia num campo uuid é erro do Postgres, não "sem valor".
-                supplier_id: editando.supplier_id || null,
                 matricula: editando.matricula || null,
                 cartorio: editando.cartorio || null,
                 endereco: editando.endereco,
                 coordenadas: editando.coordenadas || null,
-                area_m2: editando.area_m2 === '' ? null : Number(editando.area_m2),
-                valor_aluguel: editando.valor_aluguel === '' ? null : Number(String(editando.valor_aluguel).replace(',', '.')),
-                repasse_tipo: editando.repasse_tipo === 'fixo' ? 'fixo' : 'percentual',
-                // Nulo é "repasse ainda não definido", que é diferente de zero:
-                // zero significa que nada vai ao arrendante.
-                repasse_valor: editando.repasse_valor === '' || editando.repasse_valor === null ? null : Number(String(editando.repasse_valor).replace(',', '.')),
-                dia_pagamento: editando.dia_pagamento === '' ? null : Number(editando.dia_pagamento),
+                area_m2: num(editando.area_m2),
+                valor_aluguel: num(editando.valor_aluguel),
+                dia_pagamento: num(editando.dia_pagamento),
                 mes_inicio: editando.mes_inicio || null,
                 indice_reajuste: editando.indice_reajuste || 'IPCA',
                 comarca: editando.comarca || null,
@@ -154,11 +194,44 @@ export default function LeasedAreasSettings() {
                 updated_at: new Date().toISOString()
             };
 
-            const { error } = editando.id
-                ? await supabase.from('leased_areas').update(payload).eq('id', editando.id)
-                : await supabase.from('leased_areas').insert(payload);
+            let areaId = editando.id;
+            if (areaId) {
+                const { error } = await supabase.from('leased_areas').update(payload).eq('id', areaId);
+                if (error) throw error;
+            } else {
+                const { data, error } = await supabase.from('leased_areas').insert(payload).select('id').single();
+                if (error) throw error;
+                areaId = data.id;
+            }
 
-            if (error) throw error;
+            if (removidos.length) {
+                const { error } = await supabase.from('leased_area_beneficiaries').delete().in('id', removidos);
+                if (error) throw error;
+            }
+
+            for (const b of benefs) {
+                const linha = {
+                    leased_area_id: areaId,
+                    nome: b.nome.trim(),
+                    doc: b.doc || null,
+                    tipo: b.tipo,
+                    assina_contrato: b.tipo === 'terceiro' ? !!b.assina_contrato : false,
+                    rateio_tipo: b.rateio_tipo === 'fixo' ? 'fixo' : 'percentual',
+                    rateio_valor: num(b.rateio_valor) ?? 0,
+                    // Vazio vira NULL: "trilho ainda não definido" é diferente
+                    // de um trilho escolhido, e o pagamento barra em cima disso.
+                    forma_pagamento: b.tipo === 'casa' ? null : (b.forma_pagamento || null),
+                    pix_key: b.forma_pagamento === 'pix' ? (b.pix_key || null) : null,
+                    pix_key_type: b.forma_pagamento === 'pix' ? (b.pix_key_type || null) : null,
+                    endereco: b.endereco,
+                    ativo: b.ativo !== false,
+                    updated_at: new Date().toISOString()
+                };
+                const { error } = b.id
+                    ? await supabase.from('leased_area_beneficiaries').update(linha).eq('id', b.id)
+                    : await supabase.from('leased_area_beneficiaries').insert(linha);
+                if (error) throw error;
+            }
 
             showAlert('Área arrendada salva.', 'success');
             setEditando(null);
@@ -190,11 +263,10 @@ export default function LeasedAreasSettings() {
 
     const filtradas = areas.filter(a => {
         const t = busca.toLowerCase();
-        return !t || [a.nome, a.arrendante_nome, a.matricula, a.endereco?.cidade].some(v => (v || '').toLowerCase().includes(t));
+        if (!t) return true;
+        const nomes = (benefPorArea[a.id] || []).map(b => b.nome).join(' ');
+        return [a.nome, nomes, a.matricula, a.endereco?.cidade].some(v => (v || '').toLowerCase().includes(t));
     });
-
-    const setCampo = (chave, valor) => setEditando(prev => ({ ...prev, [chave]: valor }));
-    const setEnd = (grupo, chave, valor) => setEditando(prev => ({ ...prev, [grupo]: { ...prev[grupo], [chave]: valor } }));
 
     return (
         <div>
@@ -204,7 +276,7 @@ export default function LeasedAreasSettings() {
                         <MapPin size={20} color="#3b82f6" /> Áreas Arrendadas
                     </h3>
                     <p style={{ margin: '0.4rem 0 0 0', color: '#64748b', fontSize: '0.85rem' }}>
-                        Alimentam o Contrato de Arrendamento e, quando vinculadas a um fornecedor, o split de pagamentos da usina.
+                        Alimentam o Contrato de Arrendamento e o repasse mensal aos beneficiários. O fornecedor vem da usina vinculada à área.
                     </p>
                 </div>
                 <button
@@ -222,7 +294,7 @@ export default function LeasedAreasSettings() {
                     <input
                         value={busca}
                         onChange={e => setBusca(e.target.value)}
-                        placeholder="Buscar por nome, arrendante, matrícula ou cidade"
+                        placeholder="Buscar por nome, beneficiário, matrícula ou cidade"
                         style={{ ...campo, paddingLeft: '2.3rem' }}
                     />
                 </div>
@@ -237,22 +309,29 @@ export default function LeasedAreasSettings() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         {filtradas.map(a => {
                             const usinas = usinasPorArea[a.id] || [];
+                            const bs = (benefPorArea[a.id] || []).filter(b => b.ativo !== false);
+                            const semTrilho = bs.filter(b => b.tipo !== 'casa' && !b.forma_pagamento);
                             return (
                                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '12px', flexWrap: 'wrap' }}>
                                     <div style={{ minWidth: 0 }}>
                                         <div style={{ fontWeight: 700, color: '#1e293b' }}>{a.nome}</div>
                                         <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
-                                            {a.arrendante_nome || 'arrendante não informado'}
+                                            {bs.length
+                                                ? bs.map(b => `${b.nome}${b.forma_pagamento ? ` (${b.forma_pagamento})` : ''}`).join(' · ')
+                                                : 'nenhum beneficiário cadastrado'}
                                             {a.area_m2 ? ` · ${a.area_m2} m²` : ''}
                                             {a.valor_aluguel ? ` · ${dinheiro(a.valor_aluguel)}/mês` : ''}
-                                            {a.repasse_valor !== null && a.repasse_valor !== undefined
-                                                ? ` · repasse ${dinheiro(calcularRepasse(a.valor_aluguel, a.repasse_tipo, a.repasse_valor).repasse)}`
-                                                : ''}
                                             {a.matricula ? ` · matrícula ${a.matricula}` : ''}
                                         </div>
                                         <div style={{ fontSize: '0.78rem', color: usinas.length ? '#166534' : '#94a3b8', marginTop: '0.2rem' }}>
                                             {usinas.length ? `Usina: ${usinas.join(', ')}` : 'Sem usina vinculada'}
                                         </div>
+                                        {semTrilho.length > 0 && (
+                                            <div style={{ fontSize: '0.78rem', color: '#b45309', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                <AlertTriangle size={13} />
+                                                {semTrilho.map(b => b.nome).join(', ')} sem forma de pagamento: não dá para repassar.
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <button type="button" onClick={() => abrir(a)} style={{ padding: '0.5rem 0.9rem', border: '1px solid #bfdbfe', borderRadius: '10px', background: 'white', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>Editar</button>
@@ -281,7 +360,7 @@ export default function LeasedAreasSettings() {
                                 <div style={grade}>
                                     <div style={{ gridColumn: '1 / -1' }}>
                                         <label style={rotulo}>Nome da área *</label>
-                                        <input style={campo} value={editando.nome} onChange={e => setCampo('nome', e.target.value)} placeholder="Ex.: Área Vista Bom Jesus" />
+                                        <input style={campo} value={editando.nome} onChange={e => setCampo('nome', e.target.value)} placeholder="Ex.: Vista Bom Jesus" />
                                     </div>
                                     <div><label style={rotulo}>Área (m²)</label><input style={campo} value={editando.area_m2} onChange={e => setCampo('area_m2', e.target.value)} /></div>
                                     <div><label style={rotulo}>Matrícula</label><input style={campo} value={editando.matricula} onChange={e => setCampo('matricula', e.target.value)} /></div>
@@ -295,38 +374,15 @@ export default function LeasedAreasSettings() {
 
                             <div style={card}>
                                 <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
-                                    <Building2 size={18} color="#3b82f6" /> Arrendante
-                                </h4>
-                                <div style={grade}>
-                                    <div><label style={rotulo}>Nome</label><input style={campo} value={editando.arrendante_nome} onChange={e => setCampo('arrendante_nome', e.target.value)} /></div>
-                                    <div><label style={rotulo}>CPF/CNPJ</label><input style={campo} value={editando.arrendante_doc} onChange={e => setCampo('arrendante_doc', e.target.value)} /></div>
-                                    <div style={{ gridColumn: '1 / -1' }}>
-                                        <label style={rotulo}>Fornecedor vinculado (para o aluguel entrar no split)</label>
-                                        <select style={campo} value={editando.supplier_id} onChange={e => setCampo('supplier_id', e.target.value)}>
-                                            <option value="">— sem vínculo —</option>
-                                            {fornecedores.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div><label style={rotulo}>Rua</label><input style={campo} value={editando.arrendante_endereco.rua} onChange={e => setEnd('arrendante_endereco', 'rua', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Número</label><input style={campo} value={editando.arrendante_endereco.numero} onChange={e => setEnd('arrendante_endereco', 'numero', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Bairro</label><input style={campo} value={editando.arrendante_endereco.bairro} onChange={e => setEnd('arrendante_endereco', 'bairro', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Cidade</label><input style={campo} value={editando.arrendante_endereco.cidade} onChange={e => setEnd('arrendante_endereco', 'cidade', e.target.value)} /></div>
-                                    <div><label style={rotulo}>UF</label><input style={campo} value={editando.arrendante_endereco.uf} onChange={e => setEnd('arrendante_endereco', 'uf', e.target.value)} /></div>
-                                    <div><label style={rotulo}>CEP</label><input style={campo} value={editando.arrendante_endereco.cep} onChange={e => setEnd('arrendante_endereco', 'cep', e.target.value)} /></div>
-                                </div>
-                            </div>
-
-                            <div style={card}>
-                                <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
                                     <MapPin size={18} color="#3b82f6" /> Endereço do imóvel
                                 </h4>
                                 <div style={grade}>
-                                    <div><label style={rotulo}>Rua</label><input style={campo} value={editando.endereco.rua} onChange={e => setEnd('endereco', 'rua', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Número</label><input style={campo} value={editando.endereco.numero} onChange={e => setEnd('endereco', 'numero', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Bairro</label><input style={campo} value={editando.endereco.bairro} onChange={e => setEnd('endereco', 'bairro', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Cidade</label><input style={campo} value={editando.endereco.cidade} onChange={e => setEnd('endereco', 'cidade', e.target.value)} /></div>
-                                    <div><label style={rotulo}>UF</label><input style={campo} value={editando.endereco.uf} onChange={e => setEnd('endereco', 'uf', e.target.value)} /></div>
-                                    <div><label style={rotulo}>CEP</label><input style={campo} value={editando.endereco.cep} onChange={e => setEnd('endereco', 'cep', e.target.value)} /></div>
+                                    <div><label style={rotulo}>Rua</label><input style={campo} value={editando.endereco.rua} onChange={e => setEnd('rua', e.target.value)} /></div>
+                                    <div><label style={rotulo}>Número</label><input style={campo} value={editando.endereco.numero} onChange={e => setEnd('numero', e.target.value)} /></div>
+                                    <div><label style={rotulo}>Bairro</label><input style={campo} value={editando.endereco.bairro} onChange={e => setEnd('bairro', e.target.value)} /></div>
+                                    <div><label style={rotulo}>Cidade</label><input style={campo} value={editando.endereco.cidade} onChange={e => setEnd('cidade', e.target.value)} /></div>
+                                    <div><label style={rotulo}>UF</label><input style={campo} value={editando.endereco.uf} onChange={e => setEnd('uf', e.target.value)} /></div>
+                                    <div><label style={rotulo}>CEP</label><input style={campo} value={editando.endereco.cep} onChange={e => setEnd('cep', e.target.value)} /></div>
                                     <div><label style={rotulo}>Comarca (foro)</label><input style={campo} value={editando.comarca} onChange={e => setCampo('comarca', e.target.value)} placeholder="Situação do imóvel" /></div>
                                 </div>
                             </div>
@@ -337,30 +393,10 @@ export default function LeasedAreasSettings() {
                                     <div>
                                         <label style={rotulo}>Aluguel mensal (R$)</label>
                                         <input style={campo} value={editando.valor_aluguel} onChange={e => setCampo('valor_aluguel', e.target.value)} placeholder="600,00" />
-                                        <p style={ajuda}>Cobrado de quem ocupa a área e arrecadado pela Associação.</p>
-                                    </div>
-                                    <div>
-                                        <label style={rotulo}>Repasse ao arrendante</label>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <select
-                                                style={{ ...campo, width: '96px', flexShrink: 0, padding: '0.65rem 0.4rem' }}
-                                                value={editando.repasse_tipo || 'percentual'}
-                                                onChange={e => setCampo('repasse_tipo', e.target.value)}
-                                            >
-                                                <option value="percentual">%</option>
-                                                <option value="fixo">R$ fixo</option>
-                                            </select>
-                                            <input
-                                                style={campo}
-                                                value={editando.repasse_valor ?? ''}
-                                                onChange={e => setCampo('repasse_valor', e.target.value.replace(/[^\d.,]/g, ''))}
-                                                placeholder={editando.repasse_tipo === 'fixo' ? '420,00' : '70'}
-                                            />
-                                        </div>
-                                        <p style={ajuda}>Sai no split para o dono da área. A diferença fica com o grupo pela intermediação.</p>
+                                        <p style={ajuda}>Total cobrado de quem ocupa a área. É ele que se divide entre os beneficiários.</p>
                                     </div>
                                     <div><label style={rotulo}>Dia de pagamento</label><input style={campo} value={editando.dia_pagamento} onChange={e => setCampo('dia_pagamento', e.target.value)} /></div>
-                                    <div><label style={rotulo}>Início do pagamento</label><input style={campo} value={editando.mes_inicio} onChange={e => setCampo('mes_inicio', e.target.value)} placeholder="Março/2026" /></div>
+                                    <div><label style={rotulo}>Início do pagamento</label><input style={campo} value={editando.mes_inicio} onChange={e => setCampo('mes_inicio', e.target.value)} placeholder="Julho/2026" /></div>
                                     <div>
                                         <label style={rotulo}>Índice de reajuste</label>
                                         <select style={campo} value={editando.indice_reajuste} onChange={e => setCampo('indice_reajuste', e.target.value)}>
@@ -369,18 +405,6 @@ export default function LeasedAreasSettings() {
                                             <option value="IGPM limitado ao IPCA + 3 p.p.">IGPM com teto no IPCA + 3 p.p.</option>
                                         </select>
                                     </div>
-                                    {(() => {
-                                        const r = calcularRepasse(editando.valor_aluguel, editando.repasse_tipo, editando.repasse_valor);
-                                        if (!r.definido) return null;
-                                        return (
-                                            <div style={{ gridColumn: '1 / -1', padding: '0.85rem 1rem', background: r.excede ? '#fffbeb' : '#f8fafc', border: `1px solid ${r.excede ? '#fde68a' : '#e2e8f0'}`, borderRadius: '10px', fontSize: '0.83rem', color: r.excede ? '#92400e' : '#475569' }}>
-                                                {r.excede
-                                                    ? `O repasse de ${dinheiro(r.repasse)} é maior que o aluguel de ${dinheiro(editando.valor_aluguel)}: o grupo pagaria ${dinheiro(-r.retido)} por mês para intermediar.`
-                                                    : `Do aluguel de ${dinheiro(editando.valor_aluguel)}, vão ${dinheiro(r.repasse)} ao arrendante e ficam ${dinheiro(r.retido)} com o grupo${r.percentual ? ` (${(100 - r.percentual).toFixed(1).replace('.', ',')}% de intermediação)` : ''}.`}
-                                            </div>
-                                        );
-                                    })()}
-
                                     <div style={{ gridColumn: '1 / -1' }}>
                                         <label style={rotulo}>Observações</label>
                                         <textarea style={{ ...campo, minHeight: '70px', resize: 'vertical' }} value={editando.observacoes} onChange={e => setCampo('observacoes', e.target.value)} />
@@ -388,9 +412,140 @@ export default function LeasedAreasSettings() {
                                 </div>
                             </div>
 
+                            <div style={card}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                                    <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
+                                        <Users size={18} color="#3b82f6" /> Quem recebe
+                                    </h4>
+                                    <button type="button" onClick={addBenef} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', border: '1px solid #bfdbfe', borderRadius: '10px', background: 'white', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}>
+                                        <Plus size={15} /> Adicionar beneficiário
+                                    </button>
+                                </div>
+                                <p style={{ ...ajuda, marginTop: 0, marginBottom: '1rem' }}>
+                                    A forma de pagamento é de cada um, não da área: a mesma terra pode ter um dono recebendo por PIX e
+                                    outro por boleto de imobiliária. O boleto em si não se cadastra aqui, porque a linha digitável muda
+                                    todo mês e mora na fila de pagamentos.
+                                </p>
+
+                                {benefs.map((b, i) => (
+                                    <div key={b.id || `novo-${i}`} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', marginBottom: '0.85rem', background: b.tipo === 'casa' ? '#f8fafc' : 'white' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
+                                            <strong style={{ fontSize: '0.85rem', color: '#334155' }}>{b.nome?.trim() || `Beneficiário ${i + 1}`}</strong>
+                                            <button type="button" onClick={() => removerBenef(i)} title="Remover" style={{ padding: '0.35rem', border: '1px solid #fecaca', borderRadius: '8px', background: '#fef2f2', color: '#b91c1c', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                                        </div>
+
+                                        <div style={grade}>
+                                            <div style={{ gridColumn: '1 / -1' }}>
+                                                <label style={rotulo}>Papel</label>
+                                                <select style={campo} value={b.tipo} onChange={e => setBenef(i, 'tipo', e.target.value)}>
+                                                    <option value="terceiro">{TIPO_ROTULO.terceiro}</option>
+                                                    <option value="intermediario">{TIPO_ROTULO.intermediario}</option>
+                                                    <option value="casa">{TIPO_ROTULO.casa}</option>
+                                                </select>
+                                                <p style={ajuda}>
+                                                    {b.tipo === 'terceiro' && 'Recebe e assina o contrato como arrendante.'}
+                                                    {b.tipo === 'intermediario' && 'Recebe no lugar do proprietário e não assina o contrato.'}
+                                                    {b.tipo === 'casa' && 'A B2W é a arrendatária: retém a margem, não recebe repasse e não assina como arrendante.'}
+                                                </p>
+                                            </div>
+
+                                            <div><label style={rotulo}>Nome</label><input style={campo} value={b.nome} onChange={e => setBenef(i, 'nome', e.target.value)} /></div>
+                                            <div><label style={rotulo}>CPF/CNPJ</label><input style={campo} value={b.doc} onChange={e => setBenef(i, 'doc', e.target.value)} /></div>
+
+                                            <div>
+                                                <label style={rotulo}>Parte do aluguel</label>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <select
+                                                        style={{ ...campo, width: '96px', flexShrink: 0, padding: '0.65rem 0.4rem' }}
+                                                        value={b.rateio_tipo}
+                                                        onChange={e => setBenef(i, 'rateio_tipo', e.target.value)}
+                                                    >
+                                                        <option value="percentual">%</option>
+                                                        <option value="fixo">R$ fixo</option>
+                                                    </select>
+                                                    <input
+                                                        style={campo}
+                                                        value={b.rateio_valor}
+                                                        onChange={e => setBenef(i, 'rateio_valor', e.target.value.replace(/[^\d.,]/g, ''))}
+                                                        placeholder={b.rateio_tipo === 'fixo' ? '420,00' : '100'}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {b.tipo !== 'casa' && (
+                                                <div>
+                                                    <label style={rotulo}>Forma de pagamento</label>
+                                                    <select style={campo} value={b.forma_pagamento} onChange={e => setBenef(i, 'forma_pagamento', e.target.value)}>
+                                                        <option value="">— não definida —</option>
+                                                        <option value="pix">PIX</option>
+                                                        <option value="boleto">Boleto</option>
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            {b.forma_pagamento === 'pix' && b.tipo !== 'casa' && (
+                                                <>
+                                                    <div>
+                                                        <label style={rotulo}>Tipo da chave</label>
+                                                        <select style={campo} value={b.pix_key_type} onChange={e => setBenef(i, 'pix_key_type', e.target.value)}>
+                                                            <option value="CPF">CPF</option>
+                                                            <option value="CNPJ">CNPJ</option>
+                                                            <option value="EMAIL">E-mail</option>
+                                                            <option value="TELEFONE">Telefone</option>
+                                                            <option value="ALEATORIA">Aleatória</option>
+                                                        </select>
+                                                    </div>
+                                                    <div><label style={rotulo}>Chave PIX</label><input style={campo} value={b.pix_key} onChange={e => setBenef(i, 'pix_key', e.target.value)} /></div>
+                                                </>
+                                            )}
+
+                                            {b.forma_pagamento === 'boleto' && (
+                                                <div style={{ gridColumn: '1 / -1' }}>
+                                                    <p style={{ ...ajuda, color: '#64748b' }}>
+                                                        A linha digitável é colada na fila de pagamentos a cada competência, porque muda todo mês.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {b.tipo === 'terceiro' && (
+                                                <>
+                                                    <div><label style={rotulo}>Rua</label><input style={campo} value={b.endereco.rua} onChange={e => setBenefEnd(i, 'rua', e.target.value)} /></div>
+                                                    <div><label style={rotulo}>Número</label><input style={campo} value={b.endereco.numero} onChange={e => setBenefEnd(i, 'numero', e.target.value)} /></div>
+                                                    <div><label style={rotulo}>Bairro</label><input style={campo} value={b.endereco.bairro} onChange={e => setBenefEnd(i, 'bairro', e.target.value)} /></div>
+                                                    <div><label style={rotulo}>Cidade</label><input style={campo} value={b.endereco.cidade} onChange={e => setBenefEnd(i, 'cidade', e.target.value)} /></div>
+                                                    <div><label style={rotulo}>UF</label><input style={campo} value={b.endereco.uf} onChange={e => setBenefEnd(i, 'uf', e.target.value)} /></div>
+                                                    <div><label style={rotulo}>CEP</label><input style={campo} value={b.endereco.cep} onChange={e => setBenefEnd(i, 'cep', e.target.value)} /></div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {previa && (
+                                    <div style={{ padding: '0.9rem 1rem', borderRadius: '10px', background: previa.valido ? '#f0fdf4' : '#fffbeb', border: `1px solid ${previa.valido ? '#bbf7d0' : '#fde68a'}`, fontSize: '0.83rem', color: previa.valido ? '#166534' : '#92400e' }}>
+                                        {previa.valido ? (
+                                            <>
+                                                <strong>O rateio fecha.</strong>{' '}
+                                                {previa.parcelas.map(p => `${p.nome?.trim() || 'sem nome'} ${dinheiro(p.valor)}`).join(' · ')}
+                                                {' '}de {dinheiro(editando.valor_aluguel)}.
+                                            </>
+                                        ) : (
+                                            <>
+                                                <strong style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                                                    <AlertTriangle size={15} /> Ainda não dá para salvar:
+                                                </strong>
+                                                <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
+                                                    {previa.problemas.map((p, i) => <li key={i}>{p}</li>)}
+                                                </ul>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                                 <button type="button" onClick={() => setEditando(null)} style={{ padding: '0.75rem 1.3rem', background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-                                <button type="button" disabled={saving} onClick={salvar} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.4rem', background: saving ? '#94a3b8' : '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                                <button type="button" disabled={saving || !previa?.valido} onClick={salvar} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.4rem', background: (saving || !previa?.valido) ? '#94a3b8' : '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: (saving || !previa?.valido) ? 'not-allowed' : 'pointer' }}>
                                     <Save size={16} /> {saving ? 'Salvando…' : 'Salvar área'}
                                 </button>
                             </div>

@@ -22,6 +22,7 @@ import SettingsLayout from './dashboards/SettingsLayout';
 import GridMap from './dashboards/GridMap';
 import GraphNodeView from './dashboards/GraphNodeView';
 import RateioList from './dashboards/RateioList';
+import ArrendamentoPagamentos from './dashboards/ArrendamentoPagamentos';
 import ProtocolList from './dashboards/ProtocolList';
 
 export default function Dashboard() {
@@ -142,7 +143,13 @@ export default function Dashboard() {
             items.push({ id: 'billing', label: 'Billing', icon: 'bi-currency-dollar' });
         }
 
-        // 9. Gestão de Usuários
+        // 9. Repasse de arrendamento — move dinheiro, e a pay-asaas-bill exige
+        //    admin do lado do servidor de qualquer forma.
+        if (['admin', 'super_admin'].includes(role)) {
+            items.push({ id: 'arrendamento_pagamentos', label: 'Arrendamento', icon: 'bi-signpost-2' });
+        }
+
+        // 10. Gestão de Usuários
         if (['admin', 'super_admin'].includes(role)) {
             items.push({ id: 'settings', label: 'Configurações', icon: 'bi-gear' });
         }
@@ -173,6 +180,7 @@ export default function Dashboard() {
             case 'settings': return <SettingsLayout />;
             case 'grid_map': return <GridMap />;
             case 'rateio_list': return <RateioList />;
+            case 'arrendamento_pagamentos': return <ArrendamentoPagamentos />;
             case 'protocols': return <ProtocolList />;
 
             default:
