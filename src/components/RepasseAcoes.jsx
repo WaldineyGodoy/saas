@@ -18,6 +18,30 @@ import { Send, AlertTriangle } from 'lucide-react';
 
 const campo = { width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' };
 
+/**
+ * O motivo real, e não "Edge Function returned a non-2xx status code".
+ *
+ * Quando a função responde 4xx, o supabase-js entrega um FunctionsHttpError
+ * cuja mensagem só diz que houve erro; o que aconteceu está no corpo da
+ * resposta, pendurado em `error.context`. Sem ler esse corpo, a recusa do
+ * Asaas — chave inexistente, saldo insuficiente, transferência sem token
+ * configurado — chega ao operador como uma frase que não ajuda em nada.
+ */
+async function motivoDaFalha(error, data) {
+    if (data?.error) return data.error;
+    try {
+        const corpo = await error?.context?.json?.();
+        if (corpo?.error) return corpo.error;
+        if (corpo?.message) return corpo.message;
+    } catch {
+        try {
+            const texto = await error?.context?.text?.();
+            if (texto) return texto.slice(0, 400);
+        } catch { /* sem corpo legível: fica a mensagem original */ }
+    }
+    return error?.message || 'falha desconhecida';
+}
+
 export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConcluir }) {
     const { showAlert, showConfirm } = useUI();
     const [ocupado, setOcupado] = useState(false);
@@ -70,7 +94,7 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
                 }
             });
 
-            if (error || data?.error) throw new Error(data?.error || error.message);
+            if (error || data?.error) throw new Error(await motivoDaFalha(error, data));
 
             // Prende a transferência ao repasse. É esse elo que faz o webhook
             // do Asaas, ao confirmar o token, achar o repasse e marcá-lo pago.
@@ -163,8 +187,7 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
                 }
             });
 
-            if (error) throw error;
-            if (data?.success === false) throw new Error(data.error || 'Asaas recusou o pagamento');
+            if (error || data?.success === false) throw new Error(await motivoDaFalha(error, data));
 
             await marcar('pago');
             showAlert(`Boleto de ${dinheiro(linha.valor)} pago para ${beneficiario?.nome}.`, 'success');
