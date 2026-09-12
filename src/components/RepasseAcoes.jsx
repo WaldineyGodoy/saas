@@ -72,8 +72,23 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
 
             if (error || data?.error) throw new Error(data?.error || error.message);
 
-            await marcar('pago');
-            showAlert(`Repasse de ${dinheiro(linha.valor)} enviado a ${beneficiario.nome}.`, 'success');
+            // O Asaas devolve PENDING quando a transferência ainda espera a
+            // autorização por token. Marcar 'pago' aí lançaria a saída no razão
+            // antes de o dinheiro sair, e o Banco Asaas passaria a mentir.
+            // 'enfileirado' é o que ela é até a confirmação chegar.
+            const concluida = ['DONE', 'CONFIRMED'].includes(String(data?.status || '').toUpperCase());
+
+            if (concluida) {
+                await marcar('pago');
+                showAlert(`Repasse de ${dinheiro(linha.valor)} enviado a ${beneficiario.nome}.`, 'success');
+            } else {
+                showAlert(
+                    `Transferência de ${dinheiro(linha.valor)} criada para ${beneficiario.nome}, `
+                    + 'e aguardando autorização por token no Asaas. O repasse fica como "Enviado ao banco" '
+                    + 'até a confirmação, e só então entra no razão.',
+                    'info'
+                );
+            }
             aoConcluir?.();
         } catch (e) {
             try { await marcar('falhou', { observacoes: e.message }); } catch { /* o erro abaixo ja' reporta */ }
