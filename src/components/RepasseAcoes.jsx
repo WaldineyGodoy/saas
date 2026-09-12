@@ -28,18 +28,50 @@ const campo = { width: '100%', padding: '0.6rem', border: '1px solid #e2e8f0', b
  * configurado — chega ao operador como uma frase que não ajuda em nada.
  */
 async function motivoDaFalha(error, data) {
-    if (data?.error) return data.error;
-    try {
-        const corpo = await error?.context?.json?.();
-        if (corpo?.error) return corpo.error;
-        if (corpo?.message) return corpo.message;
-    } catch {
+    let bruto = null;
+
+    if (data?.error) {
+        bruto = data.error;
+    } else {
         try {
-            const texto = await error?.context?.text?.();
-            if (texto) return texto.slice(0, 400);
-        } catch { /* sem corpo legível: fica a mensagem original */ }
+            const corpo = await error?.context?.json?.();
+            bruto = corpo?.error || corpo?.message || null;
+        } catch {
+            try {
+                const texto = await error?.context?.text?.();
+                if (texto) bruto = texto.slice(0, 400);
+            } catch { /* sem corpo legível: fica a mensagem original */ }
+        }
     }
-    return error?.message || 'falha desconhecida';
+
+    return traduzir(bruto || error?.message || 'falha desconhecida');
+}
+
+/**
+ * Duas recusas previsíveis merecem uma frase que diga o que fazer.
+ *
+ * O Asaas recusa com 409 qualquer transferência idêntica a outra dos últimos
+ * 15 minutos, e a mensagem crua cita um identificador que não diz nada a quem
+ * está pagando. Duas competências do mesmo arrendante são idênticas para ele:
+ * mesma chave, mesmo valor. A descrição, que para nós separa os meses, ele
+ * não compara.
+ */
+function traduzir(mensagem) {
+    const m = String(mensagem);
+
+    if (/j[áa]\s+solicitad/i.test(m)) {
+        return 'O Asaas recusou por duplicidade: ele bloqueia toda transferência idêntica a outra '
+             + 'dos últimos 15 minutos, e duas competências do mesmo arrendante são idênticas para ele '
+             + '(mesma chave, mesmo valor). Espere 15 minutos desde o repasse anterior desta pessoa e '
+             + 'tente de novo. Nada foi enviado agora.';
+    }
+
+    if (/bloqueio de seguran/i.test(m)) {
+        return 'Nossa própria trava antifraude barrou: já houve um repasse a este beneficiário nos '
+             + 'últimos 2 minutos. Espere e tente de novo. Nada foi enviado agora.';
+    }
+
+    return m;
 }
 
 export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConcluir }) {
@@ -92,6 +124,11 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
                     // adianta, porque a função a ignora de propósito — destino
                     // vindo do cliente foi o que a transformava num saque.
                     beneficiaryId: beneficiario.id,
+                    // Identificador do repasse no nosso sistema. Faz qualquer
+                    // transferencia no extrato do Asaas apontar de volta para a
+                    // competencia e o beneficiario, sem depender de casar por
+                    // valor e data.
+                    externalReference: linha.id,
                     description: `Arrendamento ${competenciaLegivel(linha.competencia)} - ${usinaNome || ''}`.slice(0, 60)
                 }
             });

@@ -33,6 +33,9 @@ serve(async (req) => {
         const usinaId = body.usinaId ?? body.usina_id
         const supplierId = body.supplierId ?? body.supplier_id
         const beneficiaryId = body.beneficiaryId ?? body.beneficiary_id
+        // Identificador da transferencia no nosso sistema. So' isso: nao e'
+        // destino nem valor, entao nao afrouxa nada.
+        const externalReference = body.externalReference ?? body.external_reference
 
         if (!amount || Number(amount) <= 0) {
             throw new Error('Valor da transferencia ausente ou nao positivo.')
@@ -163,7 +166,8 @@ serve(async (req) => {
                 pixAddressKey: pixKey,
                 pixAddressKeyType: formattedPixKeyType, // 'CPF', 'CNPJ', 'EMAIL', 'PHONE', 'EVP'
                 description: description || 'Repasse Usina',
-                operationType: 'PIX'
+                operationType: 'PIX',
+                externalReference
             };
 
             const response = await fetch(`${ASAAS_URL}/transfers`, {
