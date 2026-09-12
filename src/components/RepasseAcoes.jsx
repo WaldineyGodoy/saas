@@ -87,10 +87,12 @@ export default function RepasseAcoes({ linha, beneficiario, usinaNome, aoConclui
             const { data, error } = await supabase.functions.invoke('transfer-asaas-pix', {
                 body: {
                     amount: Number(linha.valor),
-                    pixKey: beneficiario.pix_key,
-                    pixKeyType: beneficiario.pix_key_type,
-                    description: `Arrendamento ${competenciaLegivel(linha.competencia)} - ${usinaNome || ''}`.slice(0, 60),
-                    destinationType: 'arrendante'
+                    // Só o identificador do beneficiário. A chave PIX é resolvida
+                    // no servidor, a partir do cadastro: mandá-la daqui não
+                    // adianta, porque a função a ignora de propósito — destino
+                    // vindo do cliente foi o que a transformava num saque.
+                    beneficiaryId: beneficiario.id,
+                    description: `Arrendamento ${competenciaLegivel(linha.competencia)} - ${usinaNome || ''}`.slice(0, 60)
                 }
             });
 

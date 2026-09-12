@@ -32,6 +32,7 @@ serve(async (req) => {
         const description = body.description
         const usinaId = body.usinaId ?? body.usina_id
         const supplierId = body.supplierId ?? body.supplier_id
+        const beneficiaryId = body.beneficiaryId ?? body.beneficiary_id
 
         if (!amount || Number(amount) <= 0) {
             throw new Error('Valor da transferencia ausente ou nao positivo.')
@@ -70,8 +71,34 @@ serve(async (req) => {
                 .eq('id', usina.supplier_id)
                 .single()
             supplierRow = data
+        } else if (beneficiaryId) {
+            // Arrendante: quem recebe o repasse da area arrendada. Pode ser
+            // o dono da terra ou a imobiliaria que cobra por ele -- os dois
+            // vivem em leased_area_beneficiaries.
+            //
+            // A chave sai do cadastro, igual aos outros dois destinos. E' a
+            // propriedade que esta funcao existe para proteger: destino vindo
+            // do corpo da requisicao e' o que a transformava num saque.
+            destinationType = 'arrendante'
+            destinationId = beneficiaryId
+            const { data } = await supabase
+                .from('leased_area_beneficiaries')
+                .select('pix_key, pix_key_type, tipo, ativo, forma_pagamento')
+                .eq('id', beneficiaryId)
+                .single()
+            if (!data?.ativo) {
+                throw new Error('Beneficiario inativo ou inexistente - nao ha destino cadastrado.')
+            }
+            // A casa nao recebe repasse: o dinheiro dela ja' esta' na conta.
+            if (data.tipo === 'casa') {
+                throw new Error('Beneficiario do tipo casa nao recebe repasse.')
+            }
+            if (data.forma_pagamento !== 'pix') {
+                throw new Error('Beneficiario nao recebe por PIX - confira a forma de pagamento no cadastro.')
+            }
+            supplierRow = data
         } else {
-            throw new Error('Informe supplierId ou usinaId. Transferencia sem destino cadastrado nao e permitida.')
+            throw new Error('Informe supplierId, usinaId ou beneficiaryId. Transferencia sem destino cadastrado nao e permitida.')
         }
 
         if (!supplierRow?.pix_key) {
