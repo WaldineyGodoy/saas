@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
-import { MapPin, Plus, Save, X, Trash2, Search, Landmark, Users, AlertTriangle } from 'lucide-react';
-import { ratear, num, dinheiro } from '../../lib/rateioArrendamento';
+import { MapPin, Plus, Save, X, Trash2, Search, Landmark, Users, AlertTriangle, Banknote } from 'lucide-react';
+import { ratear, num, dinheiro, competenciaLegivel } from '../../lib/rateioArrendamento';
+import { conferirChavePix } from '../../lib/pixChave';
+import RepasseAcoes from '../../components/RepasseAcoes';
 
 /**
- * Áreas arrendadas — cadastro em Configurações.
+ * Áreas arrendadas — cadastro na seção Arrendamento.
  *
  * A área é entidade própria, não campo da usina: tem dono, matrícula e vida
  * independente. Pode receber outra usina e pode ser vendida.
@@ -68,7 +70,7 @@ const TIPO_ROTULO = {
     casa: 'B2W (margem de intermediação)'
 };
 
-export default function LeasedAreasSettings() {
+export default function ArrendamentoAreas() {
     const { showAlert, showConfirm } = useUI();
     const [areas, setAreas] = useState([]);
     const [benefPorArea, setBenefPorArea] = useState({});
@@ -79,6 +81,7 @@ export default function LeasedAreasSettings() {
     const [editando, setEditando] = useState(null);
     const [benefs, setBenefs] = useState([]);
     const [removidos, setRemovidos] = useState([]);
+    const [repasses, setRepasses] = useState([]);
 
     const carregar = useCallback(async () => {
         setLoading(true);
@@ -115,8 +118,25 @@ export default function LeasedAreasSettings() {
 
     useEffect(() => { carregar(); }, [carregar]);
 
+    /**
+     * Os repasses desta area, para o pagamento acontecer onde a pessoa ja'
+     * esta' quando abre o contrato. A fila geral continua existindo para a
+     * pergunta oposta: o que devo este mes, atravessando todas as areas.
+     */
+    const carregarRepasses = useCallback(async (areaId) => {
+        if (!areaId) { setRepasses([]); return; }
+        const { data, error } = await supabase
+            .from('arrendamento_pagamentos')
+            .select('*, beneficiario:leased_area_beneficiaries!inner(id, nome, tipo, forma_pagamento, pix_key, pix_key_type, leased_area_id), usina:usinas(id, name)')
+            .eq('beneficiario.leased_area_id', areaId)
+            .order('competencia', { ascending: false });
+        if (error) { console.error('Erro ao carregar repasses da área:', error); setRepasses([]); return; }
+        setRepasses(data || []);
+    }, []);
+
     const abrir = (area) => {
         setRemovidos([]);
+        carregarRepasses(area?.id);
         if (area) {
             setEditando({ ...VAZIO, ...area, endereco: { ...VAZIO.endereco, ...(area.endereco || {}) } });
             setBenefs((benefPorArea[area.id] || []).map(b => ({
@@ -164,7 +184,23 @@ export default function LeasedAreasSettings() {
         return prev.filter((_, j) => j !== i);
     });
 
-    const previa = editando ? ratear(editando.valor_aluguel, benefs) : null;
+    // O rateio e a coerencia das chaves sao problemas diferentes, mas travam a
+    // mesma coisa: salvar. Chave PIX errada nao da erro visivel -- da dinheiro
+    // na conta de outra pessoa -- entao ela bloqueia, nao avisa.
+    const previaBase = editando ? ratear(editando.valor_aluguel, benefs) : null;
+    const problemasChave = benefs
+        .filter(b => b.ativo !== false && b.forma_pagamento === 'pix' && b.tipo !== 'casa')
+        .map(b => {
+            const r = conferirChavePix(b.pix_key_type, b.pix_key);
+            return r.ok ? null : `${b.nome?.trim() || 'Beneficiário sem nome'}: ${r.erro}`;
+        })
+        .filter(Boolean);
+
+    const previa = previaBase && {
+        ...previaBase,
+        problemas: [...previaBase.problemas, ...problemasChave],
+        valido: previaBase.valido && problemasChave.length === 0
+    };
 
     const salvar = async () => {
         if (!editando.nome?.trim()) {
@@ -542,6 +578,51 @@ export default function LeasedAreasSettings() {
                                     </div>
                                 )}
                             </div>
+
+                            {editando.id && (
+                                <div style={card}>
+                                    <h4 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
+                                        <Banknote size={18} color="#3b82f6" /> Repasses desta área
+                                    </h4>
+                                    <p style={{ ...ajuda, marginTop: 0, marginBottom: '1rem' }}>
+                                        Cada competência é paga por beneficiário. A linha digitável do boleto se cola aqui,
+                                        na competência certa, porque ela muda todo mês.
+                                    </p>
+
+                                    {repasses.length === 0 ? (
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8' }}>
+                                            Nenhum repasse reconhecido para esta área ainda. A obrigação nasce no fechamento
+                                            da usina ou no reconhecimento de pré-operação.
+                                        </p>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                                            {repasses.map(r => (
+                                                <div key={r.id} style={{ border: '1px solid #f1f5f9', borderRadius: '10px', padding: '0.85rem', background: r.status === 'pago' ? '#f8fafc' : 'white' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>
+                                                            <strong>{competenciaLegivel(r.competencia)}</strong> · {r.beneficiario?.nome}
+                                                            {r.origem === 'b2w_pre_operacao' ? ' · custo da B2W' : ''}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: r.status === 'pago' ? '#166534' : '#1e293b' }}>
+                                                            {dinheiro(r.valor)}{r.status === 'pago' ? ' · pago' : ''}
+                                                        </span>
+                                                    </div>
+                                                    {r.status !== 'pago' && (
+                                                        <div style={{ marginTop: '0.7rem', paddingTop: '0.7rem', borderTop: '1px dashed #e2e8f0' }}>
+                                                            <RepasseAcoes
+                                                                linha={r}
+                                                                beneficiario={r.beneficiario}
+                                                                usinaNome={r.usina?.name}
+                                                                aoConcluir={() => carregarRepasses(editando.id)}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                                 <button type="button" onClick={() => setEditando(null)} style={{ padding: '0.75rem 1.3rem', background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>

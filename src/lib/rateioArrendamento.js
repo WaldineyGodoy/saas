@@ -76,3 +76,10 @@ export function ratear(aluguel, beneficiarios) {
 
     return { parcelas, somaFixo, somaPct, problemas, valido: problemas.length === 0 };
 }
+
+/** "2026-08-01" vira "08/2026". Competência é mês, nunca dia. */
+export const competenciaLegivel = (d) => {
+    if (!d) return '—';
+    const [ano, mes] = String(d).split('-');
+    return `${mes}/${ano}`;
+};

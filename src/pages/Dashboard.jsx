@@ -22,7 +22,7 @@ import SettingsLayout from './dashboards/SettingsLayout';
 import GridMap from './dashboards/GridMap';
 import GraphNodeView from './dashboards/GraphNodeView';
 import RateioList from './dashboards/RateioList';
-import ArrendamentoPagamentos from './dashboards/ArrendamentoPagamentos';
+import Arrendamento from './dashboards/Arrendamento';
 import ProtocolList from './dashboards/ProtocolList';
 
 export default function Dashboard() {
@@ -180,7 +180,7 @@ export default function Dashboard() {
             case 'settings': return <SettingsLayout />;
             case 'grid_map': return <GridMap />;
             case 'rateio_list': return <RateioList />;
-            case 'arrendamento_pagamentos': return <ArrendamentoPagamentos />;
+            case 'arrendamento_pagamentos': return <Arrendamento />;
             case 'protocols': return <ProtocolList />;
 
             default:
