@@ -2533,6 +2533,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 gestao_percentual: Number(formData.gestao_percentual),
                 // String vazia num campo uuid é erro do Postgres, não "sem valor".
                 leased_area_id: formData.leased_area_id || null,
+                // Parcelas, prazos e demais condições da aba Contratos. Antes só
+                // o "Gerar e enviar" gravava isto: o que se digitava e salvava
+                // pelo botão da usina se perdia ao fechar o modal.
+                contract_terms: condicoesParaGravar(),
                 ibge_code: formData.ibge_code,
                 unidade_geradora: formData.unidade_geradora,
                 cnpj_cpf: formData.cnpj_cpf,

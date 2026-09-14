@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos — o
@@ -146,7 +146,7 @@ CLÁUSULA 5 – DA REMUNERAÇÃO DA GESTORA
 5.1. A GESTORA fará jus a:
 (a) Remuneração Inicial — 100% (cem por cento) do Valor Integral da Primeira Fatura da Associação, devida apenas quanto a CONSUMIDORES captados pela GESTORA ou por seus corretores;
 (b) Remuneração Recorrente — ${numeroBr(recorrente)}% (${percentualExtenso(recorrente)} por cento) sobre as faturas da Associação pagas pelo CONSUMIDOR;
-(c) Taxa de Administração — R$ ${moeda(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
+(c) Taxa de Administração — ${valorEmReais(taxaAdmin)} por CONSUMIDOR ativo, incluindo emissão e envio de boleto.
 5.2. Definição de "captado pela GESTORA". Considera-se captado pela GESTORA o CONSUMIDOR cujo cadastro tenha sido originado por canal, link de indicação ou corretor da GESTORA, conforme registro do sistema de CRM da GESTORA na data da adesão.
 5.3. Cálculo do Valor Integral da Primeira Fatura: Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado.
 5.4. Cálculo da Remuneração Recorrente: [Tarifa de Aplicação x (1 – Desconto %) x Volume de Energia Gerada x % Efetivamente Compensado, no período de apuração] x Percentual Recorrente.
@@ -231,7 +231,7 @@ Fica eleito o foro da comarca de ${p.foro}, com renúncia a qualquer outro, por 
 ANEXO I — CONDIÇÕES COMERCIAIS
 - Desconto ao consumidor: ${numeroBr(desconto)}%
 - Remuneração Recorrente: ${numeroBr(recorrente)}%
-- Taxa de Administração: R$ ${moeda(taxaAdmin)} por consumidor ativo/mês
+- Taxa de Administração: ${valorEmReais(taxaAdmin)} por consumidor ativo/mês
 - Taxa de Recuperação de Crédito: ${numeroBr(recuperacao)}% sobre o principal recuperado após D+30
 - Data de Corte: dia ${diaCorte}
 - Data de Repasse: até o dia ${diaRepasse}

@@ -82,6 +82,18 @@ export const numeroBr = (n) => {
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
+/**
+ * Valor em reais para o texto do contrato, ou lacuna quando não há valor.
+ *
+ * Campo vazio chega ao gerador como zero, e "R$ 0,00" num contrato se lê
+ * como condição combinada — parcela gratuita, taxa zerada. Sem valor
+ * informado, o contrato fica com o espaço em branco para preencher.
+ */
+export const valorEmReais = (valor) => {
+    const n = Number(valor);
+    return Number.isFinite(n) && n > 0 ? `R$ ${moeda(n)}` : 'R$ ________';
+};
+
 const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '');
 
 const lacuna = (valor, alternativa = '_______________') => String(valor ?? '').trim() || alternativa;

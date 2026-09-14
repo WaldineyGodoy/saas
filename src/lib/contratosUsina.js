@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
 
 /**
  * Os três contratos que existem por USINA, e não por fornecedor: compra e
@@ -170,6 +170,22 @@ export const montarCompraVenda = ({ usina, supplier, area } = {}, opts = {}) => 
 
     const proprietario = nomesArrendantes(area);
 
+    // Parcelas: a primeira sempre aparece, em branco enquanto não houver
+    // valor. A segunda e a terceira só entram quando têm valor — pagamento
+    // em uma ou duas vezes não deve listar marco inexistente, nem "R$ 0,00",
+    // que se leria como parcela gratuita. As letras seguem a ordem que sobrou.
+    const marcosPagamento = [
+        { valor: num(p.parcela1), texto: 'na assinatura deste Contrato', sempre: true },
+        { valor: num(p.parcela2), texto: 'na entrega dos equipamentos no local da obra, comprovada por nota fiscal e romaneio' },
+        { valor: num(p.parcela3), texto: 'na conclusão da montagem e solicitação de vistoria à DISTRIBUIDORA' }
+    ].filter(m => m.sempre || m.valor > 0);
+    const parcelasTexto = marcosPagamento
+        .map((m, i) => `(${String.fromCharCode(97 + i)}) ${valorEmReais(m.valor)} ${m.texto}${i === marcosPagamento.length - 1 ? '.' : ';'}`)
+        .join('\n');
+    const vencimentoParcelas = marcosPagamento.length > 1
+        ? 'Cada parcela vence em até 5 (cinco) dias do atingimento do respectivo marco'
+        : 'O pagamento vence em até 5 (cinco) dias do atingimento do marco';
+
     // O proprietário da área só assina o compra e venda quando outorga opção
     // de compra do imóvel (Cláusula 15). Sem opção, a relação com a terra vive
     // inteira no Contrato de Arrendamento, e trazê-lo para cá punha no
@@ -216,14 +232,12 @@ CLÁUSULA 4 – DA INFRAESTRUTURA E DAS OBRAS
 CAPÍTULO III — PREÇO, PRAZO E ENTREGA
 
 CLÁUSULA 5 – DO VALOR
-5.1. O valor total do empreendimento é de R$ ${moeda(valorTotal)}, compreendendo equipamentos, engenharia, desenvolvimento do projeto, obras civis, implantação e comissionamento.
+5.1. O valor total do empreendimento é de ${valorEmReais(valorTotal)}, compreendendo equipamentos, engenharia, desenvolvimento do projeto, obras civis, implantação e comissionamento.
 
 CLÁUSULA 6 – DA FORMA DE PAGAMENTO
 6.1. O pagamento será realizado conforme marcos:
-(a) R$ ${moeda(num(p.parcela1))} na assinatura deste Contrato;
-(b) R$ ${moeda(num(p.parcela2))} na entrega dos equipamentos no local da obra, comprovada por nota fiscal e romaneio;
-(c) R$ ${moeda(num(p.parcela3))} na conclusão da montagem e solicitação de vistoria à DISTRIBUIDORA.
-6.2. Cada parcela vence em até 5 (cinco) dias do atingimento do respectivo marco, comunicado por escrito com a documentação comprobatória.
+${parcelasTexto}
+6.2. ${vencimentoParcelas}, comunicado por escrito com a documentação comprobatória.
 6.3. O atraso no pagamento sujeita o INVESTIDOR a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção pelo IPCA, e suspende automaticamente os prazos da Cláusula 7 enquanto perdurar.
 
 CLÁUSULA 7 – DO PRAZO DE EXECUÇÃO
@@ -237,7 +251,7 @@ CLÁUSULA 8 – DO ATRASO E DO INADIMPLEMENTO DA CONTRATADA
 
 CLÁUSULA 9 – DO PARECER DE ACESSO
 9.1. Cabe à CONTRATADA elaborar, protocolar e conduzir a Solicitação de Acesso junto à DISTRIBUIDORA, respondendo pelas exigências documentais e técnicas do projeto.
-9.2. Havendo indeferimento não sanável, ou exigência de obras de reforço de rede cujo custo exceda R$ ${moeda(num(p.limiteReforco))}, qualquer das Partes poderá rescindir este Contrato sem ônus, restituindo-se ao INVESTIDOR os valores aportados, deduzidos os custos comprovadamente incorridos.
+9.2. Havendo indeferimento não sanável, ou exigência de obras de reforço de rede cujo custo exceda ${valorEmReais(num(p.limiteReforco))}, qualquer das Partes poderá rescindir este Contrato sem ônus, restituindo-se ao INVESTIDOR os valores aportados, deduzidos os custos comprovadamente incorridos.
 9.3. Excedido o limite e havendo interesse do INVESTIDOR em prosseguir, o custo do reforço correrá por sua conta, mediante aditivo.
 
 CAPÍTULO IV — TITULARIDADE E EXPLORAÇÃO
@@ -256,7 +270,7 @@ CLÁUSULA 12 – DA REMUNERAÇÃO DA ASSOCIAÇÃO E DO REPASSE
 12.1. Contratada a gestão, a remuneração da ASSOCIAÇÃO é a prevista no Contrato de Gestão e compreende, cumulativamente:
 (a) Remuneração Inicial — 100% (cem por cento) do valor integral da primeira fatura, devida apenas quanto a consumidores captados pela ASSOCIAÇÃO ou seus corretores;
 (b) Remuneração Recorrente — ${numeroBr(num(p.percentualRecorrente, 10))}% sobre as faturas efetivamente pagas pelos consumidores;
-(c) Taxa de Administração — R$ ${moeda(num(p.taxaAdmin, 10))} por consumidor ativo por mês;
+(c) Taxa de Administração — ${valorEmReais(num(p.taxaAdmin, 10))} por consumidor ativo por mês;
 (d) Taxa de Recuperação de Crédito — ${numeroBr(num(p.taxaRecuperacao, 8))}% sobre o principal recuperado de fatura paga após 30 (trinta) dias do vencimento.
 12.2. O INVESTIDOR declara ter recebido e lido o Contrato de Gestão, que integra este instrumento como Anexo I, antes da assinatura.
 12.3. O repasse observará o regime do Contrato de Gestão: ocorre somente após a compensação financeira dos pagamentos dos consumidores, encerrado o ciclo de apuração. Energia gerada, energia compensada na DISTRIBUIDORA e boleto emitido não constituem, isolada ou conjuntamente, fato gerador de repasse.
@@ -269,7 +283,7 @@ CAPÍTULO V — ÁREA, O&M E SEGURO
 
 CLÁUSULA 14 – DO ARRENDAMENTO DA ÁREA
 14.1. A usina será instalada em área de ${areaM2 ? `${numeroBr(areaM2)} m²` : '_______ m²'} objeto de Contrato de Arrendamento celebrado entre o INVESTIDOR e o proprietário da área, que integra este instrumento como Anexo II.
-14.2. Valor do arrendamento: ${aluguel ? `R$ ${moeda(aluguel)}` : 'R$ _______'} mensais, reajustados anualmente na forma do respectivo contrato. Prazo: 10 (dez) anos, renovável por igual período.
+14.2. Valor do arrendamento: ${valorEmReais(aluguel)} mensais, reajustados anualmente na forma do respectivo contrato. Prazo: 10 (dez) anos, renovável por igual período.
 14.3. O INVESTIDOR declara ter recebido e lido o Contrato de Arrendamento, inclusive suas cláusulas de multa rescisória, de vigência em caso de alienação e de propriedade da usina, antes da assinatura deste.
 14.4. Declaração de parte relacionada. O INVESTIDOR declara ciência de que a área é de propriedade de sócio ou pessoa ligada ao GRUPO B2W, e que as condições praticadas correspondem a valores de mercado para a região e finalidade.
 
@@ -380,7 +394,7 @@ CLÁUSULA 2 – DO PRAZO
 2.2. Ao término, renova-se automaticamente por mais 10 (dez) anos, salvo oposição escrita de qualquer das Partes com antecedência mínima de 90 (noventa) dias.
 
 CLÁUSULA 3 – DO VALOR E DO REAJUSTE
-3.1. O valor mensal é de ${aluguel ? `R$ ${moeda(aluguel)}` : 'R$ _______'}, pago até o dia ${dia} (${porExtenso(dia)}) de cada mês, referente ao mês anterior de utilização${area?.mes_inicio ? `, com início em ${area.mes_inicio}` : ''}.
+3.1. O valor mensal é de ${valorEmReais(aluguel)}, pago até o dia ${dia} (${porExtenso(dia)}) de cada mês, referente ao mês anterior de utilização${area?.mes_inicio ? `, com início em ${area.mes_inicio}` : ''}.
 3.2. O valor será corrigido anualmente, na data de aniversário do início do pagamento, pela variação acumulada do ${indice}, ou, na sua extinção, por índice que o substitua.
 3.3. O atraso no pagamento sujeita o ARRENDATÁRIO a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção monetária.
 
@@ -501,8 +515,8 @@ CLÁUSULA 4 – DO RELATÓRIO MENSAL
 4.2. O relatório será fornecido em formato que permita conciliação com os registros da distribuidora e com o fechamento mensal da gestão de créditos, quando contratada.
 
 CLÁUSULA 5 – DO VALOR E DA FORMA DE PAGAMENTO
-5.1. O valor mensal é composto por: (a) R$ ${moeda(porModulo)} por módulo fotovoltaico instalado; e (b) R$ ${moeda(porInversor)} por inversor instalado.
-5.2. Na data de assinatura, o valor mensal totaliza R$ ${moeda(mensal)}.
+5.1. O valor mensal é composto por: (a) ${valorEmReais(porModulo)} por módulo fotovoltaico instalado; e (b) ${valorEmReais(porInversor)} por inversor instalado.
+5.2. Na data de assinatura, o valor mensal totaliza ${valorEmReais(mensal)}.
 5.3. A cobrança será emitida até o dia 5 (cinco) de cada mês, referente aos serviços do mês anterior.
 5.4. O valor será corrigido anualmente, na data de aniversário do contrato, pela variação acumulada do ${ou(v.indiceReajuste, 'IPCA')}, ou índice que o substitua.
 5.5. O atraso sujeita a CONTRATANTE a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção monetária.
