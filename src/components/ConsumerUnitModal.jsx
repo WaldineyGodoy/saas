@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { salvarSenhaPortal, semSenha, buscarTarifaReferencia } from '../lib/api';
+import { salvarSenhaPortal, semSenha, buscarTarifaReferencia, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
     Loader2, Trash2, Smartphone as PhoneIcon, MessageCircle, FileText, Smartphone as MobileIcon,
     History as HistoryIcon, DollarSign, Globe, MapPin, Building2, CreditCard,
-    Filter, Clock, Ban, AlertCircle, CheckCircle, Info, Lock, Unlock, Power
+    Filter, Clock, Ban, AlertCircle, CheckCircle, Info, Lock, Unlock, Power, FileSignature, ExternalLink, RefreshCcw
 } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,9 @@ import UCInvoicesModal from './UCInvoicesModal';
 import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
 import { sendWhatsapp } from '../lib/api';
+import { useBranding } from '../contexts/BrandingContext';
+import ContratoTransferencia from './ContratoTransferencia';
+import { dividirEmPaginasTransferencia, gerarPdfTransferenciaBase64, montarTermoTransferencia } from '../lib/contratoTransferencia';
 import SubscriberModal from './SubscriberModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 
@@ -39,7 +42,15 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [showCredentialsModal, setShowCredentialsModal] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
-    const [activeTab, setActiveTab] = useState(defaultSection); // 'geral' | 'tecnico' | 'financeiro' | 'comunicados'
+    const [activeTab, setActiveTab] = useState(defaultSection); // 'geral' | 'tecnico' | 'financeiro' | 'comunicados' | 'contrato'
+    const { branding } = useBranding();
+    // Termo de transferência de titularidade (aba Contrato)
+    const [termoDraft, setTermoDraft] = useState('');
+    const [enviandoTermo, setEnviandoTermo] = useState(false);
+    const [gerandoTermo, setGerandoTermo] = useState(false);
+    const [assinaturasTermo, setAssinaturasTermo] = useState([]);
+    const [carregandoTermos, setCarregandoTermos] = useState(false);
+    const [cancelandoTermo, setCancelandoTermo] = useState(null);
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
@@ -312,6 +323,217 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
             supabase.removeChannel(channel);
         };
     }, [consumerUnit?.id]);
+
+    // ===================== Termo de transferência de titularidade =====================
+    //
+    // O titular da conta na distribuidora (`titular_fatura_id`) autoriza o
+    // assinante (`subscriber_id`) a levar a UC para o próprio nome. O titular
+    // assina; o assinante reconhece como ciente. Cada um recebe o seu link.
+    const titularTermo = subscribers.find(sub => sub.id === formData.titular_fatura_id) || null;
+    const assinanteTermo = subscribers.find(sub => sub.id === formData.subscriber_id) || null;
+    const ucTermo = { ...consumerUnit, ...formData };
+
+    const textoTermoGerado = () => montarTermoTransferencia({ uc: ucTermo, titular: titularTermo, assinante: assinanteTermo });
+    const textoTermoAtual = () => termoDraft || textoTermoGerado();
+    const termoEditado = termoDraft !== '' && termoDraft !== textoTermoGerado();
+
+    // O que impede gerar o termo, em ordem de conserto. Vazio = pode enviar.
+    const pendenciaTermo = !consumerUnit?.id
+        ? 'Salve a UC antes de gerar o termo.'
+        : !formData.numero_uc
+            ? 'Informe o número da UC.'
+            : !titularTermo
+                ? 'Informe o titular da conta (Titular da Fatura, na aba Geral) antes de gerar o termo.'
+                : !assinanteTermo
+                    ? 'Vincule o assinante à UC antes de gerar o termo.'
+                    : titularTermo.id === assinanteTermo.id
+                        ? 'O titular da conta já é o próprio assinante: não há transferência a autorizar.'
+                        : '';
+
+    const carregarTermos = async () => {
+        if (!consumerUnit?.id) return;
+        setCarregandoTermos(true);
+        try {
+            const { data } = await supabase
+                .from('signatures')
+                .select('*')
+                .eq('signer_type', 'consumer_unit')
+                .eq('signer_id', consumerUnit.id)
+                .order('created_at', { ascending: false });
+            setAssinaturasTermo(data || []);
+        } catch (e) {
+            console.error('Erro ao carregar termos da UC:', e);
+        } finally {
+            setCarregandoTermos(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'contrato') carregarTermos();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, consumerUnit?.id]);
+
+    /** Relê os cadastros de titular e assinante e descarta o rascunho. */
+    const gerarMinutaTermo = async () => {
+        setGerandoTermo(true);
+        try {
+            const { data, error } = await supabase.from('subscribers').select('*').order('name');
+            if (error) throw error;
+            setSubscribers(data || []);
+            setTermoDraft('');
+            showAlert('Minuta gerada com os dados atuais do cadastro.', 'success');
+        } catch (e) {
+            showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
+        } finally {
+            setGerandoTermo(false);
+        }
+    };
+
+    const enviarLinkTermo = async (pessoa, link, papel) => {
+        const texto = papel === 'titular'
+            ? `Olá ${pessoa.name}, aqui é a B2W Energia. ⚡
+
+Segue o termo de autorização para a transferência de titularidade da UC ${formData.numero_uc} para o nome de ${assinanteTermo?.name || 'o assinante'}, para sua assinatura digital. 📄
+
+${link}
+
+Qualquer dúvida, é só responder esta mensagem.`
+            : `Olá ${pessoa.name}, aqui é a B2W Energia. ⚡
+
+Segue o termo de transferência de titularidade da UC ${formData.numero_uc} para o seu nome. Pedimos que o assine como ciente: depois de concluída a transferência na distribuidora, a UC deixa de receber créditos de energia, e os valores compensados até a data da transferência continuam devidos. 📄
+
+${link}
+
+Qualquer dúvida, é só responder esta mensagem.`;
+        const r = { whatsapp: null, email: null };
+
+        if (!pessoa.phone) r.whatsapp = 'não enviado (sem telefone cadastrado)';
+        else {
+            try {
+                let instanceName = 'default';
+                const { data: cfg } = await supabase.from('integrations_config').select('variables').eq('service_name', 'evolution_api').single();
+                if (cfg?.variables?.instance_name) instanceName = cfg.variables.instance_name;
+                await sendWhatsapp(pessoa.phone.replace(/[^0-9]/g, ''), texto, null, null, null, instanceName);
+                r.whatsapp = 'enviado';
+            } catch (e) { console.error('WhatsApp:', e); r.whatsapp = `falhou: ${e.message}`; }
+        }
+
+        if (!pessoa.email) r.email = 'não enviado (sem e-mail cadastrado)';
+        else {
+            try {
+                // functions.invoke devolve o erro em `error`, não lança.
+                const { error } = await supabase.functions.invoke('send-email', {
+                    body: { to: pessoa.email, subject: 'Transferência de titularidade de UC - B2W Energia', text: texto }
+                });
+                if (error) throw error;
+                r.email = 'enviado';
+            } catch (e) { console.error('E-mail:', e); r.email = `falhou: ${e.message}`; }
+        }
+
+        r.resumo = `WhatsApp: ${r.whatsapp} · E-mail: ${r.email}`;
+        r.falhou = String(r.whatsapp).startsWith('falhou') || String(r.email).startsWith('falhou');
+        return r;
+    };
+
+    const enviarTermoTransferencia = async () => {
+        if (pendenciaTermo) { showAlert(pendenciaTermo, 'warning'); return; }
+        if (!assinanteTermo.phone && !assinanteTermo.email) {
+            showAlert('O assinante não tem telefone nem e-mail cadastrado para receber o link.', 'warning');
+            return;
+        }
+
+        setEnviandoTermo(true);
+        try {
+            // Congela o texto na tela para o PDF ser exatamente o revisado.
+            const texto = textoTermoAtual();
+            setTermoDraft(texto);
+
+            const pdfBase64 = await gerarPdfTransferenciaBase64();
+            const numero = String(formData.numero_uc).replace(/[^0-9]/g, '');
+            const fileName = `Termo_Transferencia_Titularidade_UC_${numero}_${Date.now()}.pdf`;
+            // As duas assinaturas vão lado a lado na última folha, onde está o bloco de assinaturas.
+            const ultimaPagina = dividirEmPaginasTransferencia(texto).length;
+
+            const result = await createAutentiqueDocument({
+                documentName: fileName,
+                fileBase64: pdfBase64,
+                // Sem `email`/`phone`: assim a Autentique devolve um link por
+                // signatário, e a entrega é nossa, por WhatsApp e e-mail.
+                signers: [
+                    { name: titularTermo.name, action: 'SIGN', positions: [{ x: 25, y: 85, z: ultimaPagina }] },
+                    { name: assinanteTermo.name, action: 'RECOGNIZE', positions: [{ x: 75, y: 85, z: ultimaPagina }] }
+                ],
+                signerId: consumerUnit.id,
+                signerType: 'consumer_unit'
+            });
+
+            if (result.error) throw new Error(result.error);
+            if (!result?.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado.');
+
+            const links = Array.isArray(result.links) ? result.links : [];
+            const linkDe = (nome, indice) => (links.find(l => l.name === nome && l.short_link) || links[indice] || {}).short_link || null;
+            const linkTitular = linkDe(titularTermo.name, 0);
+            const linkAssinante = linkDe(assinanteTermo.name, 1);
+            if (!linkTitular || !linkAssinante) {
+                throw new Error('A Autentique criou o documento, mas não devolveu o link de cada signatário. Nada foi enviado — verifique o documento no painel dela antes de gerar outro.');
+            }
+
+            const encurtar = async (url, sufixo, titulo) => {
+                try {
+                    const r = await shortenLink(url, `tt${numero.slice(-6)}${sufixo}${Date.now().toString().slice(-4)}`, titulo);
+                    return r?.success && r.shortUrl ? r.shortUrl : url;
+                } catch (e) {
+                    console.warn('Falha ao encurtar link:', e);
+                    return url;
+                }
+            };
+            const curtoTitular = await encurtar(linkTitular, 't', `Transferência UC ${formData.numero_uc} - titular`);
+            const curtoAssinante = await encurtar(linkAssinante, 'a', `Transferência UC ${formData.numero_uc} - assinante`);
+
+            await supabase.from('signatures')
+                .update({ short_url: curtoAssinante, document_type: 'transferencia_titularidade' })
+                .eq('autentique_doc_id', result.documentId);
+
+            const envioTitular = await enviarLinkTermo(titularTermo, curtoTitular, 'titular');
+            const envioAssinante = await enviarLinkTermo(assinanteTermo, curtoAssinante, 'assinante');
+            const falhou = envioTitular.falhou || envioAssinante.falhou;
+            const resumo = `Titular — ${envioTitular.resumo}. Assinante — ${envioAssinante.resumo}.`;
+
+            showAlert(falhou ? `Termo criado, mas houve falha no envio. ${resumo}` : `Termo gerado e enviado. ${resumo}`, falhou ? 'warning' : 'success');
+            await addHistory('uc', consumerUnit.id,
+                `Termo de transferência de titularidade enviado para assinatura. ${resumo}`,
+                { tipo: 'transferencia_titularidade', document_name: fileName, autentique_doc_id: result.documentId, link_titular: curtoTitular, link_assinante: curtoAssinante, envio_titular: envioTitular, envio_assinante: envioAssinante });
+            carregarTermos();
+        } catch (e) {
+            console.error('Erro ao enviar termo de transferência:', e);
+            showAlert('Erro ao enviar termo: ' + e.message, 'error');
+        } finally {
+            setEnviandoTermo(false);
+        }
+    };
+
+    const cancelarTermo = async (sig) => {
+        const ok = await showConfirm('Cancelar este termo na Autentique? Os links deixam de valer e o documento é removido de lá. Não dá para desfazer.', 'Cancelar termo');
+        if (!ok) return;
+        setCancelandoTermo(sig.id);
+        try {
+            const res = await cancelAutentiqueDocument(sig.id);
+            if (res?.error) throw new Error(res.error);
+            showAlert(res?.jaCancelado ? 'Este termo já estava cancelado.' : 'Termo cancelado.', 'success');
+            // A função de cancelamento só registra histórico de fornecedor e
+            // de assinante; o da UC é registrado aqui.
+            if (!res?.jaCancelado) {
+                await addHistory('uc', consumerUnit.id,
+                    'Termo de transferência de titularidade cancelado na Autentique. Os links deixaram de valer.',
+                    { tipo: 'transferencia_titularidade', signature_id: sig.id, autentique_doc_id: sig.autentique_doc_id });
+            }
+            carregarTermos();
+        } catch (e) {
+            showAlert('Erro ao cancelar termo: ' + e.message, 'error');
+        } finally {
+            setCancelandoTermo(null);
+        }
+    };
 
     const addHistory = async (type, id, content, metadata = {}) => {
         try {
@@ -1043,7 +1265,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             { id: 'tecnico', label: 'Técnico', icon: Zap },
                             { id: 'faturas_contas', label: 'Faturas e Contas de Energia', icon: FileText },
                             { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
-                            { id: 'comunicados', label: 'Comunicados', icon: MessageSquare }
+                            { id: 'comunicados', label: 'Comunicados', icon: MessageSquare },
+                            { id: 'contrato', label: 'Contrato', icon: FileSignature }
                         ].map(tab => {
                             const isActive = activeTab === tab.id;
                             const Icon = tab.icon;
@@ -2679,6 +2902,122 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
                             )}
 
                             {/* Tab Content: Comunicados */}
+                            {activeTab === 'contrato' && (
+                                <div>
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                        <h4 style={{ margin: '0 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                            <FileSignature size={18} /> Termo de transferência de titularidade
+                                        </h4>
+                                        <p style={{ margin: '0 0 1rem 0', fontSize: '0.82rem', color: '#64748b' }}>
+                                            O titular da conta na distribuidora autoriza o assinante a transferir a UC para o próprio nome. O titular assina; o assinante assina como ciente de que a UC deixa de receber créditos e de que o compensado até a transferência continua devido.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
+                                            {[
+                                                { rotulo: 'UC', valor: formData.numero_uc || '—', detalhe: formData.concessionaria || '' },
+                                                { rotulo: 'Titular da conta (assina)', valor: titularTermo?.name || 'não informado', detalhe: titularTermo?.cpf_cnpj || 'Titular da Fatura, na aba Geral' },
+                                                { rotulo: 'Assinante (ciente)', valor: assinanteTermo?.name || 'não vinculado', detalhe: assinanteTermo?.cpf_cnpj || '' }
+                                            ].map(item => (
+                                                <div key={item.rotulo} style={{ padding: '0.8rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.rotulo}</div>
+                                                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', marginTop: '0.2rem' }}>{item.valor}</div>
+                                                    {item.detalhe && <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{item.detalhe}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {pendenciaTermo && (
+                                            <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.83rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
+                                                <AlertCircle size={18} style={{ flexShrink: 0 }} /> {pendenciaTermo}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', flexWrap: 'wrap' }}>
+                                                Minuta
+                                                {termoEditado && (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.2rem 0.6rem', borderRadius: '999px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '0.72rem', fontWeight: 700 }}>
+                                                        <AlertCircle size={13} /> editada à mão, não acompanha os cadastros
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                                {termoEditado && (
+                                                    <button type="button" onClick={() => setTermoDraft('')} style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                                        Descartar edições
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    disabled={gerandoTermo || enviandoTermo}
+                                                    onClick={gerarMinutaTermo}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoTermo || enviandoTermo ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoTermo || enviandoTermo ? 0.6 : 1 }}
+                                                >
+                                                    {gerandoTermo ? <><Loader2 size={15} className="spin-animation" /> Gerando...</> : <><RefreshCcw size={15} /> Gerar minuta</>}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={enviandoTermo || gerandoTermo || !!pendenciaTermo}
+                                                    onClick={enviarTermoTransferencia}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: enviandoTermo || pendenciaTermo ? '#94a3b8' : '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: enviandoTermo || gerandoTermo || pendenciaTermo ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+                                                >
+                                                    {enviandoTermo ? <><Loader2 size={16} className="spin-animation" /> Enviando...</> : <><Send size={16} /> Gerar e enviar</>}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            value={textoTermoAtual()}
+                                            onChange={e => setTermoDraft(e.target.value)}
+                                            spellCheck={false}
+                                            style={{ width: '100%', minHeight: '420px', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontFamily: 'Georgia, serif', fontSize: '0.85rem', lineHeight: 1.5, boxSizing: 'border-box', resize: 'vertical' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b' }}>Termos desta UC</h4>
+                                        {carregandoTermos ? (
+                                            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>Carregando...</p>
+                                        ) : assinaturasTermo.length === 0 ? (
+                                            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>Nenhum termo enviado para assinatura.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                                {assinaturasTermo.map(sig => {
+                                                    const rotuloStatus = { pending: 'Aguardando assinatura', signed: 'Assinado', rejected: 'Recusado', refused: 'Recusado', canceled: 'Cancelado', cancelled: 'Cancelado' }[sig.status] || sig.status;
+                                                    const corStatus = { pending: '#b45309', signed: '#047857', rejected: '#b91c1c', refused: '#b91c1c', canceled: '#64748b', cancelled: '#64748b' }[sig.status] || '#475569';
+                                                    const link = sig.short_url || sig.autentique_url;
+                                                    return (
+                                                        <div key={sig.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.8rem 1rem', border: '1px solid #f1f5f9', borderRadius: '10px', flexWrap: 'wrap' }}>
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem', wordBreak: 'break-all' }}>{sig.document_name || 'Termo de transferência'}</div>
+                                                                <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                                                    {new Date(sig.created_at).toLocaleString('pt-BR')} · <span style={{ color: corStatus, fontWeight: 700 }}>{rotuloStatus}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                                {link && (
+                                                                    <a href={link} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #bfdbfe', borderRadius: '10px', color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                                                                        <ExternalLink size={14} /> Abrir
+                                                                    </a>
+                                                                )}
+                                                                {sig.status === 'pending' && (
+                                                                    <button type="button" disabled={cancelandoTermo === sig.id} onClick={() => cancelarTermo(sig)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #fecaca', borderRadius: '10px', background: '#fef2f2', color: '#b91c1c', cursor: cancelandoTermo === sig.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                                        <Ban size={14} /> {cancelandoTermo === sig.id ? 'Cancelando...' : 'Cancelar'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {enviandoTermo && (
+                                        <ContratoTransferencia texto={textoTermoAtual()} branding={branding} />
+                                    )}
+                                </div>
+                            )}
+
                             {activeTab === 'comunicados' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', height: '100%' }}>
                                     {/* Left: WhatsApp Composer */}

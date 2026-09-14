@@ -16,6 +16,18 @@ const extractSigningLink = (signatures: any[]) => {
     return sigWithLink ? sigWithLink.link.short_link : null;
 };
 
+// Documento com mais de um signatário tem um link por pessoa. `url` segue
+// sendo o primeiro, para não mudar nada em quem já chama com um signatário
+// só; quem manda para vários lê `links` e entrega a cada um o seu.
+const extractAllLinks = (signatures: any[]) => {
+    if (!signatures || !Array.isArray(signatures)) return [];
+    return signatures.map(s => ({
+        name: s?.name ?? null,
+        public_id: s?.public_id ?? null,
+        short_link: s?.link?.short_link ?? null
+    }));
+};
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -158,7 +170,11 @@ serve(async (req) => {
 
         if (dbError) throw dbError;
 
-        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl, signingLinkFound: !!signingLink }), {
+        const links = extractAllLinks(
+            (docData.signatures || []).some((s: any) => s?.link?.short_link) ? docData.signatures : debugSignatures
+        );
+
+        return new Response(JSON.stringify({ success: true, documentId, url: finalUrl, signingLinkFound: !!signingLink, links }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
