@@ -97,6 +97,15 @@ const callFunction = async (name, payload) => {
     
     if (error) {
         let msg = error.message;
+        // "Failed to send a request to the Edge Function" é o supabase-js
+        // avisando que o fetch falhou antes de existir resposta. A causa real
+        // (rede, bloqueio do navegador, requisição recusada) vem em `context`;
+        // sem ela o erro na tela não diz o que aconteceu nem se vale tentar
+        // de novo.
+        if (error.name === 'FunctionsFetchError' && error.context?.message) {
+            const causa = error.context.name ? `${error.context.name}: ${error.context.message}` : error.context.message;
+            msg = `${msg} — ${causa}`;
+        }
         try {
             // Tenta extrair a mensagem de erro detalhada do corpo da resposta
             const body = await error.context?.json();
