@@ -435,6 +435,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [assinaturas, setAssinaturas] = useState([]);
     const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
     const [enviandoContrato, setEnviandoContrato] = useState(false);
+    const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [cancelandoAssinatura, setCancelandoAssinatura] = useState(null);
 
     const contratoAtual = CONTRATOS_USINA.find(c => c.tipo === tipoContrato) || CONTRATOS_USINA[0];
@@ -500,7 +501,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
      * então entra aqui convertido: o gerador aceita string, mas quem lê o
      * campo cru sem tirar o "R$" recebe NaN e imprime R$ 0,00.
      */
-    const valorInvestidoNumero = () => parseCurrency(formData.valor_investido);
+    // `paraNumero` e não `parseCurrency`: esta função roda durante a
+    // renderização (via `minutaEditada`, sempre que há rascunho), e
+    // `parseCurrency` só é declarada mil linhas abaixo. Chamá-la aqui era
+    // ReferenceError de zona morta — o modal inteiro ficava em branco ao
+    // editar a minuta ou ao clicar em "Gerar e enviar", que cria o rascunho
+    // antes de gerar o PDF.
+    const valorInvestidoNumero = () => {
+        const n = paraNumero(formData.valor_investido);
+        return Number.isFinite(n) ? n : 0;
+    };
 
     const opcoesContrato = () => ({ ...contractOpts, valorTotal: valorInvestidoNumero() });
 
@@ -524,6 +534,32 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             }
         }
         return gravar;
+    };
+
+    /**
+     * Refaz a minuta com o que está gravado agora.
+     *
+     * Fornecedores e áreas são lidos uma vez, quando o modal abre. Quem corrige
+     * o endereço do fornecedor ou o signatário da área em outra tela, com este
+     * modal aberto, continuava vendo a minuta antiga — e não havia como pedir
+     * outra sem fechar e reabrir. Descarta também o rascunho, que depois de um
+     * envio fica congelado no texto enviado.
+     */
+    const gerarMinutaUsina = async () => {
+        setGerandoMinuta(true);
+        try {
+            await Promise.all([
+                fetchSuppliers(),
+                carregarDadosContrato(usina?.id, formData.leased_area_id)
+            ]);
+            setContractDraft('');
+            showAlert('Minuta gerada com os dados atuais do cadastro.', 'success');
+        } catch (e) {
+            console.error('Erro ao gerar minuta da usina:', e);
+            showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
+        } finally {
+            setGerandoMinuta(false);
+        }
     };
 
     const enviarContratoUsina = async () => {
@@ -4620,7 +4656,15 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                 )}
                                                 <button
                                                     type="button"
-                                                    disabled={enviandoContrato}
+                                                    disabled={gerandoMinuta || enviandoContrato}
+                                                    onClick={gerarMinutaUsina}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoMinuta || enviandoContrato ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoMinuta || enviandoContrato ? 0.6 : 1 }}
+                                                >
+                                                    {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando...</> : <><RefreshCcw size={15} /> Gerar minuta</>}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={enviandoContrato || gerandoMinuta}
                                                     onClick={enviarContratoUsina}
                                                     style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', background: enviandoContrato ? '#94a3b8' : '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: enviandoContrato ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
                                                 >

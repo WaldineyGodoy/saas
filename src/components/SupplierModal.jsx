@@ -8,7 +8,7 @@ import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } 
 import {
     History, User, MapPin, Wallet, X, Save, Trash2,
     CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
-    FileSignature, Loader2, Send, ExternalLink, Clock, Ban
+    FileSignature, Loader2, Send, ExternalLink, Clock, Ban, RefreshCcw
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
@@ -59,6 +59,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [searchingCep, setSearchingCep] = useState(false);
     const [activeTab, setActiveTab] = useState('geral');
     const [usinas, setUsinas] = useState([]);
+    const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [ledgerEntries, setLedgerEntries] = useState([]);
     const [repasseOrigins, setRepasseOrigins] = useState({});
     const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -161,6 +162,31 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             setSignatureLink(supplier.signature_link || '');
         }
     }, [supplier]);
+
+    /**
+     * Refaz a minuta com o que está gravado e na tela agora.
+     *
+     * O botão antigo copiava o texto gerado para o rascunho: na tela nada
+     * mudava, e dali em diante a minuta congelava — alterar o cadastro não
+     * a atualizava mais, e aparecia "editada à mão" sem ninguém ter editado.
+     * Agora ele relê as usinas do Anexo II e descarta o rascunho, voltando a
+     * minuta a acompanhar os campos.
+     */
+    const gerarMinutaFornecedor = async () => {
+        setGerandoMinuta(true);
+        try {
+            // As condições da tela seguem valendo: passá-las como gravadas
+            // impede a releitura de trocar a Remuneração Recorrente digitada.
+            if (supplier?.id) await fetchLinkedUsinas(supplier.id, contractOpts);
+            setContractDraft('');
+            showAlert('Minuta gerada com os dados atuais do cadastro.', 'success');
+        } catch (e) {
+            console.error('Erro ao gerar minuta do fornecedor:', e);
+            showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
+        } finally {
+            setGerandoMinuta(false);
+        }
+    };
 
     const fetchLinkedUsinas = async (supplierId, termosGravados) => {
         // O Anexo II lista as usinas do contrato, então precisamos de mais que
@@ -2444,10 +2470,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     )}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setContractDraft(textoGerado)}
-                                                        style={{ padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
+                                                        disabled={gerandoMinuta || isCreatingContract}
+                                                        onClick={gerarMinutaFornecedor}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoMinuta || isCreatingContract ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoMinuta || isCreatingContract ? 0.6 : 1 }}
                                                     >
-                                                        Gerar minuta
+                                                        {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando…</> : <><RefreshCcw size={15} /> Gerar minuta</>}
                                                     </button>
                                                     <button
                                                         type="button"
