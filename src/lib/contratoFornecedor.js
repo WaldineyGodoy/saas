@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos — o
@@ -38,7 +38,16 @@ const enderecoSupplier = (s) => {
     const a = s?.address || {};
     const rua = a.logradouro || a.rua || '';
     const cidade = a.municipio || a.cidade || '';
-    return `${rua}, ${a.numero || ''} ${a.complemento || ''} - ${a.bairro || ''}, ${cidade}/${a.uf || ''}, CEP ${a.cep || ''}`;
+    // Só entra o que existe: com campo vazio, a versão antiga imprimia
+    // ",   - , /, CEP " no lugar do endereço.
+    const partes = [
+        [rua, a.numero].filter(Boolean).join(', '),
+        a.complemento,
+        a.bairro,
+        [cidade, a.uf].filter(Boolean).join('/'),
+        a.cep ? `CEP ${a.cep}` : ''
+    ].filter(Boolean);
+    return partes.join(' - ') || '_______________';
 };
 
 /** Anexo II: uma linha por usina vinculada ao fornecedor. */
@@ -96,9 +105,9 @@ export const montarTextoContratoFornecedor = (supplier, usinas = [], opts = {}) 
 
     return `CONTRATO DE ADMINISTRAÇÃO E GESTÃO DE CRÉDITOS ENERGÉTICOS
 
-(I). GESTORA: ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07, com sede na Praça Apolinário Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, neste ato representada na forma do seu Estatuto Social por seu presidente ("GESTORA");
+(I). GESTORA: ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07, com sede na Praça Apolinário Barbosa, 86, 1º andar – Centro, Caraí/MG, CEP 39810-000, neste ato representada na forma do seu Estatuto Social por seu presidente ("GESTORA");
 
-(II). CONTRATANTE: ${supplier?.name || ''}, CNPJ/CPF ${supplier?.cnpj || ''}, com sede/endereço em ${enderecoSupplier(supplier)}, neste ato representada por ${supplier?.legal_partner_name || '_______________'}, CPF ${supplier?.legal_partner_cpf || '_______________'}, proprietária da(s) central(is) geradora(s) descrita(s) no Anexo II ("CONTRATANTE").
+(II). CONTRATANTE: ${qualificaParte({ nome: supplier?.name, doc: supplier?.cnpj, endereco: enderecoSupplier(supplier), representante: supplier?.legal_partner_name, representanteCpf: supplier?.legal_partner_cpf })}, proprietário(a) da(s) central(is) geradora(s) descrita(s) no Anexo II ("CONTRATANTE").
 
 CAPÍTULO I — DO OBJETO E DA NATUREZA
 
@@ -231,11 +240,7 @@ ANEXO II — CENTRAIS GERADORAS
 ${tabelaUsinas(usinas)}
 
 ANEXO III — PROCURAÇÃO PARA LIBERAÇÃO DE ACESSO
-Autorização de acesso ao portal de Geração Distribuída da ${distribuidora} e à rede de agências presenciais, em nome do CONTRATANTE, ao preposto indicado pela GESTORA.
-- Preposto: ${p.prepostoNome || '_______________'} — CPF ${p.prepostoCpf || '_______________'}
-- Perfil: ( X ) consultor  (   ) projetista
-- Tipo: ( X ) completo  (   ) restrito
-- Validade: ( X ) indeterminado, revogável a qualquer tempo mediante comunicação escrita
+Firmada pelo CONTRATANTE em instrumento próprio, autorizando o acesso ao portal de Geração Distribuída da ${distribuidora} e à rede de agências presenciais, em seu nome, ao preposto indicado pela GESTORA.
 
 E, por estarem justas e contratadas, as Partes assinam eletronicamente o presente Contrato, na presença das testemunhas abaixo.
 
@@ -247,7 +252,7 @@ CNPJ 64.561.352/0001-07 — Presidente
 
 ________________________________________
 ${supplier?.name || ''}
-CNPJ/CPF ${supplier?.cnpj || ''} — Contratante
+${rotuloDocumento(supplier?.cnpj)} ${supplier?.cnpj || '_______________'} — Contratante
 
 TESTEMUNHAS:
 

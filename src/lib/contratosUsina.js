@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento } from './contratoBase';
 
 /**
  * Os três contratos que existem por USINA, e não por fornecedor: compra e
@@ -107,14 +107,14 @@ const arrendantesDe = (area) => {
 const nomesArrendantes = (area) => {
     const lista = arrendantesDe(area);
     if (!lista.length) return `${ou(null)}, CPF/CNPJ ${ou(null)}`;
-    return lista.map(b => `${ou(b.nome)}, CPF/CNPJ ${ou(b.doc)}`).join('; ');
+    return lista.map(b => `${ou(b.nome)}, ${rotuloDocumento(b.doc)} ${ou(b.doc)}`).join('; ');
 };
 
 const qualificaArrendantes = (area) => {
     const lista = arrendantesDe(area);
-    if (!lista.length) return `${ou(null)}, CPF/CNPJ ${ou(null)}, residente/sediado em ${ou(null)}`;
+    if (!lista.length) return qualificaParte();
     return lista
-        .map(b => `${ou(b.nome)}, CPF/CNPJ ${ou(b.doc)}, residente/sediado em ${enderecoDe({ address: b.endereco })}`)
+        .map(b => qualificaParte({ nome: b.nome, doc: b.doc, endereco: enderecoDe({ address: b.endereco }) }))
         .join('; ');
 };
 
@@ -126,12 +126,18 @@ const blocoAssinaturas = (area, papel) => {
     // Um bloco por arrendante: terra com dois donos tem duas assinaturas, e
     // uma linha só deixaria um deles de fora do documento.
     return assinantes
-        .map(b => [LINHA_ASSINATURA, ou(b.nome), `CPF/CNPJ ${ou(b.doc)} — ${papel}`].join('\n'))
+        .map(b => [LINHA_ASSINATURA, ou(b.nome), `${rotuloDocumento(b.doc)} ${ou(b.doc)} — ${papel}`].join('\n'))
         .join('\n\n');
 };
 
 const qualificaInvestidor = (supplier) =>
-    `${ou(supplier?.name)}, CNPJ/CPF ${ou(supplier?.cnpj)}, com sede/endereço em ${enderecoDe(supplier)}, neste ato representada por ${ou(supplier?.legal_partner_name)}, CPF ${ou(supplier?.legal_partner_cpf)}`;
+    qualificaParte({
+        nome: supplier?.name,
+        doc: supplier?.cnpj,
+        endereco: enderecoDe(supplier),
+        representante: supplier?.legal_partner_name,
+        representanteCpf: supplier?.legal_partner_cpf
+    });
 
 // ============================================================
 // 1. COMPRA E VENDA
@@ -164,14 +170,24 @@ export const montarCompraVenda = ({ usina, supplier, area } = {}, opts = {}) => 
 
     const proprietario = nomesArrendantes(area);
 
+    // O proprietário da área só assina o compra e venda quando outorga opção
+    // de compra do imóvel (Cláusula 15). Sem opção, a relação com a terra vive
+    // inteira no Contrato de Arrendamento, e trazê-lo para cá punha no
+    // documento um signatário que nada assume nele — com o dado que estiver
+    // no cadastro da área, inclusive o provisório.
+    const temInterveniente = precoOpcao > 0;
+    const blocoInterveniente = temInterveniente
+        ? `
+(III). INTERVENIENTE ANUENTE: ${proprietario}, proprietário da área descrita na Cláusula 14, que comparece exclusivamente para os fins da Cláusula 15.
+`
+        : '';
+
     return `CONTRATO DE COMPRA E VENDA DE USINA FOTOVOLTAICA E PRESTAÇÃO DE SERVIÇOS DE IMPLANTAÇÃO
 
 (I). CONTRATADA: ${B2W_PROJETOS}, neste ato representada na forma de seu contrato social ("CONTRATADA" ou "B2W PROJETOS");
 
 (II). CONTRATANTE: ${qualificaInvestidor(supplier)} ("CONTRATANTE" ou "INVESTIDOR");
-
-(III). INTERVENIENTE ANUENTE: ${proprietario}, proprietário da área descrita na Cláusula 14, que comparece exclusivamente para os fins das Cláusulas 14 e 15.
-
+${blocoInterveniente}
 CAPÍTULO I — OBJETO E DEFINIÇÕES
 
 CLÁUSULA 1 – DO OBJETO
@@ -252,7 +268,7 @@ CLÁUSULA 13 – DOS CUSTOS OPERACIONAIS
 CAPÍTULO V — ÁREA, O&M E SEGURO
 
 CLÁUSULA 14 – DO ARRENDAMENTO DA ÁREA
-14.1. A usina será instalada em área de ${areaM2 ? `${numeroBr(areaM2)} m²` : '_______ m²'} objeto de Contrato de Arrendamento celebrado entre o INVESTIDOR e o INTERVENIENTE ANUENTE, que integra este instrumento como Anexo II.
+14.1. A usina será instalada em área de ${areaM2 ? `${numeroBr(areaM2)} m²` : '_______ m²'} objeto de Contrato de Arrendamento celebrado entre o INVESTIDOR e o proprietário da área, que integra este instrumento como Anexo II.
 14.2. Valor do arrendamento: ${aluguel ? `R$ ${moeda(aluguel)}` : 'R$ _______'} mensais, reajustados anualmente na forma do respectivo contrato. Prazo: 10 (dez) anos, renovável por igual período.
 14.3. O INVESTIDOR declara ter recebido e lido o Contrato de Arrendamento, inclusive suas cláusulas de multa rescisória, de vigência em caso de alienação e de propriedade da usina, antes da assinatura deste.
 14.4. Declaração de parte relacionada. O INVESTIDOR declara ciência de que a área é de propriedade de sócio ou pessoa ligada ao GRUPO B2W, e que as condições praticadas correspondem a valores de mercado para a região e finalidade.
@@ -311,7 +327,7 @@ CLÁUSULA 25 – DA ASSINATURA ELETRÔNICA
 25.1. As Partes reconhecem a validade da assinatura eletrônica, nos termos da MP nº 2.200-2/2001 e da Lei nº 14.063/2020, aceitando como prova os registros de auditoria da plataforma utilizada.
 
 CLÁUSULA 26 – DOS ANEXOS
-Integram este Contrato: Anexo I — Contrato de Administração e Gestão de Créditos Energéticos, se contratado; Anexo II — Contrato de Arrendamento de Área; Anexo III — Contrato de O&M, se contratado; Anexo IV — Memorial descritivo e cronograma físico; Anexo V — Procuração para representação junto à DISTRIBUIDORA.
+Integram este Contrato: Anexo I — Contrato de Administração e Gestão de Créditos Energéticos, se contratado; Anexo II — Contrato de Arrendamento de Área; Anexo III — Contrato de O&M, se contratado; Anexo IV — Memorial descritivo e cronograma físico; Anexo V — Procuração para representação junto à DISTRIBUIDORA, firmada pelo INVESTIDOR em instrumento próprio.
 
 CLÁUSULA 27 – DO FORO
 27.1. Fica eleito o foro da comarca de ${foro}, com renúncia a qualquer outro, por mais privilegiado que seja.
@@ -320,29 +336,19 @@ ${cidadeUfDe(usina)}, ${dataPorExtenso()}.
 
 ________________________________________
 ${ou(supplier?.name)}
-CNPJ/CPF ${ou(supplier?.cnpj)} — Contratante
+${rotuloDocumento(supplier?.cnpj)} ${ou(supplier?.cnpj)} — Contratante
 
 ________________________________________
 B2W PROJETOS & SOLUÇÕES SOLARES LTDA
 CNPJ 34.999.115/0002-34 — Contratada
 
-${blocoAssinaturas(area, 'Interveniente Anuente')}
+${temInterveniente ? `${blocoAssinaturas(area, 'Interveniente Anuente')}
 
-TESTEMUNHAS:
+` : ''}TESTEMUNHAS:
 
 1. ______________________________  Nome: __________________  CPF: ______________
 
-2. ______________________________  Nome: __________________  CPF: ______________
-
-ANEXO V — PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO À DISTRIBUIDORA
-${ou(supplier?.name)}, CNPJ/CPF ${ou(supplier?.cnpj)}, autoriza o acesso ao portal de Geração Distribuída da ${distribuidora} e à rede de agências presenciais, para solicitar serviços e acessar informações necessárias à prestação dos serviços contratados, ao preposto abaixo:
-- Preposto: ${ou(p.prepostoNome)} — CPF ${ou(p.prepostoCpf)}
-- Perfil: ( X ) consultor  (   ) projetista
-- Tipo: ( X ) completo  (   ) restrito
-- Validade: ( X ) indeterminado, revogável a qualquer tempo mediante comunicação escrita
-
-________________________________________
-${ou(supplier?.name)} — CNPJ/CPF ${ou(supplier?.cnpj)}`;
+2. ______________________________  Nome: __________________  CPF: ______________`;
 };
 
 // ============================================================
@@ -438,7 +444,7 @@ ${blocoAssinaturas(area, 'Arrendante')}
 
 ________________________________________
 ${ou(supplier?.name)}
-CNPJ/CPF ${ou(supplier?.cnpj)} — Arrendatário
+${rotuloDocumento(supplier?.cnpj)} ${ou(supplier?.cnpj)} — Arrendatário
 
 TESTEMUNHAS:
 
@@ -537,7 +543,7 @@ ${cidadeUfDe(usina)}, ${dataPorExtenso()}.
 
 ________________________________________
 ${ou(supplier?.name)}
-CNPJ/CPF ${ou(supplier?.cnpj)} — Contratante
+${rotuloDocumento(supplier?.cnpj)} ${ou(supplier?.cnpj)} — Contratante
 
 ________________________________________
 B2W PROJETOS & SOLUÇÕES SOLARES LTDA

@@ -442,7 +442,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const carregarDadosContrato = useCallback(async (usinaId, leasedAreaId) => {
         try {
             const [{ data: areas }, { data: om }] = await Promise.all([
-                supabase.from('leased_areas').select('*').order('nome'),
+                // Quem assina é o beneficiário marcado para assinar, não o
+                // campo legado `arrendante_nome`. Sem os beneficiários na
+                // consulta, o gerador caía no legado e imprimia o arrendante
+                // provisório da área em vez do signatário real.
+                supabase.from('leased_areas')
+                    .select('*, beneficiarios:leased_area_beneficiaries(nome, doc, tipo, assina_contrato, ativo, endereco)')
+                    .order('nome'),
                 supabase.from('service_defaults').select('valores').eq('codigo', 'om').maybeSingle()
             ]);
             setAreasDisponiveis(areas || []);
@@ -1510,7 +1516,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     };
 
     const fetchSuppliers = async () => {
-        const { data } = await supabase.from('suppliers').select('id, name, phone, cnpj, email').order('name');
+        // Endereço e representante entram na qualificação do contratante nos
+        // três contratos da usina; sem eles a minuta saía com lacunas para
+        // dados que já estão no cadastro do fornecedor.
+        const { data } = await supabase
+            .from('suppliers')
+            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')
+            .order('name');
         setSuppliers(data || []);
     };
 

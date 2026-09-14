@@ -82,6 +82,42 @@ export const numeroBr = (n) => {
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
+const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '');
+
+const lacuna = (valor, alternativa = '_______________') => String(valor ?? '').trim() || alternativa;
+
+/**
+ * "CPF" ou "CNPJ" conforme o documento, pelo número de dígitos.
+ *
+ * O cadastro guarda os dois no mesmo campo (`suppliers.cnpj`, `doc`), e o
+ * contrato imprimia "CNPJ/CPF" para todo mundo — inclusive para quem tem só
+ * um dos dois. Documento em branco continua ambíguo, porque ainda não se sabe.
+ */
+export const rotuloDocumento = (doc) => {
+    const digitos = soDigitos(doc).length;
+    if (digitos === 11) return 'CPF';
+    if (digitos === 14) return 'CNPJ';
+    return 'CPF/CNPJ';
+};
+
+/**
+ * Qualificação de uma parte no preâmbulo, na forma certa para quem ela é.
+ *
+ * Pessoa física não tem sede nem é "representada por" ninguém: o texto único
+ * de antes saía com "neste ato representada por ____, CPF ____" para um
+ * investidor pessoa física, duas lacunas que ninguém consegue preencher.
+ */
+export const qualificaParte = ({ nome, doc, endereco, representante, representanteCpf } = {}) => {
+    const tipo = rotuloDocumento(doc);
+    if (tipo === 'CPF') {
+        return `${lacuna(nome)}, pessoa física, inscrito(a) no CPF sob o nº ${lacuna(doc)}, residente e domiciliado(a) em ${lacuna(endereco)}`;
+    }
+    if (tipo === 'CNPJ') {
+        return `${lacuna(nome)}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${lacuna(doc)}, com sede em ${lacuna(endereco)}, neste ato representada por ${lacuna(representante)}, CPF ${lacuna(representanteCpf)}`;
+    }
+    return `${lacuna(nome)}, inscrito(a) no CPF/CNPJ sob o nº ${lacuna(doc)}, com endereço em ${lacuna(endereco)}, representado(a), se pessoa jurídica, por ${lacuna(representante)}, CPF ${lacuna(representanteCpf)}`;
+};
+
 export const dataPorExtenso = (data = new Date()) =>
     `${data.getDate()} de ${MESES[data.getMonth()]} de ${data.getFullYear()}`;
 
