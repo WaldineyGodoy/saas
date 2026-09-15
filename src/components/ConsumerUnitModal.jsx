@@ -1117,7 +1117,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
             'pendente': isPastDue 
                 ? { color: '#dc2626', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle }
                 : { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer', icon: Clock },
-            'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Erro', icon: AlertCircle },
+            'erro': { color: '#991b1b', bg: '#fef2f2', label: 'Indisponível', icon: AlertCircle },
             'parcelada': { color: '#ca8a04', bg: '#fef9c3', label: 'Parcelado', icon: Info },
             'contestada': { color: '#7c3aed', bg: '#f3e8ff', label: 'Contestado', icon: Ban }
         };

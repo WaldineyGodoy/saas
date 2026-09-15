@@ -1287,7 +1287,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             'pendente': isPastDue 
                                                 ? { color: '#dc2626', label: 'ATRASADA', bg: '#fee2e2' }
                                                 : { color: '#2563eb', label: 'A VENCER', bg: '#eff6ff' },
-                                            'erro': { color: '#991b1b', label: 'ERRO PAGAMENTO', bg: '#fef2f2' },
+                                            'erro': { color: '#991b1b', label: 'INDISPONÍVEL', bg: '#fef2f2' },
                                             'parcelada': { color: '#ca8a04', label: 'PARCELADA', bg: '#fef9c3' },
                                             'contestada': { color: '#7c3aed', label: 'CONTESTADA', bg: '#f3e8ff' }
                                         };

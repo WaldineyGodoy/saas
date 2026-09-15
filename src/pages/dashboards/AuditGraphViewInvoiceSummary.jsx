@@ -1839,14 +1839,14 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
     try {
       if (inc.type === 'duplicate_bill' || inc.type === 'duplicate_ref' || inc.type === 'billing_error') {
-        // Mock update: For critical errors, we either mark as 'erro' status or settle
+        // 'erro' é reservado para conta indisponível (leitura falhou); conta com valor errado é 'inconsistente'
         const { error } = await supabase
           .from('invoices')
-          .update({ energy_bill_status: 'erro' })
+          .update({ energy_bill_status: 'inconsistente' })
           .eq('id', inc.invoice_id);
 
         if (error) throw error;
-        showAlert('Fatura sinalizada com "ERRO" no CRM para auditoria manual.', 'success');
+        showAlert('Conta sinalizada como "INCONSISTENTE" no CRM para auditoria manual.', 'success');
       } else if (inc.type === 'overlap' || inc.type === 'no_compensation') {
         // Trigger simulated scraping check
         const { error } = await supabase

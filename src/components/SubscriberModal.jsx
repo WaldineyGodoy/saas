@@ -2350,7 +2350,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                 
                                                 switch (uc.last_scraping_status) {
                                                     case 'success': return { icon: <CheckCircle size={14} />, color: '#10b981', label: 'Sucesso' };
-                                                    case 'error': return { icon: <AlertCircle size={14} />, color: '#ef4444', label: 'Erro' };
+                                                    case 'error': return { icon: <AlertCircle size={14} />, color: '#ef4444', label: 'Indisponível' };
                                                     case 'processing': return { icon: <RefreshCw size={14} className="spin" />, color: '#3b82f6', label: 'Lendo...' };
                                                     default: return { icon: <Clock size={14} />, color: '#94a3b8', label: 'Pendente' };
                                                 }
