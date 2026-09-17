@@ -184,8 +184,8 @@ export const identificadorDocumento = (texto = '') => {
     return `${fnv(0x811c9dc5)}-${fnv(0x1000193)}`;
 };
 
-/** Caracteres que cabem numa linha justificada de 170mm em serif 11pt. */
-const CARACTERES_POR_LINHA = 95;
+/** Caracteres que cabem numa linha justificada de 170mm em serif 10pt. */
+const CARACTERES_POR_LINHA = 104;
 
 /**
  * Altura de um trecho, contada em linhas renderizadas.
@@ -209,13 +209,15 @@ const alturaEmLinhas = (trecho) =>
  * parecia bastar até as folhas cheias de alíneas ("(a) ...", "(b) ...")
  * estourarem o A4 com metade do texto de uma folha de parágrafos corridos:
  * uma alínea curta ocupa uma linha inteira na mesma altura de uma linha
- * cheia. O limite de 30 e os 95 caracteres por linha foram medidos no
- * layout real (A4, margem de 20mm, serif 11pt, entrelinha 1.5).
+ * cheia. O limite de 32 e os 104 caracteres por linha foram medidos no
+ * layout real (A4, margem de 20mm, serif 10pt, entrelinha 1.5), folha a
+ * folha: a 32 nenhuma das seis peças passa dos 297mm; a 33 a primeira
+ * folha estoura, porque ela carrega também o título em destaque.
  *
  * @param texto           corpo do contrato
  * @param linhasPorPagina linhas úteis por folha, já descontados logo e rodapé
  */
-export const paginarTexto = (texto, linhasPorPagina = 30) => {
+export const paginarTexto = (texto, linhasPorPagina = 32) => {
     if (!texto) return [''];
 
     // Cada bloco começa num cabeçalho de cláusula/capítulo, ou é o preâmbulo.
@@ -324,6 +326,6 @@ export const baixarPdfContrato = async (seletor, nomeArquivo) => {
 
 /** Estilos das folhas. Ficam aqui, e não no componente, porque o
  *  react-refresh exige que um módulo de componente exporte só componentes. */
-export const corpoContrato = { whiteSpace: 'pre-wrap', fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify' };
+export const corpoContrato = { whiteSpace: 'pre-wrap', fontSize: '10pt', lineHeight: '1.5', textAlign: 'justify' };
 
 export const tituloContrato = { fontSize: '20px', textAlign: 'center', marginBottom: '10mm', fontWeight: 'bold', textTransform: 'uppercase', color: '#003366' };
