@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
+import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos — o
@@ -264,3 +264,7 @@ TESTEMUNHAS:
 export const dividirEmPaginasFornecedor = (texto) => paginarTexto(texto);
 
 export const gerarPdfContratoFornecedorBase64 = () => gerarPdfBase64('[data-contract="fornecedor"]');
+
+/** Baixa a minuta em PDF, para análise antes de mandar assinar. */
+export const baixarPdfContratoFornecedor = (nomeArquivo) =>
+    baixarPdfContrato('[data-contract="fornecedor"]', nomeArquivo);

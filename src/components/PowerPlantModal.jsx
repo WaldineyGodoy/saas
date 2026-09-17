@@ -441,7 +441,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const contratoAtual = CONTRATOS_USINA.find(c => c.tipo === tipoContrato) || CONTRATOS_USINA[0];
 
     const carregarDadosContrato = useCallback(async (usinaId, leasedAreaId) => {
-        let frescos = {};
         try {
             const [{ data: areas }, { data: om }] = await Promise.all([
                 // Quem assina é o beneficiário marcado para assinar, não o
@@ -453,14 +452,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     .order('nome'),
                 supabase.from('service_defaults').select('valores').eq('codigo', 'om').maybeSingle()
             ]);
-            const area = (areas || []).find(a => a.id === leasedAreaId) || null;
-            const servico = om?.valores || null;
             setAreasDisponiveis(areas || []);
-            setAreaArrendada(area);
-            setServicoOM(servico);
-            frescos = { area, servicoOM: servico };
+            setAreaArrendada((areas || []).find(a => a.id === leasedAreaId) || null);
+            setServicoOM(om?.valores || null);
 
-            if (!usinaId) return frescos;
+            if (!usinaId) return;
             setCarregandoAssinaturas(true);
             const { data: sigs } = await supabase
                 .from('signatures')
@@ -473,7 +469,6 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         } finally {
             setCarregandoAssinaturas(false);
         }
-        return frescos;
     }, []);
 
     useEffect(() => {
@@ -492,13 +487,11 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     }, [usina?.id, usina?.contract_terms]);
 
-    // `frescos` entra quando o cadastro acabou de ser relido no mesmo clique:
-    // o estado do React ainda é o anterior, e a minuta sairia com o dado velho.
-    const contextoContrato = (frescos = {}) => ({
+    const contextoContrato = () => ({
         usina: { ...usina, ...formData, address: { rua: formData.rua, numero: formData.numero, bairro: formData.bairro, cidade: formData.cidade, uf: formData.uf, cep: formData.cep } },
-        supplier: (frescos.suppliers || suppliers).find(f => f.id === formData.supplier_id) || null,
-        area: frescos.area !== undefined ? frescos.area : areaArrendada,
-        servicoOM: frescos.servicoOM !== undefined ? frescos.servicoOM : servicoOM
+        supplier: suppliers.find(f => f.id === formData.supplier_id) || null,
+        area: areaArrendada,
+        servicoOM
     });
 
     /**
@@ -563,32 +556,39 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
      * nada disso chegava ao banco — ao fechar o modal a minuta voltava ao
      * texto automático. Agora a edição manda: ela vai para
      * `contract_terms.minutas[tipo]`, volta ao reabrir o modal e é o que sai
-     * no PDF de análise. Para voltar ao texto automático existe "Descartar
+     * no PDF e na Autentique. Para voltar ao automático existe "Descartar
      * edições".
      *
-     * Sem edição à mão, a minuta é refeita com o cadastro de agora: quem
-     * corrigiu o endereço do fornecedor em outra tela vê a correção sem
-     * precisar fechar e reabrir o modal.
+     * Sem edição à mão nada é gravado em `minutas`, e a minuta é refeita com
+     * o cadastro de agora: quem corrigiu o endereço do fornecedor em outra
+     * tela vê a correção sem precisar fechar e reabrir o modal.
      */
     const gerarMinutaUsina = async () => {
         if (!usina?.id) { showAlert('Salve a usina antes de gerar a minuta.', 'warning'); return; }
 
         setGerandoMinuta(true);
         try {
-            let texto = textoContratoAtual();
-            if (!minutaEditada) {
-                const [listaFornecedores, dadosContrato] = await Promise.all([
+            const editada = minutaEditada;
+            const texto = textoContratoAtual();
+
+            if (editada) {
+                setContractDraft(texto);
+            } else {
+                // O texto se refaz sozinho na renderização seguinte, com o
+                // cadastro recém-lido — e é ele que a folha do PDF imprime.
+                await Promise.all([
                     fetchSuppliers(),
                     carregarDadosContrato(usina.id, formData.leased_area_id)
                 ]);
-                texto = contratoAtual.montar(
-                    contextoContrato({ suppliers: listaFornecedores, ...dadosContrato }),
-                    opcoesContrato()
-                );
+                setContractDraft('');
             }
-            setContractDraft(texto);
 
-            const minutas = { ...(contractOpts.minutas || {}), [tipoContrato]: texto };
+            // Só minuta escrita à mão é gravada. Guardar uma cópia do texto
+            // automático congelaria o contrato: ele pararia de acompanhar os
+            // campos, e apareceria "editada à mão" sem ninguém ter editado.
+            const minutas = { ...(contractOpts.minutas || {}) };
+            if (editada) minutas[tipoContrato] = texto;
+
             const { error } = await supabase.from('usinas')
                 .update({ ...montarPayloadUsina(), contract_terms: { ...condicoesParaGravar(), minutas } })
                 .eq('id', usina.id);
@@ -598,7 +598,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             const arquivo = `${contratoAtual.rotulo.replace(/\s+/g, '_')}_${(formData.name || 'usina').replace(/\s+/g, '_')}_MINUTA.pdf`;
             await baixarPdfContratoUsina(arquivo);
 
-            showAlert('Minuta salva na usina e PDF baixado para análise.', 'success');
+            showAlert(editada
+                ? 'Minuta editada salva na usina e PDF baixado para análise.'
+                : 'Minuta refeita com o cadastro atual e PDF baixado para análise.', 'success');
         } catch (e) {
             console.error('Erro ao gerar minuta da usina:', e);
             showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
@@ -1621,9 +1623,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')
             .order('name');
         setSuppliers(data || []);
-        // Devolve a lista porque quem chama no mesmo clique ainda enxerga
-        // o estado antigo: `setSuppliers` só vale na renderização seguinte.
-        return data || [];
     };
 
     const fetchSubscribers = async () => {

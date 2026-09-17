@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoFornecedor from './ContratoFornecedor';
-import { DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
+import { baixarPdfContratoFornecedor, DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
 import { numeroBr, paraNumero } from '../lib/contratoBase';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -164,27 +164,77 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     }, [supplier]);
 
     /**
-     * Refaz a minuta com o que está gravado e na tela agora.
+     * Grava a minuta como ela está na tela, salva o fornecedor e baixa o PDF.
      *
-     * O botão antigo copiava o texto gerado para o rascunho: na tela nada
-     * mudava, e dali em diante a minuta congelava — alterar o cadastro não
-     * a atualizava mais, e aparecia "editada à mão" sem ninguém ter editado.
-     * Agora ele relê as usinas do Anexo II e descarta o rascunho, voltando a
-     * minuta a acompanhar os campos.
+     * O botão antigo só refazia o texto e jogava fora o rascunho: quem
+     * reescrevia uma cláusula à mão e clicava aqui perdia a edição, e nada
+     * disso chegava ao banco — ao fechar o modal a minuta voltava ao texto
+     * automático. Agora a edição manda: vai para
+     * `contract_terms.minutas.gestao`, volta ao reabrir o modal e é o que sai
+     * no PDF e na Autentique. Para voltar ao automático existe "Descartar
+     * edições".
+     *
+     * Sem edição à mão nada é gravado em `minutas`, e as usinas do Anexo II
+     * são relidas antes de montar o texto. As condições da tela seguem
+     * valendo: passá-las como gravadas impede a releitura de trocar a
+     * Remuneração Recorrente digitada.
      */
     const gerarMinutaFornecedor = async () => {
+        if (!supplier?.id) { showAlert('Salve o fornecedor antes de gerar a minuta.', 'warning'); return; }
+
         setGerandoMinuta(true);
         try {
-            // As condições da tela seguem valendo: passá-las como gravadas
-            // impede a releitura de trocar a Remuneração Recorrente digitada.
-            if (supplier?.id) await fetchLinkedUsinas(supplier.id, contractOpts);
-            setContractDraft('');
-            showAlert('Minuta gerada com os dados atuais do cadastro.', 'success');
+            const editada = minutaEditada;
+            const texto = textoContratoAtual();
+
+            if (editada) {
+                setContractDraft(texto);
+            } else {
+                // O texto se refaz sozinho na renderização seguinte, com o
+                // cadastro recém-lido — e é ele que a folha do PDF imprime.
+                await fetchLinkedUsinas(supplier.id, contractOpts);
+                setContractDraft('');
+            }
+
+            // Só minuta escrita à mão é gravada. Guardar uma cópia do texto
+            // automático congelaria o contrato: ele pararia de acompanhar os
+            // campos, e apareceria "editada à mão" sem ninguém ter editado.
+            const minutas = { ...(contractOpts.minutas || {}) };
+            if (editada) minutas.gestao = texto;
+
+            const { error } = await supabase.from('suppliers')
+                .update({ ...montarPayloadFornecedor(), contract_terms: { ...condicoesParaGravar(), minutas } })
+                .eq('id', supplier.id);
+            if (error) throw error;
+            setContractOpts(prev => ({ ...prev, minutas }));
+
+            const arquivo = `Contrato_de_Gestao_${(formData.name || 'fornecedor').replace(/\s+/g, '_')}_MINUTA.pdf`;
+            await baixarPdfContratoFornecedor(arquivo);
+
+            showAlert(editada
+                ? 'Minuta editada salva no fornecedor e PDF baixado para análise.'
+                : 'Minuta refeita com o cadastro atual e PDF baixado para análise.', 'success');
         } catch (e) {
             console.error('Erro ao gerar minuta do fornecedor:', e);
             showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
         } finally {
             setGerandoMinuta(false);
+        }
+    };
+
+    /** Joga fora a minuta editada — a da tela e a gravada — e volta ao automático. */
+    const descartarEdicoesMinuta = async () => {
+        const minutas = { ...(contractOpts.minutas || {}) };
+        delete minutas.gestao;
+        setContractDraft('');
+        setContractOpts(prev => ({ ...prev, minutas }));
+        if (!supplier?.id) return;
+        try {
+            await supabase.from('suppliers')
+                .update({ contract_terms: { ...condicoesParaGravar(), minutas } })
+                .eq('id', supplier.id);
+        } catch (e) {
+            console.error('Erro ao descartar a minuta salva:', e);
         }
     };
 
@@ -257,16 +307,22 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         [supplier, formData, usinas, contractOpts]
     );
 
-    const textoContratoAtual = () => contractDraft || textoGerado;
+    /** A minuta gravada no banco, se alguém já editou e salvou uma. */
+    const minutaSalva = () => (contractOpts.minutas || {}).gestao || '';
+
+    // Ordem de precedência: o que está sendo digitado agora, depois a minuta
+    // gravada, e por último o texto montado a partir dos campos.
+    const textoContratoAtual = () => contractDraft || minutaSalva() || textoGerado;
 
     /**
      * A minuta na tela não é mais a que os campos produzem.
      *
-     * Só acontece quando alguém digita no textarea: trocar uma condição
-     * limpa o rascunho. Mas, enquanto durar, a minuta ignora os campos — e
-     * sem aviso isso se parece exatamente com "o campo não salvou".
+     * Vale tanto para o que está sendo digitado agora quanto para a minuta
+     * gravada por um "Gerar minuta" anterior. Enquanto durar, a minuta
+     * ignora os campos — e sem aviso isso se parece exatamente com "o campo
+     * não salvou".
      */
-    const minutaEditada = contractDraft !== '' && contractDraft !== textoGerado;
+    const minutaEditada = textoContratoAtual() !== textoGerado;
 
     /**
      * Condições no formato que vai para o banco.
@@ -281,6 +337,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         for (const campo of CAMPOS_CONDICOES) {
             const n = paraNumero(contractOpts[campo.key]);
             if (Number.isFinite(n)) gravar[campo.key] = n;
+        }
+        // A minuta editada à mão não está em CAMPOS_CONDICOES e seria apagada
+        // pelo botão Salvar, que reescreve `contract_terms` inteiro.
+        if (contractOpts.minutas && Object.keys(contractOpts.minutas).length) {
+            gravar.minutas = contractOpts.minutas;
         }
         return gravar;
     };
@@ -1074,6 +1135,37 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         }));
     };
 
+    /**
+     * O registro do fornecedor como ele vai ao banco.
+     *
+     * Mora fora do `handleSubmit` porque "Gerar minuta" também grava o
+     * fornecedor, e duas listas de campos em paralelo envelheceriam
+     * separadas.
+     */
+    const montarPayloadFornecedor = () => ({
+        name: formData.name,
+        cnpj: formData.cnpj,
+        email: formData.email,
+        phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
+        status: formData.status,
+        legal_partner_name: formData.legal_partner_name,
+        legal_partner_cpf: formData.legal_partner_cpf,
+        pix_key: formData.pix_key,
+        pix_key_type: formData.pix_key_type,
+        address: {
+            cep: formData.cep,
+            logradouro: formData.rua,
+            rua: formData.rua,
+            numero: formData.numero,
+            complemento: formData.complemento,
+            bairro: formData.bairro,
+            municipio: formData.cidade,
+            cidade: formData.cidade,
+            uf: formData.uf
+        },
+        contract_terms: condicoesParaGravar()
+    });
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -1089,29 +1181,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         setLoading(true);
 
         try {
-            const payload = {
-                name: formData.name,
-                cnpj: formData.cnpj,
-                email: formData.email,
-                phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
-                status: formData.status,
-                legal_partner_name: formData.legal_partner_name,
-                legal_partner_cpf: formData.legal_partner_cpf,
-                pix_key: formData.pix_key,
-                pix_key_type: formData.pix_key_type,
-                address: {
-                    cep: formData.cep,
-                    logradouro: formData.rua,
-                    rua: formData.rua,
-                    numero: formData.numero,
-                    complemento: formData.complemento,
-                    bairro: formData.bairro,
-                    municipio: formData.cidade,
-                    cidade: formData.cidade,
-                    uf: formData.uf
-                },
-                contract_terms: condicoesParaGravar()
-            };
+            const payload = montarPayloadFornecedor();
 
             let result;
             if (supplier?.id) {
@@ -2462,7 +2532,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                     {minutaEditada && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => setContractDraft('')}
+                                                            onClick={descartarEdicoesMinuta}
                                                             style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
                                                         >
                                                             Descartar edições
@@ -2472,9 +2542,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                                         type="button"
                                                         disabled={gerandoMinuta || isCreatingContract}
                                                         onClick={gerarMinutaFornecedor}
+                                                        title="Salva a minuta como ela está na tela e baixa o PDF para análise"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoMinuta || isCreatingContract ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoMinuta || isCreatingContract ? 0.6 : 1 }}
                                                     >
-                                                        {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando…</> : <><RefreshCcw size={15} /> Gerar minuta</>}
+                                                        {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando…</> : <><RefreshCcw size={15} /> Gerar minuta (salva e baixa PDF)</>}
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2910,7 +2981,7 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
               O gerarPdfBase64 espera 1500ms antes de varrer o DOM, tempo de
               sobra para o React montar isto.
             */}
-            {isCreatingContract && supplier && (
+            {(isCreatingContract || gerandoMinuta) && supplier && (
                 <ContratoFornecedor
                     supplier={dadosContratante}
                     usinas={usinas}
