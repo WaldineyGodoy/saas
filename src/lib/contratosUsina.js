@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
+import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
 
 /**
  * Os três contratos que existem por USINA, e não por fornecedor: compra e
@@ -583,3 +583,7 @@ export const CONTRATOS_USINA = [
 export const dividirEmPaginasUsina = (texto) => paginarTexto(texto);
 
 export const gerarPdfContratoUsinaBase64 = () => gerarPdfBase64('[data-contract="usina"]');
+
+/** Baixa a minuta em PDF, para análise antes de mandar assinar. */
+export const baixarPdfContratoUsina = (nomeArquivo) =>
+    baixarPdfContrato('[data-contract="usina"]', nomeArquivo);

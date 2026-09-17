@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
-import { CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
+import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
 import { paraNumero } from '../lib/contratoBase';
 import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
@@ -441,6 +441,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const contratoAtual = CONTRATOS_USINA.find(c => c.tipo === tipoContrato) || CONTRATOS_USINA[0];
 
     const carregarDadosContrato = useCallback(async (usinaId, leasedAreaId) => {
+        let frescos = {};
         try {
             const [{ data: areas }, { data: om }] = await Promise.all([
                 // Quem assina é o beneficiário marcado para assinar, não o
@@ -452,11 +453,14 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                     .order('nome'),
                 supabase.from('service_defaults').select('valores').eq('codigo', 'om').maybeSingle()
             ]);
+            const area = (areas || []).find(a => a.id === leasedAreaId) || null;
+            const servico = om?.valores || null;
             setAreasDisponiveis(areas || []);
-            setAreaArrendada((areas || []).find(a => a.id === leasedAreaId) || null);
-            setServicoOM(om?.valores || null);
+            setAreaArrendada(area);
+            setServicoOM(servico);
+            frescos = { area, servicoOM: servico };
 
-            if (!usinaId) return;
+            if (!usinaId) return frescos;
             setCarregandoAssinaturas(true);
             const { data: sigs } = await supabase
                 .from('signatures')
@@ -469,6 +473,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         } finally {
             setCarregandoAssinaturas(false);
         }
+        return frescos;
     }, []);
 
     useEffect(() => {
@@ -487,11 +492,13 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     }, [usina?.id, usina?.contract_terms]);
 
-    const contextoContrato = () => ({
+    // `frescos` entra quando o cadastro acabou de ser relido no mesmo clique:
+    // o estado do React ainda é o anterior, e a minuta sairia com o dado velho.
+    const contextoContrato = (frescos = {}) => ({
         usina: { ...usina, ...formData, address: { rua: formData.rua, numero: formData.numero, bairro: formData.bairro, cidade: formData.cidade, uf: formData.uf, cep: formData.cep } },
-        supplier: suppliers.find(f => f.id === formData.supplier_id) || null,
-        area: areaArrendada,
-        servicoOM
+        supplier: (frescos.suppliers || suppliers).find(f => f.id === formData.supplier_id) || null,
+        area: frescos.area !== undefined ? frescos.area : areaArrendada,
+        servicoOM: frescos.servicoOM !== undefined ? frescos.servicoOM : servicoOM
     });
 
     /**
@@ -514,9 +521,16 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     const opcoesContrato = () => ({ ...contractOpts, valorTotal: valorInvestidoNumero() });
 
-    const textoContratoAtual = () => contractDraft || contratoAtual.montar(contextoContrato(), opcoesContrato());
+    const textoGerado = () => contratoAtual.montar(contextoContrato(), opcoesContrato());
 
-    const minutaEditada = contractDraft !== '' && contractDraft !== contratoAtual.montar(contextoContrato(), opcoesContrato());
+    /** A minuta gravada no banco para este tipo de contrato, se houver. */
+    const minutaSalva = () => (contractOpts.minutas || {})[tipoContrato] || '';
+
+    // Ordem de precedência: o que está sendo digitado agora, depois a minuta
+    // gravada, e por último o texto montado a partir dos campos.
+    const textoContratoAtual = () => contractDraft || minutaSalva() || textoGerado();
+
+    const minutaEditada = textoContratoAtual() !== textoGerado();
 
     const condicoesParaGravar = () => {
         const gravar = {};
@@ -533,32 +547,79 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
                 gravar[chave] = bruto;
             }
         }
+        // As minutas salvas não estão em DEFAULTS_USINA e seriam apagadas pelo
+        // botão Salvar, que reescreve `contract_terms` inteiro.
+        if (contractOpts.minutas && Object.keys(contractOpts.minutas).length) {
+            gravar.minutas = contractOpts.minutas;
+        }
         return gravar;
     };
 
     /**
-     * Refaz a minuta com o que está gravado agora.
+     * Grava a minuta como ela está na tela, salva a usina e baixa o PDF.
      *
-     * Fornecedores e áreas são lidos uma vez, quando o modal abre. Quem corrige
-     * o endereço do fornecedor ou o signatário da área em outra tela, com este
-     * modal aberto, continuava vendo a minuta antiga — e não havia como pedir
-     * outra sem fechar e reabrir. Descarta também o rascunho, que depois de um
-     * envio fica congelado no texto enviado.
+     * Antes este botão só refazia o texto do zero e jogava fora o rascunho:
+     * quem reescrevia uma cláusula à mão e clicava aqui perdia a edição, e
+     * nada disso chegava ao banco — ao fechar o modal a minuta voltava ao
+     * texto automático. Agora a edição manda: ela vai para
+     * `contract_terms.minutas[tipo]`, volta ao reabrir o modal e é o que sai
+     * no PDF de análise. Para voltar ao texto automático existe "Descartar
+     * edições".
+     *
+     * Sem edição à mão, a minuta é refeita com o cadastro de agora: quem
+     * corrigiu o endereço do fornecedor em outra tela vê a correção sem
+     * precisar fechar e reabrir o modal.
      */
     const gerarMinutaUsina = async () => {
+        if (!usina?.id) { showAlert('Salve a usina antes de gerar a minuta.', 'warning'); return; }
+
         setGerandoMinuta(true);
         try {
-            await Promise.all([
-                fetchSuppliers(),
-                carregarDadosContrato(usina?.id, formData.leased_area_id)
-            ]);
-            setContractDraft('');
-            showAlert('Minuta gerada com os dados atuais do cadastro.', 'success');
+            let texto = textoContratoAtual();
+            if (!minutaEditada) {
+                const [listaFornecedores, dadosContrato] = await Promise.all([
+                    fetchSuppliers(),
+                    carregarDadosContrato(usina.id, formData.leased_area_id)
+                ]);
+                texto = contratoAtual.montar(
+                    contextoContrato({ suppliers: listaFornecedores, ...dadosContrato }),
+                    opcoesContrato()
+                );
+            }
+            setContractDraft(texto);
+
+            const minutas = { ...(contractOpts.minutas || {}), [tipoContrato]: texto };
+            const { error } = await supabase.from('usinas')
+                .update({ ...montarPayloadUsina(), contract_terms: { ...condicoesParaGravar(), minutas } })
+                .eq('id', usina.id);
+            if (error) throw error;
+            setContractOpts(prev => ({ ...prev, minutas }));
+
+            const arquivo = `${contratoAtual.rotulo.replace(/\s+/g, '_')}_${(formData.name || 'usina').replace(/\s+/g, '_')}_MINUTA.pdf`;
+            await baixarPdfContratoUsina(arquivo);
+
+            showAlert('Minuta salva na usina e PDF baixado para análise.', 'success');
         } catch (e) {
             console.error('Erro ao gerar minuta da usina:', e);
             showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
         } finally {
             setGerandoMinuta(false);
+        }
+    };
+
+    /** Joga fora a minuta editada — a da tela e a gravada — e volta ao automático. */
+    const descartarEdicoesMinuta = async () => {
+        const minutas = { ...(contractOpts.minutas || {}) };
+        delete minutas[tipoContrato];
+        setContractDraft('');
+        setContractOpts(prev => ({ ...prev, minutas }));
+        if (!usina?.id) return;
+        try {
+            await supabase.from('usinas')
+                .update({ contract_terms: { ...condicoesParaGravar(), minutas } })
+                .eq('id', usina.id);
+        } catch (e) {
+            console.error('Erro ao descartar a minuta salva:', e);
         }
     };
 
@@ -1560,6 +1621,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')
             .order('name');
         setSuppliers(data || []);
+        // Devolve a lista porque quem chama no mesmo clique ainda enxerga
+        // o estado antigo: `setSuppliers` só vale na renderização seguinte.
+        return data || [];
     };
 
     const fetchSubscribers = async () => {
@@ -2507,53 +2571,63 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
     };
 
+    /**
+     * O registro da usina como ele vai ao banco.
+     *
+     * Mora fora do `handleSubmit` porque "Gerar minuta" também grava a usina,
+     * e duas listas de campos em paralelo envelheceriam separadas.
+     */
+    const montarPayloadUsina = () => {
+        const valorInvestidoNum = parseCurrency(formData.valor_investido);
+
+        return {
+            supplier_id: formData.supplier_id || null,
+            name: formData.name,
+            concessionaria: formData.concessionaria,
+            status: formData.status,
+            modalidade: formData.modalidade,
+            modalidade_gd: formData.modalidade_gd,
+            valor_investido: valorInvestidoNum,
+            potencia_kwp: Number(potenciaKwp),
+            qtd_modulos: Number(formData.qtd_modulos),
+            potencia_modulos_w: Number(formData.potencia_modulos_w),
+            fabricante_inversor: formData.fabricante_inversor,
+            potencia_inversor_w: Number(formData.potencia_inversor_w),
+            geracao_estimada_kwh: Number(formData.geracao_estimada_kwh),
+            servicos_contratados: formData.servicos_contratados,
+            service_values: formData.service_values,
+            gestao_percentual: Number(formData.gestao_percentual),
+            // String vazia num campo uuid é erro do Postgres, não "sem valor".
+            leased_area_id: formData.leased_area_id || null,
+            // Parcelas, prazos e demais condições da aba Contratos. Antes só
+            // o "Gerar e enviar" gravava isto: o que se digitava e salvava
+            // pelo botão da usina se perdia ao fechar o modal.
+            contract_terms: condicoesParaGravar(),
+            ibge_code: formData.ibge_code,
+            unidade_geradora: formData.unidade_geradora,
+            cnpj_cpf: formData.cnpj_cpf,
+            rateio_type: formData.rateio_type,
+            grupo_tarifario: formData.grupo_tarifario,
+            portal_credentials: semSenha(formData.portal_credentials),
+            short_url: formData.short_url || null,
+            address: {
+                cep: formData.cep,
+                rua: formData.rua,
+                numero: formData.numero,
+                bairro: formData.bairro,
+                cidade: formData.cidade,
+                uf: formData.uf,
+                ibge: formData.ibge_code
+            }
+        };
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const valorInvestidoNum = parseCurrency(formData.valor_investido);
-
-            const payload = {
-                supplier_id: formData.supplier_id || null,
-                name: formData.name,
-                concessionaria: formData.concessionaria,
-                status: formData.status,
-                modalidade: formData.modalidade,
-                modalidade_gd: formData.modalidade_gd,
-                valor_investido: valorInvestidoNum,
-                potencia_kwp: Number(potenciaKwp),
-                qtd_modulos: Number(formData.qtd_modulos),
-                potencia_modulos_w: Number(formData.potencia_modulos_w),
-                fabricante_inversor: formData.fabricante_inversor,
-                potencia_inversor_w: Number(formData.potencia_inversor_w),
-                geracao_estimada_kwh: Number(formData.geracao_estimada_kwh),
-                servicos_contratados: formData.servicos_contratados,
-                service_values: formData.service_values,
-                gestao_percentual: Number(formData.gestao_percentual),
-                // String vazia num campo uuid é erro do Postgres, não "sem valor".
-                leased_area_id: formData.leased_area_id || null,
-                // Parcelas, prazos e demais condições da aba Contratos. Antes só
-                // o "Gerar e enviar" gravava isto: o que se digitava e salvava
-                // pelo botão da usina se perdia ao fechar o modal.
-                contract_terms: condicoesParaGravar(),
-                ibge_code: formData.ibge_code,
-                unidade_geradora: formData.unidade_geradora,
-                cnpj_cpf: formData.cnpj_cpf,
-                rateio_type: formData.rateio_type,
-                grupo_tarifario: formData.grupo_tarifario,
-                portal_credentials: semSenha(formData.portal_credentials),
-                short_url: formData.short_url || null,
-                address: {
-                    cep: formData.cep,
-                    rua: formData.rua,
-                    numero: formData.numero,
-                    bairro: formData.bairro,
-                    cidade: formData.cidade,
-                    uf: formData.uf,
-                    ibge: formData.ibge_code
-                }
-            };
+            const payload = montarPayloadUsina();
 
             let usinaId = usina?.id;
             let operationError = null;
@@ -4654,7 +4728,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             </h4>
                                             <div style={{ display: 'flex', gap: '0.6rem' }}>
                                                 {minutaEditada && (
-                                                    <button type="button" onClick={() => setContractDraft('')} style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                                    <button type="button" onClick={descartarEdicoesMinuta} style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
                                                         Descartar edições
                                                     </button>
                                                 )}
@@ -4662,9 +4736,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     type="button"
                                                     disabled={gerandoMinuta || enviandoContrato}
                                                     onClick={gerarMinutaUsina}
+                                                    title="Salva a minuta como ela está na tela e baixa o PDF para análise"
                                                     style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoMinuta || enviandoContrato ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoMinuta || enviandoContrato ? 0.6 : 1 }}
                                                 >
-                                                    {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando...</> : <><RefreshCcw size={15} /> Gerar minuta</>}
+                                                    {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando...</> : <><RefreshCcw size={15} /> Gerar minuta (salva e baixa PDF)</>}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -5147,7 +5222,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     }}
                 />
             )}
-            {enviandoContrato && usina && (
+            {(enviandoContrato || gerandoMinuta) && usina && (
                 <ContratoUsina
                     texto={textoContratoAtual()}
                     titulo={contratoAtual.titulo}

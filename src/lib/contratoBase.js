@@ -274,7 +274,7 @@ export const paginarTexto = (texto, linhasPorPagina = 30) => {
  * @param seletor permite gerar o PDF de um contrato específico quando dois
  *                estiverem montados ao mesmo tempo (ex.: `[data-contract="fornecedor"]`)
  */
-export const gerarPdfBase64 = async (seletor = `[${ATRIBUTO_PAGINA}]`) => {
+const montarPdfContrato = async (seletor) => {
     // Dá tempo de o React montar as páginas e o logo carregar.
     await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -304,7 +304,22 @@ export const gerarPdfBase64 = async (seletor = `[${ATRIBUTO_PAGINA}]`) => {
 
     if (capturadas === 0) throw new Error('Nenhuma página do contrato pôde ser capturada.');
 
-    return pdf.output('datauristring').split(',')[1];
+    return pdf;
+};
+
+/** O PDF em base64, do jeito que a Autentique recebe. */
+export const gerarPdfBase64 = async (seletor = `[${ATRIBUTO_PAGINA}]`) =>
+    (await montarPdfContrato(seletor)).output('datauristring').split(',')[1];
+
+/**
+ * O mesmo PDF, salvo no computador de quem clicou.
+ *
+ * É o caminho da minuta para análise prévia: o contrato ainda não vai à
+ * assinatura, mas o arquivo já pode ser lido e comentado pela outra parte.
+ */
+export const baixarPdfContrato = async (seletor, nomeArquivo) => {
+    const pdf = await montarPdfContrato(seletor);
+    pdf.save(nomeArquivo);
 };
 
 /** Estilos das folhas. Ficam aqui, e não no componente, porque o
