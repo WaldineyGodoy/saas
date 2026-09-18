@@ -577,7 +577,7 @@ TESTEMUNHAS:
 export const CONTRATOS_USINA = [
     { tipo: 'compra_venda', rotulo: 'Compra e Venda', titulo: 'Contrato de Compra e Venda de Usina Fotovoltaica e Prestação de Serviços de Implantação', montar: montarCompraVenda },
     { tipo: 'arrendamento', rotulo: 'Arrendamento', titulo: 'Contrato de Arrendamento de Área para Geração Distribuída', montar: montarArrendamento },
-    { tipo: 'om', rotulo: 'O&M', titulo: 'Contrato de Administração e Manutenção de Usina Fotovoltaica', montar: montarOM }
+    { tipo: 'om', rotulo: 'O&M', titulo: 'Contrato de Administração e Manutenção de Usina Fotovoltaica (O&M)', montar: montarOM }
 ];
 
 export const dividirEmPaginasUsina = (texto) => paginarTexto(texto);

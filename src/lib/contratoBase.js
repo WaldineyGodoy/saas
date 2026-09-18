@@ -324,6 +324,26 @@ export const baixarPdfContrato = async (seletor, nomeArquivo) => {
     pdf.save(nomeArquivo);
 };
 
+/**
+ * Tira do corpo a linha de título que a folha já imprime em destaque.
+ *
+ * Todo gerador abre o texto com o nome do contrato, e a primeira folha
+ * também o imprime grande no topo: no PDF o título saía duas vezes, uma
+ * embaixo da outra. A linha continua no texto — é o que se lê na minuta e
+ * o que alimenta o identificador do documento — e sai só na impressão.
+ *
+ * Compara sem caixa nem espaços extras, e só remove quando a primeira
+ * linha é o próprio título: uma minuta editada que comece por outra
+ * coisa sai inteira.
+ */
+export const semTituloRepetido = (texto, titulo) => {
+    if (!texto || !titulo) return texto;
+    const normaliza = (s) => s.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('pt-BR');
+    const primeira = texto.match(/^\s*([^\n]*)\n*/);
+    if (primeira && normaliza(primeira[1]) === normaliza(titulo)) return texto.slice(primeira[0].length);
+    return texto;
+};
+
 /** Estilos das folhas. Ficam aqui, e não no componente, porque o
  *  react-refresh exige que um módulo de componente exporte só componentes. */
 export const corpoContrato = { whiteSpace: 'pre-wrap', fontSize: '10pt', lineHeight: '1.5', textAlign: 'justify' };

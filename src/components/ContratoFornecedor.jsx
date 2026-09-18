@@ -1,5 +1,5 @@
 import { dividirEmPaginasFornecedor, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
-import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
+import { corpoContrato, identificadorDocumento, semTituloRepetido, tituloContrato } from '../lib/contratoBase';
 import { FolhaContrato } from './FolhaContrato';
 
 /**
@@ -13,9 +13,9 @@ import { FolhaContrato } from './FolhaContrato';
  */
 export default function ContratoFornecedor({ supplier, usinas = [], branding, texto, opts = {} }) {
     const conteudo = texto || montarTextoContratoFornecedor(supplier, usinas, opts);
-    const paginas = dividirEmPaginasFornecedor(conteudo);
-    const identificador = identificadorDocumento(conteudo);
     const TITULO = 'Contrato de Administração e Gestão de Créditos Energéticos';
+    const paginas = dividirEmPaginasFornecedor(semTituloRepetido(conteudo, TITULO));
+    const identificador = identificadorDocumento(conteudo);
 
     return (
         <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm', zIndex: -1 }}>

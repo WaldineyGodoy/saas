@@ -1,4 +1,4 @@
-import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
+import { corpoContrato, identificadorDocumento, semTituloRepetido, tituloContrato } from '../lib/contratoBase';
 import { dividirEmPaginasUsina } from '../lib/contratosUsina';
 import { FolhaContrato } from './FolhaContrato';
 
@@ -19,7 +19,7 @@ import { FolhaContrato } from './FolhaContrato';
 export default function ContratoUsina({ texto, titulo, branding }) {
     if (!texto) return null;
 
-    const paginas = dividirEmPaginasUsina(texto);
+    const paginas = dividirEmPaginasUsina(semTituloRepetido(texto, titulo));
     const identificador = identificadorDocumento(texto);
 
     return (

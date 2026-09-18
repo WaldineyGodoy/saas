@@ -1,5 +1,5 @@
 import { dividirEmPaginas, montarTextoContrato } from '../lib/contrato';
-import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
+import { corpoContrato, identificadorDocumento, semTituloRepetido, tituloContrato } from '../lib/contratoBase';
 import { FolhaContrato } from './FolhaContrato';
 
 /**
@@ -22,9 +22,9 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
         diaVencimento: opts.diaVencimento ?? uc?.dia_vencimento ?? subscriber?.consolidated_due_day
     });
 
-    const paginas = dividirEmPaginas(conteudo);
-    const identificador = identificadorDocumento(conteudo);
     const TITULO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
+    const paginas = dividirEmPaginas(semTituloRepetido(conteudo, TITULO));
+    const identificador = identificadorDocumento(conteudo);
     // A procuração é a última folha, depois do corpo do termo.
     const totalFolhas = paginas.length + 1;
 
