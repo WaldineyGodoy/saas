@@ -5,6 +5,12 @@
  * seletores e download. O scraper.js só conhece este contrato — nunca a
  * mecânica de um portal específico.
  *
+ * SOBRE `sessaoValida(page, ctx)` (opcional):
+ *   Recebe uma página com a sessão salva do titular já restaurada e responde se
+ *   ela ainda está autenticada. Quem implementa ganha sessão persistente (ver
+ *   lib/sessao.js) e passa a logar por expiração, não por rodada. Quem não
+ *   implementa segue logando toda vez — sem quebrar nada.
+ *
  * PARA ADICIONAR UMA CONCESSIONÁRIA:
  *   1. Crie drivers/<nome>.js implementando o mesmo contrato (use
  *      neoenergia.js como referência do que precisa existir).
