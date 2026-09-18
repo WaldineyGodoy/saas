@@ -17,6 +17,7 @@ require('dotenv').config();
 
 const { DRIVERS, resolverDriver } = require('./drivers');
 const { extrairDoArquivo } = require('./extrator');
+const sessao = require('./lib/sessao');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
@@ -371,19 +372,20 @@ async function run() {
         const { driver, titulares } = porDriver[driverId];
 
         const browser = await chromium.launch(driver.launchOptions());
-        const context = await browser.newContext(driver.contextOptions());
-        const page = await context.newPage();
 
-        async function takeScreenshot(name, opts = {}) {
-            if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
-            await page.screenshot({ path: `${DEBUG_DIR}/${name}_${Date.now()}.png`, ...opts });
-        }
-
-        const ctx = {
+        // O contexto agora nasce DENTRO do laço de titulares (ver lib/sessao.js):
+        // cada um tem a sua sessão salva, e misturar todos num contexto só
+        // obrigaria a limpar os cookies entre eles — justamente o que se quer
+        // preservar. Daí o `ctx` do driver virar fábrica: o `screenshot`
+        // precisa apontar para a página daquele titular.
+        const montarCtx = (pagina) => ({
             log: (msg) => console.log(msg),
-            screenshot: takeScreenshot,
+            screenshot: async (name, opts = {}) => {
+                if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
+                await pagina.screenshot({ path: `${DEBUG_DIR}/${name}_${Date.now()}.png`, ...opts });
+            },
             downloadDir: DOWNLOAD_DIR,
-        };
+        });
 
         // Processa cada grupo (Titular)
         for (const subId in titulares) {
@@ -411,8 +413,22 @@ async function run() {
                 continue;
             }
 
+            // Declarados fora do try porque o `finally` precisa alcançá-los
+            // mesmo quando a abertura da sessão é o que falha.
+            let context = null;
+            let page = null;
+            let ctx = null;
+
             try {
-                await driver.login(page, creds, ctx);
+                ({ context, page, ctx } = await sessao.abrir({
+                    supabase,
+                    browser,
+                    driver,
+                    subscriberId: subId,
+                    creds,
+                    montarCtx,
+                    log: (msg) => console.log(msg),
+                }));
 
                 for (const escopoAlvo of escoposList) {
                     const ucsDoEscopo = escopos[escopoAlvo];
@@ -526,7 +542,7 @@ async function run() {
                         } catch (ucErr) {
                             console.error(`   Erro UC ${uc.numero_uc}: ${ucErr.message}`);
                             await updateUCStatus(uc.id, 'error', ucErr.message.substring(0, 255));
-                            await takeScreenshot(`erro_uc_${uc.numero_uc}`);
+                            await ctx.screenshot(`erro_uc_${uc.numero_uc}`);
                         }
                     } // end ucs loop
                 } // end escopos loop
@@ -537,10 +553,24 @@ async function run() {
                         await updateUCStatus(uc.id, 'error', `Erro de login/portal: ${groupErr.message}`);
                     }
                 }
-                await takeScreenshot(`erro_grupo_${subId}`);
+                // Sem página não há o que fotografar: a sessão caiu antes de abrir.
+                if (ctx) await ctx.screenshot(`erro_grupo_${subId}`).catch(() => {});
             } finally {
                 console.log('Finalizando sessão do assinante...');
-                await driver.encerrarSessao(page, context);
+                if (context) {
+                    // Salvar ANTES de encerrar: o WAF rotaciona cookie durante a
+                    // navegação, e é o estado do fim da rodada que a próxima
+                    // execução tem mais chance de conseguir reusar.
+                    await sessao.salvar({
+                        supabase,
+                        driver,
+                        subscriberId: subId,
+                        context,
+                        log: (msg) => console.log(msg),
+                    });
+                    await driver.encerrarSessao(page, context).catch(() => {});
+                    await context.close().catch(() => {});
+                }
             }
         }
 

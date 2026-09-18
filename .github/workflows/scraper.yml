@@ -48,6 +48,12 @@ jobs:
         working-directory: scraper
         run: npm install
 
+      # Portão barato antes de uma rodada de 45 min: os testes de lib/ não tocam
+      # rede nem portal, então falha aqui é código quebrado, não instabilidade.
+      - name: Testes unitários
+        working-directory: scraper
+        run: npm test
+
       # O scraper usa CHROMIUM (antes era firefox).
       # Firefox headless passa pelo WAF mas recebe a aplicação sem o corpo;
       # chromium + display virtual é a combinação que funciona.
@@ -68,6 +74,13 @@ jobs:
           TARGET_DAYS: ${{ github.event.inputs.target_days || github.event.client_payload.value || '' }}
           HEADLESS: 'false'   # obrigatório: headless real é bloqueado pelo portal
           SLOW_MO: '0'        # sem atraso artificial no CI
+          # Reaproveita a sessão do titular entre rodadas (scraper/lib/sessao.js).
+          # Aqui o ganho é incerto: cookie de WAF costuma ser amarrado ao IP, e o
+          # runner do GitHub sai com IP novo toda vez. Fica ligado para MEDIR —
+          # procure "[Sessão] Reaproveitada" x "[Sessão] Expirada" no log. Se vier
+          # sempre expirada, o caminho é mover para host de IP fixo, não desligar.
+          # Para desligar mesmo assim (ex.: suspeita de sessão envenenada): 'false'.
+          SESSAO_PERSISTENTE: 'true'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" node scraper.js
 
       - name: Upload Debug Screenshots

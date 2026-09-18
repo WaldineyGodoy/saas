@@ -42,7 +42,7 @@ migrar para Scrapling.**
 | Contrato de driver | `scraper/drivers/index.js` | `login / selecionarEscopo / capturarFatura / encerrarSessao` + resolução por concessionária | ✅ é onde entra a homologação |
 | Runner com WAF resolvido | `.github/workflows/scraper.yml` | Chromium **headful** dentro de `xvfb-run` — a combinação que passa pelo Akamai | ✅ |
 | Disparo | `pg_cron` → GitHub API (`repository_dispatch`) | Agenda fora do GitHub, porque o `schedule:` do Actions falhou silenciosamente por dias | ✅ |
-| Credenciais | `subscribers.portal_credentials` (jsonb) | `{ url, login, password }` — **todos os 13 titulares têm senha preenchida** | ✅ |
+| Credenciais | Vault, via RPC `fn_get_portal_credentials` | Senha cifrada, `EXECUTE` só para `service_role`; o jsonb `portal_credentials` ficou como fallback de transição | ✅ |
 | Modelo de dados | `rateio_lists` + `protocols` (`linked_entity_type = 'rateio_list'`) | Lista de rateio com `protocolo`, `status`, `ucs_snapshot`, `status_dates` e timeline | ✅ o robô só preenche o que já existe |
 
 **Conclusão do inventário:** a homologação hoje é manual não por barreira técnica, mas porque
@@ -165,9 +165,27 @@ cenário que justifica trazer Python para cá — e é justamente o cenário que
 
 ## 5. Desenho proposto
 
-### 5.1 Sessão persistente por titular (a peça central)
+### 5.1 Sessão persistente por titular (a peça central) — ✅ IMPLEMENTADO
 
-Novo módulo `scraper/lib/sessao.js`:
+Entregue em `scraper/lib/sessao.js`, com testes em `scraper/lib/sessao.test.js`
+(`npm test`, dentro de `scraper/`). O que mudou de fato:
+
+- o contexto do navegador passou a nascer **por titular**, dentro do laço, em vez de um único
+  contexto compartilhado com `clearCookies()` entre um e outro (`scraper.js`);
+- `encerrarSessao()` do driver não limpa mais cookie nenhum — o isolamento agora é o próprio
+  contexto, e limpar apagaria justamente o que se quer guardar (`drivers/neoenergia.js`);
+- o driver ganhou `sessaoValida(page, ctx)`: sonda que vai até `meus-imoveis` e espera o campo de
+  busca de UC montar. Olhar só o hash não serve — o Angular renderiza `#/home` com cookie morto e
+  só quebra na primeira chamada autenticada;
+- o `storageState` é gravado **depois do trabalho**, não logo após o login: o WAF rotaciona cookie
+  durante a navegação, e o estado do fim da rodada é o que tem mais chance de ser aceito depois;
+- bucket privado `portal-sessions`, criado em `supabase/migrations/20260918a_bucket_portal_sessions.sql`,
+  **sem nenhuma policy** — com RLS ligado, isso significa que só o `service_role` alcança;
+- `SESSAO_PERSISTENTE=false` desliga tudo sem reverter código, e qualquer falha (bucket ausente,
+  JSON corrompido, sonda muda) cai no login completo de antes. O pior caso é o comportamento
+  atual mais alguns segundos de sonda.
+
+Esboço original, mantido como registro da intenção:
 
 ```js
 // Sessão viva por titular. Reaproveita cookies entre execuções para que o login
@@ -275,9 +293,10 @@ alguém abrindo o portal para conferir.
 
 - **`storageState` é credencial.** Bucket privado, service role, nunca commitado, nunca em
   artefato do Actions. Mesmo tratamento de senha.
-- **`portal_credentials` guarda senha em texto claro** — já registrado como dívida no
-  `HANDOFF-PARTE-B-ROBO.md` §9. Sessão persistente **aumenta** a exposição (agora há dois
-  segredos por titular). Bom momento para o Vault do Supabase.
+- **A sessão é um segredo a mais por titular.** A senha já saiu do jsonb e vive cifrada no Vault,
+  legível só pela RPC `fn_get_portal_credentials` com EXECUTE para `service_role` — o alerta do
+  `HANDOFF-PARTE-B-ROBO.md` §9 já foi endereçado. O `storageState` entra agora no mesmo nível de
+  sigilo: quem tem o arquivo entra como o titular **sem precisar da senha**.
 - **Idempotência é obrigatória.** Homologação protocolada duas vezes gera protocolo duplicado na
   concessionária — coisa que não se desfaz com `DELETE`. Conferir protocolo existente **antes** de
   submeter, e tratar `resultado: 'ja_existe'` como sucesso.
@@ -293,8 +312,9 @@ alguém abrindo o portal para conferir.
 ## 7. Ordem sugerida
 
 1. **Identificar o captcha** (seção 2): qual URL, qual provedor. Bloqueia todo o resto — 10 min.
-2. **Sessão persistente** (5.1) no fluxo de contas, que já está em produção e serve de piloto.
-   Entrega valor sozinho e prova a ideia antes de virar dependência da homologação.
+2. ~~**Sessão persistente** (5.1) no fluxo de contas~~ — ✅ feito. Falta **aplicar a migração do
+   bucket** e ler o log da primeira rodada: `[Sessão] Reaproveitada` x `[Sessão] Expirada` diz se
+   o IP variável do runner inviabiliza o reuso lá (ver ressalva na seção 3).
 3. **Login assistido** (5.2) — só se o passo 1 confirmar captcha inevitável.
 4. **`submeterRateio`** (5.3), piloto com **uma** lista de rateio antes de liberar.
 5. **Consulta de andamento** (5.4).

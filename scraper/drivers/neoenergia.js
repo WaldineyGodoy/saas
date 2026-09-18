@@ -569,10 +569,55 @@ module.exports = {
         return { resultado: 'nao_disponivel' };
     },
 
-    /** Derruba a sessão do titular antes de logar com o próximo. */
+    /**
+     * A sessão restaurada ainda está de pé?
+     *
+     * Não basta olhar o hash: o Angular renderiza `#/home` com cookie morto e
+     * só quebra quando a primeira chamada autenticada volta 401. Por isso a
+     * sonda vai até `meus-imoveis` e espera o campo de busca de UC aparecer —
+     * essa tela só monta com resposta boa do backend.
+     */
+    async sessaoValida(page, ctx) {
+        const { log } = ctx;
+
+        await page.goto(LOGIN_URL, { waitUntil: 'load', timeout: 60000 }).catch(() => {});
+
+        // O roteamento do Angular demora: olhar o hash uma vez só transformaria
+        // "ainda carregando" em "sessão morta" e jogaria fora uma sessão boa.
+        // O login() aqui do lado espera até 45s pelo mesmo motivo.
+        let hash = '#/login';
+        for (let i = 0; i < 5; i++) {
+            await page.waitForTimeout(3000);
+            hash = await page.evaluate(() => location.hash).catch(() => '#/login');
+            if (!hash.includes('/login')) break;
+        }
+
+        if (hash.includes('/login')) {
+            log('   [Sessão] Portal devolveu a tela de login.');
+            return false;
+        }
+
+        await irPara(page, ROTAS.meusImoveis);
+        try {
+            await page.waitForSelector('input[placeholder*="Unidade Consumidora"]', { timeout: 15000 });
+            return true;
+        } catch (e) {
+            log('   [Sessão] Chegou autenticado mas meus-imoveis não montou.');
+            return false;
+        }
+    },
+
+    /**
+     * Encerramento do titular.
+     *
+     * Aqui havia um `clearCookies()`: com um único contexto compartilhado entre
+     * todos os titulares, era ele que impedia a sessão de um de vazar para o
+     * próximo. O orquestrador passou a abrir um contexto por titular e fechá-lo
+     * ao final, então o isolamento já está garantido — e limpar os cookies
+     * agora apagaria justamente o que a sessão persistente precisa guardar.
+     */
     async encerrarSessao(page, context) {
-        await page.goto(LOGIN_URL).catch(() => {});
-        await context.clearCookies();
+        // Nada a derrubar: quem fecha o contexto do titular é o orquestrador.
     },
 
     parseMesRef,
