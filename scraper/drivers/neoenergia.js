@@ -120,6 +120,76 @@ function parseMesRef(texto) {
     return null;
 }
 
+/**
+ * Mensagens de falha de login, uma por causa. Vão para
+ * consumer_units.last_scraping_error e são lidas por gente e pelos bots do
+ * Hermes: até 18/09/2026 as três causas saíam como "Falha na autenticação ou
+ * timeout do portal." e o relatório tratava tudo como senha errada — no Green
+ * Park a senha estava certa e o portal é que estava instável.
+ */
+const FALHA_LOGIN = {
+    credencial: 'Portal recusou a credencial (usuário ou senha inválidos). Conferir a credencial do titular no CRM.',
+    instavel: (n) => `Portal instável: "Aconteceu um erro inesperado" persistiu em ${n} tentativas de login. Não é senha errada; tentar de novo mais tarde.`,
+    modalNaoAbriu: 'Timeout: o formulário de login do portal não abriu. Não é senha errada.',
+    semResposta: 'Timeout: login enviado, mas o portal não respondeu nem mostrou erro. Não é senha errada.',
+};
+
+// "Aconteceu um erro inesperado em nosso sistema. Por favor, tente novamente
+// mais tarde!" com botão FECHAR — visto em 18/09/2026 logo após submeter.
+const PADRAO_ERRO_INESPERADO = /aconteceu um erro inesperado/i;
+
+// Recusa de credencial. O texto exato do portal ainda não foi capturado num
+// caso real; o padrão cobre as formulações usuais. Se aparecer uma recusa que
+// não casa aqui, ela cai em "semResposta", que ao menos não afirma que a senha
+// está certa.
+const PADRAO_CREDENCIAL_RECUSADA = /(usu[aá]rio|login|cpf|cnpj|senha|credenciais?|dados)[^.\n]{0,60}(inv[aá]lid|incorret|n[aã]o confere|n[aã]o encontrad)|senha (inv[aá]lida|incorreta)/i;
+
+// Sem cortar esperas (preferência do dono: lento e completo).
+const MAX_ERRO_INESPERADO = 3;
+// Teto de envios da senha num mesmo login. Sem ele, um portal mudo recebia a
+// senha a cada volta do loop — e reenvio em série pode bloquear o titular.
+const MAX_ENVIOS = MAX_ERRO_INESPERADO + 2;
+const ESPERA_APOS_ERRO_MS = 30000; // multiplicada pelo nº da tentativa: 30 s, 60 s, 90 s
+
+/** Texto de diálogos, avisos e erros de formulário visíveis — onde o portal fala. */
+async function textoDeAvisos(page) {
+    return page.evaluate(() => {
+        const sel = 'mat-dialog-container, .swal2-popup, .swal2-container, mat-snack-bar-container, mat-error, .mat-error, [role="alert"], [role="dialog"], .toast, .alert';
+        return Array.from(document.querySelectorAll(sel))
+            .filter((el) => el.offsetParent !== null || getComputedStyle(el).position === 'fixed')
+            .map((el) => el.innerText || '')
+            .join(' \n ');
+    }).catch(() => '');
+}
+
+/** Classifica o que o portal está dizendo agora: null | 'erro_inesperado' | 'credencial'. */
+async function erroDoPortal(page) {
+    const avisos = await textoDeAvisos(page);
+    const corpo = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+    if (PADRAO_ERRO_INESPERADO.test(avisos) || PADRAO_ERRO_INESPERADO.test(corpo)) return 'erro_inesperado';
+    if (PADRAO_CREDENCIAL_RECUSADA.test(avisos)) return 'credencial';
+    return null;
+}
+
+/** Fecha o modal de erro pelo botão FECHAR (via JS: o modal pode exceder a viewport). */
+async function fecharModalDeErro(page) {
+    const fechou = await page.evaluate(() => {
+        const alvo = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+            .find((b) => /^\s*(fechar|ok|entendi)\s*$/i.test(b.innerText || ''));
+        if (alvo) { alvo.click(); return true; }
+        return false;
+    }).catch(() => false);
+    if (!fechou) await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(2000);
+    return fechou;
+}
+
+function erroDeLogin(causa, mensagem) {
+    const e = new Error(mensagem);
+    e.causa = causa;
+    return e;
+}
+
 module.exports = {
     id: 'neoenergia',
     nome: 'Neoenergia',
@@ -171,6 +241,9 @@ module.exports = {
      * O portal alterna entre home institucional, modal de login e telas logadas
      * sem transição previsível, por isso o loop de tentativas em vez de uma
      * sequência linear. Sucesso = chegou em selecionar-estado ou meus-imoveis.
+     *
+     * Falha lança Error com `causa` = 'credencial' | 'portal_instavel' |
+     * 'modal_nao_abriu' | 'sem_resposta' e mensagem própria de cada uma.
      */
     async login(page, creds, ctx) {
         const { log, screenshot } = ctx;
@@ -179,7 +252,13 @@ module.exports = {
         await page.goto(LOGIN_URL, { waitUntil: 'load', timeout: 60000 });
 
         let loggedIn = false;
-        for (let i = 0; i < 15; i++) {
+        let formularioApareceu = false;
+        let errosInesperados = 0;
+        let envios = 0;
+        // 15 voltas cobriam o caminho feliz; cada "erro inesperado" consome até 3
+        // (fechar, reabrir o modal, preencher), então o teto sobe junto.
+        const maxVoltas = 15 + 3 * MAX_ERRO_INESPERADO;
+        for (let i = 0; i < maxVoltas; i++) {
             await page.waitForTimeout(3000);
 
             // Sucesso?
@@ -189,10 +268,38 @@ module.exports = {
                 break;
             }
 
+            // O portal respondeu com erro?
+            const erro = await erroDoPortal(page);
+            if (erro === 'credencial') {
+                // Não insistir: repetir senha recusada pode bloquear o acesso do titular.
+                log('   [Faturista] Portal recusou a credencial.');
+                await screenshot(`login_credencial_recusada`, { fullPage: true });
+                throw erroDeLogin('credencial', FALHA_LOGIN.credencial);
+            }
+            if (erro === 'erro_inesperado') {
+                errosInesperados++;
+                log(`   [Faturista] Portal exibiu "Aconteceu um erro inesperado" (${errosInesperados}/${MAX_ERRO_INESPERADO}).`);
+                await screenshot(`login_erro_inesperado_${errosInesperados}`, { fullPage: true });
+                await fecharModalDeErro(page);
+                if (errosInesperados >= MAX_ERRO_INESPERADO) {
+                    throw erroDeLogin('portal_instavel', FALHA_LOGIN.instavel(errosInesperados));
+                }
+                const espera = ESPERA_APOS_ERRO_MS * errosInesperados;
+                log(`   [Faturista] Aguardando ${espera / 1000}s antes de tentar o login de novo...`);
+                await page.waitForTimeout(espera);
+                continue;
+            }
+
             // Modal Aberto?
             const userField = page.locator('input#userId, input[name="username"], input[name="j_username"], input[name="cpfCnpj"], mat-form-field:has-text("CPF") input, mat-form-field:has-text("CNPJ") input, input[formcontrolname="login"], input[formcontrolname="usuario"]').first();
             if (await userField.isVisible()) {
-                log(`   [Faturista] Preenchendo credenciais para ${creds.login}...`);
+                formularioApareceu = true;
+                if (envios >= MAX_ENVIOS) {
+                    log(`   [Faturista] ${envios} envios sem resposta do portal. Parando para não bloquear o titular.`);
+                    break;
+                }
+                envios++;
+                log(`   [Faturista] Preenchendo credenciais para ${creds.login} (envio ${envios}/${MAX_ENVIOS})...`);
 
                 await userField.click();
                 await page.keyboard.press('Control+A');
@@ -214,14 +321,20 @@ module.exports = {
                 }
                 log('   [Faturista] Submeteu form de login. Aguardando redirecionamento autônomo...');
 
-                // Aguarda o portal decidir para onde jogar (não força nav aqui de primeira)
+                // Aguarda o portal decidir para onde jogar (não força nav aqui de primeira).
+                // Um modal de erro também encerra a espera: a volta seguinte o trata,
+                // em vez de navegar por cima dele como antes.
                 try {
                     await page.waitForFunction(() =>
                         location.hash.includes('selecionar-estado') ||
                         location.hash.includes('meus-imoveis') ||
-                        !!document.querySelector('input[placeholder*="Unidade Consumidora"]'),
+                        !!document.querySelector('input[placeholder*="Unidade Consumidora"]') ||
+                        /aconteceu um erro inesperado/i.test(document.body ? document.body.innerText : '') ||
+                        !!document.querySelector('mat-error, .mat-error, [role="alert"], mat-snack-bar-container'),
                         { timeout: 15000 });
+                    if (await erroDoPortal(page)) continue;
                 } catch (e) {
+                    if (await erroDoPortal(page)) continue;
                     log('   [Faturista] Sem redirect automático pós-login. Indo para selecionar-estado...');
                     await irPara(page, ROTAS.selecionarEstado);
                     await page.waitForTimeout(3000);
@@ -262,7 +375,12 @@ module.exports = {
 
         if (!loggedIn) {
             await screenshot(`login_fail`, { fullPage: true });
-            throw new Error('Falha na autenticação ou timeout do portal.');
+            if (errosInesperados > 0) {
+                throw erroDeLogin('portal_instavel', FALHA_LOGIN.instavel(errosInesperados));
+            }
+            throw formularioApareceu
+                ? erroDeLogin('sem_resposta', FALHA_LOGIN.semResposta)
+                : erroDeLogin('modal_nao_abriu', FALHA_LOGIN.modalNaoAbriu);
         }
     },
 

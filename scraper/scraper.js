@@ -367,23 +367,17 @@ async function run() {
 
     // 4. Um navegador por driver — as exigências de anti-bot são do portal,
     //    não do orquestrador (ver launchOptions/contextOptions do driver).
+    //
+    //    Mas um CONTEXTO por titular. Até 18/09/2026 o contexto e a página eram
+    //    únicos por driver e o titular seguinte herdava o estado do anterior: em
+    //    14/09 os grupos depois do primeiro ficaram presos em "Clicando para abrir
+    //    modal de login..." e em 18/09 o modal "Aconteceu um erro inesperado" da
+    //    Bennaya ficou aberto e derrubou o grupo do Waldiney, que nem chegou a
+    //    digitar. Falha de um titular não pode contaminar o próximo.
     for (const driverId in porDriver) {
         const { driver, titulares } = porDriver[driverId];
 
         const browser = await chromium.launch(driver.launchOptions());
-        const context = await browser.newContext(driver.contextOptions());
-        const page = await context.newPage();
-
-        async function takeScreenshot(name, opts = {}) {
-            if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
-            await page.screenshot({ path: `${DEBUG_DIR}/${name}_${Date.now()}.png`, ...opts });
-        }
-
-        const ctx = {
-            log: (msg) => console.log(msg),
-            screenshot: takeScreenshot,
-            downloadDir: DOWNLOAD_DIR,
-        };
 
         // Processa cada grupo (Titular)
         for (const subId in titulares) {
@@ -410,6 +404,24 @@ async function run() {
                 }
                 continue;
             }
+
+            // Sessão limpa deste titular: nada de cookies, modal ou rota do anterior.
+            const context = await browser.newContext(driver.contextOptions());
+            const page = await context.newPage();
+
+            // Os helpers apontam para a página DESTE grupo, não para uma página
+            // compartilhada capturada fora do loop.
+            async function takeScreenshot(name, opts = {}) {
+                if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
+                await page.screenshot({ path: `${DEBUG_DIR}/${name}_${Date.now()}.png`, ...opts })
+                    .catch((e) => console.error(`   [Faturista] Screenshot ${name} falhou: ${e.message}`));
+            }
+
+            const ctx = {
+                log: (msg) => console.log(msg),
+                screenshot: takeScreenshot,
+                downloadDir: DOWNLOAD_DIR,
+            };
 
             try {
                 await driver.login(page, creds, ctx);
@@ -540,7 +552,8 @@ async function run() {
                 await takeScreenshot(`erro_grupo_${subId}`);
             } finally {
                 console.log('Finalizando sessão do assinante...');
-                await driver.encerrarSessao(page, context);
+                await driver.encerrarSessao(page, context).catch(() => {});
+                await context.close().catch(() => {});
             }
         }
 
