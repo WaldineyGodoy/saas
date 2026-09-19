@@ -129,6 +129,7 @@ function parseMesRef(texto) {
  */
 const FALHA_LOGIN = {
     credencial: 'Portal recusou a credencial (usuário ou senha inválidos). Conferir a credencial do titular no CRM.',
+    documento: 'Portal recusou a credencial: o CPF/CNPJ de login foi digitado corretamente e o portal o considera inválido. Conferir o login do titular no CRM.',
     instavel: (n) => `Portal instável: "Aconteceu um erro inesperado" persistiu em ${n} tentativas de login. Não é senha errada; tentar de novo mais tarde.`,
     modalNaoAbriu: 'Timeout: o formulário de login do portal não abriu. Não é senha errada.',
     semResposta: 'Timeout: login enviado, mas o portal não respondeu nem mostrou erro. Não é senha errada.',
@@ -143,6 +144,15 @@ const PADRAO_ERRO_INESPERADO = /aconteceu um erro inesperado/i;
 // não casa aqui, ela cai em "semResposta", que ao menos não afirma que a senha
 // está certa.
 const PADRAO_CREDENCIAL_RECUSADA = /(usu[aá]rio|login|cpf|cnpj|senha|credenciais?|dados)[^.\n]{0,60}(inv[aá]lid|incorret|n[aã]o confere|n[aã]o encontrad)|senha (inv[aá]lida|incorreta)/i;
+
+// "CPF/CNPJ Inválido! Por favor, verifique e tente novamente" é validação de
+// FORMATO do campo, não recusa de senha. Visto em 19/09/2026: ao refazer o
+// login depois do "erro inesperado", o CPF foi digitado por cima do valor que
+// sobrou no campo e virou "83.731.830/6083-73". Só conta como credencial se o
+// documento foi conferido no campo e o portal ainda o rejeita.
+const PADRAO_DOC_INVALIDO = /cpf\s*\/\s*cnpj\s+inv[aá]lido/i;
+
+const digitos = (v) => String(v || '').replace(/\D/g, '');
 
 // Sem cortar esperas (preferência do dono: lento e completo).
 const MAX_ERRO_INESPERADO = 3;
@@ -162,13 +172,54 @@ async function textoDeAvisos(page) {
     }).catch(() => '');
 }
 
-/** Classifica o que o portal está dizendo agora: null | 'erro_inesperado' | 'credencial'. */
+/**
+ * Classifica o que o portal está dizendo agora:
+ * null | 'erro_inesperado' | 'documento_invalido' | 'credencial'.
+ */
 async function erroDoPortal(page) {
     const avisos = await textoDeAvisos(page);
     const corpo = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
     if (PADRAO_ERRO_INESPERADO.test(avisos) || PADRAO_ERRO_INESPERADO.test(corpo)) return 'erro_inesperado';
+    if (PADRAO_DOC_INVALIDO.test(avisos) || PADRAO_DOC_INVALIDO.test(corpo)) return 'documento_invalido';
     if (PADRAO_CREDENCIAL_RECUSADA.test(avisos)) return 'credencial';
     return null;
+}
+
+/** Esvazia um campo de verdade: Ctrl+A/Backspace sozinho deixou sobra em 19/09. */
+async function limparCampo(page, campo) {
+    await campo.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await campo.fill('').catch(() => {});
+}
+
+/**
+ * Digita o CPF/CNPJ e confere o que ficou no campo. Até 3 tentativas.
+ * Retorna true se o campo terminou com exatamente os dígitos do documento.
+ */
+async function digitarDocumento(page, campo, documento, log) {
+    const esperado = digitos(documento);
+    for (let t = 1; t <= 3; t++) {
+        await limparCampo(page, campo);
+        await campo.pressSequentially(formatDoc(documento), { delay: 100 });
+        const lido = digitos(await campo.inputValue().catch(() => ''));
+        if (lido === esperado) return true;
+        log(`   [Faturista] Campo CPF/CNPJ ficou com ${lido.length} dígitos em vez de ${esperado.length}; redigitando (${t}/3)...`);
+        await page.waitForTimeout(1500);
+    }
+    return false;
+}
+
+/** Digita a senha e confere só o TAMANHO do que ficou (nunca o conteúdo). */
+async function digitarSenha(page, campo, senha) {
+    for (let t = 1; t <= 2; t++) {
+        await limparCampo(page, campo);
+        await campo.pressSequentially(senha, { delay: 100 });
+        const tamanho = (await campo.inputValue().catch(() => '')).length;
+        if (tamanho === senha.length) return true;
+        await page.waitForTimeout(1500);
+    }
+    return false;
 }
 
 /** Fecha o modal de erro pelo botão FECHAR (via JS: o modal pode exceder a viewport). */
@@ -255,6 +306,8 @@ module.exports = {
         let formularioApareceu = false;
         let errosInesperados = 0;
         let envios = 0;
+        let docConferido = false;
+        let docRecusado = 0;
         // 15 voltas cobriam o caminho feliz; cada "erro inesperado" consome até 3
         // (fechar, reabrir o modal, preencher), então o teto sobe junto.
         const maxVoltas = 15 + 3 * MAX_ERRO_INESPERADO;
@@ -275,6 +328,17 @@ module.exports = {
                 log('   [Faturista] Portal recusou a credencial.');
                 await screenshot(`login_credencial_recusada`, { fullPage: true });
                 throw erroDeLogin('credencial', FALHA_LOGIN.credencial);
+            }
+            if (erro === 'documento_invalido' && envios > 0) {
+                // Só vale depois de um envio com o documento conferido no campo:
+                // aí é o login cadastrado que está errado. Antes disso é sobra no
+                // campo, e a volta seguinte redigita.
+                if (docConferido && ++docRecusado >= 2) {
+                    log('   [Faturista] Portal rejeita o CPF/CNPJ mesmo digitado corretamente.');
+                    await screenshot(`login_documento_recusado`, { fullPage: true });
+                    throw erroDeLogin('credencial', FALHA_LOGIN.documento);
+                }
+                log('   [Faturista] Portal marcou "CPF/CNPJ Inválido"; limpando o campo e redigitando.');
             }
             if (erro === 'erro_inesperado') {
                 errosInesperados++;
@@ -301,16 +365,25 @@ module.exports = {
                 envios++;
                 log(`   [Faturista] Preenchendo credenciais para ${creds.login} (envio ${envios}/${MAX_ENVIOS})...`);
 
-                await userField.click();
-                await page.keyboard.press('Control+A');
-                await page.keyboard.press('Backspace');
-                await userField.pressSequentially(formatDoc(creds.login), { delay: 100 });
+                // Documento e senha são digitados e CONFERIDOS no campo antes de
+                // enviar. Em 19/09 o CPF entrou por cima de sobra da tentativa
+                // anterior e o portal respondeu "CPF/CNPJ Inválido".
+                docConferido = await digitarDocumento(page, userField, creds.login, log);
+                if (!docConferido) {
+                    log('   [Faturista] Não consegui deixar o CPF/CNPJ correto no campo. Reabrindo o login...');
+                    await screenshot(`login_campo_documento`, { fullPage: true });
+                    envios--; // nada foi enviado
+                    await page.goto(LOGIN_URL, { waitUntil: 'load', timeout: 60000 }).catch(() => {});
+                    continue;
+                }
 
                 const passField = page.locator('input#password, input[name="password"], input[name="j_password"], mat-form-field:has-text("Senha") input, input[type="password"]').first();
-                await passField.click();
-                await page.keyboard.press('Control+A');
-                await page.keyboard.press('Backspace');
-                await passField.pressSequentially(creds.password, { delay: 100 });
+                if (!await digitarSenha(page, passField, creds.password)) {
+                    log('   [Faturista] Campo de senha não ficou com o tamanho esperado. Reabrindo o login...');
+                    envios--;
+                    await page.goto(LOGIN_URL, { waitUntil: 'load', timeout: 60000 }).catch(() => {});
+                    continue;
+                }
 
                 await page.waitForTimeout(2000);
                 const enterBtn = page.locator('button:has-text("ENTRAR"), button[type="submit"]').filter({ hasNotText: 'Visitar' }).first();
