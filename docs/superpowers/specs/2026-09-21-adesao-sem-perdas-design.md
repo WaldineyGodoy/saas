@@ -24,7 +24,7 @@ Mapeamento de 21/09/2026 (4 agentes, só leitura):
 
 1. **Hostinger (`.htaccess` do `public_html`)**: `301` de `/convite/` e `/assine/` para `/`, preservando a query string. A raiz já lê `?name=&id=` e grava `leads.originator_id`. Os links curtos do YOURLS voltam a funcionar sem regravação. Aplicado pelo dono no gerenciador de arquivos; o texto vai pronto.
 2. **Página "cadastro para ser embaixador"** (`Paginas/landingpage cadastro para ser embaixador`): build com `base: './'`, sem o `<link href="/index.css">`, commitado na pasta `embaixador/` do **branch `Home`** do repo `WaldineyGodoy/paginas` (o branch que publica a raiz). Endereço: `https://b2wenergia.com.br/embaixador/` — o mesmo para onde o botão da raiz já aponta. A página de convite (`landingpage_embaixador`) **não** é publicada: o 301 a substitui.
-3. **Papel do embaixador**: nova RPC `fn_originador_confirmar_perfil()` (SECURITY DEFINER, `authenticated`): se existe `originators_v2.id = auth.uid()`, grava `profiles.role = 'originator'`. `OriginatorSignupForm.jsx` chama logo após o INSERT. Migração corrige os perfis `lead` que têm linha em `originators_v2`.
+3. **Papel do embaixador**: gatilho `trg_originador_confirma_perfil` AFTER INSERT em `originators_v2` (função SECURITY DEFINER `fn_originador_confirmar_perfil()`): grava `profiles.role = 'originator'` onde `profiles.id = NEW.id`, `role IN ('lead')` e o e-mail bate. Gatilho, e não chamada do front, porque o `signUp` com confirmação de e-mail pode não abrir sessão e o INSERT roda como `anon`. Migração corrige os perfis `lead` que têm linha em `originators_v2`.
 4. **Login do embaixador**: botão "Ir para Login" → `https://crm.b2wenergia.com.br/login`.
 5. **Colunas do anon em `originators_v2`**: INSERT anônimo restrito por grant de coluna às colunas do formulário; `split_commission`, `short_url` e similares ficam fora.
 6. **Atribuição**: em `SubscriberSignup.jsx`, `originator_id` que não casa com regex de UUID é descartado. Na RPC, `p_originator_id` nulo ⇒ usa `leads.originator_id` do `p_lead_id`.
@@ -69,7 +69,7 @@ Regras da RPC:
 
 ## §5 Segurança do envio (1ª parte do subprojeto C)
 
-- `send-whatsapp` e `send-email` passam pelo portão `_shared/auth.ts`: administrador logado, `service_role`, ou header `x-b2w-internal` igual ao segredo `B2W_INTERNAL_SECRET` (lido do Vault pelo `fn_dispatch_notification`).
+- `send-whatsapp` e `send-email` passam pelo portão `_shared/auth.ts`: administrador logado, `service_role`, ou header `x-b2w-internal` igual ao segredo do Vault `b2w:internal_secret`. O `fn_dispatch_notification` lê o segredo do Vault e manda no header; a Edge Function o confere pela RPC `fn_segredo_interno_confere(p_valor)` (só `service_role`), sem depender de variável de ambiente.
 - Chamadas do navegador que hoje usam essas funções continuam funcionando para usuário interno logado; a única chamada anônima (`SubscriberSignup.jsx`) é removida em §4.
 
 ## §6 Limpeza
@@ -78,7 +78,7 @@ Apagar `src/pages/LeadSignup.jsx`, `src/pages/ReferralLanding.jsx`, `src/pages/L
 
 ## §7 Testes
 
-- **Banco** (`supabase/tests/*.test.sql`, padrão `SANDBOX_OK`): RPC v2 (desconto por IBGE e por UF, recusa sem aceite, recusa de CNPJ sem representante, duplicidade de CPF e de UC, herança do originador do lead, `originator_id` inválido), `fn_onboarding_estado`, `fn_originador_confirmar_perfil`.
+- **Banco** (`supabase/tests/*.test.sql`, padrão `SANDBOX_OK`): RPC v2 (desconto por IBGE e por UF, recusa sem aceite, recusa de CNPJ sem representante, duplicidade de CPF e de UC, herança do originador do lead, `originator_id` inválido), `fn_onboarding_estado`, gatilho `trg_originador_confirma_perfil`.
 - **Edge Functions** (`deno test`): regras puras extraídas em módulos — completude de documentos, escolha e validação do link de assinatura, idempotência, portão interno.
 - **Front** (Vitest, novo): `contrato.js` — desconto, vencimento, representante.
 - **Ponta a ponta real, Autentique em Sandbox**, dois caminhos: raiz com `?name=&id=` de um embaixador, e raiz sem embaixador. Contato real: WhatsApp **5533999991234**, e-mail **b2wnotificacoes@gmail.com**; demais dados fictícios válidos, CEP 59158-155. Conferir: WhatsApp e e-mail com o mesmo link curto, documentos no bucket, entidades no CRM (lead, assinante, UCs com desconto/vencimento, perfil, assinatura), lead derivado pelo gatilho. Webhook de assinatura em Sandbox → `contrato_assinado`. Autentique volta a produção e os dados de teste são apagados no fim.
