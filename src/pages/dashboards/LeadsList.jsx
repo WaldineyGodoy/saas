@@ -401,9 +401,10 @@ export default function LeadsList() {
                                     fontSize: '0.75rem',
                                     padding: '0.2rem 0.6rem',
                                     borderRadius: '16px',
-                                    border: `1px solid ${selectedStatuses.includes(s.status) ? s.color : '#cbd5e1'}`,
-                                    background: selectedStatuses.includes(s.status) ? s.color : 'white',
-                                    color: selectedStatuses.includes(s.status) ? 'white' : '#475569',
+                                    border: `1px solid ${selectedStatuses.includes(s.status) ? s.color : s.color + '40'}`,
+                                    background: selectedStatuses.includes(s.status) ? s.color : s.color + '15',
+                                    color: selectedStatuses.includes(s.status) ? 'white' : s.color,
+                                    fontWeight: selectedStatuses.includes(s.status) ? 600 : 500,
                                     cursor: 'pointer',
                                     transition: 'all 0.2s'
                                 }}
