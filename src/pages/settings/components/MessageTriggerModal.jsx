@@ -41,10 +41,15 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
     ];
 
     const entityStatusOptions = {
+        // Espelha o enum `lead_status`. Um gatilho salvo com o antigo
+        // 'em_negociacao' nunca dispararia: a comparação é com NEW.status.
         lead: [
             { id: 'indicado', label: 'Indicado' },
             { id: 'simulacao', label: 'Simulação' },
-            { id: 'em_negociacao', label: 'Em Negociação' },
+            { id: 'sem_interacao', label: 'Sem Interação' },
+            { id: 'negociacao', label: 'Negociação' },
+            { id: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação' },
+            { id: 'contrato_enviado', label: 'Contrato Enviado' },
             { id: 'ativacao', label: 'Ativação' },
             { id: 'ativo', label: 'Ativo' },
             { id: 'pago', label: 'Pago' },

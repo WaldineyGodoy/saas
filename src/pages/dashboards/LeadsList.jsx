@@ -246,7 +246,7 @@ export default function LeadsList() {
             // Só grava o VÍNCULO. O status do lead é derivado do status do
             // assinante pelo gatilho `trg_sync_lead_status`, que conhece a
             // regra: assinante em 'ativacao' ainda não assinou o contrato,
-            // logo o lead é 'em_negociacao'; ele só vira 'ativacao' quando a
+            // logo o lead é 'contrato_enviado'; ele só vira 'ativacao' quando a
             // Autentique confirma a assinatura.
             //
             // Definir o status aqui na mão foi o que produziu leads em

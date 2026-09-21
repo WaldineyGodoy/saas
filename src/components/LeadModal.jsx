@@ -25,16 +25,21 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     const [loadingAppointments, setLoadingAppointments] = useState(false);
     const [newAppointment, setNewAppointment] = useState({ date: '', time: '', reason: 'Ligação', notes: '' });
 
-    // Status Options
+    // Espelha o enum `lead_status` e as colunas do kanban (LeadsList).
+    // 'em_negociacao' foi renomeado para 'negociacao' no banco e
+    // 'convertido' nunca existiu: escolher qualquer um dos dois fazia o
+    // salvamento falhar com "invalid input value for enum lead_status".
     const statusOptions = [
         { value: 'indicado', label: 'Indicado' },
         { value: 'simulacao', label: 'Simulação' },
-        { value: 'em_negociacao', label: 'Em Negociação' },
+        { value: 'sem_interacao', label: 'Sem Interação' },
+        { value: 'negociacao', label: 'Negociação' },
+        { value: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação' },
+        { value: 'contrato_enviado', label: 'Contrato Enviado' },
         { value: 'ativacao', label: 'Ativação' },
         { value: 'ativo', label: 'Ativo' },
         { value: 'pago', label: 'Pago' },
-        { value: 'negocio_perdido', label: 'Negócio Perdido' },
-        { value: 'convertido', label: 'Convertido (Legado)' }
+        { value: 'negocio_perdido', label: 'Negócio Perdido' }
     ];
 
     const [formData, setFormData] = useState({
