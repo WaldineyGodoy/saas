@@ -158,6 +158,8 @@ export default function LeadsList() {
     const [viewMode, setViewMode] = useState('kanban'); // Default to kanban
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTags, setSelectedTags] = useState([]);
+    const [selectedStatuses, setSelectedStatuses] = useState([]);
+    const [hideEmptyStatuses, setHideEmptyStatuses] = useState(false);
     const [activeId, setActiveId] = useState(null);
 
     const sensors = useSensors(
@@ -171,6 +173,7 @@ export default function LeadsList() {
     const filteredLeads = leads.filter(lead => {
         let matchesSearch = true;
         let matchesTags = true;
+        let matchesStatus = true;
         
         if (searchTerm) {
             const lowerTerm = searchTerm.toLowerCase();
@@ -191,8 +194,12 @@ export default function LeadsList() {
                 matchesTags = selectedTags.some(t => lead.tags.includes(t));
             }
         }
+        
+        if (selectedStatuses.length > 0) {
+            matchesStatus = selectedStatuses.includes(lead.status);
+        }
 
-        return matchesSearch && matchesTags;
+        return matchesSearch && matchesTags && matchesStatus;
     });
 
     useEffect(() => {
@@ -378,6 +385,44 @@ export default function LeadsList() {
                             </button>
                         ))}
                     </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center', marginTop: '0.5rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Filtrar Status:</span>
+                        {KANBAN_STATUSES.map(s => (
+                            <button
+                                key={s.status}
+                                onClick={() => {
+                                    if (selectedStatuses.includes(s.status)) {
+                                        setSelectedStatuses(selectedStatuses.filter(st => st !== s.status));
+                                    } else {
+                                        setSelectedStatuses([...selectedStatuses, s.status]);
+                                    }
+                                }}
+                                style={{
+                                    fontSize: '0.75rem',
+                                    padding: '0.2rem 0.6rem',
+                                    borderRadius: '16px',
+                                    border: `1px solid ${selectedStatuses.includes(s.status) ? s.color : '#cbd5e1'}`,
+                                    background: selectedStatuses.includes(s.status) ? s.color : 'white',
+                                    color: selectedStatuses.includes(s.status) ? 'white' : '#475569',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+                    {viewMode === 'kanban' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto', marginTop: '0.5rem' }}>
+                            <input 
+                                type="checkbox" 
+                                id="hide-empty" 
+                                checked={hideEmptyStatuses}
+                                onChange={e => setHideEmptyStatuses(e.target.checked)}
+                            />
+                            <label htmlFor="hide-empty" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>Ocultar colunas vazias</label>
+                        </div>
+                    )}
                     <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                         <button
                             onClick={() => setViewMode('list')}
@@ -439,14 +484,10 @@ export default function LeadsList() {
                                                     <td>
                                                         <span style={{
                                                             padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.85rem', fontWeight: '500',
-                                                            background: lead.status === 'simulacao' ? '#f1f5f9' :
-                                                                lead.status === 'em_negociacao' ? '#fef9c3' :
-                                                                    lead.status === 'ativo' ? '#dcfce7' : '#f1f5f9',
-                                                            color: lead.status === 'simulacao' ? '#64748b' :
-                                                                lead.status === 'em_negociacao' ? '#a16207' :
-                                                                    lead.status === 'ativo' ? '#166534' : '#64748b'
+                                                            background: (KANBAN_STATUSES.find(s => s.status === lead.status)?.color || '#94a3b8') + '20',
+                                                            color: KANBAN_STATUSES.find(s => s.status === lead.status)?.color || '#94a3b8'
                                                         }}>
-                                                            {lead.status.toUpperCase().replace('_', ' ')}
+                                                            {KANBAN_STATUSES.find(s => s.status === lead.status)?.label || lead.status}
                                                         </span>
                                                         {lead.tags && lead.tags.length > 0 && (
                                                             <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
@@ -524,6 +565,7 @@ export default function LeadsList() {
                                 <div className="kanban-board">
                                     {KANBAN_STATUSES.map(({ status, label, color }) => {
                                         const leadsInStatus = filteredLeads.filter(l => (l.status || 'simulacao') === status);
+                                        if (hideEmptyStatuses && leadsInStatus.length === 0) return null;
                                         return (
                                             <KanbanColumn
                                                 key={status}
