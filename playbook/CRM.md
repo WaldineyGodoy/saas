@@ -235,6 +235,30 @@ Fluxo automatizado para geração, envio e monitoramento de assinaturas.
 - **Segurança de Credenciais**: Todas as funções financeiras (`create_asaas_charge`, `manage_asaas_customer`, `transfer_asaas_pix`, `pay_asaas_bill`) buscam chaves (`api_key` e `endpoint_url`) dinamicamente no banco de dados.
 - **Webhooks**: A função `asaas-webhook` opera com `verify_jwt = false` no `config.toml`, permitindo o recebimento de notificações diretas do Asaas.
 
+### ✂️ Encurtador de Links (YOURLS)
+Atende três fluxos: **link de indicação do originador** (automático), **links de assinatura da Autentique** e **página pública da usina** (manual). No fluxo do originador roda em segundo plano — uma queda do YOURLS não derruba o cadastro.
+
+- **Tabelas**:
+  - `originators_v2.short_url` — link de indicação.
+  - `signatures.short_url` — link de assinatura.
+  - `short_url` da usina — página pública.
+  - `integrations_config` (`service_name = 'yourls'`) — `endpoint_url` e `api_key` (signature). RLS só para admin; lida pela Edge Function com a service role.
+- **Banco**: o gatilho `trg_originador_short_url` (AFTER INSERT em `originators_v2`) chama `fn_originador_gerar_short_url()`, que dispara um `net.http_post` assíncrono (só sai após o COMMIT). Originador que já veio com `short_url` é ignorado. Vale para qualquer origem: modal do CRM, `/cadastro` público, importação SQL.
+- **`originador-short-url`** (`verify_jwt = false`): monta `https://b2wenergia.com.br/convite/?name=…&id=…` e grava o `short_url`. Keyword = primeiro nome sem acento + 4 chars do id (ex.: `joao-abcd`); sem nome, `ref-` + 8 chars. Idempotente. Chamadas: `{"originator_id": "<uuid>"}` ou `{"all_missing": true}` (backfill).
+- **`yourls-shorten`** (`verify_jwt = true`): lê a config e chama a API do YOURLS por **GET** (a signature vai na query string). Se o YOURLS disser que a URL já existe, devolve o link existente.
+  - **Quem pode chamar** (desde 12/09/2026): usuário logado ou outra Edge Function com a service role. A chave anon recebe **401**.
+  - **Destinos permitidos**: só `https` para `b2wenergia.com.br`, `b2winvest.com.br`, `b2wedutech.com.br`, `autentique.com.br` e `assina.ae` (encurtador da Autentique), incluindo subdomínios. Outro destino recebe **403**. Para liberar um domínio novo, edite `DOMINIOS_PERMITIDOS` e publique a função de novo.
+- **Frontend**:
+  - `shortenLink(url, keyword, title)` em `src/lib/api.js`.
+  - `buildReferralUrl` (`src/lib/originador.js`) usa o `short_url` quando existe e cai no link longo enquanto ele não chega. Usado em `OriginatorDashboard.jsx` e `OriginatorList.jsx`.
+  - `OriginatorSignupForm.jsx` relê o `short_url` 4 s após o cadastro.
+  - `SubscriberModal.jsx`, `SupplierModal.jsx` e `PowerPlantModal.jsx` encurtam o link da Autentique antes do envio; `PowerPlantModal.jsx` também tem o botão "Gerar Link Encurtado" da página da usina.
+- **Limitações conhecidas**:
+  - Sem nova tentativa automática: se o YOURLS falhar, o `short_url` fica nulo até rodar `{"all_missing": true}`.
+  - Keyword já ocupada no YOURLS gera erro e deixa o `short_url` nulo.
+  - `OriginatorDashboard.jsx` ainda gera link por conta própria com outro formato (`ref-xxxxx`, título "Link Embaixador"), divergente da Edge Function.
+  - `yourls-shorten` aceita a chave anon (pública) e qualquer URL de destino — qualquer pessoa consegue encurtar links no domínio do YOURLS.
+
 ---
 
 ## 10. Rastreabilidade

@@ -51,6 +51,16 @@ verify_jwt = false
 [functions.onboarding-finalizar]
 verify_jwt = false
 
+# Encurtador YOURLS. `verify_jwt` sozinho nao protege (a chave anon e um JWT
+# valido e publico); a funcao exige usuario logado ou service role e so aceita
+# destinos da lista DOMINIOS_PERMITIDOS. Endurecida em 12/09/2026.
+[functions.yourls-shorten]
+verify_jwt = true
+
+# Chamada pelo gatilho trg_originador_short_url via pg_net, sem token.
+[functions.originador-short-url]
+verify_jwt = false
+
 # O emissor cria cobranca real. `verify_jwt` sozinho nao protege — a chave anon
 # e um JWT valido e publico — entao a funcao tem portao proprio: token do cron
 # lido do Vault, ou sessao de administrador. O verify_jwt fica ligado como

@@ -27,10 +27,13 @@ import { CSS } from '@dnd-kit/utilities';
 const KANBAN_STATUSES = [
     { status: 'indicado', label: 'Indicado', color: '#0ea5e9' },
     { status: 'simulacao', label: 'Simulação', color: '#64748b' },
-    { status: 'em_negociacao', label: 'Em Negociação', color: '#eab308' },
+    { status: 'sem_interacao', label: 'Sem Interação', color: '#a8a29e' },
+    { status: 'negociacao', label: 'Negociação', color: '#eab308' },
+    { status: 'reuniao_agendada', label: 'Reunião Agendada/Apresentação', color: '#f97316' },
+    { status: 'contrato_enviado', label: 'Contrato Enviado', color: '#8b5cf6' },
     { status: 'ativacao', label: 'Ativação', color: '#7c3aed' },
     { status: 'ativo', label: 'Ativo', color: '#22c55e' },
-    { status: 'pago', label: 'Pago', color: '#8b5cf6' },
+    { status: 'pago', label: 'Pago', color: '#06b6d4' },
     { status: 'negocio_perdido', label: 'Negócio Perdido', color: '#ef4444' }
 ];
 
@@ -154,6 +157,7 @@ export default function LeadsList() {
     const [leadToConvert, setLeadToConvert] = useState(null);
     const [viewMode, setViewMode] = useState('kanban'); // Default to kanban
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedTags, setSelectedTags] = useState([]);
     const [activeId, setActiveId] = useState(null);
 
     const sensors = useSensors(
@@ -165,16 +169,30 @@ export default function LeadsList() {
     );
 
     const filteredLeads = leads.filter(lead => {
-        if (!searchTerm) return true;
-        const lowerTerm = searchTerm.toLowerCase();
-        const hasTagMatch = lead.tags?.some(tag => tag.toLowerCase().includes(lowerTerm));
-        return (
-            lead.name?.toLowerCase().includes(lowerTerm) ||
-            lead.email?.toLowerCase().includes(lowerTerm) ||
-            lead.phone?.includes(lowerTerm) ||
-            lead.concessionaria?.toLowerCase().includes(lowerTerm) ||
-            hasTagMatch
-        );
+        let matchesSearch = true;
+        let matchesTags = true;
+        
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            const hasTagMatch = lead.tags?.some(tag => tag.toLowerCase().includes(lowerTerm));
+            matchesSearch = (
+                lead.name?.toLowerCase().includes(lowerTerm) ||
+                lead.email?.toLowerCase().includes(lowerTerm) ||
+                lead.phone?.includes(lowerTerm) ||
+                lead.concessionaria?.toLowerCase().includes(lowerTerm) ||
+                hasTagMatch
+            );
+        }
+
+        if (selectedTags.length > 0) {
+            if (!lead.tags || lead.tags.length === 0) {
+                matchesTags = false;
+            } else {
+                matchesTags = selectedTags.some(t => lead.tags.includes(t));
+            }
+        }
+
+        return matchesSearch && matchesTags;
     });
 
     useEffect(() => {
@@ -327,12 +345,39 @@ export default function LeadsList() {
                 <div style={{ display: 'flex', gap: '1rem', flex: 1, alignItems: 'center' }}>
                     <input
                         type="text"
-                        placeholder="Buscar por nome, email, telefone ou concessionária..."
+                        placeholder="Buscar por nome, email, telefone..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="input"
-                        style={{ maxWidth: '400px' }}
+                        style={{ maxWidth: '300px' }}
                     />
+                    
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
+                        {['Embaixador', 'Energia por Assinatura', 'Investidor', 'Eletropostos', 'Cotas', 'Consorcio', 'Financiamento', 'Arrendamento de area', 'Locação de Vagas', 'Comercializadora'].map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => {
+                                    if (selectedTags.includes(tag)) {
+                                        setSelectedTags(selectedTags.filter(t => t !== tag));
+                                    } else {
+                                        setSelectedTags([...selectedTags, tag]);
+                                    }
+                                }}
+                                style={{
+                                    fontSize: '0.75rem',
+                                    padding: '0.2rem 0.6rem',
+                                    borderRadius: '16px',
+                                    border: selectedTags.includes(tag) ? '1px solid var(--color-primary)' : '1px solid #cbd5e1',
+                                    background: selectedTags.includes(tag) ? 'var(--color-primary)' : 'white',
+                                    color: selectedTags.includes(tag) ? 'white' : '#475569',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
                     <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                         <button
                             onClick={() => setViewMode('list')}
@@ -430,14 +475,27 @@ export default function LeadsList() {
                                                             Editar
                                                         </button>
                                                         {!['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && (
-                                                            <button
-                                                                onClick={() => handleConvert(lead)}
-                                                                className="btn"
-                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: '1px solid var(--color-success)', color: 'var(--color-success)', background: 'white' }}
-                                                            >
-                                                                Converter
-                                                            </button>
-                                                        )}
+        <select
+            onChange={(e) => {
+                if (e.target.value) {
+                    if (e.target.value === 'assinante') {
+                        handleConvert(lead);
+                    } else {
+                        alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
+                    }
+                    e.target.value = '';
+                }
+            }}
+            className="input"
+            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: '1px solid var(--color-success)', color: 'var(--color-success)', background: 'white', maxWidth: '120px' }}
+        >
+            <option value="">Converter...</option>
+            <option value="embaixador">Embaixador</option>
+            <option value="assinante">Assinante</option>
+            <option value="fornecedor">Fornecedor</option>
+            <option value="dono_areas">Dono de Áreas/Vagas</option>
+        </select>
+    )}
                                                     </td>
                                                 </tr>
                                             ))}

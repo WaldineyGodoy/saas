@@ -116,102 +116,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
     const handleSaveAppointment = async (e) => {
         e.preventDefault();
-        try {
-            const { error } = await supabase
-                .from('lead_appointments')
-                .insert({
-                    lead_id: lead.id,
-                    appointment_date: newAppointment.date,
-                    appointment_time: newAppointment.time,
-                    reason: newAppointment.reason,
-                    notes: newAppointment.notes,
-                    created_by: profile?.id
-                });
-            if (error) throw error;
-            showAlert('Agendamento criado com sucesso!', 'success');
-            setNewAppointment({ date: '', time: '', reason: 'Ligação', notes: '' });
-            fetchAppointments();
-            addHistory('lead', lead.id, 'agendamento_criado', { reason: newAppointment.reason, date: newAppointment.date, time: newAppointment.time });
-        } catch (error) {
-            showAlert('Erro ao criar agendamento: ' + error.message, 'error');
-        }
-    };
-
-    const addHistory = async (type, id, action, details = {}, customContent = null) => {
-        if (!id) {
-            console.error('addHistory: Missing entity ID');
+        if (!lead?.id) {
+            showAlert('Por favor, salve o lead primeiro clicando no botão "Salvar Lead" abaixo.', 'warning');
             return;
         }
-        try {
-            const { error } = await supabase.from('crm_history').insert({
-                entity_type: type,
-                entity_id: id,
-                content: customContent || `${action === 'email_sent' ? 'E-mail enviado' : action}: ${details.type || ''}`,
-                metadata: details,
-                created_by: profile?.id
-            });
-            if (error) throw error;
-        } catch (error) {
-            console.error('Error adding history:', error);
-        }
-    };
-
-    const fetchOriginators = async () => {
-        const { data } = await supabase
-            .from('originators_v2')
-            .select('id, name')
-            .order('name');
-        setOriginators(data || []);
-    };
-
-    const handleCepBlur = async () => {
-        const rawCep = formData.cep.replace(/\D/g, '');
-        if (rawCep.length === 8) {
-            setSearchingCep(true);
-            try {
-                const addr = await fetchAddressByCep(rawCep);
-                let offer = {};
-                if (addr.ibge) {
-                    try {
-                        const offerData = await fetchOfferData(addr.ibge);
-                        if (offerData) offer = offerData;
-                    } catch (e) {
-                        console.error('Erro na oferta', e);
-                    }
-                }
-                setFormData(prev => ({
-                    ...prev,
-                    rua: addr.rua || '',
-                    bairro: addr.bairro || '',
-                    cidade: addr.cidade || '',
-                    uf: addr.uf || '',
-                    concessionaria: offer?.Concessionaria || prev.concessionaria || '',
-                    tarifa_concessionaria: offer?.['Tarifa Concessionaria'] || prev.tarifa_concessionaria || '',
-                    desconto_assinante: (() => {
-                        let val = offer?.['Desconto Assinante'] || prev.desconto_assinante || '';
-                        if (val && !isNaN(val) && Number(val) > 0 && Number(val) < 1) {
-                            return Number(val) * 100;
-                        }
-                        return val;
-                    })()
-                }));
-            } catch (error) {
-                console.error('Erro ao buscar CEP:', error);
-                showAlert('Erro ao buscar CEP. Verifique se digitou corretamente.', 'error');
-            } finally {
-                setSearchingCep(false);
-            }
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        if (formData.phone && !validatePhone(formData.phone)) {
-            showAlert('Telefone inválido!', 'warning');
-            return;
-        }
-
         setLoading(true);
 
         try {
@@ -290,6 +198,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     };
 
     const handleSendManualWhatsApp = async () => {
+        if (!lead?.id) {
+            showAlert('Por favor, salve o lead primeiro clicando no botão "Salvar Lead" abaixo.', 'warning');
+            return;
+        }
         if (!manualMessage.trim() && !manualFile) {
             showAlert('Por favor, digite uma mensagem ou anexe um arquivo.', 'warning');
             return;
@@ -428,12 +340,14 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     borderBottom: '1px solid #e2e8f0',
                     gap: '2rem'
                 }}>
-                    {[
+                    {
+                    [
                         { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
-                        { id: 'endereco_energia', label: 'Endereço e Energia', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
-                        { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, color: '#f59e0b', bg: '#fff7ed' },
+                        { id: 'endereco', label: 'Endereço', icon: Home, color: '#10b981', bg: '#ecfdf5' },
+                        ...(formData.tags?.includes('Energia por Assinatura') ? [{ id: 'energia', label: 'Dados de Energia', icon: Zap, color: '#f59e0b', bg: '#fff7ed' }] : []),
+                        { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
-                    ].filter(tab => lead || ['dados', 'endereco_energia'].includes(tab.id)).map(tab => {
+                    ].map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
                         return (
@@ -517,41 +431,14 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Nome Completo</label>
-                                    <input
-                                        required
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                    />
-                                </div>
+                                
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Telefone</label>
-                                        <input
-                                            placeholder="55 xx xxxxx xxxx"
-                                            value={formData.phone}
-                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Email</label>
-                                        <input
-                                            type="email"
-                                            value={formData.email}
-                                            onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
-                                        />
-                                    </div>
-                                </div>
+                                
                             </div>
                         </form>
                     )}
 
-                    {activeTab === 'endereco_energia' && (
+                    {activeTab === 'endereco' && (
                         <form id="lead-form-endereco" onSubmit={handleSubmit}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                 <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -687,7 +574,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                         </form>
                     )}
 
-                    {activeTab === 'agendamentos' && lead && (
+                    {activeTab === 'agendamentos' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
@@ -773,7 +660,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                         </div>
                     )}
 
-                    {activeTab === 'comunicacao' && lead && (
+                    {activeTab === 'comunicacao' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', animate: 'fadeIn 0.3s ease' }}>
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
@@ -868,23 +755,38 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
                         {lead && !['ativacao', 'ativo', 'pago', 'negocio_perdido'].includes(lead.status) && onConvert && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onConvert(lead);
-                                    onClose();
+                            <select
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        if (e.target.value === 'assinante') {
+                                            onConvert(lead);
+                                            onClose();
+                                        } else {
+                                            alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
+                                        }
+                                        e.target.value = '';
+                                    }
                                 }}
-                                style={{ padding: '0.6rem 1.25rem', background: '#ecfdf5', color: '#047857', border: '1px solid #bbf7d0', borderRadius: '6px', fontWeight: 600 }}
+                                style={{ padding: '0.6rem 1.25rem', background: '#ecfdf5', color: '#047857', border: '1px solid #bbf7d0', borderRadius: '6px', fontWeight: 600, outline: 'none' }}
                             >
-                                Converter em Assinante
-                            </button>
+                                <option value="">Converter...</option>
+                                <option value="embaixador">Embaixador</option>
+                                <option value="assinante">Assinante</option>
+                                <option value="fornecedor">Fornecedor</option>
+                                <option value="dono_areas">Dono de Áreas/Vagas</option>
+                            </select>
                         )}
                         <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: 'white', color: '#475569', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 600 }}>Cancelar</button>
-                        {['dados', 'endereco_energia'].includes(activeTab) && (
+                        {['dados', 'endereco', 'energia', 'agendamentos', 'comunicacao'].includes(activeTab) && (
                             <button
                                 type="button"
                                 onClick={(e) => {
-                                    const formId = activeTab === 'dados' ? 'lead-form-dados' : 'lead-form-endereco';
+                                    let formId = 'lead-form-dados';
+                                if (activeTab === 'endereco') formId = 'lead-form-endereco';
+                                else if (activeTab === 'energia') formId = 'lead-form-energia';
+                                else if (activeTab === 'agendamentos' || activeTab === 'comunicacao') {
+                                    formId = 'lead-form-dados';
+                                }
                                     document.getElementById(formId).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                                 }}
                                 disabled={loading}
