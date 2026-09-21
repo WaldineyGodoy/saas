@@ -43,10 +43,10 @@ Campos novos coletados em `/contrato`:
 
 Regras da RPC:
 
-- **Desconto no servidor**: `desconto_assinante` de cada UC = `"Desconto Assinante"` da `Concessionaria` pelo `"Cod. Ibge"` (novo parâmetro `p_ibge`, vindo do ViaCEP); sem linha para o município, a média da UF — a mesma regra da raiz. Valor da URL é ignorado.
+- **Desconto no servidor**: `desconto_assinante` de cada UC = `"Desconto Assinante"` da `Concessionaria` pelo `"Cod. Ibge"` (novo parâmetro `p_ibge`, vindo do ViaCEP); sem linha para o município, a média da UF — a mesma regra da raiz. Valor da URL é ignorado. Desconto resolvido nulo ou zero ⇒ a RPC recusa ("Ainda não temos desconto disponível para este município"): o contrato não pode imprimir o padrão de 20% para quem não tem desconto.
 - **Duplicidade**: CPF/CNPJ bloqueado se houver assinante em qualquer status exceto `cancelado`/`cancelado_inadimplente` (mesma regra do `SubscriberModal`, que passa a usar a mesma função). Número de UC bloqueado se já existir em UC não cancelada de outro assinante.
 - **Retorno**: `{subscriber_id, onboarding_token}`. Token = `uuid` em `subscribers.onboarding_token` (nova), válido por 30 dias (`onboarding_token_expira_em`), anulado quando o contrato é assinado.
-- **Retomada**: o front grava `?retomar=<token>` na URL (`history.replaceState`). Abrir `/contrato?retomar=<token>` carrega o estado pela RPC `fn_onboarding_estado(p_token)` (SECURITY DEFINER, anon): etapa atual, nome, UCs e documentos já enviados — sem CPF completo nem endereço.
+- **Retomada**: o front grava `?retomar=<token>` na URL (`history.replaceState`). Abrir `/contrato?retomar=<token>` carrega o estado pela RPC `fn_onboarding_estado(p_token)` (SECURITY DEFINER, anon): etapa atual, dados do assinante e das UCs (o PDF do contrato é gerado no navegador e precisa deles) e documentos já enviados. O token é a credencial: só o dono do link o tem.
 
 ## §3 Passo "Documentos"
 
