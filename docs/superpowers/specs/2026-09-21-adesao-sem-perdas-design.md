@@ -83,6 +83,10 @@ Apagar `src/pages/LeadSignup.jsx`, `src/pages/ReferralLanding.jsx`, `src/pages/L
 - **Front** (Vitest, novo): `contrato.js` — desconto, vencimento, representante.
 - **Ponta a ponta real, Autentique em Sandbox**, dois caminhos: raiz com `?name=&id=` de um embaixador, e raiz sem embaixador. Contato real: WhatsApp **5533999991234**, e-mail **b2wnotificacoes@gmail.com**; demais dados fictícios válidos, CEP 59158-155. Conferir: WhatsApp e e-mail com o mesmo link curto, documentos no bucket, entidades no CRM (lead, assinante, UCs com desconto/vencimento, perfil, assinatura), lead derivado pelo gatilho. Webhook de assinatura em Sandbox → `contrato_assinado`. Autentique volta a produção e os dados de teste são apagados no fim.
 
+## Dados anteriores
+
+Decisão do dono (21/09/2026): os leads e vínculos lead→assinante criados antes desta implementação têm vício de dados e são descartados da jornada. Sem backfill de `lead_id`, sem migração de status, sem reprocessar os 32 leads em `simulacao`. Só leads gerados depois do deploy contam como válidos. Nada é apagado por esta implementação.
+
 ## Fora do escopo
 
 Lembretes de adesão incompleta e notificações por etapa (C); TT, rateio, capacidade e ativação (B); unificar os três simuladores (o desconto passa a vir do servidor, a divergência deixa de chegar ao contrato); OCR da conta de energia.
