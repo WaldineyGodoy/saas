@@ -57,6 +57,10 @@ verify_jwt = false
 [functions.onboarding-finalizar]
 verify_jwt = false
 
+# Upload de documentos da adesão pública. portao = onboarding_token
+[functions.onboarding-documentos]
+verify_jwt = false
+
 # Encurtador YOURLS. `verify_jwt` sozinho nao protege (a chave anon e um JWT
 # valido e publico); a funcao exige usuario logado ou service role e so aceita
 # destinos da lista DOMINIOS_PERMITIDOS. Endurecida em 12/09/2026.
