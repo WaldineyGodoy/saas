@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fetchAddressByCep } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
+import { maskCpfCnpj, validateDocument } from '../lib/validators';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 const maskCEP = (val) => (val || '').replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
@@ -59,6 +60,7 @@ export default function PublicConsumerUnitForm({
     titularDefault,
     franquiaDefault,
     enderecoDefault,
+    docAssinante,
     onClose,
     onSave
 }) {
@@ -70,6 +72,10 @@ export default function PublicConsumerUnitForm({
         titular_conta: titularDefault || '',
         concessionaria: concessionariaDefault || '',
         franquia: franquiaDefault || '',
+        // Documento de quem aparece na fatura. Quase sempre é o do próprio
+        // assinante, por isso já vem preenchido — mas pode ser outro titular.
+        cpf_cnpj_fatura: maskCpfCnpj(docAssinante || ''),
+        tipo_ligacao: '',
 
         // Endereço herdado do cadastro do assinante — na maioria das adesões
         // a UC fica no mesmo endereço, e redigitar é onde o cliente desiste.
@@ -79,12 +85,15 @@ export default function PublicConsumerUnitForm({
         complemento: enderecoDefault?.complemento || '',
         bairro: enderecoDefault?.bairro || '',
         cidade: enderecoDefault?.cidade || '',
-        uf: enderecoDefault?.uf || ''
+        uf: enderecoDefault?.uf || '',
+        // Código IBGE do município: é por ele que a RPC acha o desconto.
+        ibge: enderecoDefault?.ibge || ''
     });
 
     const handleCepChange = (e) => {
         const masked = maskCEP(e.target.value);
-        setFormData(prev => ({ ...prev, cep: masked }));
+        // CEP novo invalida o IBGE antigo; o blur busca o certo.
+        setFormData(prev => ({ ...prev, cep: masked, ibge: prev.cep === masked ? prev.ibge : '' }));
     };
 
     const handleCepBlur = async () => {
@@ -99,17 +108,18 @@ export default function PublicConsumerUnitForm({
                     bairro: addr.bairro || '',
                     cidade: addr.cidade || '',
                     uf: addr.uf || '',
+                    ibge: addr.ibge || '',
                 }));
             } catch (error) {
                 console.error('Erro CEP', error);
-                // Silent error or basic alert
+                setFormData(prev => ({ ...prev, ibge: '' }));
             } finally {
                 setSearchingCep(false);
             }
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         const numeroUc = formData.numero_uc.trim();
@@ -118,7 +128,31 @@ export default function PublicConsumerUnitForm({
             return showAlert('Informe o titular da conta, exatamente como aparece na fatura.', 'warning');
         }
 
-        onSave({ ...formData, numero_uc: numeroUc });
+        if (!validateDocument(formData.cpf_cnpj_fatura)) {
+            return showAlert('Informe um CPF/CNPJ válido do titular da conta.', 'warning');
+        }
+        if (!['monofasico', 'bifasico', 'trifasico'].includes(formData.tipo_ligacao)) {
+            return showAlert('Informe o tipo de ligação (está na sua conta de luz).', 'warning');
+        }
+
+        // Sem IBGE a RPC não acha o desconto do município. Se o blur do CEP
+        // não chegou a rodar (ou falhou), tenta mais uma vez aqui.
+        let ibge = formData.ibge;
+        if (!ibge) {
+            try {
+                ibge = (await fetchAddressByCep(formData.cep || '')).ibge || '';
+            } catch {
+                ibge = '';
+            }
+        }
+        if (!ibge) return showAlert('Não conseguimos localizar o CEP da instalação. Confira o CEP.', 'warning');
+
+        onSave({
+            ...formData,
+            ibge,
+            numero_uc: numeroUc,
+            cpf_cnpj_fatura: formData.cpf_cnpj_fatura.replace(/\D/g, '')
+        });
         onClose();
     };
 
@@ -157,6 +191,33 @@ export default function PublicConsumerUnitForm({
                                 placeholder="Nome Completo / Razão Social"
                                 className="input"
                             />
+                        </div>
+
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="label">CPF/CNPJ do titular da conta <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                            <input
+                                required
+                                inputMode="numeric"
+                                value={formData.cpf_cnpj_fatura}
+                                onChange={e => setFormData({ ...formData, cpf_cnpj_fatura: maskCpfCnpj(e.target.value) })}
+                                placeholder="000.000.000-00"
+                                className="input"
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label className="label">Tipo de ligação <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                            <select
+                                required
+                                value={formData.tipo_ligacao}
+                                onChange={e => setFormData({ ...formData, tipo_ligacao: e.target.value })}
+                                className="input"
+                            >
+                                <option value="">Selecione</option>
+                                <option value="monofasico">Monofásico</option>
+                                <option value="bifasico">Bifásico</option>
+                                <option value="trifasico">Trifásico</option>
+                            </select>
                         </div>
 
                         <div style={{ marginBottom: '1rem' }}>

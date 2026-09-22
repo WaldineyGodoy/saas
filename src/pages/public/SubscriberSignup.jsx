@@ -1,15 +1,78 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { fetchAddressByCep, fetchCpfCnpjData, sendWhatsapp } from '../../lib/api';
-import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../../lib/validators';
+import { fetchAddressByCep, fetchCpfCnpjData } from '../../lib/api';
+import { maskCpfCnpj, maskPhone, validateCpf, validateDocument, validatePhone } from '../../lib/validators';
 import { useUI } from '../../contexts/UIContext';
 import { useBranding } from '../../contexts/BrandingContext';
 import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
 import ContratoAdesao from '../../components/ContratoAdesao';
-import { gerarPdfContratoBase64 } from '../../lib/contrato';
-import { Zap, CheckCircle, Plus, Trash2, ArrowRight } from 'lucide-react';
+import PassoDocumentos from './onboarding/PassoDocumentos';
+import { dividirEmPaginas, gerarPdfContratoBase64, montarTextoContrato } from '../../lib/contrato';
+import { semTituloRepetido } from '../../lib/contratoBase';
+import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo } from '../../lib/onboarding';
+import { Zap, CheckCircle, Plus, Trash2, ArrowRight, Clock, Link2, FileSignature } from 'lucide-react';
 
+const TITULO_TERMO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
+const URL_TERMOS_USO = 'https://b2wenergia.com.br/termos-de-uso/';
+const URL_PRIVACIDADE = 'https://b2wenergia.com.br/politica-de-privacidade/';
+
+const PASSOS = [
+    { id: 'dados', rotulo: 'Dados' },
+    { id: 'documentos', rotulo: 'Documentos' },
+    { id: 'contrato', rotulo: 'Contrato' }
+];
+
+const inputClass = 'w-full px-4 py-4 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6600] focus:border-transparent transition-all shadow-sm font-medium text-slate-700';
+
+/** Tela cheia de mensagem: carregando, link expirado, concluído etc. */
+function TelaMensagem({ icone, titulo, children }) {
+    return (
+        <div className="min-h-screen bg-slate-50 font-inter flex items-center justify-center px-4">
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-8 md:p-10 max-w-lg w-full text-center">
+                {icone}
+                <h1 className="text-2xl md:text-3xl font-bold mb-4" style={{ color: '#003366' }}>{titulo}</h1>
+                <div className="text-slate-600">{children}</div>
+            </div>
+        </div>
+    );
+}
+
+/** Indicador Dados → Documentos → Contrato. */
+function Passos({ atual }) {
+    const idx = Math.max(0, PASSOS.findIndex(p => p.id === atual));
+    const concluidoTudo = atual === 'enviado';
+    return (
+        <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 mt-4 text-xs sm:text-sm">
+            {PASSOS.map((p, i) => {
+                const feito = concluidoTudo || i < idx;
+                const ativo = !concluidoTudo && i === idx;
+                return (
+                    <li key={p.id} className="flex items-center gap-2">
+                        <span
+                            className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-white ${feito ? 'bg-green-500' : ''}`}
+                            style={!feito ? { backgroundColor: ativo ? '#FF6600' : '#cbd5e1' } : undefined}
+                        >
+                            {feito ? '✓' : i + 1}
+                        </span>
+                        <span className={`font-semibold ${ativo ? 'text-slate-900' : 'text-slate-500'}`}>{p.rotulo}</span>
+                        {i < PASSOS.length - 1 && <span className="w-3 sm:w-8 h-px bg-slate-300" />}
+                    </li>
+                );
+            })}
+        </ol>
+    );
+}
+
+/**
+ * Adesão pública em três passos: Dados → Documentos → Contrato.
+ *
+ * O passo Dados grava assinante + UCs pela RPC `fn_criar_assinante_publico`
+ * e recebe um token de retomada. A partir daí a URL vira
+ * `/contrato?retomar=<token>`: quem fecha a página no meio volta de onde
+ * parou, e o estado vem sempre do banco (`fn_onboarding_estado`), nunca da
+ * memória do navegador.
+ */
 export default function SubscriberSignup() {
     const [searchParams] = useSearchParams();
     const { showAlert, showConfirm } = useUI();
@@ -26,18 +89,29 @@ export default function SubscriberSignup() {
     const paramSavingsAnnual = searchParams.get('savings_annual') || '0';
     const paramConcessionaria = searchParams.get('concessionaria') || '';
     const paramConsumo = searchParams.get('consumo') || '';
+    const paramRetomar = searchParams.get('retomar') || '';
+
+    // 'carregando' | 'expirado' | 'dados' | 'documentos' | 'contrato' |
+    // 'enviado' | 'assinado' | 'pendente_equipe'
+    const [passo, setPasso] = useState(paramRetomar ? 'carregando' : 'dados');
+    const [onboardingToken, setOnboardingToken] = useState(paramRetomar);
+    const [estado, setEstado] = useState(null);
 
     const [loading, setLoading] = useState(false);
     const [etapa, setEtapa] = useState('');
-    const [done, setDone] = useState(false);
+    // Trava síncrona contra duplo clique: o `disabled` só vale depois do
+    // próximo render, e dois cliques rápidos criavam dois documentos na
+    // Autentique (o servidor não tem trava de concorrência).
+    const ocupadoRef = useRef(false);
     const [showUcModal, setShowUcModal] = useState(false);
-    // Alimenta as páginas ocultas do contrato. Só é preenchido depois que o
-    // assinante existe no banco — o PDF precisa refletir o que foi gravado.
+    // Alimenta as páginas ocultas do contrato. Só é preenchido a partir do
+    // estado do banco — o PDF precisa refletir o que foi gravado.
     const [dadosContrato, setDadosContrato] = useState(null);
-    // UCs vivem em memória até o "Finalizar Adesão". Antes, adicionar uma UC
-    // gravava o assinante no banco só para ter um id de vínculo: quem
-    // desistia no meio deixava assinante órfão sem nenhuma unidade.
+    // UCs vivem em memória até o envio do passo Dados.
     const [consumerUnits, setConsumerUnits] = useState([]);
+
+    const [diaVencimento, setDiaVencimento] = useState(null);
+    const [aceite, setAceite] = useState(false);
 
     const [formData, setFormData] = useState({
         name: paramName,
@@ -52,8 +126,13 @@ export default function SubscriberSignup() {
         complemento: '',
         bairro: searchParams.get('bairro') || '',
         cidade: searchParams.get('cidade') || '',
-        uf: searchParams.get('uf') || ''
+        uf: searchParams.get('uf') || '',
+        ibge: '',
+        representante_nome: '',
+        representante_cpf: ''
     });
+
+    const ehCnpj = formData.cpf_cnpj.replace(/\D/g, '').length === 14;
 
     // Address & Doc Search States
     const [searchingCep, setSearchingCep] = useState(false);
@@ -61,10 +140,64 @@ export default function SubscriberSignup() {
 
     // Initial Address Fetch if CEP provided
     useEffect(() => {
-        if (paramCep) {
+        if (paramCep && !paramRetomar) {
             handleCepBlur(paramCep);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paramCep]);
+
+    // Retomada: o link `/contrato?retomar=<token>` reabre a adesão no passo
+    // em que ela parou.
+    useEffect(() => {
+        if (!paramRetomar) return;
+        carregarEstado(paramRetomar).then(est => {
+            if (est === null) {
+                setPasso('expirado');
+                showAlert('Link expirado, refaça a simulação.', 'warning');
+            }
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paramRetomar]);
+
+    /**
+     * Busca o estado da adesão no banco e leva a tela ao passo certo.
+     * Devolve o estado, `null` se o token não vale mais, ou `undefined` se
+     * a chamada falhou (rede) — nesse caso não dá para dizer que expirou.
+     */
+    const carregarEstado = async (token) => {
+        const { data, error } = await supabase.rpc('fn_onboarding_estado', { p_token: token });
+        if (error) {
+            console.error('fn_onboarding_estado:', error);
+            showAlert(error.message || 'Não foi possível carregar sua adesão. Tente de novo.', 'error');
+            setPasso(prev => (prev === 'carregando' ? 'erro_carga' : prev));
+            return undefined;
+        }
+        if (!data) return null;
+
+        const sub = data.subscriber || {};
+        const ucs = data.ucs || [];
+        setEstado(data);
+        setFormData(prev => ({
+            ...prev,
+            name: sub.name || '',
+            cpf_cnpj: maskCpfCnpj(sub.cpf_cnpj || ''),
+            phone: maskPhone(sub.phone || ''),
+            email: sub.email || '',
+            cep: sub.cep || '',
+            rua: sub.rua || '',
+            numero: sub.numero || '',
+            complemento: sub.complemento || '',
+            bairro: sub.bairro || '',
+            cidade: sub.cidade || '',
+            uf: sub.uf || '',
+            representante_nome: sub.representante_nome || '',
+            representante_cpf: sub.representante_cpf || ''
+        }));
+        setConsumerUnits(ucs);
+        setDiaVencimento(ucs[0]?.dia_vencimento ?? null);
+        setPasso(data.etapa || 'documentos');
+        return data;
+    };
 
     const handleCepBlur = async (cepValue) => {
         const rawCep = (cepValue || formData.cep).replace(/\D/g, '');
@@ -78,10 +211,13 @@ export default function SubscriberSignup() {
                     rua: addr.rua || '',
                     bairro: addr.bairro || '',
                     cidade: addr.cidade || '',
-                    uf: addr.uf || ''
+                    uf: addr.uf || '',
+                    // Código do município: é por ele que a RPC acha o desconto.
+                    ibge: addr.ibge || ''
                 }));
             } catch (error) {
                 console.error('Erro CEP:', error);
+                setFormData(prev => ({ ...prev, ibge: '' }));
             } finally {
                 setSearchingCep(false);
             }
@@ -113,17 +249,27 @@ export default function SubscriberSignup() {
 
     const handleAddUcClick = () => setShowUcModal(true);
 
-    const handleFinalize = async () => {
+    /** Passo Dados: grava assinante + UCs e abre o passo Documentos. */
+    const handleEnviarDados = async () => {
+        if (ocupadoRef.current) return;
+
         // Validação local — a RPC revalida tudo do lado do banco, já que ela
         // é chamada direto da internet.
         if (!formData.name?.trim()) return showAlert('Informe seu nome completo.', 'warning');
         if (!validateDocument(formData.cpf_cnpj)) return showAlert('CPF/CNPJ inválido.', 'warning');
+        if (ehCnpj) {
+            if (!formData.representante_nome.trim()) return showAlert('Informe o nome do representante legal.', 'warning');
+            if (!validateCpf(formData.representante_cpf)) return showAlert('CPF do representante legal inválido.', 'warning');
+        }
         if (!validatePhone(formData.phone)) return showAlert('WhatsApp inválido. Informe DDD + 9 dígitos.', 'warning');
         if (!formData.email?.trim()) return showAlert('Informe seu e-mail.', 'warning');
         if (consumerUnits.length === 0) {
-            return showAlert('Adicione pelo menos uma Unidade Consumidora para concluir a adesão.', 'warning');
+            return showAlert('Adicione pelo menos uma Unidade Consumidora para continuar.', 'warning');
         }
+        if (!DIAS_VENCIMENTO.includes(diaVencimento)) return showAlert('Escolha o dia de vencimento.', 'warning');
+        if (!aceite) return showAlert('Aceite os termos de uso e a política de privacidade para continuar.', 'warning');
 
+        ocupadoRef.current = true;
         setLoading(true);
         setEtapa('Registrando sua adesão...');
         try {
@@ -141,13 +287,17 @@ export default function SubscriberSignup() {
                 p_bairro: formData.bairro,
                 p_cidade: formData.cidade,
                 p_uf: formData.uf,
-                p_originator_id: paramOriginatorId || null,
-                p_lead_id: paramLeadId || null,
+                p_ibge: formData.ibge || null,
+                p_originator_id: uuidOuNulo(paramOriginatorId),
+                p_lead_id: uuidOuNulo(paramLeadId),
                 p_ucs: consumerUnits.map(uc => ({
                     numero_uc: uc.numero_uc,
                     titular_conta: uc.titular_conta,
+                    cpf_cnpj_fatura: uc.cpf_cnpj_fatura,
+                    tipo_ligacao: uc.tipo_ligacao,
                     concessionaria: uc.concessionaria,
                     franquia: uc.franquia,
+                    ibge: uc.ibge,
                     cep: uc.cep,
                     rua: uc.rua,
                     numero: uc.numero,
@@ -155,121 +305,185 @@ export default function SubscriberSignup() {
                     bairro: uc.bairro,
                     cidade: uc.cidade,
                     uf: uc.uf
-                }))
+                })),
+                p_dia_vencimento: diaVencimento,
+                p_representante_nome: ehCnpj ? formData.representante_nome.trim() : null,
+                p_representante_cpf: ehCnpj ? formData.representante_cpf : null,
+                p_aceite_versao: VERSAO_TERMOS
             });
 
             if (error) throw error;
-            console.info('Adesão criada:', data);
 
-            // A partir daqui o assinante JÁ EXISTE. Nada abaixo pode
-            // desfazê-lo nem esconder isso do cliente — só degradar a
-            // experiência para "o contrato chega pelo WhatsApp".
-            await notificarOriginador();
-            await enviarContrato(data?.subscriber_id);
+            // A partir daqui o assinante JÁ EXISTE. A URL passa a ser o link
+            // de retomada: recarregar a página não cria outro cadastro.
+            const token = data?.onboarding_token;
+            setOnboardingToken(token);
+            window.history.replaceState(null, '', '/contrato?retomar=' + token);
 
-            setDone(true);
-
+            setEtapa('Carregando o próximo passo...');
+            const est = await carregarEstado(token);
+            // Cadastro gravado mas o estado não veio: a URL já é o link de
+            // retomada, então "tentar de novo" continua de onde parou.
+            if (!est) setPasso('erro_carga');
         } catch (error) {
             console.error(error);
-            showAlert(error.message || 'Não foi possível concluir a adesão.', 'error');
+            showAlert(error.message || 'Não foi possível registrar sua adesão.', 'error');
         } finally {
+            ocupadoRef.current = false;
             setLoading(false);
             setEtapa('');
         }
     };
 
     /**
-     * Gera o contrato e leva o assinante para a página de termos.
-     *
-     * Antes isso dependia de um admin abrir o CRM e clicar em "Gerar e
-     * Enviar para Assinatura Eletrônica" — o cliente saía do site sem
-     * contrato nenhum e sem saber que faltava um passo.
+     * Passo Contrato: gera o PDF a partir do que está no banco e manda para
+     * a assinatura digital. O servidor cria a conta, o documento na
+     * Autentique e avisa assinante e originador.
      */
-    const enviarContrato = async (subscriberId) => {
-        if (!subscriberId) return;
-
+    const handleGerarContrato = async () => {
+        if (ocupadoRef.current || !estado) return;
+        ocupadoRef.current = true;
+        setLoading(true);
         try {
             setEtapa('Preparando seu contrato...');
-
             // Monta as páginas ocultas e espera o React renderizar antes de
             // o html2canvas tentar capturá-las.
-            setDadosContrato({
-                subscriber: { ...formData, cpf_cnpj: formData.cpf_cnpj.replace(/\D/g, '') },
-                ucs: consumerUnits
-            });
+            setDadosContrato({ subscriber: estado.subscriber, ucs: estado.ucs });
             await new Promise(resolve => setTimeout(resolve, 400));
 
             const pdfBase64 = await gerarPdfContratoBase64();
+            const uc0 = estado.ucs?.[0];
+            // Mesma paginação do ContratoAdesao (que tira o título repetido
+            // antes de paginar): a assinatura vai na última folha do termo.
+            const paginasTermo = dividirEmPaginas(semTituloRepetido(
+                montarTextoContrato(estado.subscriber, uc0?.concessionaria, {
+                    desconto: uc0?.desconto_assinante,
+                    diaVencimento: uc0?.dia_vencimento
+                }),
+                TITULO_TERMO
+            )).length;
 
             setEtapa('Enviando para assinatura digital...');
-            const { data: fim, error: fimErro } = await supabase.functions.invoke('onboarding-finalizar', {
-                body: { subscriber_id: subscriberId, pdf_base64: pdfBase64 }
+            const { data: fim, error } = await supabase.functions.invoke('onboarding-finalizar', {
+                body: { token: onboardingToken, pdf_base64: pdfBase64, paginas_termo: paginasTermo }
             });
 
-            if (fimErro) throw fimErro;
+            if (error) {
+                const { status, corpo, mensagem } = await lerErroFuncao(error);
+                if (status === 409) {
+                    const lista = (corpo?.faltantes || []).length;
+                    showAlert(mensagem || `Faltam ${lista} documento(s).`, 'warning');
+                    await carregarEstado(onboardingToken);
+                    return;
+                }
+                if (status === 502) {
+                    setPasso('pendente_equipe');
+                    return;
+                }
+                if (status === 401) {
+                    setPasso('expirado');
+                    return;
+                }
+                throw new Error(mensagem);
+            }
             if (fim?.error) throw new Error(fim.error);
             if (fim?.avisos?.length) console.warn('Avisos do onboarding:', fim.avisos);
 
             if (fim?.contrato_url) {
                 // Página de termos com o link de assinatura embutido.
                 window.location.href = fim.contrato_url;
+                return;
             }
+            setEstado(prev => ({ ...prev, etapa: 'enviado', signature_link: fim?.signature_link || prev?.signature_link }));
+            setPasso('enviado');
         } catch (e) {
-            // Falhou o contrato, não a adesão. O cliente continua cadastrado
-            // e a tela de sucesso avisa que o link chega pelo WhatsApp.
             console.error('Falha ao gerar/enviar contrato:', e);
+            showAlert(e.message || 'Não foi possível gerar seu contrato. Tente de novo.', 'error');
+        } finally {
+            ocupadoRef.current = false;
+            setLoading(false);
+            setEtapa('');
         }
     };
 
-    /**
-     * Avisa o originador da conversão.
-     *
-     * A mensagem para o próprio assinante NÃO sai daqui: quem manda é a
-     * `onboarding-finalizar`, junto com o link de assinatura. Duas
-     * mensagens seguidas, uma sem link e outra com, só confundiriam.
-     *
-     * `integrations_config` é admin-only por RLS e esta página roda como
-     * visitante anônimo, então a instância do WhatsApp é resolvida pela
-     * Edge Function, não aqui.
-     */
-    const notificarOriginador = async () => {
-        if (!paramOriginatorId) return;
+    /** Contrato já enviado: o servidor reenvia o mesmo link, sem PDF novo. */
+    const handleReenviar = async () => {
+        if (ocupadoRef.current) return;
+        ocupadoRef.current = true;
+        setLoading(true);
         try {
-            const { data: org } = await supabase
-                .from('originators_v2')
-                .select('phone')
-                .eq('id', paramOriginatorId)
-                .maybeSingle();
-
-            if (org?.phone) {
-                await sendWhatsapp(
-                    org.phone,
-                    `🚀 Novo cliente cadastrado!\n\n${formData.name} concluiu a adesão pelo seu link e recebeu o contrato para assinar.\nAcompanhe pelo CRM.`
-                );
+            const { data: fim, error } = await supabase.functions.invoke('onboarding-finalizar', {
+                body: { token: onboardingToken }
+            });
+            if (error) {
+                const { status, mensagem } = await lerErroFuncao(error);
+                if (status === 401) {
+                    setPasso('expirado');
+                    return;
+                }
+                throw new Error(mensagem);
             }
+            if (fim?.error) throw new Error(fim.error);
+            if (fim?.signature_link) setEstado(prev => ({ ...prev, signature_link: fim.signature_link }));
+            showAlert('Pronto! Reenviamos o link de assinatura para o seu WhatsApp e e-mail.', 'success');
         } catch (e) {
-            console.error('Falha ao notificar originador:', e);
+            console.error('Falha ao reenviar:', e);
+            showAlert(e.message || 'Não foi possível reenviar o link.', 'error');
+        } finally {
+            ocupadoRef.current = false;
+            setLoading(false);
         }
     };
 
+    const primeiroNome = (formData.name || '').split(' ')[0];
 
-    if (done) {
+    if (passo === 'carregando') {
         return (
-            <div className="min-h-screen bg-slate-50 font-inter flex items-center justify-center px-4">
-                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-10 max-w-lg text-center">
-                    <CheckCircle size={64} className="mx-auto mb-6 text-green-500" />
-                    <h1 className="text-3xl font-bold mb-4" style={{ color: '#003366' }}>
-                        Adesão concluída!
-                    </h1>
-                    <p className="text-slate-600 text-lg mb-2">
-                        Obrigado, {formData.name.split(' ')[0]}. Recebemos seu cadastro e ele já está em ativação.
-                    </p>
-                    <p className="text-slate-500">
-                        Em instantes você recebe no WhatsApp <strong>{formData.phone}</strong> o contrato
-                        de adesão para assinatura digital. É o último passo.
-                    </p>
-                </div>
-            </div>
+            <TelaMensagem icone={<Clock size={56} className="mx-auto mb-6 text-slate-400" />} titulo="Carregando sua adesão...">
+                <p>Só um instante.</p>
+            </TelaMensagem>
+        );
+    }
+
+    if (passo === 'expirado') {
+        return (
+            <TelaMensagem icone={<Clock size={56} className="mx-auto mb-6 text-orange-500" />} titulo="Link expirado">
+                <p className="text-lg">Link expirado, refaça a simulação.</p>
+            </TelaMensagem>
+        );
+    }
+
+    if (passo === 'erro_carga') {
+        return (
+            <TelaMensagem icone={<Clock size={56} className="mx-auto mb-6 text-orange-500" />} titulo="Não conseguimos abrir sua adesão">
+                <p className="mb-6">Verifique sua conexão e tente de novo.</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-6 py-3 rounded-xl font-bold text-white"
+                    style={{ backgroundColor: '#FF6600' }}
+                >
+                    Tentar de novo
+                </button>
+            </TelaMensagem>
+        );
+    }
+
+    if (passo === 'assinado') {
+        return (
+            <TelaMensagem icone={<CheckCircle size={64} className="mx-auto mb-6 text-green-500" />} titulo="Adesão concluída!">
+                <p className="text-lg mb-2">
+                    Obrigado{primeiroNome ? `, ${primeiroNome}` : ''}. Seu contrato está assinado.
+                </p>
+                <p className="text-slate-500">Agora cuidamos da conexão da sua unidade consumidora e avisamos você pelo WhatsApp.</p>
+            </TelaMensagem>
+        );
+    }
+
+    if (passo === 'pendente_equipe') {
+        return (
+            <TelaMensagem icone={<CheckCircle size={64} className="mx-auto mb-6 text-green-500" />} titulo="Dados recebidos">
+                <p className="text-lg">Recebemos seus dados; nossa equipe vai enviar o contrato em até 1 dia útil.</p>
+            </TelaMensagem>
         );
     }
 
@@ -284,6 +498,8 @@ export default function SubscriberSignup() {
         />
     );
 
+    const descontoExibido = estado?.ucs?.[0]?.desconto_assinante ?? paramDiscountPercent;
+
     return (
         <div className="min-h-screen bg-slate-50 font-inter">
             {/* Header / Banner */}
@@ -293,13 +509,17 @@ export default function SubscriberSignup() {
                         {formData.name || 'Novo Assinante'}
                     </h1>
                     <p className="text-slate-500 mt-2 text-lg">
-                        Confira os detalhes da sua economia e finalize sua adesão abaixo.
+                        {passo === 'dados'
+                            ? 'Confira os detalhes da sua economia e finalize sua adesão abaixo.'
+                            : 'Sua adesão fica salva: se sair, volte por este mesmo link.'}
                     </p>
+                    <Passos atual={passo} />
                 </div>
             </div>
 
             <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
+                {passo === 'dados' && (<>
                 {/* Info Cards Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -328,7 +548,7 @@ export default function SubscriberSignup() {
                         {/* Blue Box */}
                         <div className="p-8 text-center text-white flex flex-col justify-center items-center" style={{ backgroundColor: '#003366' }}>
                             <p className="text-sm font-medium opacity-90 mb-2 uppercase tracking-wider">Desconto Garantido</p>
-                            <p className="text-6xl font-bold mb-2">{paramDiscountPercent}%</p>
+                            <p className="text-6xl font-bold mb-2">{descontoExibido}%</p>
                             <p className="text-xs opacity-75">Sobre a tarifa de energia</p>
                         </div>
                         {/* Orange Box */}
@@ -403,6 +623,37 @@ export default function SubscriberSignup() {
                             />
                         </div>
 
+                        {/* Representante legal — obrigatório para CNPJ: é quem
+                            assina o termo em nome da empresa. */}
+                        {ehCnpj && (
+                            <div className="md:col-span-2 p-5 rounded-xl border border-orange-200 bg-orange-50">
+                                <h3 className="text-base font-bold mb-4" style={{ color: '#003366' }}>Representante legal</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Nome do representante</label>
+                                        <input
+                                            type="text"
+                                            value={formData.representante_nome}
+                                            onChange={e => setFormData({ ...formData, representante_nome: e.target.value })}
+                                            className={inputClass}
+                                            placeholder="Quem assina pela empresa"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">CPF do representante</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={formData.representante_cpf}
+                                            onChange={e => setFormData({ ...formData, representante_cpf: maskCpfCnpj(e.target.value).slice(0, 14) })}
+                                            className={inputClass}
+                                            placeholder="000.000.000-00"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Address */}
                         <div className="md:col-span-2 pt-6 border-t border-slate-100 mt-2">
                             <h3 className="text-lg font-bold mb-6 flex items-center gap-2" style={{ color: '#003366' }}>
@@ -476,7 +727,7 @@ export default function SubscriberSignup() {
 
                 {/* Consumer Units (UCs) */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 md:p-10">
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
                         <h2 className="text-2xl font-bold flex items-center gap-2" style={{ color: '#003366' }}>
                             <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
                             Unidades Consumidoras
@@ -521,24 +772,137 @@ export default function SubscriberSignup() {
                     )}
                 </div>
 
+                {/* Vencimento + aceite */}
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10 space-y-8">
+                    <div>
+                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+                            <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
+                            Dia de vencimento
+                        </h2>
+                        <p className="text-slate-500 mb-4">Escolha o dia do mês para pagar sua contribuição.</p>
+                        <div className="grid grid-cols-4 gap-3 max-w-md">
+                            {DIAS_VENCIMENTO.map(dia => (
+                                <button
+                                    key={dia}
+                                    type="button"
+                                    onClick={() => setDiaVencimento(dia)}
+                                    aria-pressed={diaVencimento === dia}
+                                    className={`py-4 rounded-xl font-bold text-lg border transition-colors ${diaVencimento === dia ? 'text-white border-transparent' : 'bg-white text-slate-700 border-slate-200 hover:border-[#FF6600]'}`}
+                                    style={diaVencimento === dia ? { backgroundColor: '#003366' } : undefined}
+                                >
+                                    {dia}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={aceite}
+                            onChange={e => setAceite(e.target.checked)}
+                            className="mt-1 w-5 h-5 accent-[#FF6600] shrink-0"
+                        />
+                        <span className="text-slate-600">
+                            Li e aceito os{' '}
+                            <a href={URL_TERMOS_USO} target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: '#003366' }}>termos de uso</a>
+                            {' '}e a{' '}
+                            <a href={URL_PRIVACIDADE} target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: '#003366' }}>política de privacidade</a>.
+                        </span>
+                    </label>
+                </div>
+
                 {/* Finalize Button */}
                 <button
-                    onClick={handleFinalize}
+                    onClick={handleEnviarDados}
                     disabled={loading}
                     className="w-full py-5 text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl transition-all transform active:scale-[0.99] flex justify-center items-center gap-3 hover:shadow-2xl disabled:opacity-70"
                     style={{ backgroundColor: '#FF6600' }}
                 >
                     {loading ? (etapa || 'Processando...') : (
                         <>
-                            Finalizar Adesão <ArrowRight size={24} />
+                            Continuar <ArrowRight size={24} />
                         </>
                     )}
                 </button>
 
-                {loading && etapa && (
-                    <p className="text-center text-sm text-slate-500 -mt-4">
-                        Não feche esta página — estamos preparando seu contrato para assinatura.
-                    </p>
+                </>)}
+
+                {passo === 'documentos' && estado && (
+                    <PassoDocumentos
+                        token={onboardingToken}
+                        estado={estado}
+                        onCompleto={() => setPasso('contrato')}
+                    />
+                )}
+
+                {passo === 'contrato' && estado && (
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10">
+                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2" style={{ color: '#003366' }}>
+                            <div className="w-1 h-8 bg-[#FF6600] rounded-full"></div>
+                            Contrato
+                        </h2>
+                        <p className="text-slate-500 mb-6">
+                            Tudo certo com seus documentos. Confira o resumo e gere o termo de adesão para assinatura digital.
+                        </p>
+                        <div className="space-y-3 mb-8">
+                            {(estado.ucs || []).map(uc => (
+                                <div key={uc.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                    <p className="font-bold text-slate-800">UC {uc.numero_uc}</p>
+                                    <p className="text-sm text-slate-500">
+                                        {[uc.concessionaria,
+                                          uc.desconto_assinante != null ? `${Number(uc.desconto_assinante)}% de desconto` : null,
+                                          uc.dia_vencimento ? `vencimento dia ${uc.dia_vencimento}` : null]
+                                            .filter(Boolean).join(' • ')}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            onClick={handleGerarContrato}
+                            disabled={loading}
+                            className="w-full py-5 text-lg md:text-xl font-bold text-white uppercase tracking-wider rounded-xl shadow-xl flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-wait"
+                            style={{ backgroundColor: '#FF6600' }}
+                        >
+                            {loading ? (etapa || 'Processando...') : (<><FileSignature size={24} /> Gerar e enviar meu contrato</>)}
+                        </button>
+                        {loading && (
+                            <p className="text-center text-sm text-slate-500 mt-3">
+                                Não feche esta página — estamos preparando seu contrato para assinatura.
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {passo === 'enviado' && (
+                    <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 md:p-10 text-center">
+                        <CheckCircle size={56} className="mx-auto mb-4 text-green-500" />
+                        <h2 className="text-2xl font-bold mb-3" style={{ color: '#003366' }}>Contrato enviado para assinatura</h2>
+                        <p className="text-slate-600 mb-6">
+                            Enviamos o link de assinatura para o seu WhatsApp e e-mail. É o último passo.
+                        </p>
+                        {estado?.signature_link && (
+                            <a
+                                href={estado.signature_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full md:w-auto inline-flex justify-center items-center gap-2 px-8 py-4 rounded-xl font-bold text-white text-lg shadow-lg mb-4"
+                                style={{ backgroundColor: '#FF6600' }}
+                            >
+                                <Link2 size={22} /> Assinar meu contrato
+                            </a>
+                        )}
+                        <div>
+                            <button
+                                onClick={handleReenviar}
+                                disabled={loading}
+                                className="mt-2 px-6 py-3 rounded-xl font-bold border disabled:opacity-60 disabled:cursor-wait"
+                                style={{ color: '#003366', borderColor: '#003366' }}
+                            >
+                                {loading ? 'Reenviando...' : 'Reenviar link'}
+                            </button>
+                        </div>
+                    </div>
                 )}
 
             </div>
@@ -550,6 +914,7 @@ export default function SubscriberSignup() {
                 <PublicConsumerUnitForm
                     concessionariaDefault={paramConcessionaria}
                     titularDefault={formData.name}
+                    docAssinante={formData.cpf_cnpj}
                     franquiaDefault={consumerUnits.length === 0 ? paramConsumo : ''}
                     enderecoDefault={{
                         cep: formData.cep,
@@ -558,7 +923,8 @@ export default function SubscriberSignup() {
                         complemento: formData.complemento,
                         bairro: formData.bairro,
                         cidade: formData.cidade,
-                        uf: formData.uf
+                        uf: formData.uf,
+                        ibge: formData.ibge
                     }}
                     onClose={() => setShowUcModal(false)}
                     onSave={(uc) => {
