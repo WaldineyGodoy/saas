@@ -22,6 +22,12 @@ describe('regras do onboarding', () => {
     keywords.forEach(kw => expect(kw).toMatch(/^adesao-[0-9a-f]{8}-[0-9a-z]{4}$/));
     expect(unique.size).toBeGreaterThanOrEqual(49);
   });
+  test('keyword da pagina de termos: prefixo contrato, 8 hex + 4 aleatorios', () => {
+    const agora = new Date(1_000_000);
+    const a = R.keywordTermos('12345678-aaaa-bbbb', agora); const b = R.keywordTermos('12345678-aaaa-bbbb', agora);
+    expect(a).toMatch(/^contrato-12345678-[0-9a-z]{4}$/); expect(b).toMatch(/^contrato-12345678-[0-9a-z]{4}$/);
+    expect(R.keywordAdesao('12345678-aaaa-bbbb', agora)).toMatch(/^adesao-12345678-[0-9a-z]{4}$/);
+  });
   test('termos sem cpf', () => {
     const u = R.urlTermos('https://www.b2wenergia.com.br/contrato/', { link: 'https://l/x', nome: 'Ana', concessionaria: 'COSERN', desconto: 15 });
     expect(u).toContain('Linkdocontrato=https%3A%2F%2Fl%2Fx'); expect(u).toContain('desconto=15'); expect(u).not.toMatch(/cpf|endereco/);

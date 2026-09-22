@@ -38,13 +38,18 @@ export function escolherLink(r: { signingLinkFound?: boolean; url?: string }) {
   return { ok: true as const, url: r.url };
 }
 
-export const keywordAdesao = (sub: string, _agora: Date) => {
+const keywordCom = (prefixo: string, sub: string) => {
   const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
   const bytes = new Uint8Array(4);
   globalThis.crypto.getRandomValues(bytes);
   const suffix = Array.from(bytes).map(b => chars[b % 36]).join('');
-  return `adesao-${sub.replace(/-/g, '').slice(0, 8)}-${suffix}`;
+  return `${prefixo}-${sub.replace(/-/g, '').slice(0, 8)}-${suffix}`;
 };
+
+// Link curto do link de assinatura da Autentique.
+export const keywordAdesao = (sub: string, _agora: Date) => keywordCom('adesao', sub);
+// Link curto da pagina de termos (o que vai no WhatsApp e no e-mail).
+export const keywordTermos = (sub: string, _agora: Date) => keywordCom('contrato', sub);
 
 export function urlTermos(base: string, p: { link: string; nome: string; concessionaria: string; desconto: number | null }) {
   const q = new URLSearchParams({ Linkdocontrato: p.link, nome: p.nome || '', concessionaria: p.concessionaria || '' });

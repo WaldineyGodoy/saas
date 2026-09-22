@@ -188,7 +188,9 @@ serve(async (req) => {
 
                 const { error: subErr } = await supabaseAdmin
                     .from('subscribers')
-                    .update({ status: 'contrato_assinado' })
+                    // O link de adesao (onboarding_token) morre junto: depois
+                    // de assinado ninguem deve conseguir reabrir a retomada.
+                    .update({ status: 'contrato_assinado', onboarding_token: null, onboarding_token_expira_em: null })
                     .eq('id', sig.signer_id)
                     // Só avança quem ainda está em ativação: um assinante já
                     // 'ativo' (ou cancelado) não pode regredir porque a
