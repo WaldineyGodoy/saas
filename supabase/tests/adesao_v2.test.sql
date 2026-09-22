@@ -3,6 +3,7 @@ DO $$
 DECLARE
   v_ibge text; v_uf text; v_desc numeric; r jsonb; v_sub uuid; v_org uuid; v_lead uuid;
   v_ucs jsonb; v_msg text;
+  r2 jsonb; v_sub2 uuid; v_ucs2 jsonb;
 BEGIN
   SELECT "Cod. Ibge", "UF", "Desconto Assinante" INTO v_ibge, v_uf, v_desc
     FROM public."Concessionaria" WHERE "Desconto Assinante" > 0 LIMIT 1;
@@ -69,6 +70,38 @@ BEGIN
                    AND desconto_assinante = v_desc AND dia_vencimento = 15
                    AND cpf_cnpj_fatura = '52998224725' AND tipo_ligacao = 'monofasico') THEN
     RAISE EXCEPTION 'FALHOU: UC sem desconto/vencimento/titular/ligacao';
+  END IF;
+  IF jsonb_typeof(r->'descontos') <> 'array' OR jsonb_array_length(r->'descontos') <> (r->>'ucs_criadas')::int THEN
+    RAISE EXCEPTION 'FALHOU: descontos com tamanho diferente de ucs_criadas';
+  END IF;
+  IF (r->>'desconto')::numeric IS DISTINCT FROM (r->'descontos'->0->>'desconto')::numeric THEN
+    RAISE EXCEPTION 'FALHOU: desconto nao e o do primeiro item de descontos';
+  END IF;
+
+  -- 5b. caminho feliz CNPJ: representante gravado (nome + cpf so digitos), descontos por UC em ordem
+  v_ucs2 := jsonb_build_array(
+    jsonb_build_object('numero_uc','TESTE-UC-0002','titular_conta','Empresa Teste','cpf_cnpj_fatura','52998224725',
+      'tipo_ligacao','monofasico','concessionaria','COSERN','franquia','300','ibge',v_ibge,
+      'cep','59158155','rua','Rua A','numero','10','bairro','B','cidade','C','uf',v_uf),
+    jsonb_build_object('numero_uc','TESTE-UC-0003','titular_conta','Empresa Teste','cpf_cnpj_fatura','15350946056',
+      'tipo_ligacao','bifasico','concessionaria','COSERN','franquia','500','ibge',v_ibge,
+      'cep','59158155','rua','Rua A','numero','20','bairro','B','cidade','C','uf',v_uf));
+
+  r2 := public.fn_criar_assinante_publico('Empresa Teste','11222333000181','emp@teste.invalid','84999990001',
+      '59158155','Rua A','10',null,'B','C',v_uf,v_ibge,null,null,v_ucs2,10,'Representante Teste','111.444.777-35','3.0');
+  v_sub2 := (r2->>'subscriber_id')::uuid;
+  IF NOT EXISTS (SELECT 1 FROM public.subscribers WHERE id = v_sub2
+                   AND representante_nome = 'Representante Teste' AND representante_cpf = '11144477735') THEN
+    RAISE EXCEPTION 'FALHOU: CNPJ happy path sem representante gravado';
+  END IF;
+  IF (r2->>'ucs_criadas')::int <> 2 OR jsonb_array_length(r2->'descontos') <> 2 THEN
+    RAISE EXCEPTION 'FALHOU: CNPJ happy path com numero de descontos errado';
+  END IF;
+  IF (r2->'descontos'->0->>'numero_uc') <> 'TESTE-UC-0002' OR (r2->'descontos'->1->>'numero_uc') <> 'TESTE-UC-0003' THEN
+    RAISE EXCEPTION 'FALHOU: ordem de descontos incorreta';
+  END IF;
+  IF (r2->>'desconto')::numeric IS DISTINCT FROM (r2->'descontos'->0->>'desconto')::numeric THEN
+    RAISE EXCEPTION 'FALHOU: desconto do CNPJ nao e o do primeiro UC';
   END IF;
 
   -- 6. CPF duplicado recusa; UC duplicada recusa

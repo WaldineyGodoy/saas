@@ -44,6 +44,7 @@ DECLARE
   v_rep text := public.fn_so_digitos(p_representante_cpf);
   v_originator uuid; v_sub_id uuid; v_token uuid := gen_random_uuid();
   v_uc jsonb; v_uc_num text; v_tit text; v_desc numeric; v_n int := 0;
+  v_descontos jsonb := '[]'::jsonb; v_desc_primeiro numeric;
 BEGIN
   IF coalesce(btrim(p_aceite_versao), '') = '' THEN
     RAISE EXCEPTION 'Aceite os termos de uso e a politica de privacidade para continuar.' USING ERRCODE = '22023';
@@ -101,6 +102,8 @@ BEGIN
     IF coalesce(v_desc, 0) <= 0 THEN
       RAISE EXCEPTION 'Ainda nao temos desconto disponivel para este municipio.' USING ERRCODE = '22023';
     END IF;
+    IF v_n = 0 THEN v_desc_primeiro := v_desc; END IF;
+    v_descontos := v_descontos || jsonb_build_array(jsonb_build_object('numero_uc', v_uc_num, 'desconto', v_desc));
 
     INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
       concessionaria, status, modalidade, franquia, desconto_assinante, dia_vencimento, address)
@@ -113,7 +116,7 @@ BEGIN
   END LOOP;
 
   RETURN jsonb_build_object('subscriber_id', v_sub_id, 'onboarding_token', v_token, 'ucs_criadas', v_n,
-    'originador_vinculado', v_originator IS NOT NULL, 'desconto', v_desc);
+    'originador_vinculado', v_originator IS NOT NULL, 'desconto', v_desc_primeiro, 'descontos', v_descontos);
 END;
 $function$;
 
