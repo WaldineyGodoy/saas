@@ -47,6 +47,15 @@ Base: a mesma base B que o gatilho de fatura paga usa hoje para comissão e gest
 - No cálculo da próxima fatura de X, o saldo pendente é consumido como desconto, limitado ao valor da fatura de X. O que exceder é descartado: não acumula para o mês seguinte. O descarte é registrado no crédito (valor aplicado × valor descartado), para aparecer no extrato.
 - Contabilmente, o valor sai da gestão da B2W na fatura de Y e vira uma obrigação com X; o consumo na fatura de X baixa essa obrigação. As contas do razão são definidas no plano, seguindo o plano de contas existente.
 
+## §4.1 Tela "Equipe" do embaixador
+
+Decisão do dono (22/09/2026): a tela `OriginatorList`, hoje no menu do papel `originator`, deixa de listar todos os embaixadores (era a própria brecha de CPF/PIX) e passa a mostrar a rede dele:
+
+- **Indicados diretos:** leads e assinantes com `originator_id` dele, com status e data.
+- **2º nível, em dropdown dentro de cada assinante direto:** quem aquele assinante indicou (`indicador_assinante_id`), com status.
+- Por linha: o que ele recebe (4% direto, 2% quando vier de assinante) e o valor lançado no mês.
+- Sem CPF, PIX ou comissão de terceiros — só da própria rede, e os dados pessoais dos indicados limitados a nome, cidade e status.
+
 ## §5 Split no modal
 
 - Modal do assinante, em cada fatura: quadro com 5 fatias:
