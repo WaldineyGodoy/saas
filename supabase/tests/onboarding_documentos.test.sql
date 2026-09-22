@@ -14,6 +14,8 @@ BEGIN
   IF e->>'etapa' <> 'documentos' OR jsonb_array_length(e->'faltantes') <> 2 THEN
     RAISE EXCEPTION 'FALHOU: estado inicial %', e;
   END IF;
+  -- A procuracao do contrato imprime a localidade de cada UC.
+  IF e->'ucs'->0->>'uf' IS NULL THEN RAISE EXCEPTION 'FALHOU: uf da UC ausente no estado %', e->'ucs'; END IF;
 
   INSERT INTO public.subscriber_documents (subscriber_id, tipo, storage_path, mime, tamanho)
   VALUES (v_sub, 'identidade', v_sub || '/identidade/a.pdf', 'application/pdf', 10);
