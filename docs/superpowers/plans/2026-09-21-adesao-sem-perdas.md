@@ -1208,3 +1208,25 @@ Motivo: o gatilho que lança comissão e gestão no razão é SECURITY INVOKER. 
 - [ ] **Step 3: migração.** `CREATE OR REPLACE FUNCTION public.handle_invoice_paid_ledger()` idêntica à atual, só acrescentando `SECURITY DEFINER` e `SET search_path = public, pg_temp`. Não mudar uma linha da lógica. Conferir o dono da função (`proowner`) e registrar no relatório.
 - [ ] **Step 4:** aplicar, GREEN, e conferir por SELECT que os lançamentos de uma fatura já paga não foram alterados.
 - [ ] **Step 5:** commit `fix(razao): gatilho de fatura paga lanca comissao com permissao propria`.
+
+---
+
+### Task 17: só admin marca fatura como paga (regra do dono, 22/09/2026)
+
+Regra: "embaixador não pode marcar fatura como paga, somente admins". Hoje `invoices` e `ledger_entries` têm política `ALL` com `USING true` para `authenticated`, então qualquer papel logado grava.
+
+**Files:**
+- Create: `supabase/migrations/20260922h_invoices_pagamento_admin.sql`, `supabase/tests/invoices_pagamento_admin.test.sql`
+- Modify (se necessário): `src/pages/dashboards/Dashboard.jsx` (menu) e as telas de fatura, para esconder a ação de quem não pode
+
+**Regras:**
+- Papéis internos = `fn_papel_interno()` (super_admin, admin, manager, coordinator), criado na Task 15.
+- `invoices`: SELECT continua para quem já lê hoje (conferir no levantamento: assinante vê as próprias, originador vê as dos seus assinantes). INSERT/UPDATE/DELETE só papel interno. Robôs usam `service_role` e não passam por RLS.
+- `ledger_entries`: escrita só papel interno ou `service_role`; leitura como hoje (o painel do originador lê a conta 2.1.2 dele).
+- `consumer_units`/`subscribers` ficam fora desta tarefa.
+
+- [ ] **Step 1: levantamento.** Listar quem lê e grava `invoices` e `ledger_entries` em `src/`, `scraper/` e Edge Functions, com o papel de cada caminho. Toda tela que um papel não interno usa para gravar (ex.: baixa de fatura) tem de ser nomeada, com o efeito da mudança. Se algum papel não interno precisar gravar de fato, PARAR e reportar NEEDS_CONTEXT.
+- [ ] **Step 2: teste** (`SANDBOX_OK`): assinante e originador não conseguem `update invoices set status='pago'` (42501) nem inserir em `ledger_entries`; admin consegue; leitura de cada papel segue como no levantamento. RED antes.
+- [ ] **Step 3: migração**, aplicar, GREEN.
+- [ ] **Step 4:** esconder na interface o que o papel não pode mais fazer, para não virar erro na cara do usuário; `npm run build`.
+- [ ] **Step 5:** commit `fix(seguranca): so papel interno grava faturas e razao`.
