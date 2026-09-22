@@ -1193,3 +1193,18 @@ Motivo: a política `originators_v2_authenticated` é `ALL` com `USING true`/`WI
 - [ ] **Step 3: migração**, aplicar, GREEN.
 - [ ] **Step 4:** `npm run build`; conferir por leitura que as telas do levantamento continuam cobertas.
 - [ ] **Step 5:** commit `fix(seguranca): originators_v2 so le e grava a propria linha; campos de comissao so por papel interno`.
+
+---
+
+### Task 16: `handle_invoice_paid_ledger` com permissão própria (decisão do dono, 22/09/2026)
+
+Motivo: o gatilho que lança comissão e gestão no razão é SECURITY INVOKER. Com o RLS novo de `originators_v2` (Task 15), se quem marcar a fatura como paga não for papel interno, o SELECT do originador volta vazio e a comissão **não é lançada, em silêncio**. A tela de Faturas está aberta a todos os papéis.
+
+**Files:**
+- Create: `supabase/migrations/20260922g_invoice_paid_ledger_definer.sql`, `supabase/tests/invoice_paid_ledger_definer.test.sql`
+
+- [ ] **Step 1: levantamento.** Ler `pg_get_functiondef('public.handle_invoice_paid_ledger')` inteiro e listar cada tabela que ele lê ou grava, com o RLS de cada uma. Conferir se alguma outra função de gatilho no mesmo caminho (ex.: liquidação, repasse) também é INVOKER e depende de linha com RLS — reportar sem corrigir.
+- [ ] **Step 2: teste** (`SANDBOX_OK`): fatura de assinante com originador que tem `split_commission`; rodar o UPDATE para `pago` com `set_config('role','authenticated')` e claims de um perfil **não interno** (ex.: `subscriber`); afirmar que os lançamentos em `ledger_entries` da conta 2.1.2 saem com o mesmo valor que saem quando quem marca é admin. RED antes.
+- [ ] **Step 3: migração.** `CREATE OR REPLACE FUNCTION public.handle_invoice_paid_ledger()` idêntica à atual, só acrescentando `SECURITY DEFINER` e `SET search_path = public, pg_temp`. Não mudar uma linha da lógica. Conferir o dono da função (`proowner`) e registrar no relatório.
+- [ ] **Step 4:** aplicar, GREEN, e conferir por SELECT que os lançamentos de uma fatura já paga não foram alterados.
+- [ ] **Step 5:** commit `fix(razao): gatilho de fatura paga lanca comissao com permissao propria`.
