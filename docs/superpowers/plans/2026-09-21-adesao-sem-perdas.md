@@ -1140,3 +1140,33 @@ Executada na fase de revisão (requesting-code-review), depois do deploy do fron
   - assinar no sandbox da Autentique → webhook → `contrato_assinado`, token anulado, lead `ativacao`.
 - [ ] **Step 5:** inconsistência → systematic-debugging antes de qualquer correção.
 - [ ] **Step 6: limpeza:** apagar assinantes/UCs/leads/documentos/objetos de storage/perfis e usuários de auth de teste, links YOURLS de teste; `update integrations_config set environment='production' where service_name='autentique_api'`; conferir.
+
+---
+
+### Task 14: Embaixador fora do portão de envio (decisão do dono, 22/09/2026)
+
+Motivo: qualquer pessoa vira `originator` pelo cadastro público de embaixador e, com o papel no portão, disparava WhatsApp/e-mail com texto e destino livres pelo número da B2W.
+
+**Files:**
+- Modify: `supabase/functions/_shared/envio-portao.ts` (`PAPEIS_INTERNOS` sem `originator`), `tests/envio-portao.test.ts`
+- Create: `supabase/migrations/20260922c_notification_logs_sem_originador.sql` (policy de INSERT de `notification_logs` sem `originator`)
+- Create: `supabase/functions/_shared/mensagem-lead.ts` (modelos puros), `tests/mensagem-lead.test.ts`
+- Create: `supabase/functions/lead-mensagem/index.ts` (verify_jwt true)
+- Modify: `src/components/LeadModal.jsx` (envio manual: embaixador escolhe modelo; interno segue com texto livre)
+
+**Interfaces:**
+- `MODELOS_LEAD`: chaves `convite`, `lembrete_simulacao`, `retomar_adesao`; `montarMensagemLead(chave, {nomeLead, nomeOriginador, link}) → string | null` (chave desconhecida → null). Texto com `\u` escapes.
+- `POST lead-mensagem {lead_id, modelo}` com JWT do usuário:
+  - papel interno (`super_admin, admin, manager, coordinator`) → 403 (use `send-whatsapp`, texto livre);
+  - `originator` → o lead precisa ter `leads.originator_id = auth.uid()`; telefone lido de `leads.phone` no servidor (nunca do corpo); link = `originators_v2.short_url` (ou URL longa de `buildConviteUrl` equivalente); envia via `send-whatsapp` com service role; grava `crm_history` (entity lead, `whatsapp_modelo`); 200 `{ok:true}`;
+  - lead de outro originador → 403; modelo inválido → 400; demais → 401.
+  - Limite: no máximo 3 envios por lead por dia (conta `crm_history` do dia com `whatsapp_modelo`) → 429.
+- `LeadModal`: se o papel do usuário logado é `originator`, o bloco de WhatsApp manual mostra um select de modelos com a prévia do texto e envia por `lead-mensagem`; sem anexo e sem texto livre. Demais papéis: comportamento atual.
+
+- [ ] **Step 1:** testes Vitest de `mensagem-lead.ts` (3 modelos, chave inválida → null, sem caracteres não-ASCII no fonte) e de `envio-portao` (originator agora barrado) → RED.
+- [ ] **Step 2:** implementar os módulos puros → GREEN.
+- [ ] **Step 3:** migração: `DROP POLICY notification_logs_insert_interno` e recriar sem `originator`; teste SQL `supabase/tests/notification_logs_insert.test.sql` passa a afirmar que originator é recusado (RED antes, `SANDBOX_OK` depois).
+- [ ] **Step 4:** Edge Function `lead-mensagem`; deploy verify_jwt true; redeploy de `send-whatsapp` e `send-email` com o portão novo.
+- [ ] **Step 5:** `LeadModal` conforme a interface; `npm run build`.
+- [ ] **Step 6: verificação real:** curl com anon em `send-whatsapp` → 403; `lead-mensagem` sem sessão → 401. Sem envio real de mensagem.
+- [ ] **Step 7:** commit `fix(seguranca): embaixador fora do portao de envio; mensagens ao lead por modelo e so para os proprios leads`.
