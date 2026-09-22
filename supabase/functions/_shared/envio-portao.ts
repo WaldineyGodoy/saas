@@ -1,14 +1,16 @@
 /**
- * Regra do portão de send-whatsapp / send-email. Sem imports Deno para
- * poder ser testada pelo Vitest. `papelDoBearer` só decodifica: a
- * assinatura já foi conferida pelo gateway (verify_jwt = true).
+ * Regra do portao de send-whatsapp / send-email. Sem imports Deno para
+ * poder ser testada pelo Vitest. `papelDoBearer` so decodifica: a
+ * assinatura ja foi conferida pelo gateway (verify_jwt = true).
  */
-export const PAPEIS_INTERNOS = ['super_admin', 'admin', 'manager', 'coordinator', 'originator'];
+// Sem 'originator' desde 22/09/2026 (Task 14): qualquer um vira originator pelo
+// cadastro publico de embaixador. Embaixador fala com o lead por lead-mensagem.
+export const PAPEIS_INTERNOS = ['super_admin', 'admin', 'manager', 'coordinator'];
 
 export function papelDoBearer(authorization: string | null, chaveServiceRole?: string | null): string | null {
   const token = (authorization || '').replace(/^Bearer\s+/i, '').trim();
 
-  // Chaves novas do Supabase (sb_secret_/sb_publishable_) não são JWT — não dá
+  // Chaves novas do Supabase (sb_secret_/sb_publishable_) nao sao JWT -- nao da
   // para decodificar `role` delas. Quando o token bate exatamente com a
   // service role key do ambiente, trata como service_role por igualdade.
   if (chaveServiceRole && token === chaveServiceRole) return 'service_role';

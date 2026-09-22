@@ -202,6 +202,15 @@ export const sendWhatsapp = async (phone, text, mediaUrl = null, mediaBase64 = n
     });
 };
 
+/**
+ * Mensagem do embaixador (papel originator) ao proprio lead, por modelo.
+ * O texto e o telefone sao resolvidos no servidor (Edge Function
+ * lead-mensagem); aqui so vai o id do lead e a chave do modelo.
+ */
+export const sendLeadMensagem = async (leadId, modelo) => {
+    return callFunction('lead-mensagem', { lead_id: leadId, modelo });
+};
+
 export const mergePdf = async (summaryBase64, asaasUrl, fileName = 'fatura.pdf', energyBillUrl = null, asaasPdfStorageUrl = null) => {
     const body = { 
         summaryBase64, 

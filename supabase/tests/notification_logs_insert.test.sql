@@ -1,19 +1,23 @@
 -- Fix round 1 da Task 4 (F1): notification_logs só aceita INSERT de
--- authenticated com papel interno (super_admin/admin/manager/coordinator/
--- originator). Assinante/lead/fornecedor tem que ser barrado.
+-- authenticated com papel interno (super_admin/admin/manager/coordinator).
+-- Assinante/lead/fornecedor tem que ser barrado.
+-- Task 14 (22/09/2026): originator saiu da lista -- qualquer um vira
+-- originator pelo cadastro público de embaixador.
 -- Sucesso = erro SANDBOX_OK (tudo desfeito, nada persiste).
 DO $$
 DECLARE
   v_subscriber_id uuid;
   v_admin_id uuid;
+  v_originator_id uuid;
   v_log_id uuid;
   v_rejeitado boolean := false;
 BEGIN
   SELECT id INTO v_subscriber_id FROM public.profiles WHERE role = 'subscriber' LIMIT 1;
   SELECT id INTO v_admin_id FROM public.profiles WHERE role IN ('admin', 'super_admin') LIMIT 1;
+  SELECT id INTO v_originator_id FROM public.profiles WHERE role = 'originator' LIMIT 1;
 
-  IF v_subscriber_id IS NULL OR v_admin_id IS NULL THEN
-    RAISE EXCEPTION 'FIXTURE: faltou perfil subscriber ou admin/super_admin para o teste';
+  IF v_subscriber_id IS NULL OR v_admin_id IS NULL OR v_originator_id IS NULL THEN
+    RAISE EXCEPTION 'FIXTURE: faltou perfil subscriber, originator ou admin/super_admin para o teste';
   END IF;
 
   -- Assinante (papel externo) autenticado tenta inserir -- tem que ser barrado.
@@ -31,6 +35,23 @@ BEGIN
 
   IF NOT v_rejeitado THEN
     RAISE EXCEPTION 'FALHOU: assinante (papel externo) conseguiu inserir em notification_logs';
+  END IF;
+
+  -- Embaixador (originator) autenticado tenta inserir -- tem que ser barrado.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_originator_id, 'role', 'authenticated')::text, true);
+
+  BEGIN
+    INSERT INTO public.notification_logs (entity_type, entity_id, channel, recipient, body, status)
+    VALUES ('subscriber', v_originator_id, 'whatsapp', '5533999991234', 'tentativa indevida do embaixador', 'sent');
+    v_rejeitado := false;
+  -- Só RLS (42501) conta como recusa: outro erro qualquer não prova a policy.
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_rejeitado := true;
+  END;
+
+  IF NOT v_rejeitado THEN
+    RAISE EXCEPTION 'FALHOU: originator conseguiu inserir em notification_logs';
   END IF;
 
   -- Usuário interno (admin) autenticado tenta inserir -- tem que passar.

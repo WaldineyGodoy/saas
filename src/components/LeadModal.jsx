@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { fetchAddressByCep, fetchOfferData, sendWhatsapp } from '../lib/api';
+import { fetchAddressByCep, fetchOfferData, sendWhatsapp, sendLeadMensagem } from '../lib/api';
+import { MODELOS_LEAD, montarMensagemLead, montarLinkIndicacao } from '../../supabase/functions/_shared/mensagem-lead.ts';
 import { maskPhone, validatePhone } from '../lib/validators';
 import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
@@ -19,6 +20,12 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
     const [manualMessage, setManualMessage] = useState('');
     const [manualFile, setManualFile] = useState(null);
     const [isSendingManualWA, setIsSendingManualWA] = useState(false);
+
+    // Embaixador (originator) nao manda texto livre: so escolhe um modelo e o
+    // servidor (lead-mensagem) monta o texto e le o telefone do lead. Task 14.
+    const isOriginator = profile?.role === 'originator';
+    const [modeloLead, setModeloLead] = useState('convite');
+    const [meuOriginador, setMeuOriginador] = useState(null);
 
     // Estados para Agendamentos
     const [appointments, setAppointments] = useState([]);
@@ -93,6 +100,46 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
             }
         }
     }, [lead, profile]);
+
+    useEffect(() => {
+        if (!isOriginator || !profile?.id) return;
+        supabase.from('originators_v2').select('id, name, short_url').eq('id', profile.id).maybeSingle()
+            .then(({ data }) => setMeuOriginador(data || null));
+    }, [isOriginator, profile?.id]);
+
+    // Previa: mesma funcao que o servidor usa; o link sai do mesmo cadastro.
+    const previaModeloLead = isOriginator
+        ? montarMensagemLead(modeloLead, {
+            nomeLead: lead?.name || formData.name,
+            nomeOriginador: meuOriginador?.name || profile?.name,
+            link: montarLinkIndicacao({
+                id: profile?.id,
+                name: meuOriginador?.name || profile?.name,
+                short_url: meuOriginador?.short_url,
+            }),
+        })
+        : null;
+
+    const handleSendModeloLead = async () => {
+        if (!lead?.id) {
+            showAlert('Por favor, salve o lead primeiro clicando no botão "Salvar Lead" abaixo.', 'warning');
+            return;
+        }
+        const targetName = lead?.name || formData.name;
+        const confirmed = await showConfirm(`Deseja enviar esta mensagem para ${targetName}?`, 'Confirmar Envio', 'Sim, Enviar', 'Cancelar');
+        if (!confirmed) return;
+
+        setIsSendingManualWA(true);
+        try {
+            await sendLeadMensagem(lead.id, modeloLead);
+            showAlert('Mensagem enviada com sucesso!', 'success');
+        } catch (error) {
+            console.error('Error sending lead template:', error);
+            showAlert('Erro ao enviar mensagem: ' + error.message, 'error');
+        } finally {
+            setIsSendingManualWA(false);
+        }
+    };
 
     const fetchAppointments = async () => {
         if (!lead?.id) return;
@@ -673,6 +720,42 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     Enviar Novo Comunicado para {formData.name}
                                 </h4>
 
+                                {isOriginator ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <select
+                                        value={modeloLead}
+                                        onChange={(e) => setModeloLead(e.target.value)}
+                                        style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }}
+                                    >
+                                        {Object.entries(MODELOS_LEAD).map(([chave, m]) => (
+                                            <option key={chave} value={chave}>{m.rotulo}</option>
+                                        ))}
+                                    </select>
+                                    <div style={{
+                                        padding: '1rem', borderRadius: '8px', background: '#f8fafc',
+                                        border: '1px solid #e2e8f0', fontSize: '0.95rem', color: '#334155', whiteSpace: 'pre-wrap'
+                                    }}>
+                                        {previaModeloLead}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                            Até 3 mensagens por lead por dia, enviadas para o telefone cadastrado.
+                                        </span>
+                                        <button
+                                            onClick={handleSendModeloLead}
+                                            disabled={isSendingManualWA}
+                                            style={{
+                                                padding: '0.6rem 2rem', background: '#25D366',
+                                                color: '#fff', border: 'none', borderRadius: '6px',
+                                                fontWeight: '600', cursor: 'pointer',
+                                                opacity: isSendingManualWA ? 0.6 : 1
+                                            }}
+                                        >
+                                            {isSendingManualWA ? 'Enviando...' : 'Enviar Agora'}
+                                        </button>
+                                    </div>
+                                </div>
+                                ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                     <textarea
                                         placeholder="Digite a mensagem que o lead receberá no WhatsApp..."
@@ -726,6 +809,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                         </button>
                                     </div>
                                 </div>
+                                )}
                             </div>
 
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>

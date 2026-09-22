@@ -77,3 +77,10 @@ verify_jwt = false
 # camada externa, e o pg_cron manda a chave anon junto do token.
 [functions.emissor]
 verify_jwt = true
+
+# Mensagem do embaixador ao proprio lead, so por modelo (Task 14, 22/09/2026).
+# `verify_jwt` sozinho nao protege (a chave anon e JWT valido e publico): a
+# funcao exige usuario logado com papel originator, dono do lead, e limita a
+# 3 envios por lead por dia. Internos usam send-whatsapp.
+[functions.lead-mensagem]
+verify_jwt = true
