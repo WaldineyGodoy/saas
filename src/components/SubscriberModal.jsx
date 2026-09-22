@@ -10,6 +10,7 @@ import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUt
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
+import DocumentosAssinante from './subscriber/DocumentosAssinante';
 import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -1803,21 +1804,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
         try {
             // 1. Check for duplicates
-            let query = supabase
-                .from('subscribers')
-                .select('id')
-                .eq('cpf_cnpj', formData.cpf_cnpj);
-
-            if (subscriber?.id) {
-                query = query.neq('id', subscriber.id);
-            }
-
-            const { data: existing, error: searchError } = await query;
-
-            if (searchError) throw searchError;
-            if (existing && existing.length > 0) {
-                throw new Error('Já existe um assinante cadastrado com este CPF/CNPJ.');
-            }
+            const { data: emUso, error: dupErr } = await supabase.rpc('fn_documento_em_uso', { p_doc: formData.cpf_cnpj, p_ignorar: subscriber?.id ?? null });
+            if (dupErr) throw dupErr;
+            if (emUso) { showAlert('Já existe um assinante com este CPF/CNPJ.', 'warning'); setLoading(false); return; }
 
             // 2. Sync with Asaas
             let asaasId = null;
@@ -2095,7 +2084,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'ucs', label: 'Unidades Consumidoras', icon: Zap, color: '#10b981', bg: '#ecfdf5' },
                         { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
-                        { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' }
+                        { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' },
+                        { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' }
                     ].filter(tab => subscriber || ['dados', 'endereco'].includes(tab.id)).map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
@@ -3401,6 +3391,24 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                             </div>
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'documentos' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', paddingBottom: '1.5rem' }}>
+                                <div style={{
+                                    background: 'white',
+                                    padding: '2rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                }}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#1e293b' }}>
+                                        <Paperclip size={20} color="#8b5cf6" />
+                                        Documentos do Assinante
+                                    </h4>
+                                    {subscriber?.id && <DocumentosAssinante subscriberId={subscriber.id} />}
                                 </div>
                             </div>
                         )}
