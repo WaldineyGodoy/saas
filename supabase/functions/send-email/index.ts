@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
 import { Resend } from 'npm:resend@3.2.0'
+import { decidirPortao, papelDoBearer, textoParaHtml } from '../_shared/envio-portao.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-b2w-internal',
 }
 
 serve(async (req) => {
@@ -13,13 +14,37 @@ serve(async (req) => {
     }
 
     try {
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            supabaseServiceKey
         )
 
+        // Portão: service_role, usuário interno (perfil na lista) ou segredo
+        // x-b2w-internal (pg_net/fn_dispatch_notification). Sem isso, hoje
+        // qualquer um na internet manda e-mail como faturas@b2wenergia.com.br.
+        const authorization = req.headers.get('Authorization')
+        const bearerRole = papelDoBearer(authorization, supabaseServiceKey)
+        let userRole: string | null = null
+        if (bearerRole === 'authenticated') {
+            const { data: { user } } = await supabaseAdmin.auth.getUser((authorization || '').replace(/^Bearer\s+/i, ''))
+            if (user) {
+                const { data: p } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+                userRole = p?.role ?? null
+            }
+        }
+        const segredo = req.headers.get('x-b2w-internal')
+        const { data: segredoOk } = segredo
+            ? await supabaseAdmin.rpc('fn_segredo_interno_confere', { p_valor: segredo })
+            : { data: false }
+        const portao = decidirPortao({ bearerRole, userRole, segredoOk: !!segredoOk })
+        if (!portao.ok) {
+            return new Response(JSON.stringify({ error: 'Sem permissão para enviar mensagens.' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 })
+        }
+
         const body = await req.json().catch(() => ({}));
-        const { to, subject, html, attachments, variables } = body;
+        const { to, subject, html, text, attachments, variables } = body;
 
         const { data: config, error: configError } = await supabaseAdmin
             .from('integrations_config')
@@ -59,6 +84,9 @@ serve(async (req) => {
 
         // Template de Altíssima Fidelidade (inspirado em Email de fatura/src/App.tsx)
         let finalHtml = html;
+        if (!finalHtml && !variables && text) {
+            finalHtml = textoParaHtml(text);
+        }
         if (!finalHtml && variables) {
             const { nome, valor, vencimento, mensagem } = variables;
             const brandLogo = "https://b2wenergia.com.br/wp-content/uploads/2025/12/Logo-Laranja-estreito.png";
@@ -214,6 +242,7 @@ serve(async (req) => {
             to: Array.isArray(finalRecipient) ? finalRecipient : [finalRecipient],
             subject: `${isSandbox ? '[SANDBOX] ' : ''}${subject || 'Sua fatura B2W Energia chegou!'}`,
             html: finalHtml || `<p>Sua fatura está disponível.</p>`,
+            text: text || undefined,
             attachments: attachments || []
         });
 

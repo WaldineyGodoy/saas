@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
+import { decidirPortao, papelDoBearer } from '../_shared/envio-portao.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-b2w-internal',
 }
 
 serve(async (req) => {
@@ -15,6 +16,29 @@ serve(async (req) => {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Portão: service_role, usuário interno (perfil na lista) ou segredo
+        // x-b2w-internal (pg_net/fn_dispatch_notification). Sem isso, hoje
+        // qualquer um na internet manda WhatsApp pelo número da empresa.
+        const authorization = req.headers.get('Authorization')
+        const bearerRole = papelDoBearer(authorization, supabaseServiceKey)
+        let userRole: string | null = null
+        if (bearerRole === 'authenticated') {
+            const { data: { user } } = await supabaseAdmin.auth.getUser((authorization || '').replace(/^Bearer\s+/i, ''))
+            if (user) {
+                const { data: p } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+                userRole = p?.role ?? null
+            }
+        }
+        const segredo = req.headers.get('x-b2w-internal')
+        const { data: segredoOk } = segredo
+            ? await supabaseAdmin.rpc('fn_segredo_interno_confere', { p_valor: segredo })
+            : { data: false }
+        const portao = decidirPortao({ bearerRole, userRole, segredoOk: !!segredoOk })
+        if (!portao.ok) {
+            return new Response(JSON.stringify({ error: 'Sem permissão para enviar mensagens.' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 })
+        }
 
         let { text, mediaUrl, mediaBase64, fileName, phone, instanceName } = await req.json()
 

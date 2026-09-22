@@ -17,11 +17,17 @@ verify_jwt = true
 [functions.parse-invoice]
 verify_jwt = false
 
+# Ate 21/09/2026 qualquer um na internet mandava e-mail como
+# faturas@b2wenergia.com.br so acertando o slug da funcao. O portao de
+# verdade e o decidirPortao em _shared/envio-portao.ts (service_role,
+# usuario interno ou segredo x-b2w-internal); isto aqui e a camada externa.
 [functions.send-email]
-verify_jwt = false
+verify_jwt = true
 
+# Mesmo portao do send-email (_shared/envio-portao.ts) -- ate 21/09/2026
+# qualquer um mandava WhatsApp pelo numero da empresa sem autenticacao nenhuma.
 [functions.send-whatsapp]
-verify_jwt = false
+verify_jwt = true
 
 [functions.transfer-asaas-pix]
 verify_jwt = true
