@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
-import { TIPOS_DOCUMENTO, caminhoDocumento, validarArquivo } from '../_shared/onboarding-regras.ts'
+import { TIPOS_DOCUMENTO, caminhoDocumento, validarArquivo, metadadosDoObjeto } from '../_shared/onboarding-regras.ts'
 
 // Upload de documentos da ades\u00e3o p\u00fablica. An\u00f4nima: o port\u00e3o \u00e9 o
 // onboarding_token, que s\u00f3 o dono do link tem. O navegador nunca escreve
@@ -36,10 +36,16 @@ serve(async (req) => {
       const pasta = b.path.slice(0, b.path.lastIndexOf('/'))
       const nome = b.path.slice(b.path.lastIndexOf('/') + 1)
       const { data: lista } = await db.storage.from(BUCKET).list(pasta, { search: nome })
-      if (!lista?.some(o => o.name === nome)) return json({ error: 'Arquivo n\u00e3o encontrado. Envie de novo.' }, 404)
+      const objeto = lista?.find(o => o.name === nome)
+      if (!objeto) return json({ error: 'Arquivo n\u00e3o encontrado. Envie de novo.' }, 404)
+      // Metadados REAIS do arquivo no Storage -- nunca os declarados pelo
+      // cliente no corpo da requisicao (b.mime / b.tamanho), que um chamador
+      // anonimo pode falsificar livremente.
+      const meta = metadadosDoObjeto(objeto.metadata as { mimetype?: string; size?: number } | null | undefined)
+      if ('erro' in meta) return json({ error: meta.erro }, 400)
       const { error } = await db.from('subscriber_documents').upsert({
         subscriber_id: sub, consumer_unit_id: b.tipo === 'conta_energia' ? b.consumer_unit_id : null,
-        tipo: b.tipo, storage_path: b.path, mime: b.mime, tamanho: Number(b.tamanho) }, { onConflict: 'storage_path' })
+        tipo: b.tipo, storage_path: b.path, mime: meta.mime, tamanho: meta.tamanho }, { onConflict: 'storage_path' })
       if (error) throw error
       const { data: faltantes } = await db.rpc('fn_onboarding_documentos_faltantes', { p_subscriber: sub })
       return json({ ok: true, faltantes })

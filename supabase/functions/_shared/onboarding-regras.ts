@@ -11,6 +11,19 @@ export function validarArquivo(a: { mime: string; tamanho: number }): string | n
 export const extensaoDoMime = (mime: string) => MIMES[mime];
 export const caminhoDocumento = (sub: string, tipo: string, id: string, mime: string) => `${sub}/${tipo}/${id}.${extensaoDoMime(mime)}`;
 
+// Metadados REAIS do objeto no Storage (nunca os declarados pelo cliente no
+// corpo da requisicao). Sem isso, um chamador anonimo podia registrar
+// mime/tamanho arbitrarios em subscriber_documents so declarando valores
+// diferentes do arquivo que de fato subiu.
+export function metadadosDoObjeto(meta: { mimetype?: string; size?: number } | null | undefined): { mime: string; tamanho: number } | { erro: string } {
+  if (!meta || typeof meta.mimetype !== 'string' || typeof meta.size !== 'number') {
+    return { erro: 'N\u00e3o foi poss\u00edvel confirmar o arquivo enviado.' };
+  }
+  const erro = validarArquivo({ mime: meta.mimetype, tamanho: meta.size });
+  if (erro) return { erro };
+  return { mime: meta.mimetype, tamanho: meta.size };
+}
+
 const ROTULO: Record<string, string> = {
   identidade: 'documento de identidade (CNH ou RG)',
   contrato_social: 'contrato social da empresa',

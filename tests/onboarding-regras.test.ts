@@ -31,4 +31,20 @@ describe('regras do onboarding', () => {
     const h = htmlEmailContrato({ nome: 'Ana <x>', link: 'https://l/x', desconto: 15, concessionaria: 'COSERN' });
     expect(h).toContain('href="https://l/x"'); expect(h).toContain('Ana &lt;x&gt;'); expect(h).toContain('15%');
   });
+  test('metadados do objeto: pdf valido devolve os valores reais', () => {
+    expect(R.metadadosDoObjeto({ mimetype: 'application/pdf', size: 12345 })).toEqual({ mime: 'application/pdf', tamanho: 12345 });
+  });
+  test('metadados do objeto: ausentes -> erro', () => {
+    expect(R.metadadosDoObjeto(null)).toHaveProperty('erro');
+    expect(R.metadadosDoObjeto(undefined)).toHaveProperty('erro');
+    expect(R.metadadosDoObjeto({})).toHaveProperty('erro');
+  });
+  test('metadados do objeto: png de 11 MB -> erro de tamanho', () => {
+    const r = R.metadadosDoObjeto({ mimetype: 'image/png', size: 11 * 1024 * 1024 });
+    expect(r).toHaveProperty('erro'); expect((r as { erro: string }).erro).toMatch(/10 MB/);
+  });
+  test('metadados do objeto: msword -> erro de tipo', () => {
+    const r = R.metadadosDoObjeto({ mimetype: 'application/msword', size: 10 });
+    expect(r).toHaveProperty('erro'); expect((r as { erro: string }).erro).toMatch(/PDF, JPG ou PNG/);
+  });
 });
