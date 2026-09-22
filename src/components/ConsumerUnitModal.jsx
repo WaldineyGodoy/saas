@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { salvarSenhaPortal, semSenha, buscarTarifaReferencia, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink } from '../lib/api';
 import { fetchAddressByCep, fetchOfferData } from '../lib/api';
+import { ehPapelInterno } from '../lib/papeis';
 import { 
     ChevronDown, ChevronUp, History, X, User, Home, Zap, Link, Settings, Key, Eye, EyeOff, 
     FileSearch, PlusCircle, Upload, MessageSquare, Smartphone, Mail, Paperclip, Send, 
@@ -1267,7 +1268,15 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
                             { id: 'comunicados', label: 'Comunicados', icon: MessageSquare },
                             { id: 'contrato', label: 'Contrato', icon: FileSignature }
-                        ].map(tab => {
+                        ]
+                            // "Faturas e Contas de Energia" cria fatura, sobe conta
+                            // da concessionaria, gera fatura zerada e edita fatura —
+                            // escrita em `invoices`, que desde a migracao 20260922h
+                            // so o papel interno grava. A tela Unidades Consumidoras
+                            // esta no menu do embaixador e do fornecedor, e sem este
+                            // filtro os botoes apareceriam para quem leva 42501.
+                            .filter(tab => tab.id !== 'faturas_contas' || ehPapelInterno(profile?.role))
+                            .map(tab => {
                             const isActive = activeTab === tab.id;
                             const Icon = tab.icon;
                             return (

@@ -7,6 +7,7 @@ import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCust
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
+import { ehPapelInterno } from '../lib/papeis';
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
@@ -2086,7 +2087,22 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
                         { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' },
                         { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' }
-                    ].filter(tab => subscriber || ['dados', 'endereco'].includes(tab.id)).map(tab => {
+                    ]
+                        .filter(tab => subscriber || ['dados', 'endereco'].includes(tab.id))
+                        // A aba Faturas nao e consulta: emite boleto, cancela,
+                        // reenvia e desvincula fatura consolidada — tudo escrita
+                        // em `invoices`, que desde a migracao 20260922h so o
+                        // papel interno grava. A tela Assinantes fica no menu do
+                        // embaixador e do fornecedor, entao sem este filtro eles
+                        // veriam os botoes e levariam 42501 na cara.
+                        //
+                        // Tem outro motivo, menos visivel: `fetchInvoices` dispara
+                        // uma "auto-correcao" que ATUALIZA faturas orfas e chama a
+                        // si mesma em seguida. Com a escrita recusada, a condicao
+                        // continuaria verdadeira e a tela entraria em laco infinito
+                        // de refetch. A aba fechada e o que impede isso.
+                        .filter(tab => tab.id !== 'faturas' || ehPapelInterno(profile?.role))
+                        .map(tab => {
                         const isActive = activeTab === tab.id;
                         const Icon = tab.icon;
                         return (

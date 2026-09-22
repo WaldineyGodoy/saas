@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../contexts/BrandingContext';
+import { ehPapelInterno } from '../lib/papeis';
 
 // Dashboards Existing
 import AdminDashboard from './dashboards/AdminDashboard';
@@ -112,11 +113,20 @@ export default function Dashboard() {
             items.push({ id: 'consumer_units', label: 'Unidades Consumidoras', icon: 'bi-house' });
         }
 
-        // 5. Contas de Energia
-        items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text' });
-
-        // 6. Faturas
-        items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt' });
+        // 5 e 6. Contas de Energia e Faturas (InvoiceListManager)
+        //
+        // Ate 22/09/2026 estes dois itens entravam para TODOS os papeis — lead,
+        // assinante, embaixador, fornecedor. E a tela nao e de consulta: tem
+        // arrastar-para-Pago, apagar fatura e baixar conta de concessionaria.
+        // Era o caminho literal da regra do dono, "embaixador nao pode marcar
+        // fatura como paga". Desde a migracao 20260922h o banco recusa essa
+        // escrita (RLS de invoices), e o menu deixa de oferecer a tela a quem
+        // nao pode usa-la. O assinante continua vendo as proprias faturas em
+        // "Meu Painel" (SubscriberDashboard), que e a tela feita para isso.
+        if (ehPapelInterno(role)) {
+            items.push({ id: 'energy_bills', label: 'Contas de Energia', icon: 'bi-file-earmark-text' });
+            items.push({ id: 'invoices', label: 'Faturas', icon: 'bi-receipt' });
+        }
 
         // 6. Fornecedores
         const suppliersAllowed = ['supplier', 'manager', 'admin', 'super_admin'];
@@ -161,6 +171,18 @@ export default function Dashboard() {
 
     const renderContent = () => {
         if (!profile) return <p>Carregando perfil...</p>;
+
+        // `activeView` vem do localStorage: quem ja tinha a tela Faturas aberta
+        // continuaria caindo nela depois do logout/login, mesmo sem o item no
+        // menu. Aqui o caminho tambem fecha.
+        if ((activeView === 'invoices' || activeView === 'energy_bills') && !ehPapelInterno(profile.role)) {
+            return (
+                <div style={{ padding: '2rem' }}>
+                    <h2>Bem-vindo, {profile?.name}</h2>
+                    <p>Selecione uma opção no menu.</p>
+                </div>
+            );
+        }
 
         switch (activeView) {
             case 'admin': return <AdminDashboard />;
