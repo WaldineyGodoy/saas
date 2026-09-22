@@ -18,7 +18,15 @@ export type VarsMensagemLead = { nomeLead?: string | null; nomeOriginador?: stri
 
 export const LIMITE_ENVIOS_DIA = 3;
 
-/** Tipo gravado em crm_history.metadata.tipo e usado na contagem do limite. */
+/** Teto por embaixador por dia, somando todos os leads dele (fix C1c). */
+export const LIMITE_ENVIOS_ORIGINADOR_DIA = 20;
+
+/** Unico host aceito para `short_url` (o YOURLS da B2W). A coluna e editavel
+ *  pelo proprio embaixador; sem esta trava ele poria qualquer link na
+ *  mensagem que sai pelo numero da empresa. */
+export const HOST_ENCURTADOR = 'link.b2wenergia.com.br';
+
+/** Tipo gravado em crm_history.metadata.tipo (so historico; os limites contam lead_mensagens_envios). */
 export const TIPO_HISTORICO = 'whatsapp_modelo';
 
 export const MODELOS_LEAD: Record<string, { rotulo: string; texto: string }> = {
@@ -40,11 +48,25 @@ export const MODELOS_LEAD: Record<string, { rotulo: string; texto: string }> = {
 
 export const primeiroNome = (nome?: string | null) => (nome || '').trim().split(/\s+/)[0] || '';
 
+/**
+ * Nome que pode entrar no texto (fix C1b). `leads.name` e `originators_v2.name`
+ * sao digitados por quem quer que seja; um "nome" como `www.site.com` viraria
+ * link clicavel na mensagem da B2W. Regra: primeira palavra; se tiver qualquer
+ * caractere que nao seja letra Unicode, hifen ou apostrofo, descarta tudo
+ * (vazio -> saudacao neutra). Corta em 20 caracteres.
+ */
+export function nomeSeguro(nome?: string | null): string {
+  const palavra = primeiroNome(nome);
+  if (!palavra || !/^[\p{L}'-]+$/u.test(palavra)) return '';
+  if (!/\p{L}/u.test(palavra)) return '';
+  return Array.from(palavra).slice(0, 20).join('');
+}
+
 export function montarMensagemLead(chave: string, vars: VarsMensagemLead): string | null {
   if (!Object.prototype.hasOwnProperty.call(MODELOS_LEAD, chave)) return null;
-  const nomeLead = primeiroNome(vars.nomeLead);
-  const saudacao = nomeLead ? `Oi, ${nomeLead}!` : 'Oi!';
-  const nomeOriginador = primeiroNome(vars.nomeOriginador) || 'a equipe';
+  const nomeLead = nomeSeguro(vars.nomeLead);
+  const saudacao = nomeLead ? `Oi, ${nomeLead}!` : 'Oi, tudo bem?';
+  const nomeOriginador = nomeSeguro(vars.nomeOriginador) || 'a equipe';
   return MODELOS_LEAD[chave].texto
     .replace('{saudacao}', saudacao)
     .replace('{nomeOriginador}', nomeOriginador)
@@ -57,8 +79,13 @@ export function montarMensagemLead(chave: string, vars: VarsMensagemLead): strin
  * la). `id` e o que atribui o lead ao embaixador.
  */
 export function montarLinkIndicacao(o: { id: string; name?: string | null; short_url?: string | null }): string {
-  if (o.short_url) return o.short_url;
-  return `https://b2wenergia.com.br/?name=${encodeURIComponent(primeiroNome(o.name))}&id=${o.id}`;
+  if (o.short_url) {
+    try {
+      const u = new URL(o.short_url);
+      if (u.protocol === 'https:' && u.host === HOST_ENCURTADOR) return o.short_url;
+    } catch { /* nao e URL: cai na longa */ }
+  }
+  return `https://b2wenergia.com.br/?name=${encodeURIComponent(nomeSeguro(o.name))}&id=${o.id}`;
 }
 
 /** Internos ja tem o envio normal (send-whatsapp); aqui so embaixador. */
@@ -72,6 +99,7 @@ export function decidirEnvioLead(e: {
   leadOriginatorId: string | null;
   modelo: string;
   enviosHoje: number;
+  enviosOriginadorHoje: number;
   temTelefone: boolean;
 }): { status: 200 | 400 | 401 | 403 | 429; erro?: string } {
   if (e.papel && PAPEIS_INTERNOS_LEAD.includes(e.papel)) {
@@ -85,6 +113,9 @@ export function decidirEnvioLead(e: {
   if (!e.temTelefone) return { status: 400, erro: 'Lead sem telefone cadastrado.' };
   if (e.enviosHoje >= LIMITE_ENVIOS_DIA) {
     return { status: 429, erro: `Limite de ${LIMITE_ENVIOS_DIA} mensagens por lead por dia atingido.` };
+  }
+  if (e.enviosOriginadorHoje >= LIMITE_ENVIOS_ORIGINADOR_DIA) {
+    return { status: 429, erro: `Limite de ${LIMITE_ENVIOS_ORIGINADOR_DIA} mensagens por dia atingido.` };
   }
   return { status: 200 };
 }

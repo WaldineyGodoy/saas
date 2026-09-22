@@ -15,7 +15,8 @@ import {
  * publico de embaixador, entao o papel saiu do portao de send-whatsapp /
  * send-email. Aqui o embaixador so escolhe o modelo: o texto e montado no
  * servidor, o telefone vem de `leads.phone` (nunca do corpo) e o lead precisa
- * ter `originator_id = auth.uid()`. Limite de 3 envios por lead por dia.
+ * ter `originator_id = auth.uid()`. Limites: 3 por lead e 20 por embaixador
+ * por dia, contados em lead_mensagens_envios (reserva antes de enviar).
  *
  * POST { lead_id, modelo }  com o JWT do usuario.
  *   interno (super_admin/admin/manager/coordinator) -> 403 (use send-whatsapp)
@@ -68,23 +69,38 @@ serve(async (req) => {
 
         // 2. Papel antes de tudo: quem nao e embaixador nao chega a consultar lead.
         const previa = decidirEnvioLead({
-            papel, userId: user.id, leadOriginatorId: user.id, modelo: chave, enviosHoje: 0, temTelefone: true,
+            papel, userId: user.id, leadOriginatorId: user.id, modelo: chave,
+            enviosHoje: 0, enviosOriginadorHoje: 0, temTelefone: true,
         })
         if (previa.status !== 200) return json(previa.status, { error: previa.erro })
 
         if (typeof lead_id !== 'string' || !UUID_RE.test(lead_id)) return json(400, { error: 'lead_id invalido.' })
 
-        // 3. Lead, embaixador e contagem do dia -- tudo lido no servidor.
-        const { data: lead } = await supabaseAdmin
+        // 3. Lead e contagens do dia -- tudo lido no servidor. Os limites contam
+        // lead_mensagens_envios (so service_role), nao crm_history (que qualquer
+        // logado apaga). Erro de leitura falha FECHADO: 500, nunca "zero envios".
+        const { data: lead, error: erroLead } = await supabaseAdmin
             .from('leads').select('id, name, phone, originator_id').eq('id', lead_id).maybeSingle()
+        if (erroLead) {
+            console.error('lead-mensagem: falha ao ler lead', erroLead)
+            return json(500, { error: 'Erro interno.' })
+        }
 
-        const { count } = await supabaseAdmin
-            .from('crm_history')
+        const desde = inicioDoDiaBrasilia()
+        const { count: enviosLead, error: erroContaLead } = await supabaseAdmin
+            .from('lead_mensagens_envios')
             .select('id', { count: 'exact', head: true })
-            .eq('entity_type', 'lead')
-            .eq('entity_id', lead_id)
-            .eq('metadata->>tipo', TIPO_HISTORICO)
-            .gte('created_at', inicioDoDiaBrasilia())
+            .eq('lead_id', lead_id)
+            .gte('criado_em', desde)
+        const { count: enviosOriginador, error: erroContaOrig } = await supabaseAdmin
+            .from('lead_mensagens_envios')
+            .select('id', { count: 'exact', head: true })
+            .eq('originator_id', user.id)
+            .gte('criado_em', desde)
+        if (erroContaLead || erroContaOrig || enviosLead == null || enviosOriginador == null) {
+            console.error('lead-mensagem: falha na contagem do limite', erroContaLead || erroContaOrig)
+            return json(500, { error: 'Erro interno.' })
+        }
 
         const telefone = String(lead?.phone || '').replace(/\D/g, '')
         const decisao = decidirEnvioLead({
@@ -92,11 +108,15 @@ serve(async (req) => {
             userId: user.id,
             leadOriginatorId: lead?.originator_id ?? null,
             modelo: chave,
-            enviosHoje: count ?? 0,
+            enviosHoje: enviosLead,
+            enviosOriginadorHoje: enviosOriginador,
             temTelefone: telefone.length >= 10,
         })
         if (decisao.status !== 200) return json(decisao.status, { error: decisao.erro })
 
+        // Nome e short_url sao editaveis pelo proprio embaixador: montarLinkIndicacao
+        // so aceita short_url https em link.b2wenergia.com.br e o id e o da sessao;
+        // montarMensagemLead so deixa passar nome feito de letras.
         const { data: originador } = await supabaseAdmin
             .from('originators_v2').select('id, name, short_url').eq('id', user.id).maybeSingle()
 
@@ -111,7 +131,19 @@ serve(async (req) => {
             link,
         })!
 
-        // 4. Envio pelo portao normal, com service role.
+        // 4. Reserva ANTES de enviar: a vaga do limite fica ocupada mesmo que o
+        // envio demore. Se o envio falhar, a reserva e desfeita.
+        const { data: reserva, error: erroReserva } = await supabaseAdmin
+            .from('lead_mensagens_envios')
+            .insert({ originator_id: user.id, lead_id, modelo: chave })
+            .select('id')
+            .single()
+        if (erroReserva || !reserva) {
+            console.error('lead-mensagem: falha ao reservar envio', erroReserva)
+            return json(500, { error: 'Erro interno.' })
+        }
+
+        // 5. Envio pelo portao normal, com service role.
         const { data: envio, error: erroEnvio } = await supabaseAdmin.functions.invoke('send-whatsapp', {
             body: { phone: telefone, text: texto },
         })
@@ -119,10 +151,13 @@ serve(async (req) => {
             let detalhe = envio?.error || erroEnvio?.message
             try { const b = await (erroEnvio as any)?.context?.json(); if (b?.error) detalhe = b.error } catch { /* sem corpo */ }
             console.error('lead-mensagem: falha no send-whatsapp', detalhe)
+            const { error: erroDesfaz } = await supabaseAdmin.from('lead_mensagens_envios').delete().eq('id', reserva.id)
+            if (erroDesfaz) console.error('lead-mensagem: falha ao desfazer reserva', reserva.id, erroDesfaz)
             return json(502, { error: 'Falha ao enviar o WhatsApp. Tente novamente mais tarde.' })
         }
 
-        // 5. Historico: e dele que sai a contagem do limite diario.
+        // 6. Historico para a timeline do lead. Falha aqui nao desfaz o envio.
+        const avisos: string[] = []
         const { error: erroHist } = await supabaseAdmin.from('crm_history').insert({
             entity_type: 'lead',
             entity_id: lead_id,
@@ -130,9 +165,12 @@ serve(async (req) => {
             metadata: { tipo: TIPO_HISTORICO, modelo: chave, message: texto, phone: telefone, status: 'sent' },
             created_by: user.id,
         })
-        if (erroHist) console.error('lead-mensagem: falha ao gravar crm_history', erroHist)
+        if (erroHist) {
+            console.error('lead-mensagem: falha ao gravar crm_history', erroHist)
+            avisos.push('Mensagem enviada, mas o registro no historico falhou.')
+        }
 
-        return json(200, { ok: true })
+        return json(200, avisos.length ? { ok: true, avisos } : { ok: true })
     } catch (e) {
         console.error('lead-mensagem:', e)
         return json(500, { error: 'Erro interno.' })
