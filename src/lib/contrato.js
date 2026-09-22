@@ -70,7 +70,15 @@ export const montarTextoContrato = (subscriber, distribuidora, opts = {}) => {
 
 (I). ASSOCIAÇÃO: ASSOCIAÇÃO DE USINAS B2W ENERGIA, associação de direito privado, CNPJ 64.561.352/0001-07, com sede na Praça Apolinário Barbosa, 86 – Centro, Caraí/MG, CEP 39800-000, neste ato representada na forma do seu Estatuto Social por seu presidente ("ASSOCIAÇÃO");
 
-(II). ASSOCIADO: ${subscriber?.name || ''}, CPF/CNPJ ${subscriber?.cpf_cnpj || ''}, residente e domiciliado à ${fullAddress} ("ASSOCIADO").
+(II). ASSOCIADO: ${
+        (() => {
+            const doc = (subscriber?.cpf_cnpj || '').replace(/\D/g, '');
+            const qualificacao = doc.length === 14 && subscriber?.representante_nome
+                ? `${subscriber?.name || ''}, pessoa jurídica inscrita no CNPJ ${subscriber?.cpf_cnpj || ''}, com sede à ${fullAddress}, neste ato representada por ${subscriber.representante_nome}, CPF ${subscriber?.representante_cpf || ''}`
+                : `${subscriber?.name || ''}, CPF/CNPJ ${subscriber?.cpf_cnpj || ''}, residente e domiciliado à ${fullAddress}`;
+            return qualificacao;
+        })()
+    } ("ASSOCIADO").
 
 CLÁUSULA 1 – DO OBJETO
 O presente Termo tem por objeto o ingresso do ASSOCIADO na ASSOCIAÇÃO DE USINAS B2W ENERGIA, para participação no modelo de geração compartilhada, com compensação de créditos de energia elétrica no Sistema de Compensação de Energia Elétrica (SCEE), nos termos da Lei nº 14.300/2022 e das normas da ANEEL, junto à distribuidora ${DIST}.
