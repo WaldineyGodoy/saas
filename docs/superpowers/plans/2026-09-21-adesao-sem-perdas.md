@@ -1170,3 +1170,26 @@ Motivo: qualquer pessoa vira `originator` pelo cadastro público de embaixador e
 - [ ] **Step 5:** `LeadModal` conforme a interface; `npm run build`.
 - [ ] **Step 6: verificação real:** curl com anon em `send-whatsapp` → 403; `lead-mensagem` sem sessão → 401. Sem envio real de mensagem.
 - [ ] **Step 7:** commit `fix(seguranca): embaixador fora do portao de envio; mensagens ao lead por modelo e so para os proprios leads`.
+
+---
+
+### Task 15: RLS de `originators_v2` (decisão do dono, 22/09/2026)
+
+Motivo: a política `originators_v2_authenticated` é `ALL` com `USING true`/`WITH CHECK true`. Qualquer usuário logado (lead, assinante, quem se cadastrou pelo formulário público) lê CPF e PIX de todos os embaixadores e **altera o PIX de qualquer um**, o que desvia comissão.
+
+**Files:**
+- Create: `supabase/migrations/20260922d_originators_v2_rls.sql`, `supabase/tests/originators_v2_rls.test.sql`
+
+**Regras:**
+- Papéis internos = `super_admin, admin, manager, coordinator` (via `profiles.role` de `auth.uid()`; criar helper `fn_papel_interno()` SECURITY DEFINER STABLE, `search_path` fixo, se não houver um equivalente).
+- SELECT authenticated: a própria linha (`id = auth.uid()`) ou papel interno.
+- INSERT authenticated: a própria linha (`id = auth.uid()`, o cadastro público com sessão) ou papel interno.
+- UPDATE authenticated: a própria linha ou papel interno. Guarda por gatilho BEFORE UPDATE: quem não é papel interno não pode alterar `split_commission`, `short_url`, `id` nem `cpf_cnpj` (erro claro). Gatilhos SECURITY DEFINER existentes (`trg_originador_short_url` via Edge Function com service role) continuam funcionando.
+- DELETE: só papel interno.
+- `anon` fica como está (INSERT das colunas do formulário; SELECT só `id, phone`).
+
+- [ ] **Step 1: levantamento.** Listar todos os usos de `originators_v2` em `src/`, `supabase/functions/` e funções do banco, com o papel que os executa (ex.: `OriginatorDashboard` como originator, `OriginatorModal`/`OriginatorList` como admin, `LeadModal`/`SubscriberModal` como admin, `SubscriberSignup`/raiz como anon, funções SECURITY DEFINER). Se algum uso legítimo de um papel não interno ler ou gravar linha alheia, PARAR e reportar NEEDS_CONTEXT.
+- [ ] **Step 2: teste SQL** (padrão `SANDBOX_OK`, com `set_config('role','authenticated',true)` + `request.jwt.claims`): um lead/assinante não lê nem altera o PIX de um embaixador; um embaixador lê e altera o próprio PIX, mas não o próprio `split_commission`; um admin altera qualquer linha. RED antes.
+- [ ] **Step 3: migração**, aplicar, GREEN.
+- [ ] **Step 4:** `npm run build`; conferir por leitura que as telas do levantamento continuam cobertas.
+- [ ] **Step 5:** commit `fix(seguranca): originators_v2 so le e grava a propria linha; campos de comissao so por papel interno`.
