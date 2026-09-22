@@ -1,11 +1,11 @@
-// Regras puras do onboarding público. Sem imports Deno: testadas pelo Vitest.
+// Regras puras do onboarding p\u00fablico. Sem imports Deno: testadas pelo Vitest.
 export const TIPOS_DOCUMENTO = ['identidade', 'conta_energia', 'contrato_social'] as const;
 const MIMES: Record<string, 'pdf' | 'jpg' | 'png'> = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
 export const LIMITE_BYTES = 10 * 1024 * 1024;
 
 export function validarArquivo(a: { mime: string; tamanho: number }): string | null {
   if (!MIMES[a.mime]) return 'Envie o arquivo em PDF, JPG ou PNG.';
-  if (!(a.tamanho > 0) || a.tamanho > LIMITE_BYTES) return 'O arquivo deve ter até 10 MB.';
+  if (!(a.tamanho > 0) || a.tamanho > LIMITE_BYTES) return 'O arquivo deve ter at\u00e9 10 MB.';
   return null;
 }
 export const extensaoDoMime = (mime: string) => MIMES[mime];
@@ -21,12 +21,17 @@ export function descreverFaltantes(f: { tipo: string; numero_uc: string | null }
 }
 
 export function escolherLink(r: { signingLinkFound?: boolean; url?: string }) {
-  if (!r?.signingLinkFound || !r.url) return { ok: false as const, motivo: 'A Autentique não devolveu o link de assinatura do signatário.' };
+  if (!r?.signingLinkFound || !r.url) return { ok: false as const, motivo: 'A Autentique n\u00e3o devolveu o link de assinatura do signat\u00e1rio.' };
   return { ok: true as const, url: r.url };
 }
 
-export const keywordAdesao = (sub: string, agora: Date) =>
-  `adesao-${sub.replace(/-/g, '').slice(0, 8)}-${Math.floor(agora.getTime() / 1000).toString(36).slice(-4).padStart(4, '0')}`;
+export const keywordAdesao = (sub: string, _agora: Date) => {
+  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+  const bytes = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(bytes);
+  const suffix = Array.from(bytes).map(b => chars[b % 36]).join('');
+  return `adesao-${sub.replace(/-/g, '').slice(0, 8)}-${suffix}`;
+};
 
 export function urlTermos(base: string, p: { link: string; nome: string; concessionaria: string; desconto: number | null }) {
   const q = new URLSearchParams({ Linkdocontrato: p.link, nome: p.nome || '', concessionaria: p.concessionaria || '' });
@@ -35,9 +40,9 @@ export function urlTermos(base: string, p: { link: string; nome: string; concess
 }
 
 export const textoWhatsappContrato = (nome: string, url: string) =>
-  `Olá, ${nome}! ⚡\n\nSua adesão à B2W Energia foi registrada. Falta só assinar o contrato — ` +
-  `leva menos de 2 minutos e é 100% digital. ✍️\n\nEntenda os termos e assine aqui:\n${url}\n\n` +
-  `Enviamos o mesmo link para o seu e-mail. Qualquer dúvida, é só responder esta mensagem.`;
+  `Ol\u00e1, ${nome}! \u26a1\n\nSua ades\u00e3o \u00e0 B2W Energia foi registrada. Falta s\u00f3 assinar o contrato \u2014 ` +
+  `leva menos de 2 minutos e \u00e9 100% digital. \u270d\ufe0f\n\nEntenda os termos e assine aqui:\n${url}\n\n` +
+  `Enviamos o mesmo link para o seu e-mail. Qualquer d\u00favida, \u00e9 s\u00f3 responder esta mensagem.`;
 
 export const textoOriginador = (cliente: string) =>
-  `🚀 Novo cliente pelo seu link!\n\n${cliente} concluiu a adesão e recebeu o contrato para assinar.\nAcompanhe pelo CRM.`;
+  `\ud83d\ude80 Novo cliente pelo seu link!\n\n${cliente} concluiu a ades\u00e3o e recebeu o contrato para assinar.\nAcompanhe pelo CRM.`;

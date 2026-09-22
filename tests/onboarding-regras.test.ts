@@ -13,7 +13,14 @@ describe('regras do onboarding', () => {
   test('link bom passa', () => expect(R.escolherLink({ signingLinkFound: true, url: 'https://assina.ae/abc' })).toEqual({ ok: true, url: 'https://assina.ae/abc' }));
   test('keyword única por instante', () => {
     const a = R.keywordAdesao('12345678-aaaa', new Date(1_000_000)); const b = R.keywordAdesao('12345678-aaaa', new Date(2_000_000));
-    expect(a).toMatch(/^adesao-12345678-[0-9a-z]{4}$/); expect(a).not.toBe(b);
+    expect(a).toMatch(/^adesao-[0-9a-f]{8}-[0-9a-z]{4}$/); expect(a).not.toBe(b);
+  });
+  test('keyword aleatória evita colisão no mesmo segundo', () => {
+    const agora = new Date(1_000_000);
+    const keywords = Array.from({ length: 50 }, () => R.keywordAdesao('12345678-aaaa', agora));
+    const unique = new Set(keywords);
+    keywords.forEach(kw => expect(kw).toMatch(/^adesao-[0-9a-f]{8}-[0-9a-z]{4}$/));
+    expect(unique.size).toBeGreaterThanOrEqual(49);
   });
   test('termos sem cpf', () => {
     const u = R.urlTermos('https://www.b2wenergia.com.br/contrato/', { link: 'https://l/x', nome: 'Ana', concessionaria: 'COSERN', desconto: 15 });
