@@ -557,7 +557,7 @@ export default function OriginatorSignupForm() {
                         )}
 
                         <button
-                            onClick={() => window.location.href = 'https://app.b2wenergia.com.br/login'}
+                            onClick={() => window.location.href = 'https://crm.b2wenergia.com.br/login'}
                             style={styles.button}
                         >
                             Ir para Login
