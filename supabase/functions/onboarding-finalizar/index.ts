@@ -163,6 +163,12 @@ serve(async (req) => {
             .single();
         if (subErr || !sub) throw subErr ?? new Error('assinante nao encontrado');
 
+        // F2: fora de 'ativacao' (cancelado, ou assinado na mao/gov.br) ->
+        // recusa antes de tocar em qualquer coisa (idempotencia ou Autentique).
+        if (sub.status !== 'ativacao') {
+            return json({ error: 'Esta ades\u00e3o n\u00e3o est\u00e1 mais aguardando contrato.' }, 409);
+        }
+
         const { data: ucs } = await supabaseAdmin
             .from('consumer_units')
             .select('numero_uc, concessionaria, desconto_assinante, created_at')
@@ -344,6 +350,19 @@ serve(async (req) => {
         // 6. Sem link de assinatura -> nada e enviado
         const escolha = escolherLink(autentique ?? {});
         if (!escolha.ok) {
+            // A linha 'pending'/short_url NULL que create-autentique-document
+            // ja gravou fica orfa: sem isto, fn_onboarding_estado marcava
+            // 'enviado' mesmo sem nada enviado (ver 20260922b).
+            if (autentique?.documentId) {
+                const { error: cancelErr } = await supabaseAdmin
+                    .from('signatures')
+                    .update({ status: 'canceled' })
+                    .eq('autentique_doc_id', autentique.documentId);
+                if (cancelErr) {
+                    console.error('onboarding-finalizar: cancelar assinatura orfa', cancelErr);
+                    avisos.push('Assinatura pendente sem link nao cancelada.');
+                }
+            }
             await supabaseAdmin.from('crm_history').insert({
                 entity_type: 'subscriber',
                 entity_id: subscriber_id,

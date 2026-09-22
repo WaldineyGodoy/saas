@@ -148,10 +148,16 @@ export default function SubscriberSignup() {
     // em que ela parou.
     useEffect(() => {
         if (!paramRetomar) return;
+        // `retomar` que não é UUID nunca vai resolver na RPC (webhook de
+        // assinatura zera o token de quem já assinou, e um link adulterado
+        // também cai aqui) — vai direto para o estado neutro, sem round-trip.
+        if (!uuidOuNulo(paramRetomar)) {
+            setPasso('expirado');
+            return;
+        }
         carregarEstado(paramRetomar).then(est => {
             if (est === null) {
                 setPasso('expirado');
-                showAlert('Link expirado, refaça a simulação.', 'warning');
             }
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -438,8 +444,8 @@ export default function SubscriberSignup() {
 
     if (passo === 'expirado') {
         return (
-            <TelaMensagem icone={<Clock size={56} className="mx-auto mb-6 text-orange-500" />} titulo="Link expirado">
-                <p className="text-lg">Link expirado, refaça a simulação.</p>
+            <TelaMensagem icone={<Clock size={56} className="mx-auto mb-6 text-orange-500" />} titulo="Link não está mais ativo">
+                <p className="text-lg">Este link não está mais ativo. Se você já assinou o contrato, está tudo certo — acompanhe pelo WhatsApp. Caso contrário, refaça a simulação.</p>
             </TelaMensagem>
         );
     }
