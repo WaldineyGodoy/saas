@@ -1,5 +1,5 @@
-import { dividirEmPaginas, montarTextoContrato } from '../lib/contrato';
-import { corpoContrato, identificadorDocumento, semTituloRepetido, tituloContrato } from '../lib/contratoBase';
+import { TITULO_ADESAO, folhasTermoAdesao, textoTermoAdesao } from '../lib/contrato';
+import { corpoContrato, identificadorDocumento, tituloContrato } from '../lib/contratoBase';
 import { FolhaContrato } from './FolhaContrato';
 
 /**
@@ -16,14 +16,13 @@ export default function ContratoAdesao({ subscriber, consumerUnits = [], brandin
     // A distribuidora citada nas cláusulas 1, 9 e 17 vem da primeira UC,
     // assim como o desconto e o dia de vencimento que a Cláusula 6 e a 7.2
     // precisam nomear.
+    // Texto e paginação vêm de src/lib/contrato.js — a mesma conta que dá o
+    // `paginas_termo` enviado à Autentique.
     const uc = consumerUnits[0];
-    const conteudo = texto || montarTextoContrato(subscriber, uc?.concessionaria, {
-        desconto: opts.desconto ?? uc?.desconto_assinante,
-        diaVencimento: opts.diaVencimento ?? uc?.dia_vencimento ?? subscriber?.consolidated_due_day
-    });
+    const conteudo = textoTermoAdesao(subscriber, consumerUnits, { ...opts, texto });
 
-    const TITULO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
-    const paginas = dividirEmPaginas(semTituloRepetido(conteudo, TITULO));
+    const TITULO = TITULO_ADESAO;
+    const paginas = folhasTermoAdesao(conteudo);
     const identificador = identificadorDocumento(conteudo);
     // A procuração é a última folha, depois do corpo do termo.
     const totalFolhas = paginas.length + 1;

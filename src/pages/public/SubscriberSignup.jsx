@@ -8,12 +8,10 @@ import { useBranding } from '../../contexts/BrandingContext';
 import PublicConsumerUnitForm from '../../components/PublicConsumerUnitForm';
 import ContratoAdesao from '../../components/ContratoAdesao';
 import PassoDocumentos from './onboarding/PassoDocumentos';
-import { dividirEmPaginas, gerarPdfContratoBase64, montarTextoContrato } from '../../lib/contrato';
-import { semTituloRepetido } from '../../lib/contratoBase';
+import { gerarPdfContratoBase64, paginasTermoAdesao } from '../../lib/contrato';
 import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo } from '../../lib/onboarding';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight, Clock, Link2, FileSignature } from 'lucide-react';
 
-const TITULO_TERMO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
 const URL_TERMOS_USO = 'https://b2wenergia.com.br/termos-de-uso/';
 const URL_PRIVACIDADE = 'https://b2wenergia.com.br/politica-de-privacidade/';
 
@@ -352,16 +350,9 @@ export default function SubscriberSignup() {
             await new Promise(resolve => setTimeout(resolve, 400));
 
             const pdfBase64 = await gerarPdfContratoBase64();
-            const uc0 = estado.ucs?.[0];
-            // Mesma paginação do ContratoAdesao (que tira o título repetido
-            // antes de paginar): a assinatura vai na última folha do termo.
-            const paginasTermo = dividirEmPaginas(semTituloRepetido(
-                montarTextoContrato(estado.subscriber, uc0?.concessionaria, {
-                    desconto: uc0?.desconto_assinante,
-                    diaVencimento: uc0?.dia_vencimento
-                }),
-                TITULO_TERMO
-            )).length;
+            // Mesma paginação do ContratoAdesao: a assinatura vai na última
+            // folha do termo.
+            const paginasTermo = paginasTermoAdesao(estado.subscriber, estado.ucs || []);
 
             setEtapa('Enviando para assinatura digital...');
             const { data: fim, error } = await supabase.functions.invoke('onboarding-finalizar', {

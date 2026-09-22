@@ -1,4 +1,4 @@
-import { dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso } from './contratoBase';
+import { dataPorExtenso, gerarPdfBase64, numeroBr, paginarTexto, paraNumero, percentualExtenso, semTituloRepetido } from './contratoBase';
 
 /**
  * Termo de adesão do assinante — fonte única.
@@ -197,6 +197,34 @@ Associado`;
 
 /** Quebra o termo em folhas A4 respeitando o início de cada cláusula. */
 export const dividirEmPaginas = (texto) => paginarTexto(texto);
+
+/** Título impresso no cabeçalho das folhas do termo de adesão. */
+export const TITULO_ADESAO = 'Termo de Ingresso e Adesão à Associação de Geração Compartilhada';
+
+/**
+ * Texto do termo como o ContratoAdesao o monta: a minuta editada (`texto`)
+ * vence; sem ela, o texto automático com distribuidora, desconto e
+ * vencimento da primeira UC (vencimento cai para `consolidated_due_day`).
+ */
+export const textoTermoAdesao = (subscriber, ucs = [], opts = {}) => {
+    if (opts.texto) return opts.texto;
+    const uc = ucs[0];
+    return montarTextoContrato(subscriber, uc?.concessionaria, {
+        desconto: opts.desconto ?? uc?.desconto_assinante,
+        diaVencimento: opts.diaVencimento ?? uc?.dia_vencimento ?? subscriber?.consolidated_due_day
+    });
+};
+
+/** Folhas do corpo do termo, sem o título (que já vai no cabeçalho da 1ª). */
+export const folhasTermoAdesao = (conteudo) => dividirEmPaginas(semTituloRepetido(conteudo, TITULO_ADESAO));
+
+/**
+ * Quantas folhas o corpo do termo ocupa no PDF — a procuração vem depois.
+ * É o `paginas_termo` que posiciona a assinatura na Autentique; calculado
+ * aqui para que CRM, adesão pública e o componente não divirjam.
+ */
+export const paginasTermoAdesao = (subscriber, ucs = [], opts = {}) =>
+    folhasTermoAdesao(textoTermoAdesao(subscriber, ucs, opts)).length;
 
 /**
  * Captura as páginas montadas e devolve o PDF em base64.

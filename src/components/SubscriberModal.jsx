@@ -10,7 +10,7 @@ import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUt
 import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
-import { montarTextoContrato, gerarPdfContratoBase64, dividirEmPaginas } from '../lib/contrato';
+import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -214,12 +214,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
             // Quantas folhas o texto ocupa — o ContratoAdesao pagina o mesmo
             // conteúdo, então a conta bate com o que foi para o PDF.
-            const paginasDoTermo = dividirEmPaginas(
-                contractDraft || montarTextoContrato(subscriber, consumerUnits[0]?.concessionaria, {
-                    desconto: consumerUnits[0]?.desconto_assinante,
-                    diaVencimento: consumerUnits[0]?.dia_vencimento ?? subscriber?.consolidated_due_day
-                })
-            ).length;
+            // Mesmos argumentos passados ao <ContratoAdesao> abaixo (formData +
+            // minuta), e mesma paginação — inclusive sem o título repetido,
+            // que a conta antiga não tirava.
+            const paginasDoTermo = paginasTermoAdesao(formData, consumerUnits, { texto: contractDraft });
 
             // 4. Send to Autentique
             const result = await createAutentiqueDocument({
