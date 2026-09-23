@@ -7,6 +7,8 @@ import {
   MessageSquare, Send, User, DollarSign, Building, Layers, Globe
 } from 'lucide-react';
 import { useUI } from '../../contexts/UIContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { ehPapelInterno } from '../../lib/papeis';
 
 const compareIds = (a, b) => {
   if (!a || !b) return false;
@@ -254,6 +256,12 @@ const checkIsConnected = (selNode, targetNode, allLinks, allInvoices, allUcs, al
 
 export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
   const { showAlert, showConfirm } = useUI();
+  const { profile } = useAuth();
+  // "Corrigir Inconsistência" escreve em `invoices` (energy_bill_status /
+  // reading_status), e desde a migracao 20260922h so papel interno grava. Esta
+  // tela e' a landing do embaixador (Graph Node View), entao sem esta guarda o
+  // botao mais visivel do painel dele daria 42501 em toda tentativa.
+  const podeCorrigir = ehPapelInterno(profile?.role);
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState([]);
   const [ucs, setUcs] = useState([]);
@@ -1831,6 +1839,13 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
     const inc = inconsistencies.find(i => i.id === alertId);
     if (!inc) return;
 
+    // Ultima linha de defesa: os botoes ja' somem para quem nao e' papel
+    // interno, mas o menu de contexto do grafo tambem chama por aqui.
+    if (!podeCorrigir) {
+      showAlert('Correção de inconsistência é feita pela equipe interna. Seu perfil não altera contas de energia.', 'info');
+      return;
+    }
+
     const confirm = await showConfirm(`Deseja aplicar a correção automática recomendada para: "${inc.title}"?`);
     if (!confirm) return;
 
@@ -1863,7 +1878,12 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
     } catch (err) {
       console.error(err);
-      showAlert('Falha ao aplicar correção.', 'error');
+      showAlert(
+        err?.code === '42501'
+          ? 'Sem permissão para corrigir contas de energia. Essa correção é feita pela equipe interna.'
+          : 'Falha ao aplicar correção.',
+        'error'
+      );
       setAgentStatus('ready');
     }
   };
@@ -2131,8 +2151,8 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
           <span>Visualizar Entidade</span>
         </div>
         
-        {isErrorNode && (
-          <div 
+        {isErrorNode && podeCorrigir && (
+          <div
             className="graph-context-menu-item"
             style={{ color: '#f59e0b' }}
             onClick={() => {
@@ -2771,6 +2791,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
 
                       {isActive && (
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          {podeCorrigir && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleActionFix(inc.id); }}
                             style={{
@@ -2792,6 +2813,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                           >
                             <Zap size={10} /> Corrigir Erro
                           </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); handleActionIgnore(inc.id); }}
                             style={{
@@ -3938,6 +3960,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
                 </button>
               )}
 
+              {podeCorrigir && (
               <button
                 onClick={() => {
                   handleActionFix(activeInconsistency.id);
@@ -3965,6 +3988,7 @@ export default function AuditGraphViewInvoiceSummary({ onInspectInvoice }) {
               >
                 <Zap size={12} /> Corrigir Agora
               </button>
+              )}
             </div>
           </div>
         </div>

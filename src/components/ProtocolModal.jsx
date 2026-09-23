@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../contexts/UIContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
+import { ehPapelInterno } from '../lib/papeis';
 import { X, Hash, Calendar, Layers, Link as LinkIcon, Plus, Save, Clock, ChevronDown, CheckCircle, RefreshCw, FileText, User, Zap, ExternalLink, Loader2, AlertCircle, Info, MessageSquare, Trash2 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import SubscriberModal from './SubscriberModal';
@@ -116,7 +118,12 @@ function SearchableSelect({ options, value, onChange, placeholder, loading }) {
 
 export default function ProtocolModal({ protocol, parentProtocolId, onClose, onUpdated }) {
     const { showAlert } = useUI();
+    const { profile } = useAuth();
     const { branding } = useBranding();
+    // Contestar conta de energia e' escrita em `invoices`, e desde a migracao
+    // 20260922h so papel interno grava. Decisao do dono (22/09/2026): o
+    // fornecedor perde a escrita e quem contesta passa a ser a equipe interna.
+    const podeContestarConta = ehPapelInterno(profile?.role);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -653,18 +660,40 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
             }
 
             // Automacao: Se o status for em_tratativa / tratativa e estiver vinculado a uma conta de energia, muda o status da conta para contestada
+            //
+            // Este bloco engolia o resultado: `await supabase...update(...)` nao
+            // lanca excecao (o cliente devolve { error }), entao o catch nunca
+            // disparava. Depois da migracao 20260922h a recusa por RLS chegava
+            // exatamente assim — o protocolo salvava, a tela dizia "Protocolo
+            // criado com sucesso!" e a conta continuava sem contestacao, sem
+            // uma linha de aviso. Agora a automacao so roda para papel interno,
+            // e o erro, se vier, aparece.
             if ((status === 'em_tratativa' || status === 'tratativa') && linkedEntityType === 'conta_energia' && linkedEntityId) {
-                try {
-                    await supabase
+                if (podeContestarConta) {
+                    const { error: contestarErro } = await supabase
                         .from('invoices')
-                        .update({ 
+                        .update({
                             energy_bill_status: 'contestada',
                             reading_status: 'success',
                             reading_checked_at: new Date().toISOString()
                         })
                         .eq('id', linkedEntityId);
-                } catch (updateErr) {
-                    console.error('Erro ao atualizar status da conta de energia para contestada:', updateErr);
+
+                    if (contestarErro) {
+                        console.error('Erro ao atualizar status da conta de energia para contestada:', contestarErro);
+                        showAlert(
+                            contestarErro.code === '42501'
+                                ? 'Protocolo salvo, mas a conta de energia não foi contestada: seu perfil não tem permissão para alterar contas. Peça à equipe interna.'
+                                : 'Protocolo salvo, mas a conta de energia não foi marcada como contestada: ' + contestarErro.message,
+                            'warning'
+                        );
+                    }
+                } else {
+                    showAlert(
+                        'Protocolo salvo. A contestação da conta de energia é feita pela equipe interna — '
+                        + 'o status da conta não foi alterado por aqui.',
+                        'info'
+                    );
                 }
             }
 
@@ -790,6 +819,27 @@ export default function ProtocolModal({ protocol, parentProtocolId, onClose, onU
                             );
                         })}
                     </div>
+                    {/* A automacao "Em Tratativa -> conta contestada" grava em
+                        `invoices`, e so papel interno grava. Dizer isto aqui,
+                        antes de salvar, evita que o fornecedor conte com uma
+                        contestacao que nao vai acontecer. */}
+                    {!podeContestarConta && linkedEntityType === 'conta_energia' && (status === 'em_tratativa' || status === 'tratativa') && (
+                        <div style={{
+                            marginTop: '0.5rem',
+                            padding: '0.6rem 1rem',
+                            background: '#eff6ff',
+                            border: '1px dashed #1d4ed8',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            color: '#1d4ed8',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}>
+                            <Info size={14} />
+                            <span>A contestação da conta de energia é feita pela equipe interna. O protocolo será registrado, mas o status da conta não muda por aqui.</span>
+                        </div>
+                    )}
                     {status === 'replica' && replicaJustification && (
                         <div style={{
                             marginTop: '0.5rem',

@@ -15,15 +15,46 @@ DECLARE
   v_ass    uuid := gen_random_uuid();   -- assinante (papel nao interno)
   v_emb    uuid := gen_random_uuid();   -- embaixador/originador (o da regra)
   v_adm    uuid := gen_random_uuid();   -- admin (papel interno)
-  v_fat    uuid := gen_random_uuid();   -- fatura fixture
+
+  -- Cadeia real da fatura: sem ela o gatilho de fatura paga nao acha
+  -- originador nenhum e o ramo da comissao (2.1.2) nunca roda — a asserção
+  -- de regressao da Task 16 passava sem provar nada.
+  v_orig   uuid;                        -- originators_v2 com split_commission
+  v_usina  uuid;
+  v_sub    uuid;
+  v_uc     uuid;
+  v_fat    uuid;                        -- fatura fixture (com UC de verdade)
   v_fat2   uuid := gen_random_uuid();   -- fatura que o admin insere
+
   v_conta  uuid;                        -- ledger_accounts 2.1.2 (comissoes)
+  v_base   numeric := 1000;
+  v_esp_comissao numeric;
+  v_comissao numeric;
+
+  v_papeis text[];
   v_dono   text := current_user;
   v_n      integer;
   v_status text;
   v_erro   text;
   v_state  text;
 BEGIN
+  -- ================================================================
+  -- 0) fn_papel_interno() nao pode divergir de src/lib/papeis.js
+  --    (a tela esconde botao por essa lista; se as duas andarem
+  --     separadas, a interface mente para mais ou para menos)
+  -- ================================================================
+  SELECT array_agg(m[1] ORDER BY m[1])
+    INTO v_papeis
+    FROM pg_proc p,
+         LATERAL regexp_matches(p.prosrc, '''([a-z_]+)''', 'g') m
+   WHERE p.oid = 'public.fn_papel_interno()'::regprocedure;
+
+  IF v_papeis IS DISTINCT FROM ARRAY['admin', 'coordinator', 'manager', 'super_admin'] THEN
+    RAISE EXCEPTION
+      'FALHOU: fn_papel_interno() aceita %, esperado {admin,coordinator,manager,super_admin} — sincronizar com src/lib/papeis.js',
+      v_papeis;
+  END IF;
+
   -- ---------------------------------------------------------------- fixtures
   INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
     (v_ass, 'assin.fat@teste.invalid', '{"name":"Assinante"}',  'authenticated', 'authenticated'),
@@ -40,13 +71,29 @@ BEGIN
   SELECT id INTO v_conta FROM public.ledger_accounts WHERE code = '2.1.2';
   IF v_conta IS NULL THEN RAISE EXCEPTION 'FIXTURE: conta 2.1.2 (comissoes) nao existe'; END IF;
 
-  -- Fatura sem UC de proposito: o alvo do teste e o portao de escrita, nao o
-  -- rateio. Os gatilhos de invoices toleram uc_id nulo (conferido um a um).
-  INSERT INTO public.invoices (id, uc_id, mes_referencia, vencimento, valor_a_pagar, valor_concessionaria, status)
-  VALUES (v_fat, NULL, date_trunc('month', current_date)::date, current_date + 10, 123.45, 0, 'a_vencer');
+  -- Cadeia usina -> assinante (com originador) -> UC consumidora -> fatura.
+  INSERT INTO public.originators_v2 (name, split_commission)
+  VALUES ('SANDBOX Originador Task17', '{"start": 10, "recurrent": 4}'::jsonb)
+  RETURNING id INTO v_orig;
 
-  -- Um lancamento em 2.1.2 apontando para o embaixador: e o que o painel
-  -- "Minhas Comissoes" (OriginatorDashboard) le. A leitura tem de sobreviver.
+  INSERT INTO public.usinas (gestao_percentual) VALUES (15) RETURNING id INTO v_usina;
+
+  INSERT INTO public.subscribers (originator_id) VALUES (v_orig) RETURNING id INTO v_sub;
+
+  INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+  VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+  INSERT INTO public.invoices (uc_id, mes_referencia, vencimento, valor_a_pagar, valor_concessionaria, status)
+  VALUES (v_uc, date_trunc('month', current_date)::date, current_date + 10, v_base, 0, 'a_vencer')
+  RETURNING id INTO v_fat;
+
+  -- Primeira fatura paga da UC, concessionaria zerada:
+  --   comissao 2.1.2 = start 10% + recorrente 4% = -140
+  v_esp_comissao := -(v_base * 0.10 + v_base * 0.04);
+
+  -- Um lancamento em 2.1.2 apontando para o PERFIL do embaixador: e o que o
+  -- painel "Minhas Comissoes" (OriginatorDashboard) le. A leitura tem de
+  -- sobreviver. Nao se confunde com v_orig, que e a linha de originators_v2.
   INSERT INTO public.ledger_entries (transaction_id, account_id, amount, description, reference_type, reference_id)
   VALUES (gen_random_uuid(), v_conta, -10.00, 'Comissao fixture', 'originator', v_emb);
 
@@ -116,7 +163,7 @@ BEGIN
   v_erro := NULL; v_state := NULL;
   BEGIN
     INSERT INTO public.invoices (uc_id, mes_referencia, vencimento, valor_a_pagar, status)
-    VALUES (NULL, date_trunc('month', current_date)::date, current_date + 10, 1.00, 'a_vencer');
+    VALUES (v_uc, (date_trunc('month', current_date) + interval '1 month')::date, current_date + 40, 1.00, 'a_vencer');
   EXCEPTION WHEN others THEN v_erro := SQLERRM; v_state := SQLSTATE;
   END;
   IF v_erro IS NULL THEN RAISE EXCEPTION 'FALHOU: embaixador inseriu fatura'; END IF;
@@ -159,13 +206,24 @@ BEGIN
   GET DIAGNOSTICS v_n = ROW_COUNT;
   IF v_n <> 1 THEN RAISE EXCEPTION 'FALHOU: admin nao consegue marcar fatura como paga (% linha[s])', v_n; END IF;
 
-  -- O gatilho tr_invoice_paid_ledger (SECURITY DEFINER, Task 16) tem de
-  -- continuar lancando no razao mesmo com a escrita fechada ao usuario comum.
+  -- Regressao da Task 16: o gatilho tr_invoice_paid_ledger (SECURITY DEFINER)
+  -- tem de continuar lancando o rateio mesmo com a escrita do razao fechada ao
+  -- usuario comum. Conferir a COMISSAO (2.1.2) nominalmente, e nao so "lancou
+  -- alguma coisa": e o ramo que depende de enxergar originators_v2, que foi o
+  -- defeito original da Task 16.
   SELECT count(*) INTO v_n FROM public.ledger_entries WHERE reference_type = 'invoice' AND reference_id = v_fat;
   IF v_n = 0 THEN RAISE EXCEPTION 'FALHOU: baixa do admin nao lancou nada no razao (gatilho de fatura paga quebrou)'; END IF;
 
+  SELECT COALESCE(SUM(amount), 0) INTO v_comissao
+    FROM public.ledger_entries
+   WHERE account_id = v_conta AND reference_type = 'originator' AND reference_id = v_orig;
+  IF v_comissao <> v_esp_comissao THEN
+    RAISE EXCEPTION 'FALHOU: comissao do originador na conta 2.1.2 ficou %, esperado % (gatilho nao enxergou originators_v2)',
+      v_comissao, v_esp_comissao;
+  END IF;
+
   INSERT INTO public.invoices (id, uc_id, mes_referencia, vencimento, valor_a_pagar, status)
-  VALUES (v_fat2, NULL, date_trunc('month', current_date)::date, current_date + 10, 50.00, 'a_vencer');
+  VALUES (v_fat2, v_uc, (date_trunc('month', current_date) + interval '1 month')::date, current_date + 40, 50.00, 'a_vencer');
   SELECT count(*) INTO v_n FROM public.invoices WHERE id = v_fat2;
   IF v_n <> 1 THEN RAISE EXCEPTION 'FALHOU: admin nao consegue criar fatura'; END IF;
 
@@ -180,10 +238,18 @@ BEGIN
 
   -- =====================================================================
   -- 4) SERVICE ROLE / robos (faturista, emissor, enviador, webhook Asaas):
-  --    escrevem sem sessao de usuario e nao podem ser atingidos
+  --    escrevem sem sessao de usuario e nao podem ser atingidos.
+  --
+  --    O papel tem de ser `service_role` MESMO: rodar como o dono da conexao
+  --    (postgres) provaria outra coisa — postgres e dono das tabelas e passaria
+  --    por qualquer politica, inclusive uma que barrasse o robo.
   -- =====================================================================
-  PERFORM set_config('role', v_dono, true);
   PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('role', 'service_role', true);
+
+  IF current_user <> 'service_role' THEN
+    RAISE EXCEPTION 'FIXTURE: nao consegui assumir service_role (current_user = %)', current_user;
+  END IF;
 
   UPDATE public.invoices SET valor_a_pagar = 321.00 WHERE id = v_fat;
   GET DIAGNOSTICS v_n = ROW_COUNT;
@@ -193,6 +259,8 @@ BEGIN
   VALUES (gen_random_uuid(), v_conta, -2.00, 'Lancamento do robo', 'originator', v_emb);
   GET DIAGNOSTICS v_n = ROW_COUNT;
   IF v_n <> 1 THEN RAISE EXCEPTION 'FALHOU: robo/service role nao consegue lancar no razao'; END IF;
+
+  PERFORM set_config('role', v_dono, true);
 
   RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
