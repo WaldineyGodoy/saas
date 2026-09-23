@@ -14,6 +14,7 @@ import './InvoicesModal.css';
 import { useBranding } from '../contexts/BrandingContext';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
+import { ehPapelInterno } from '../lib/papeis';
 
 const energyStatusColors = { 
     'a_vencer': { color: '#2563eb', bg: '#eff6ff', label: 'A Vencer' }, 
@@ -120,6 +121,20 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
     const { branding } = useBranding();
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
+
+    // C3 — este modal chega ao fornecedor por Protocolos (ProtocolModal, botao
+    // "Ver Conta de Energia"), e ate agora vinha com todos os botoes de escrita
+    // ligados. Desde a migracao 20260922h so papel interno grava em `invoices`,
+    // e a politica de DELETE e restritiva (USING fn_papel_interno()): o comando
+    // do fornecedor atingia ZERO linhas e voltava sem erro, entao handleDelete
+    // anunciava "Fatura e conta de energia excluidas com sucesso!" com a fatura
+    // intacta no banco. Mentira silenciosa e pior do que a recusa.
+    //
+    // Mesma guarda das outras quatro telas (Dashboard, ConsumerUnitModal,
+    // SubscriberModal, ProtocolModal, AuditGraphViewInvoiceSummary): a lista de
+    // papeis vem de src/lib/papeis.js, espelho de public.fn_papel_interno().
+    // Isto e' so' a tela; quem decide e' o banco.
+    const podeEscrever = ehPapelInterno(profile?.role);
 
     // Resolve robustly the full UUID of the UC to prevent truncated ID query crashes
     const resolvedUcId = (invoice?.uc_id && invoice.uc_id.length === 36)
@@ -929,7 +944,16 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         }
     };
 
+    const MSG_SEM_PERMISSAO = 'Faturas e contas de energia são alteradas pela equipe interna. Seu perfil não tem permissão para esta ação.';
+
     const handleDelete = async () => {
+        // Ultima linha de defesa: o botao ja' some para quem nao e' papel
+        // interno, mas o modal e' aberto por varios caminhos.
+        if (!podeEscrever) {
+            showAlert(MSG_SEM_PERMISSAO, 'info');
+            return;
+        }
+
         const confirmCancel = await showConfirm(
             'Tem certeza que deseja cancelar esta fatura?', 
             'Cancelar Fatura', 
@@ -954,12 +978,19 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
             }
             
             if (deleteConcessionaria) {
-                // Delete completely from database
-                const { error } = await supabase
+                // `.select()` faz o PostgREST devolver as linhas efetivamente
+                // apagadas. Sem isso um DELETE barrado por RLS volta sem erro e
+                // com zero linhas — e a tela dizia "excluidas com sucesso".
+                const { data: apagadas, error } = await supabase
                     .from('invoices')
                     .delete()
-                    .eq('id', invoice.id);
+                    .eq('id', invoice.id)
+                    .select('id');
                 if (error) throw error;
+                if (!apagadas || apagadas.length === 0) {
+                    showAlert(MSG_SEM_PERMISSAO, 'error');
+                    return;
+                }
                 showAlert('Fatura e conta de energia excluídas com sucesso!', 'success');
             } else {
                 // Reset status to sem_faturamento and clear asaas fields in database
@@ -1345,20 +1376,24 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 Fazer Leitura OCR
                             </button>
                         )}
-                        <button 
+                        {podeEscrever && (
+                        <button
                             onClick={handleDelete}
                             title="Excluir Fatura"
                             style={{ background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center' }}
                         >
                             <Trash2 size={20} />
                         </button>
-                        <button 
+                        )}
+                        {podeEscrever && (
+                        <button
                             onClick={handleToggleEdit}
                             title={isEditing ? "Cancelar Edição" : "Editar Fatura"}
                             style={{ background: isEditing ? '#f1f5f9' : '#eff6ff', border: 'none', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: isEditing ? '#64748b' : '#2563eb', display: 'flex', alignItems: 'center' }}
                         >
                             {isEditing ? <RotateCcw size={20} /> : <Pencil size={20} />}
                         </button>
+                        )}
                         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                             <X size={24} />
                         </button>
@@ -1408,7 +1443,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                     <button
                                         key={s.id}
                                         onClick={() => handleUpdateFaturaStatus(s.id)}
-                                        disabled={updatingFaturaStatus}
+                                        // As faixas de status ficam visiveis para todo mundo
+                                        // (sao a leitura do estado da fatura), mas so' papel
+                                        // interno clica. O banco recusa a escrita de qualquer
+                                        // forma; aqui o botao apenas nao finge que aceita.
+                                        disabled={updatingFaturaStatus || !podeEscrever}
                                         style={{
                                             padding: '0.5rem 0.1rem',
                                             borderRadius: '8px',
@@ -1465,7 +1504,9 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                          <button
                                              key={s.id}
                                          onClick={() => handleUpdateEnergyStatus(s.id)}
-                                         disabled={updatingStatus}
+                                         // Inclui "marcar conta como paga": escrita em
+                                         // `invoices`, fechada ao papel nao interno.
+                                         disabled={updatingStatus || !podeEscrever}
                                          style={{
                                              padding: '0.5rem 0.1rem',
                                              borderRadius: '8px',
@@ -1863,9 +1904,12 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                     </span>
                                                 );
                                             }
-                                            if (invoice.linha_digitavel) {
+                                            // Pagar a conta da concessionaria move dinheiro
+                                            // e grava em `invoices`: nao e' acao de
+                                            // fornecedor nem de assinante.
+                                            if (invoice.linha_digitavel && podeEscrever) {
                                                 return (
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={handlePay}
                                                         disabled={loading || paymentStatus === 'success'}
@@ -2048,8 +2092,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                         </div>
                                                     );
                                                 }
+                                                // Emitir boleto cria cobranca no Asaas e
+                                                // grava na fatura: so' papel interno.
+                                                if (!podeEscrever) return null;
                                                 return (
-                                                    <button 
+                                                    <button
                                                         type="button"
                                                         onClick={handleGenerateBilling}
                                                         disabled={loading}
@@ -2193,13 +2240,15 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                                         }}>
                                                                             {childStatus.label}
                                                                         </span>
-                                                                        <button 
+                                                                        {podeEscrever && (
+                                                                        <button
                                                                             onClick={(e) => { e.stopPropagation(); handleUnlinkChild(child.id); }}
                                                                             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '0.25rem', cursor: 'pointer', color: '#fca5a5', display: 'flex' }}
                                                                             title="Desvincular"
                                                                         >
                                                                             <Trash2 size={16} />
                                                                         </button>
+                                                                        )}
                                                                     </div>
                                                                     <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CONTA INCORPORADA</div>
                                                                     <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', fontWeight: 600 }}>UC: {consumerUnit?.numero_uc || '-'}</div>
@@ -2221,6 +2270,11 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                             </div>
                                         )}
 
+                                        {/* Vincular/desvincular conta filha reescreve
+                                            `parent_invoice_id` em `invoices`: escrita, e
+                                            portanto so' papel interno. A lista acima
+                                            continua visivel. */}
+                                        {podeEscrever && (
                                         <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start', flexDirection: 'column' }}>
                                             <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>Pesquisar e vincular manualmente:</div>
                                             <div style={{ display: 'flex', gap: '0.5rem', width: '100%', maxWidth: '400px' }}>
@@ -2260,6 +2314,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                                 </div>
                                             )}
                                         </div>
+                                        )}
                                     </div>
                                 </CollapsibleSection>
                             </div>

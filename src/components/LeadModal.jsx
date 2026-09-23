@@ -120,6 +120,146 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         })
         : null;
 
+    // C2 — as duas funcoes abaixo sumiram do arquivo numa reescrita anterior,
+    // mas as chamadas continuaram: `fetchOriginators()` no useEffect de abertura
+    // (ReferenceError no primeiro render, para QUALQUER papel: o modal nao abria)
+    // e `addHistory(...)` depois do WhatsApp manual. Restauradas como estavam em
+    // LeadModal_backup.jsx / OriginatorModal.jsx — mesma assinatura, mesmas
+    // colunas, nada a mais.
+    const fetchOriginators = async () => {
+        // Da tabela de originadores, nao de `profiles`: o select do formulario
+        // grava `originator_id`, que aponta para originators_v2.
+        const { data } = await supabase
+            .from('originators_v2')
+            .select('id, name')
+            .order('name');
+        setOriginators(data || []);
+    };
+
+    const addHistory = async (type, id, action, details = {}, customContent = null) => {
+        if (!id) return;
+        try {
+            await supabase.from('crm_history').insert({
+                entity_type: type,
+                entity_id: id,
+                content: customContent || `${action}: ${details.type || ''}`,
+                metadata: details,
+                created_by: profile?.id
+            });
+        } catch (error) {
+            // Historico e registro, nao a acao em si: se falhar, a mensagem ja
+            // foi enviada e nao se desfaz um WhatsApp. Loga e segue.
+            console.error('Error adding history:', error);
+        }
+    };
+
+    // Tambem sumiram na mesma reescrita, e o JSX continuou chamando as duas:
+    // `onSubmit={handleSubmit}` nos formularios Dados e Endereco (linhas 478 e
+    // 527) e `onBlur={handleCepBlur}` no campo CEP. As referencias em JSX sao
+    // avaliadas no render, entao bastava abrir o modal para estourar
+    // ReferenceError — era o mesmo defeito do fetchOriginators, so que por
+    // outro caminho. Repostas como estavam em LeadModal_backup.jsx. Que elas
+    // pertencem a este arquivo se ve pelos imports que ficaram orfaos no topo
+    // (fetchAddressByCep, fetchOfferData, validatePhone) e pelo setSearchingCep
+    // sem ninguem para chamar.
+    const handleCepBlur = async () => {
+        const rawCep = formData.cep.replace(/\D/g, '');
+        if (rawCep.length !== 8) return;
+
+        setSearchingCep(true);
+        try {
+            const addr = await fetchAddressByCep(rawCep);
+
+            let offer = {};
+            if (addr.ibge) {
+                try {
+                    const offerData = await fetchOfferData(addr.ibge);
+                    if (offerData) offer = offerData;
+                } catch (e) {
+                    console.error('Erro na oferta', e);
+                }
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                rua: addr.rua || '',
+                bairro: addr.bairro || '',
+                cidade: addr.cidade || '',
+                uf: addr.uf || '',
+                concessionaria: offer?.Concessionaria || prev.concessionaria || '',
+                tarifa_concessionaria: offer?.['Tarifa Concessionaria'] || prev.tarifa_concessionaria || '',
+                desconto_assinante: (() => {
+                    // A planilha traz desconto ora como 0,15 ora como 15.
+                    let val = offer?.['Desconto Assinante'] || prev.desconto_assinante || '';
+                    if (val && !isNaN(val) && Number(val) > 0 && Number(val) < 1) {
+                        return Number(val) * 100;
+                    }
+                    return val;
+                })()
+            }));
+        } catch (error) {
+            console.error('Erro ao buscar CEP:', error);
+            showAlert('Erro ao buscar CEP. Verifique se digitou corretamente.', 'error');
+        } finally {
+            setSearchingCep(false);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (formData.phone && !validatePhone(formData.phone)) {
+            showAlert('Telefone inválido!', 'warning');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const dataToSave = { ...formData };
+            // Evolution API so aceita digitos.
+            if (dataToSave.phone) {
+                dataToSave.phone = dataToSave.phone.replace(/\D/g, '');
+            }
+            dataToSave.tarifa_concessionaria = dataToSave.tarifa_concessionaria ? Number(dataToSave.tarifa_concessionaria) : null;
+            dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;
+            dataToSave.desconto_assinante = dataToSave.desconto_assinante ? Number(dataToSave.desconto_assinante) : null;
+            if (dataToSave.originator_id === '') dataToSave.originator_id = null;
+
+            let result;
+            if (lead?.id) {
+                result = await supabase
+                    .from('leads')
+                    .update(dataToSave)
+                    .eq('id', lead.id)
+                    .select()
+                    .single();
+            } else {
+                result = await supabase
+                    .from('leads')
+                    .insert(dataToSave)
+                    .select()
+                    .single();
+            }
+
+            if (result.error) throw result.error;
+
+            // O bloco de "notificacao de ativacao" que o backup tinha aqui NAO
+            // foi copiado de proposito: ele chama sendWhatsapp direto do
+            // navegador, e essa cópia ja existe neste arquivo dentro de
+            // `handleSaveAppointment` (ver observacao abaixo). Duplicar o envio
+            // faria o mesmo aviso sair duas vezes, e envio pela tela e
+            // justamente o que o portao desta branch esta fechando. Salvar o
+            // lead volta a funcionar; nada dispara sozinho.
+            onSave(result.data);
+            onClose();
+        } catch (error) {
+            showAlert('Erro ao salvar lead: ' + error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSendModeloLead = async () => {
         if (!lead?.id) {
             showAlert('Por favor, salve o lead primeiro clicando no botão "Salvar Lead" abaixo.', 'warning');
