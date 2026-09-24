@@ -2088,7 +2088,6 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' },
                         { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' }
                     ]
-                        .filter(tab => subscriber || ['dados', 'endereco'].includes(tab.id))
                         // A aba Faturas nao e consulta: emite boleto, cancela,
                         // reenvia e desvincula fatura consolidada — tudo escrita
                         // em `invoices`, que desde a migracao 20260922h so o
@@ -3112,7 +3111,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     </div>
                                     <HistoryTimeline
                                         entityType="subscriber"
-                                        entityId={subscriber.id}
+                                        entityId={subscriber?.id}
                                         entityName={formData.name}
                                         onClose={() => setActiveTab('dados')}
                                         isInline={true}
@@ -3424,7 +3423,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                         <Paperclip size={20} color="#8b5cf6" />
                                         Documentos do Assinante
                                     </h4>
-                                    {subscriber?.id && <DocumentosAssinante subscriberId={subscriber.id} />}
+                                    {subscriber?.id ? (
+                                        <DocumentosAssinante subscriberId={subscriber.id} />
+                                    ) : (
+                                        <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
+                                            Salve os dados cadastrais do assinante primeiro para visualizar ou anexar documentos.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}

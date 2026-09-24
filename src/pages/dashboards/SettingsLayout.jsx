@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Users, Code, CreditCard, Palette, Mail, Zap, Bell, Wrench } from 'lucide-react';
+import { Users, Code, CreditCard, Palette, Mail, Zap, Bell, Wrench, Layers } from 'lucide-react';
 
+import PlansServicesSettings from '../settings/PlansServicesSettings';
 import UserProfilesSettings from '../settings/UserProfilesSettings';
 import IntegrationSettings from '../settings/IntegrationSettings';
 import CustomizationSettings from '../settings/CustomizationSettings';
@@ -9,9 +10,10 @@ import NotificationHubSettings from '../settings/NotificationHubSettings';
 import ServicesSettings from '../settings/ServicesSettings';
 
 export default function SettingsLayout() {
-    const [activeTab, setActiveTab] = useState('users');
+    const [activeTab, setActiveTab] = useState('plans');
 
     const menuItems = [
+        { id: 'plans', label: 'Planos e Serviços', icon: Layers, desc: 'Assinatura, Eletropostos e Usinas' },
         { id: 'users', label: 'Perfil de Usuários', icon: Users, desc: 'Gerenciar usuários e acesso' },
         { id: 'notifications', label: 'Central de Notificações', icon: Bell, desc: 'Configuração de WhatsApp e Gatilhos' },
 
@@ -24,6 +26,8 @@ export default function SettingsLayout() {
 
     const renderContent = () => {
         switch (activeTab) {
+            case 'plans':
+                return <PlansServicesSettings />;
             case 'users':
                 return <UserProfilesSettings />;
             case 'notifications':
