@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
 import {
-    descreverFaltantes, escolherLink, keywordAdesao, keywordTermos,
+    decidirPerfil, descreverFaltantes, escolherLink, keywordAdesao, keywordTermos,
     urlTermos, textoWhatsappContrato, textoOriginador,
 } from '../_shared/onboarding-regras.ts'
 import { htmlEmailContrato } from '../_shared/email-contrato.ts'
@@ -21,7 +21,9 @@ import { htmlEmailContrato } from '../_shared/email-contrato.ts'
  *    crm_history.metadata.contrato_url_curta (junto do autentique_doc_id).
  *    Nao usamos signatures.metadata porque o autentique-webhook sobrescreve
  *    essa coluna com o payload do evento.
- * 4. conta de acesso + profile.
+ * 4. conta de acesso + profile. Perfil que JA EXISTE e preservado inteiro
+ *    (papel, nome, CPF, telefone, endereco): so o vinculo assinante<->conta e
+ *    gravado. Ver decidirPerfil em _shared/onboarding-regras.ts.
  * 5-6. documento na Autentique com signatario SEM e-mail (so assim ela
  *    devolve link publico); sem link -> 502 e nada e enviado.
  * 7-9. encurta assinatura e pagina de termos; WhatsApp e e-mail com o mesmo
@@ -283,23 +285,55 @@ serve(async (req) => {
         }
 
         if (userId) {
-            const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
-                id: userId,
-                name: sub.name,
-                cpf_cnpj: sub.cpf_cnpj,
-                email: sub.email,
-                phone: sub.phone,
-                role: 'subscriber',
-                address: {
-                    cep: sub.cep, rua: sub.rua, numero: sub.numero,
-                    complemento: sub.complemento, bairro: sub.bairro,
-                    cidade: sub.cidade, uf: sub.uf
-                }
-            }, { onConflict: 'id' });
+            // Perfil que JA EXISTE nunca e reescrito: o e-mail da adesao pode
+            // ser de um embaixador/originador/admin que aderiu pelo proprio
+            // link. O upsert cego rebaixava o papel para 'subscriber' e apagava
+            // nome/CPF/telefone/endereco, derrubando o acesso ao CRM.
+            const { data: perfilExistente, error: leituraErr } = await supabaseAdmin
+                .from('profiles')
+                .select('id, role')
+                .eq('id', userId)
+                .maybeSingle();
 
-            if (profErr) {
-                console.error('onboarding-finalizar: profile', profErr);
-                avisos.push('Profile nao gravado.');
+            if (leituraErr) {
+                console.error('onboarding-finalizar: leitura do profile', leituraErr);
+                avisos.push('Profile nao verificado: nada foi gravado no perfil.');
+            }
+
+            // Leitura falhou -> preserva (nao escrever e menos grave que
+            // rebaixar o papel de um usuario interno).
+            const decisao = leituraErr ? { acao: 'preservar' as const } : decidirPerfil({ perfilExistente });
+
+            if (decisao.acao === 'criar') {
+                const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
+                    id: userId,
+                    name: sub.name,
+                    cpf_cnpj: sub.cpf_cnpj,
+                    email: sub.email,
+                    phone: sub.phone,
+                    role: 'subscriber',
+                    address: {
+                        cep: sub.cep, rua: sub.rua, numero: sub.numero,
+                        complemento: sub.complemento, bairro: sub.bairro,
+                        cidade: sub.cidade, uf: sub.uf
+                    }
+                }, { onConflict: 'id' });
+
+                if (profErr) {
+                    console.error('onboarding-finalizar: profile', profErr);
+                    avisos.push('Profile nao gravado.');
+                }
+            } else if (perfilExistente) {
+                await supabaseAdmin.from('crm_history').insert({
+                    entity_type: 'subscriber',
+                    entity_id: subscriber_id,
+                    content: 'Ades\u00e3o p\u00fablica: esta conta de acesso j\u00e1 tinha perfil no CRM; o perfil foi preservado e nada foi sobrescrito.',
+                    metadata: {
+                        user_id: userId,
+                        perfil_preservado: true,
+                        role_existente: perfilExistente.role ?? null
+                    }
+                });
             }
 
             const { error: linkErr } = await supabaseAdmin
