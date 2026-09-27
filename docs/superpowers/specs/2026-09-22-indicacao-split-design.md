@@ -1,80 +1,102 @@
-# Indicação pelo assinante e split de pagamentos — subprojeto D
+# Plano de Recompensas — implementação (subprojeto D)
 
-Data: 22/09/2026 · Começa depois que o subprojeto A (adesão sem perdas) estiver publicado e aprovado no teste real.
+Data: 22/09/2026 · **Reescrita em 27/09/2026** para implementar o `Plano de Recompensas/REGRAS_E_TABELAS_PLANO_DE_RECOMPENSAS.md` (commit `20e3a4b`), que substitui as regras da versão anterior desta spec.
+
+Começa depois que o subprojeto A (adesão sem perdas) passar no teste real de ponta a ponta.
 
 ## Por que
 
-O assinante passa a ter link de indicação, como o originador. A recompensa de quem indica e a divisão de cada fatura precisam ser visíveis e configuráveis no CRM.
+O assinante passa a indicar, como o originador, e a divisão de cada fatura ganha níveis (L1 a L4+) com cargos. O documento oficial define a matriz; esta spec define **como implementá-la no banco e no CRM que existem hoje**.
 
-Estado de hoje (apurado em 22/09/2026):
+Estado real em 27/09/2026:
 
-- A comissão que é paga de fato vem de `originators_v2.split_commission` (`start`/`recurrent`), lançada no razão (conta 2.1.2) pelo gatilho de fatura paga `handle_invoice_paid_ledger`. Ver memória `crm-comissao-duas-fontes`.
+- Quem paga comissão de verdade é `handle_invoice_paid_ledger` (SECURITY DEFINER desde 22/09), lendo `originators_v2.split_commission` e calculando `gestao = base × gestao_percentual − recorrente`. **Esse motor será reescrito.**
 - `profiles.commission_split` + `superior_id` pertencem a um motor morto (`generate_monthly_commissions`).
-- `subscribers.split_comissoes` existe, está vazio nos 13 assinantes e nenhum código lê.
-- Na fatura sem start, a recorrência já sai da gestão da B2W (`gestao = base × gestao_percentual − recorrente`).
+- `subscribers.split_comissoes` está vazio nos 13 assinantes e ninguém lê.
+- Existe a tabela `planos_assinatura_energia`. **Não existem** `planos_eletropostos`, `extrato_recompensas`, `tarifas_concessionarias` nem `unidades_consumidoras` — os nomes reais são `consumer_units`, `originators_v2`, `invoices` e `Concessionaria`.
+- Não existem as colunas da árvore: `originators_v2.cargo`/`lider_id`, `consumer_units.indicado_por_uc_id`/`nivel_rede`/`plano_assinatura_id`.
 
-## §1 Regras de recorrência
+## §1 A matriz (fonte: documento oficial, com uma faixa nova)
 
-Base: a mesma base B que o gatilho de fatura paga usa hoje para comissão e gestão. Toda recompensa sai da gestão da B2W; fornecedor e concessionária nunca são afetados.
+Base de cálculo líquida = **tarifa bruta da concessionária − Fio B − desconto do assinante**. Tudo abaixo incide sobre ela.
 
-| Quem indicou o cliente Y | Originador recebe | Assinante que indicou recebe |
-|---|---|---|
-| Originador O, direto | 4% | — |
-| Assinante X vinculado ao originador O | 2% | 2% (abatimento) |
-| Assinante X sem originador | — | 2% (abatimento); os 2% do originador ficam na B2W |
+Por fatura, **o nível da UC decide quem recebe** (um beneficiário por papel, nunca a árvore inteira):
 
-- Um nível só: se Y indicar Z, quem recebe é Y (e o originador de Y, pela linha 2). X não recebe sobre Z.
-- O start negociado por originador (hoje 100% da primeira fatura, ver memória `crm-comissao-duas-fontes`) continua como está. As regras acima são só a recorrência.
-- Trava: originador + assinante ≤ `gestao_percentual` da usina da UC. Se passar, o assinante é cortado primeiro e depois o originador, até caber. O corte é gravado na fatura e aparece como alerta no CRM. A B2W nunca fica negativa.
+| Nível da UC | B2W | Líder | Parceiro Power | Assinante Conect | Total |
+|---|---:|---:|---:|---:|---:|
+| L1 — venda direta | 10% | 1% | PPE/PPP 4% · **PPB 2%** · PPF 0% | — | 13% a 15% |
+| L2 — 1ª indicação | 10% | 1% | 2% (PPE/PPP/PPB) · PPF 0% | 2% | 13% a 15% |
+| L3 | 10% | 1% | 0% | 2% | 13% |
+| L4+ | 10% | 0% | 0% | 2% | 12% |
 
-## §2 Configuração
+- **PPB (Parceiro Power Básico)** é a faixa nova, decidida pelo dono em 27/09/2026: 2% em L1 e 2% em L2. Os 8 originadores atuais migram nela; o cargo é editável no modal do originador.
+- O **Assinante Conect** que recebe é o que indicou aquela UC — um por fatura, não a linha ascendente inteira. É isso que faz o superávit do documento fechar.
+- **Trava anti-déficit:** o líquido do fornecedor não pode ficar abaixo do piso contratual (50% da tarifa bruta, configurável por plano). Se ficar, o corte é aplicado na ordem Assinante Conect → Parceiro Power → Líder, e o corte é gravado na fatura e alertado no CRM. A B2W nunca fica negativa, e o fornecedor nunca fica abaixo do piso.
+- **Vigência:** vitalícia enquanto a UC estiver ativa e adimplente **e** o recebedor estiver ativo. Sem a trava de 48 meses.
 
-- Tela Configurações → Indicação, com três padrões globais: `originador_direto` = 4, `originador_via_assinante` = 2, `assinante` = 2.
-- Exceção por pessoa: o modal do originador (recorrência direta e via assinante) e o modal do assinante (% como indicador) podem sobrescrever o padrão. Vazio = usa o padrão.
-- Cada fatura grava o % efetivo de cada beneficiário no momento do cálculo. Mudar um padrão ou uma exceção vale só para faturas futuras.
-- A fonte única da recorrência do originador passa a ser essa configuração (padrão + exceção). A chave `recurrent` de `originators_v2.split_commission` é migrada para a exceção do originador e deixa de ser lida; `start` continua em `split_commission`.
+**Em aberto (decisão do dono antes do plano):** o Bônus Start do documento é "comissionamento sobre as 3 primeiras faturas"; o motor de hoje tem `split_commission.start` como 100% da base na primeira fatura. As duas definições não são a mesma coisa e precisam ser conciliadas.
 
-## §3 Link de indicação do assinante
+## §2 Onde a configuração vive
+
+- Por plano, em `planos_assinatura_energia.recorrente_config` (`regras_multinivel`), como no documento: `b2w`, `lider`, `ppe`, `ppp`, `ppb`, `ppf`, `assinante_conect`, cada um com `max_niveis` e `niveis {L1..L4}`.
+- A UC aponta para o plano (`consumer_units.plano_assinatura_id`). Sem plano, a UC usa o plano padrão; sem plano padrão, não há recompensa e a fatura registra o motivo.
+- Cada fatura grava o percentual efetivo de cada beneficiário no momento do cálculo. Mudar o plano depois não reescreve o passado.
+- `originators_v2.split_commission.recurrent` deixa de ser lido. `start` fica até a decisão do Bônus Start (§1).
+
+## §3 A árvore
+
+- `originators_v2` ganha `cargo` (`lider | ppe | ppp | ppb | ppf`) e `lider_id` (auto-relação).
+- `consumer_units` ganha `indicado_por_uc_id` (a UC que indicou) e `nivel_rede` (1 a 4+, derivado por gatilho a partir do pai, com teto de profundidade para não percorrer ciclo).
+- Guarda: `indicado_por_uc_id` não pode formar ciclo nem apontar para UC do mesmo assinante.
+- O link de indicação do assinante (§4) é o que popula `indicado_por_uc_id`.
+
+## §4 Link de indicação do assinante
 
 - Ao virar `contrato_assinado`, o assinante ganha um link curto no YOURLS (mesmo mecanismo do `originador-short-url`), para `https://b2wenergia.com.br/?indicador=<subscriber_id>&name=<primeiro nome>`.
-- A raiz (`Paginas/b2wenergia.assine`, branch `Home`) lê `indicador`, grava `leads.indicador_assinante_id` e repassa para o `/contrato`.
-- `fn_criar_assinante_publico` aceita `p_indicador_assinante_id` (texto; UUID inválido é ignorado, como o originador). O assinante novo grava `subscribers.indicador_assinante_id` e herda `originator_id` do indicador quando não vier outro, que é como O recebe os 2%.
+- A raiz (`Paginas/b2wenergia.assine`, branch `Home`) lê `indicador`, grava `leads.indicador_assinante_id` e repassa ao `/contrato`.
+- `fn_criar_assinante_publico` aceita `p_indicador_assinante_id` (texto; UUID inválido é ignorado, como o originador). A UC criada recebe `indicado_por_uc_id` = primeira UC do indicador, e o assinante herda o `originator_id` do indicador quando não vier outro — é assim que o Parceiro Power e o Líder continuam na linha.
 - Link e contagem de indicados aparecem no modal do assinante e no painel dele.
 
-## §4 Abatimento do assinante
+## §5 Como o Assinante Conect recebe
 
-- Quando a fatura de Y é paga, o gatilho do razão lança o valor do assinante X como saldo de indicação de X, numa tabela `creditos_indicacao` (origem = fatura de Y, valor, % usado).
-- No cálculo da próxima fatura de X, o saldo pendente é consumido como desconto, limitado ao valor da fatura de X. O que exceder é descartado: não acumula para o mês seguinte. O descarte é registrado no crédito (valor aplicado × valor descartado), para aparecer no extrato.
-- Contabilmente, o valor sai da gestão da B2W na fatura de Y e vira uma obrigação com X; o consumo na fatura de X baixa essa obrigação. As contas do razão são definidas no plano, seguindo o plano de contas existente.
+Decisão do dono (22/09, mantida): **abatimento na própria fatura**.
 
-## §4.1 Tela "Equipe" do embaixador
+- Quando a fatura da UC indicada é paga, o motor lança o valor do Conect como saldo dele em `creditos_indicacao` (origem, valor, % usado).
+- No cálculo da próxima fatura do indicador, o saldo é consumido como desconto, **limitado ao valor da fatura**. O excedente é descartado, não acumula, e o descarte fica registrado para aparecer no extrato.
+- Contabilmente: na fatura de origem o valor vira obrigação com o assinante; o consumo na fatura dele baixa essa obrigação.
 
-Decisão do dono (22/09/2026): a tela `OriginatorList`, hoje no menu do papel `originator`, deixa de listar todos os embaixadores (era a própria brecha de CPF/PIX) e passa a mostrar a rede dele:
+## §6 Tela "Equipe" do embaixador
 
-- **Indicados diretos:** leads e assinantes com `originator_id` dele, com status e data.
-- **2º nível, em dropdown dentro de cada assinante direto:** quem aquele assinante indicou (`indicador_assinante_id`), com status.
-- Por linha: o que ele recebe (4% direto, 2% quando vier de assinante) e o valor lançado no mês.
-- Sem CPF, PIX ou comissão de terceiros — só da própria rede, e os dados pessoais dos indicados limitados a nome, cidade e status.
+`OriginatorList`, hoje no menu do papel `originator`, deixa de listar todos os embaixadores (era a brecha de CPF/PIX, fechada em 22/09) e passa a mostrar a rede dele:
 
-## §5 Split no modal
+- Indicados diretos: leads e assinantes com `originator_id` dele, com status e data.
+- 2º nível em dropdown dentro de cada assinante direto: quem aquele assinante indicou, com status.
+- Por linha: o percentual que ele recebe naquele nível e o valor lançado no mês.
+- Sem CPF, PIX ou comissão de terceiros; dos indicados, só nome, cidade e status.
 
-- Modal do assinante, em cada fatura: quadro com 5 fatias:
-  - Concessionária (conta de energia)
-  - Fornecedor (repasse ao investidor)
-  - B2W (gestão líquida)
-  - Originador
-  - Assinante indicador
-- Os valores vêm do que o razão lançou para aquela fatura, não de um recálculo na tela.
-- O modal também mostra os campos de exceção de % (§2), o link de indicação (§3) e o saldo de abatimento com o extrato (§4).
+## §7 Split no modal do assinante
 
-## §6 Ordem e testes
+Em cada fatura, o quadro com as fatias, sempre lidas do que o razão lançou (nunca recalculadas na tela):
 
-- Começa depois que o A estiver publicado e aprovado no teste real.
-- O D mexe no gatilho de fatura paga e no cálculo da fatura, que já movem dinheiro de verdade. Cada caso da tabela do §1 e a trava são testados em blocos SQL `SANDBOX_OK` (desfazem tudo), a partir de uma fatura real de cada tipo.
-- Os testes cobrem ainda: o abatimento limitado ao valor da fatura, com o descarte registrado; o % gravado na fatura, que não muda quando o padrão muda; e o início por UUID inválido de indicador.
+- Concessionária (conta de energia)
+- Fornecedor (repasse ao investidor, com o superávit em relação ao piso)
+- B2W (10% fixo)
+- Líder
+- Parceiro Power
+- Assinante Conect
+
+O modal também mostra o link de indicação (§4), o saldo de abatimento com extrato (§5) e o nível da UC.
+
+## §8 Ordem, riscos e testes
+
+- Começa depois do teste real do subprojeto A.
+- O motor `handle_invoice_paid_ledger` move dinheiro de verdade: a reescrita é feita atrás de uma chave por plano (`recompensas_ativo`), com o motor antigo preservado para planos que não migraram.
+- Cada linha da matriz do §1, a trava anti-déficit e o abatimento limitado são testados em blocos SQL `SANDBOX_OK` sobre faturas reais de cada tipo, comparando o razão antes e depois.
+- Testes adicionais: nível derivado na árvore (incluindo tentativa de ciclo), percentual congelado na fatura, UUID inválido de indicador, UC sem plano, e originador inativo (não recebe).
 
 ## Fora do escopo
 
-- Pagamento de comissão por PIX ao assinante: a recompensa é só abatimento.
-- Mais de um nível de indicação.
-- Baixa do repasse ao originador no razão, que continua em aberto (memória `crm-comissao-duas-fontes`).
+- Eletropostos (`planos_eletropostos`): o documento descreve, mas a tabela não existe e o produto não está no CRM.
+- Pagamento por PIX ao assinante: a recompensa é só abatimento.
+- Baixa do repasse ao originador no razão, ainda em aberto (memória `crm-comissao-duas-fontes`).
+- `extrato_recompensas` como tabela separada: o razão (`ledger_entries`) continua sendo a fonte, e o extrato é uma leitura dele.
