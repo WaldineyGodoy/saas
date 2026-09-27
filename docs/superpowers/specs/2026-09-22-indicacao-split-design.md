@@ -16,36 +16,49 @@ Estado real em 27/09/2026:
 - Existe a tabela `planos_assinatura_energia`. **Não existem** `planos_eletropostos`, `extrato_recompensas`, `tarifas_concessionarias` nem `unidades_consumidoras` — os nomes reais são `consumer_units`, `originators_v2`, `invoices` e `Concessionaria`.
 - Não existem as colunas da árvore: `originators_v2.cargo`/`lider_id`, `consumer_units.indicado_por_uc_id`/`nivel_rede`/`plano_assinatura_id`.
 
-## §1 A matriz (fonte: documento oficial, com uma faixa nova)
+## §1 A matriz
 
 Base de cálculo líquida = **tarifa bruta da concessionária − Fio B − desconto do assinante**. Tudo abaixo incide sobre ela.
 
-Por fatura, **o nível da UC decide quem recebe** (um beneficiário por papel, nunca a árvore inteira):
+**Os níveis são relativos a quem recebe** (decisão do dono, 27/09/2026), não à profundidade absoluta da UC: cada beneficiário olha a distância entre ele e a UC que gerou a fatura. Por fatura, cada papel paga no máximo um beneficiário.
 
-| Nível da UC | B2W | Líder | Parceiro Power | Assinante Conect | Total |
-|---|---:|---:|---:|---:|---:|
-| L1 — venda direta | 10% | 1% | PPE/PPP 4% · **PPB 2%** · PPF 0% | — | 13% a 15% |
-| L2 — 1ª indicação | 10% | 1% | 2% (PPE/PPP/PPB) · PPF 0% | 2% | 13% a 15% |
-| L3 | 10% | 1% | 0% | 2% | 13% |
-| L4+ | 10% | 0% | 0% | 2% | 12% |
+| Papel | Nível 1 (venda/indicação direta) | Nível 2 | Nível 3 | Nível 4+ |
+|---|---:|---:|---:|---:|
+| B2W (plataforma) | 10% | 10% | 10% | 10% (fixo, sem corte) |
+| Líder | 1% | 1% | 1% | 0% |
+| PPE — Parceiro Power Embaixador | 5% | 2% | 0% | 0% |
+| PPP — Parceiro Power Pro | 4% | 2% | 0% | 0% |
+| PPF — Parceiro Power Free | 2% | 2% | 0% | 0% |
+| Assinante Conect | 2% | 0% | 0% | 0% |
 
-- **PPB (Parceiro Power Básico)** é a faixa nova, decidida pelo dono em 27/09/2026: 2% em L1 e 2% em L2. Os 8 originadores atuais migram nela; o cargo é editável no modal do originador.
-- O **Assinante Conect** que recebe é o que indicou aquela UC — um por fatura, não a linha ascendente inteira. É isso que faz o superávit do documento fechar.
-- **Trava anti-déficit:** o líquido do fornecedor não pode ficar abaixo do piso contratual (50% da tarifa bruta, configurável por plano). Se ficar, o corte é aplicado na ordem Assinante Conect → Parceiro Power → Líder, e o corte é gravado na fatura e alertado no CRM. A B2W nunca fica negativa, e o fornecedor nunca fica abaixo do piso.
-- **Vigência:** vitalícia enquanto a UC estiver ativa e adimplente **e** o recebedor estiver ativo. Sem a trava de 48 meses.
+- **Assinante Conect** recebe só pela indicação direta (`max_niveis: 1`), um por fatura: quem indicou aquela UC.
+- **Dedução total por fatura:** 16% no pior caso (PPE direto), contra o teto de 22,3% que o piso do fornecedor permite na tarifa Cosern de referência.
+- **Trava anti-déficit:** o líquido do fornecedor nunca fica abaixo do piso contratual (50% da tarifa bruta, configurável por plano). Se ficar, corta na ordem Assinante Conect → Parceiro Power → Líder, grava o corte na fatura e alerta no CRM. A B2W nunca fica negativa.
+- **Vigência:** vitalícia enquanto a UC estiver ativa e adimplente **e** o recebedor estiver ativo. Sem trava de 48 meses.
 
-**Em aberto (decisão do dono antes do plano):** o Bônus Start do documento é "comissionamento sobre as 3 primeiras faturas"; o motor de hoje tem `split_commission.start` como 100% da base na primeira fatura. As duas definições não são a mesma coisa e precisam ser conciliadas.
+### §1.1 Cargos de parceiro (hierarquia)
+
+1. **PPF — Parceiro Power Free:** entrada gratuita, menor recorrência.
+2. **PPP — Parceiro Power Pro:** intermediário; **exige licença anual paga**. O modal do originador ganha os campos da licença (valor, vencimento, situação) e mostra quando está vencida.
+3. **PPE — Parceiro Power Embaixador:** topo dos parceiros, abaixo apenas do Líder. **Critério:** ser PPP e ter **1000 assinantes ativos na rede**, contando todos os níveis.
+   - **Promoção automática, com registro:** ao cruzar o critério, o cargo passa a PPE sozinho e fica gravado no histórico quem era, quando mudou e qual a contagem no momento. Rebaixamento nunca é automático.
+
+### §1.2 Bônus Start
+
+Configurável por plano em `start_config`: até **3 faturas** elegíveis (`faturas_elegiveis`), com percentual por cargo em cada uma. Não é regra fixa: é possibilidade, e um plano pode não ter nenhuma.
+
+O `originators_v2.split_commission.start` do motor antigo deixa de ser lido.
 
 ## §2 Onde a configuração vive
 
-- Por plano, em `planos_assinatura_energia.recorrente_config` (`regras_multinivel`), como no documento: `b2w`, `lider`, `ppe`, `ppp`, `ppb`, `ppf`, `assinante_conect`, cada um com `max_niveis` e `niveis {L1..L4}`.
+- Por plano, em `planos_assinatura_energia.recorrente_config` (`regras_multinivel`), como no documento: `b2w`, `lider`, `ppe`, `ppp`, `ppf`, `assinante_conect`, cada um com `max_niveis` e `niveis {L1..L4}`.
 - A UC aponta para o plano (`consumer_units.plano_assinatura_id`). Sem plano, a UC usa o plano padrão; sem plano padrão, não há recompensa e a fatura registra o motivo.
 - Cada fatura grava o percentual efetivo de cada beneficiário no momento do cálculo. Mudar o plano depois não reescreve o passado.
 - `originators_v2.split_commission.recurrent` deixa de ser lido. `start` fica até a decisão do Bônus Start (§1).
 
 ## §3 A árvore
 
-- `originators_v2` ganha `cargo` (`lider | ppe | ppp | ppb | ppf`) e `lider_id` (auto-relação).
+- `originators_v2` ganha `cargo` (`lider | ppe | ppp | ppf`) e `lider_id` (auto-relação).
 - `consumer_units` ganha `indicado_por_uc_id` (a UC que indicou) e `nivel_rede` (1 a 4+, derivado por gatilho a partir do pai, com teto de profundidade para não percorrer ciclo).
 - Guarda: `indicado_por_uc_id` não pode formar ciclo nem apontar para UC do mesmo assinante.
 - O link de indicação do assinante (§4) é o que popula `indicado_por_uc_id`.
@@ -90,7 +103,7 @@ O modal também mostra o link de indicação (§4), o saldo de abatimento com ex
 ## §8 Ordem, riscos e testes
 
 - Começa depois do teste real do subprojeto A.
-- O motor `handle_invoice_paid_ledger` move dinheiro de verdade: a reescrita é feita atrás de uma chave por plano (`recompensas_ativo`), com o motor antigo preservado para planos que não migraram.
+- **Substituição direta** (decisão do dono, 27/09/2026): como ninguém nunca foi pago pelo motor antigo, o gatilho passa a calcular só pela matriz nova. Os R$ 135,91 já lançados na conta 2.1.2 (8 lançamentos, abr–ago/2026) **ficam como estão**: o motor novo vale das próximas faturas em diante, e a decisão de pagar ou estornar é do dono.
 - Cada linha da matriz do §1, a trava anti-déficit e o abatimento limitado são testados em blocos SQL `SANDBOX_OK` sobre faturas reais de cada tipo, comparando o razão antes e depois.
 - Testes adicionais: nível derivado na árvore (incluindo tentativa de ciclo), percentual congelado na fatura, UUID inválido de indicador, UC sem plano, e originador inativo (não recebe).
 
