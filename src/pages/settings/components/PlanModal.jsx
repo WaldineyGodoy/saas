@@ -266,6 +266,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
     // Verifica se determinado nível (L1..L4) está habilitado para o cargo de acordo com max_niveis
     const isLevelAllowedForRole = (roleKey, levelKey, maxNiveis) => {
+        if (roleKey === 'b2w') return true; // B2W (Gestão / Plataforma) recebe recorrência fixa em todos os níveis
         const levelIdx = LEVEL_KEYS.indexOf(levelKey) + 1; // 1, 2, 3, 4
         if (roleKey === 'assinante_conect') {
             // Assinante Conect indica a partir de L2 (em L1 a venda é direta do Parceiro Power)
@@ -274,6 +275,17 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             return levelIdx >= 2;
         }
         return levelIdx <= maxNiveis;
+    };
+
+    // Alterar percentual fixo da B2W (aplica igualmente em todos os níveis de assinante)
+    const handleFixedB2WPctChange = (val) => {
+        setRegrasMultinivel(prev => ({
+            ...prev,
+            b2w: {
+                max_niveis: 4,
+                niveis: { L1: val, L2: val, L3: val, L4: val }
+            }
+        }));
     };
 
     // Alterar quantidade de níveis que uma função tem direito a receber
@@ -1229,18 +1241,33 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 5º ITEM: (-) B2W (GESTÃO / PLATAFORMA) */}
+                                            {/* 5º ITEM: (-) B2W (GESTÃO / PLATAFORMA) — FIXA EM TODOS OS NÍVEIS */}
                                             <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
-                                                    (-) B2W (Gestão / Plataforma)
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                    <span>(-) B2W (Gestão / Plataforma)</span>
+                                                    <span style={{
+                                                        fontSize: '0.66rem', background: '#f1f5f9', color: '#475569',
+                                                        padding: '0.12rem 0.45rem', borderRadius: '6px', fontWeight: 700
+                                                    }}>
+                                                        Recorrência Fixa
+                                                    </span>
                                                 </div>
-                                                <div>
-                                                    {renderMultilevelCenterControl('b2w', [
-                                                        { val: 4, label: 'Todos (L1 a L4+)' },
-                                                        { val: 3, label: 'Até 3 Níveis (L3)' },
-                                                        { val: 2, label: 'Até 2 Níveis (L2)' },
-                                                        { val: 1, label: 'Apenas L1' }
-                                                    ])}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="100"
+                                                        className="crm-input"
+                                                        value={regrasMultinivel.b2w?.niveis?.L1 ?? '10'}
+                                                        onChange={e => handleFixedB2WPctChange(e.target.value)}
+                                                        style={{
+                                                            width: '78px', padding: '0.36rem 0.5rem', borderRadius: '8px',
+                                                            border: '1px solid #93c5fd', background: '#eff6ff',
+                                                            fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', color: '#1d4ed8'
+                                                        }}
+                                                    />
+                                                    <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>% s/ Base Líquida</span>
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 700 }}>
                                                     - R$ {formatCurrencyUnit(cv.vB2W, 5)}
