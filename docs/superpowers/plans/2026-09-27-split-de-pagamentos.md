@@ -15,7 +15,7 @@
 - **Dinheiro real:** o razão de produção (`ledger_entries`) não pode ganhar, perder ou alterar lançamento por causa deste trabalho. Toda verificação compara a impressão digital (contagem + soma) antes e depois.
 - **Substituição direta:** o motor antigo de comissão (`originators_v2.split_commission`) deixa de ser lido. Os R$ 135,91 já lançados na conta 2.1.2 (8 lançamentos, abr–ago/2026) ficam intactos.
 - Percentuais (níveis **relativos a quem recebe**): B2W 10% fixo; Líder 1% nos níveis 1–3; PPE 5%/2%; PPP 4%/2%; PPF 2%/2%; Assinante Conect 2% só no nível 1. Piso do fornecedor: 50% da tarifa bruta, configurável por plano.
-- PPP com licença anual vencida: **recorrência suspensa (0%) e o valor vai para a B2W**, não para o fornecedor (decisão do dono, 27/09/2026).
+- **Supressão sempre vai para a B2W** (decisões do dono, 27/09/2026): PPP com licença anual vencida tem a recorrência suspensa (0%), e o mesmo vale para recebedor inativo (originador, líder ou assinante indicador). Em todos esses casos o percentual é absorvido pela B2W, nunca pelo fornecedor.
 - PPE: promoção automática ao ser PPP com 1000 assinantes ativos na rede; rebaixamento nunca é automático.
 - Bônus Start: até 3 faturas, configurável por plano; pode não existir.
 - Commits terminam com `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
@@ -123,13 +123,13 @@ Regras: percentual = `regras[papel].niveis['L'||nivel]`, zero quando `nivel > ma
 **Interface produzida:** `fn_participantes_recompensa(p_uc uuid) returns jsonb` — array no formato que a Task 4 consome.
 
 Regras:
-- **Assinante Conect:** dono da UC apontada por `indicado_por_uc_id`; nível 1 sempre; só entra se o assinante dele estiver `ativo`.
-- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; só entra se `status` do originador for ativo; `cargo` define o percentual; **PPP com `licenca_status = 'vencida'` entra com `suspenso: true`** (recorrência suspensa; o motor manda o percentual dele para a B2W).
-- **Líder:** `lider_id` do parceiro; nível = o mesmo nível do parceiro; só entra se ativo.
-- **Pergunta ao dono antes do Step 3:** quando o recebedor está **inativo** (originador, líder ou assinante do Conect), o percentual dele fica com o fornecedor ou é absorvido pela B2W, como na licença vencida? Não implementar sem essa resposta.
+- **Assinante Conect:** dono da UC apontada por `indicado_por_uc_id`; nível 1 sempre; entra com `suspenso: true` se o assinante dele não estiver `ativo`.
+- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; entra com `suspenso: true` se o `status` do originador não for ativo; `cargo` define o percentual; **PPP com `licenca_status = 'vencida'` entra com `suspenso: true`** (recorrência suspensa; o motor manda o percentual dele para a B2W).
+- **Líder:** `lider_id` do parceiro; nível = o mesmo nível do parceiro; entra com `suspenso: true` se inativo.
+- **Recebedor inativo** (originador, líder ou assinante do Conect): entra com `suspenso: true`, como a licença vencida — o percentual é absorvido pela B2W.
 - Sem assinante, sem originador ou com UC geradora: array vazio.
 
-- [ ] **Step 1: teste primeiro** com fixture de rede: venda direta; indicação em 1 salto; cadeia de 4 saltos; originador inativo; PPP com licença vencida; assinante do Conect inativo; UC sem originador.
+- [ ] **Step 1: teste primeiro** com fixture de rede: venda direta; indicação em 1 salto; cadeia de 4 saltos; originador inativo (suspenso, não ausente); PPP com licença vencida; assinante do Conect inativo; UC sem originador.
 - [ ] **Step 2:** RED. **Step 3:** implementação. **Step 4:** GREEN.
 - [ ] **Step 5:** commit `feat(recompensas): resolucao de participantes na arvore de indicacao`.
 
