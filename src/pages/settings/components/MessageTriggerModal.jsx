@@ -87,13 +87,16 @@ export default function MessageTriggerModal({ isOpen, onClose, onSave, trigger }
             { id: 'cancelado', label: 'Cancelada' },
             { id: 'erro', label: 'Erro no Processamento' }
         ],
+        // 'cancelado' saiu: o CHECK de suppliers nunca aceitou esse valor.
         supplier: [
+            { id: 'cadastrado', label: 'Cadastrado' },
+            { id: 'contrato_assinado', label: 'Contrato Assinado' },
+            { id: 'ativacao', label: 'Em Ativação' },
             { id: 'ativo', label: 'Ativo' },
-            { id: 'ativacao', label: 'Ativação' },
-            { id: 'inativo', label: 'Inativo' },
-            { id: 'cancelado', label: 'Cancelado' }
+            { id: 'inativo', label: 'Inativo' }
         ],
         power_plant: [
+            { id: 'pre_operacao', label: 'Pré-Operação' },
             { id: 'em_conexao', label: 'Em Conexão' },
             { id: 'gerando', label: 'Gerando' },
             { id: 'manutencao', label: 'Manutenção' },
