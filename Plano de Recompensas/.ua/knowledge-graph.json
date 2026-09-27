@@ -1,0 +1,247 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "HUB B2W Energia Solar — Plano de Recompensas & Pages",
+    "languages": ["javascript", "markdown", "sql"],
+    "frameworks": ["React", "Supabase"],
+    "description": "Arquitetura do Plano de Recompensas (Playbook Comercial, Governança Multinível L1-L4, Safra Fechada e Base Líquida) integrada às páginas React (src/pages) e banco Supabase.",
+    "analyzedAt": "2026-09-24T14:53:00-03:00",
+    "gitCommitHash": "HEAD"
+  },
+  "nodes": [
+    {
+      "id": "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "type": "document",
+      "name": "PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "filePath": "Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "summary": "Playbook oficial do Plano de Recompensas HUB B2W: define Base Líquida Faturável (Tarifa s/ CIP menos Fio B menos Desconto), Plano Ultra (15% desc + 2% Originador L1 + 4%/2% Embaixador L1/L2 + 1% Coordenador L1-L3 com teto de 5%), Plano Premium (20% desc + 100% 1ª fatura 50/50), Governança Premium Pass (R$ 1.900) e Safra Fechada (Grandfathering).",
+      "tags": ["playbook", "recompensas", "governanca", "comissoes", "safra-fechada"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:Plano de Recompensas/HISTORICO_INTEGRAL_SHARE_GEMINI.md",
+      "type": "document",
+      "name": "HISTORICO_INTEGRAL_SHARE_GEMINI.md",
+      "filePath": "Plano de Recompensas/HISTORICO_INTEGRAL_SHARE_GEMINI.md",
+      "summary": "Histórico integral da modelagem matemática, simulações de breakeven (300 kWh/mês), regras de corte por nível (L1 a L4) e expansão do ecossistema HUB (Usinas, Investidores, Integradores EPC, Corretores e Eletropostos).",
+      "tags": ["historico", "modelagem-matematica", "breakeven", "ecossistema-hub"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/pages/settings/PlansServicesSettings.jsx",
+      "type": "file",
+      "name": "PlansServicesSettings.jsx",
+      "filePath": "src/pages/settings/PlansServicesSettings.jsx",
+      "summary": "Painel de configuração de Planos e Serviços (Energia por Assinatura, Eletropostos e Usinas). Lista, ativa/desativa e exclui planos da tabela planos_assinatura_energia exibindo badges para modelos Start, Recorrente e Híbrido.",
+      "tags": ["settings", "planos", "recompensas", "admin"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/pages/settings/components/PlanModal.jsx",
+      "type": "file",
+      "name": "PlanModal.jsx",
+      "filePath": "src/pages/settings/components/PlanModal.jsx",
+      "summary": "Modal de criação e edição de planos em planos_assinatura_energia. Permite configurar desconto do assinante e percentuais de recompensa por papel (Associação, Coordenador, Embaixador, Assinante) nos modos Start (por fatura 1, 2, 3), Recorrente (meses) e Híbrido.",
+      "tags": ["modal", "planos", "regras-comissao", "configuracao"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/pages/dashboards/OriginatorDashboard.jsx",
+      "type": "file",
+      "name": "OriginatorDashboard.jsx",
+      "filePath": "src/pages/dashboards/OriginatorDashboard.jsx",
+      "summary": "Painel do Originador/Embaixador. Gera e encurta link de convite, lista leads indicados e consulta o extrato de comissões diretamente no razão contábil (ledger_entries conta 2.1.2 - Comissões a Pagar).",
+      "tags": ["dashboard", "originador", "embaixador", "comissoes", "ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/pages/dashboards/OriginatorList.jsx",
+      "type": "file",
+      "name": "OriginatorList.jsx",
+      "filePath": "src/pages/dashboards/OriginatorList.jsx",
+      "summary": "Gestão administrativa de Originadores (tabela originators_v2). Exibe split de comissão (Start / Recorrente), chave PIX e link de indicação.",
+      "tags": ["admin", "originadores", "split-comissao"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/pages/dashboards/SubscriberDashboard.jsx",
+      "type": "file",
+      "name": "SubscriberDashboard.jsx",
+      "filePath": "src/pages/dashboards/SubscriberDashboard.jsx",
+      "summary": "Painel do Assinante. Exibe economia acumulada, unidades consumidoras (UCs) e histórico de faturas (status pago/a vencer).",
+      "tags": ["dashboard", "assinante", "faturas", "ucs"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/pages/public/SubscriberSignup.jsx",
+      "type": "file",
+      "name": "SubscriberSignup.jsx",
+      "filePath": "src/pages/public/SubscriberSignup.jsx",
+      "summary": "Fluxo público de adesão do assinante em 3 etapas (Dados -> Documentos -> Contrato) com captura de originator_id, discount_percent e assinatura via Autentique.",
+      "tags": ["onboarding", "assinante", "contrato", "indicacao"],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/pages/public/OriginatorLanding.jsx",
+      "type": "file",
+      "name": "OriginatorLanding.jsx",
+      "filePath": "src/pages/public/OriginatorLanding.jsx",
+      "summary": "Página pública de cadastro de novos Originadores/Embaixadores encapsulada com ErrorBoundary e OriginatorSignupForm.",
+      "tags": ["landing", "cadastro-originador", "public"],
+      "complexity": "simple"
+    },
+    {
+      "id": "table:supabase/migrations/20260923_create_planos_assinatura_energia.sql:planos_assinatura_energia",
+      "type": "table",
+      "name": "planos_assinatura_energia",
+      "filePath": "supabase/migrations/20260923_create_planos_assinatura_energia.sql",
+      "summary": "Tabela Supabase que armazena os planos comerciais, desconto_assinante, tipo_recompensa (start, recorrente, hibrido), start_config (JSONB) e recorrente_config (JSONB).",
+      "tags": ["database", "supabase", "planos", "jsonb"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "target": "document:Plano de Recompensas/HISTORICO_INTEGRAL_SHARE_GEMINI.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "target": "file:src/pages/settings/PlansServicesSettings.jsx",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "target": "file:src/pages/settings/components/PlanModal.jsx",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+      "target": "file:src/pages/dashboards/OriginatorDashboard.jsx",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/pages/settings/PlansServicesSettings.jsx",
+      "target": "file:src/pages/settings/components/PlanModal.jsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pages/settings/PlansServicesSettings.jsx",
+      "target": "table:supabase/migrations/20260923_create_planos_assinatura_energia.sql:planos_assinatura_energia",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/pages/settings/components/PlanModal.jsx",
+      "target": "table:supabase/migrations/20260923_create_planos_assinatura_energia.sql:planos_assinatura_energia",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/pages/dashboards/OriginatorDashboard.jsx",
+      "target": "file:src/pages/public/SubscriberSignup.jsx",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pages/dashboards/OriginatorList.jsx",
+      "target": "file:src/pages/dashboards/OriginatorDashboard.jsx",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:src/pages/public/SubscriberSignup.jsx",
+      "target": "file:src/pages/dashboards/SubscriberDashboard.jsx",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pages/public/OriginatorLanding.jsx",
+      "target": "file:src/pages/dashboards/OriginatorList.jsx",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.7
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:governanca-playbook",
+      "name": "Governança & Regras de Negócio (Plano de Recompensas)",
+      "description": "Documentação normativa e modelagem matemática do Plano de Recompensas HUB B2W (Base Líquida, Multinível L1-L4, Safra Fechada e Ecossistema).",
+      "nodeIds": [
+        "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+        "document:Plano de Recompensas/HISTORICO_INTEGRAL_SHARE_GEMINI.md"
+      ]
+    },
+    {
+      "id": "layer:configuracao-planos",
+      "name": "Motor de Configuração de Planos (Settings UI & Banco)",
+      "description": "Interface administrativa e estrutura de banco para parametrizar descontos e splits Start, Recorrente e Híbrido.",
+      "nodeIds": [
+        "file:src/pages/settings/PlansServicesSettings.jsx",
+        "file:src/pages/settings/components/PlanModal.jsx",
+        "table:supabase/migrations/20260923_create_planos_assinatura_energia.sql:planos_assinatura_energia"
+      ]
+    },
+    {
+      "id": "layer:operacao-comercial-dashboards",
+      "name": "Dashboards & Onboarding Comercial (Originadores e Assinantes)",
+      "description": "Páginas de operação diária de links de indicação, captação de leads/contratos e consulta ao razão de comissões (conta 2.1.2).",
+      "nodeIds": [
+        "file:src/pages/dashboards/OriginatorDashboard.jsx",
+        "file:src/pages/dashboards/OriginatorList.jsx",
+        "file:src/pages/dashboards/SubscriberDashboard.jsx",
+        "file:src/pages/public/SubscriberSignup.jsx",
+        "file:src/pages/public/OriginatorLanding.jsx"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "1. Regras e Matemática do Plano de Recompensas",
+      "description": "Comece pelo Playbook oficial que define a Base Líquida (Tarifa - Fio B - Desconto), a árvore L1-L4 (teto de 5%) e a política de Safra Fechada (Premium Pass R$ 1.900).",
+      "nodeIds": [
+        "document:Plano de Recompensas/PLAYBOOK_PLANO_DE_RECOMPENSAS.md",
+        "document:Plano de Recompensas/HISTORICO_INTEGRAL_SHARE_GEMINI.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "2. Parametrização dos Planos no Sistema",
+      "description": "Veja como os planos (Start, Recorrente e Híbrido) e as alíquotas por papel (Associação, Coordenador, Embaixador, Assinante) são salvos no Supabase.",
+      "nodeIds": [
+        "file:src/pages/settings/PlansServicesSettings.jsx",
+        "file:src/pages/settings/components/PlanModal.jsx",
+        "table:supabase/migrations/20260923_create_planos_assinatura_energia.sql:planos_assinatura_energia"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "3. Jornada de Indicação, Adesão e Extrato Contábil",
+      "description": "Acompanhe como o Originador compartilha seu link, o Assinante assina o contrato vinculando o indicador e a comissão é lançada na conta contábil 2.1.2.",
+      "nodeIds": [
+        "file:src/pages/public/OriginatorLanding.jsx",
+        "file:src/pages/dashboards/OriginatorDashboard.jsx",
+        "file:src/pages/public/SubscriberSignup.jsx",
+        "file:src/pages/dashboards/SubscriberDashboard.jsx"
+      ]
+    }
+  ]
+}

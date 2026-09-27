@@ -3,22 +3,21 @@ import {
     X,
     Save,
     Sparkles,
-    Layers,
     Check,
     Percent,
-    Building2,
+    BatteryCharging,
     ShieldCheck,
     AlertTriangle,
     TrendingUp,
     Award,
     Users,
     Zap,
-    Activity
+    Activity,
+    Link2
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
 
-// Formatadores numéricos padrão PT-BR
 const formatCurrencyUnit = (val, decimals = 4) => {
     const num = Number(val) || 0;
     return num.toLocaleString('pt-BR', {
@@ -35,96 +34,102 @@ const formatPct = (val, decimals = 2) => {
     });
 };
 
-export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
+// Extrai o valor do Lastro (Tarifa da Concessionária - Desconto do Assinante do Plano)
+export const extractSubscriptionPlanLastro = (planoAssinatura) => {
+    if (!planoAssinatura) {
+        return {
+            concessionariaNome: 'Cosern',
+            tarifaConcessionaria: 1.0300,
+            descontoPlanoPct: 15,
+            descontoPlanoValor: 0.1545,
+            lastroEletroposto: 0.8755
+        };
+    }
+    const lastroCfg = planoAssinatura.recorrente_config?.lastro_tarifario || {};
+    const tarifaConc = Number(lastroCfg.tarifa_bruta) > 0 ? Number(lastroCfg.tarifa_bruta) : 1.0300;
+    const descPct = Number(planoAssinatura.desconto_assinante ?? 15);
+    const descValor = tarifaConc * (descPct / 100);
+    const lastro = Math.max(0, tarifaConc - descValor);
+
+    return {
+        concessionariaNome: lastroCfg.concessionaria_nome || 'Concessionária',
+        tarifaConcessionaria: tarifaConc,
+        descontoPlanoPct: descPct,
+        descontoPlanoValor: descValor,
+        lastroEletroposto: Number(lastro.toFixed(6))
+    };
+};
+
+export default function EletropostoPlanModal({
+    isOpen,
+    onClose,
+    onSave,
+    planToEdit,
+    subscriptionPlans = []
+}) {
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
 
-    // Lista de Concessionárias (Lastro e Ponto de Partida)
-    const [concessionarias, setConcessionarias] = useState([]);
-    const [loadingCons, setLoadingCons] = useState(false);
-    const [selectedConsKey, setSelectedConsKey] = useState('');
-    const [concessionariaNome, setConcessionariaNome] = useState('Cosern');
-    const [subgrupoTarifario, setSubgrupoTarifario] = useState('B1 Residencial');
+    // Plano de Assinatura Vinculado (Lastro do Eletroposto)
+    const [selectedSubPlanId, setSelectedSubPlanId] = useState('');
+    const [planoVinculadoNome, setPlanoVinculadoNome] = useState('Plano Ultra 15%');
+    const [concessionariaOrigem, setConcessionariaOrigem] = useState('Cosern');
+    const [tarifaOrigem, setTarifaOrigem] = useState(1.0300);
+    const [descontoOrigemPct, setDescontoOrigemPct] = useState(15);
 
-    // Lastro Tarifário (R$/kWh)
-    const [tarifaBruta, setTarifaBruta] = useState('1.0300');
-    const [fioB, setFioB] = useState('0.2130');
+    // Valor do Lastro (Tarifa Concessionária - Desconto Assinante do Plano Vinculado)
+    // Sem Fio B, pois já foi deduzido no Plano de Assinatura!
+    const [valorLastroPlano, setValorLastroPlano] = useState('0.8755');
 
-    // Estado Principal do Plano
+    // Estado Principal do Plano de Eletroposto
     const [nome, setNome] = useState('');
-    const [descontoAssinante, setDescontoAssinante] = useState('15');
+    const [descontoEletroposto, setDescontoEletroposto] = useState('10');
     const [ativo, setAtivo] = useState(true);
     const [recompensasAtivo, setRecompensasAtivo] = useState(true);
     const [tipoRecompensa, setTipoRecompensa] = useState('recorrente'); // 'start' | 'recorrente' | 'hibrido'
 
-    // Piso Contratual do Fornecedor (% sobre Tarifa Bruta)
+    // Piso Contratual do Fornecedor / Operador (% sobre o Lastro)
     const [pisoFornecedorPct, setPisoFornecedorPct] = useState('50');
 
-    // Configuração do Bloco Recorrente (% sobre Base de Cálculo Líquida)
-    // Cargos atualizados:
-    // - B2W (Gestão / Plataforma)
-    // - Líder
-    // - Parceiro Power: PPE (Embaixador), PPP (Premium), PPF (Free)
-    // - Assinante Conect
+    // Cargos no Bloco Recorrente (% sobre a Base de Cálculo Líquida do Eletroposto)
     const [regrasRecorrente, setRegrasRecorrente] = useState({
         b2w: '10',
         lider: '1',
         ppe: '4',
         ppp: '4',
         ppf: '2',
-        assinante_conect: '0'
+        assinante_conect: '2'
     });
 
-    // Configuração do Start (Faturas Iniciais)
-    const [faturasElegiveisStart, setFaturasElegiveisStart] = useState([2]);
+    // Configuração Start (Recargas / Faturas Iniciais)
+    const [faturasElegiveisStart, setFaturasElegiveisStart] = useState([1]);
     const [regrasStart, setRegrasStart] = useState({
         1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
         2: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
         3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
     });
 
-    // Busca Concessionárias no Supabase
-    useEffect(() => {
-        if (!isOpen) return;
-        const fetchCons = async () => {
-            setLoadingCons(true);
-            try {
-                const { data, error } = await supabase
-                    .from('view_concessionarias_resumo')
-                    .select('*')
-                    .order('Concessionaria', { ascending: true });
-
-                if (!error && data) {
-                    setConcessionarias(data);
-                }
-            } catch (err) {
-                console.error('Erro ao carregar concessionárias no modal:', err);
-            } finally {
-                setLoadingCons(false);
-            }
-        };
-        fetchCons();
-    }, [isOpen]);
-
-    // Preenche dados na abertura (Edição vs Novo)
+    // Inicializa dados ao abrir o modal
     useEffect(() => {
         if (!isOpen) return;
 
         if (planToEdit) {
             setNome(planToEdit.nome || '');
-            setDescontoAssinante(String(planToEdit.desconto_assinante ?? '15'));
+            setDescontoEletroposto(String(planToEdit.desconto_assinante ?? '10'));
             setAtivo(planToEdit.ativo ?? true);
             setRecompensasAtivo(planToEdit.recompensas_ativo ?? true);
             setTipoRecompensa(planToEdit.tipo_recompensa || 'recorrente');
 
             const recCfg = planToEdit.recorrente_config || {};
+            const vinc = recCfg.plano_assinatura_vinculado || {};
             const lastro = recCfg.lastro_tarifario || {};
 
-            setConcessionariaNome(lastro.concessionaria_nome || 'Cosern');
-            setSelectedConsKey(lastro.concessionaria_key || '');
-            setSubgrupoTarifario(lastro.subgrupo || 'B1 Residencial');
-            setTarifaBruta(String(lastro.tarifa_bruta ?? '1.0300'));
-            setFioB(String(lastro.fio_b ?? '0.2130'));
+            setSelectedSubPlanId(vinc.id || '');
+            setPlanoVinculadoNome(vinc.nome || 'Plano de Assinatura');
+            setConcessionariaOrigem(vinc.concessionaria_nome || 'Cosern');
+            setTarifaOrigem(Number(vinc.tarifa_bruta_concessionaria ?? 1.0300));
+            setDescontoOrigemPct(Number(vinc.desconto_plano_pct ?? 15));
+            setValorLastroPlano(String(lastro.tarifa_bruta ?? vinc.valor_lastro_eletroposto ?? '0.8755'));
             setPisoFornecedorPct(String(lastro.piso_fornecedor_pct ?? '50'));
 
             const rRec = recCfg.regras || {};
@@ -134,11 +139,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 ppe: String(rRec.ppe ?? rRec.embaixador ?? '4'),
                 ppp: String(rRec.ppp ?? rRec.embaixador ?? '4'),
                 ppf: String(rRec.ppf ?? '2'),
-                assinante_conect: String(rRec.assinante_conect ?? rRec.assinante ?? '0')
+                assinante_conect: String(rRec.assinante_conect ?? rRec.assinante ?? '2')
             });
 
             if (planToEdit.start_config) {
-                setFaturasElegiveisStart(planToEdit.start_config.faturas_elegiveis || [2]);
+                setFaturasElegiveisStart(planToEdit.start_config.faturas_elegiveis || [1]);
                 const mapStartRule = (ruleObj = {}) => ({
                     b2w: String(ruleObj.b2w ?? ruleObj.associacao ?? '0'),
                     lider: String(ruleObj.lider ?? ruleObj.coordenador ?? '0'),
@@ -154,16 +159,21 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 });
             }
         } else {
+            // Novo plano de eletroposto: vincula automaticamente ao 1º Plano de Assinatura disponível
+            const defaultSubPlan = subscriptionPlans.find(p => p.ativo) || subscriptionPlans[0] || null;
+            const info = extractSubscriptionPlanLastro(defaultSubPlan);
+
             setNome('');
-            setDescontoAssinante('15');
+            setDescontoEletroposto('10');
             setAtivo(true);
             setRecompensasAtivo(true);
             setTipoRecompensa('recorrente');
-            setConcessionariaNome('Cosern');
-            setSelectedConsKey('');
-            setSubgrupoTarifario('B1 Residencial');
-            setTarifaBruta('1.0300');
-            setFioB('0.2130');
+            setSelectedSubPlanId(defaultSubPlan?.id || '');
+            setPlanoVinculadoNome(defaultSubPlan?.nome || 'Plano Ultra 15%');
+            setConcessionariaOrigem(info.concessionariaNome);
+            setTarifaOrigem(info.tarifaConcessionaria);
+            setDescontoOrigemPct(info.descontoPlanoPct);
+            setValorLastroPlano(info.lastroEletroposto.toFixed(4));
             setPisoFornecedorPct('50');
             setRegrasRecorrente({
                 b2w: '10',
@@ -171,77 +181,47 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 ppe: '4',
                 ppp: '4',
                 ppf: '2',
-                assinante_conect: '0'
+                assinante_conect: '2'
             });
-            setFaturasElegiveisStart([2]);
+            setFaturasElegiveisStart([1]);
             setRegrasStart({
                 1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
                 2: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
                 3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
             });
         }
-    }, [planToEdit, isOpen]);
+    }, [planToEdit, isOpen, subscriptionPlans]);
 
-    // Atualiza Tarifa e Fio B ao escolher Concessionária ou Subgrupo
-    const applyConcessionariaTariff = (consObj, subgrupo) => {
-        if (!consObj) return;
-        let tVal = consObj['Tarifa Concessionaria'] || 0;
-        let fVal = consObj['Fio B'] || 0;
+    // Handler ao trocar o Plano de Assinatura que serve de Lastro
+    const handleSelectSubscriptionPlan = (e) => {
+        const subId = e.target.value;
+        setSelectedSubPlanId(subId);
+        if (!subId) return;
 
-        if (subgrupo === 'B2 Rural') {
-            tVal = consObj['Tarifa Concessionaria_B2'] || tVal;
-            fVal = consObj['Fio B_B2'] || fVal;
-        } else if (subgrupo === 'B3 Comercial') {
-            tVal = consObj['Tarifa Concessionaria_B3'] || tVal;
-            fVal = consObj['Fio B_B3'] || fVal;
-        } else if (subgrupo === 'Grupo A') {
-            tVal = consObj['Tarifa Concessionaria_A'] || tVal;
-            fVal = consObj['Fio B_A'] || fVal;
-        }
-
-        if (Number(tVal) > 0) setTarifaBruta(Number(tVal).toFixed(4));
-        if (Number(fVal) > 0) setFioB(Number(fVal).toFixed(4));
-        if (consObj['Desconto Assinante'] && Number(consObj['Desconto Assinante']) > 0 && !planToEdit) {
-            setDescontoAssinante(String(consObj['Desconto Assinante']));
-        }
-    };
-
-    const handleSelectConcessionaria = (e) => {
-        const key = e.target.value;
-        setSelectedConsKey(key);
-        if (!key) return;
-
-        const found = concessionarias.find(c => `${c.Concessionaria}__${c.UF}` === key);
+        const found = subscriptionPlans.find(p => String(p.id) === String(subId));
         if (found) {
-            setConcessionariaNome(found.Concessionaria);
-            applyConcessionariaTariff(found, subgrupoTarifario);
+            const info = extractSubscriptionPlanLastro(found);
+            setPlanoVinculadoNome(found.nome);
+            setConcessionariaOrigem(info.concessionariaNome);
+            setTarifaOrigem(info.tarifaConcessionaria);
+            setDescontoOrigemPct(info.descontoPlanoPct);
+            setValorLastroPlano(info.lastroEletroposto.toFixed(4));
         }
     };
 
-    const handleSelectSubgrupo = (novoSubgrupo) => {
-        setSubgrupoTarifario(novoSubgrupo);
-        if (selectedConsKey) {
-            const found = concessionarias.find(c => `${c.Concessionaria}__${c.UF}` === selectedConsKey);
-            if (found) applyConcessionariaTariff(found, novoSubgrupo);
-        }
-    };
-
-    // MOTOR DE CÁLCULO DINÂMICO (Lastro na Tarifa Bruta e Fio B em 2º lugar)
+    // MOTOR DE CÁLCULO DINÂMICO DO ELETROPOSTO
+    // Lastro = Tarifa da Concessionária menos o Desconto do Assinante ofertado no Plano de Assinatura (SEM Fio B!)
     const calc = useMemo(() => {
-        const tBruta = Math.max(0, parseFloat(tarifaBruta) || 0);
-        const vFioB = Math.max(0, parseFloat(fioB) || 0);
-        const pctDescAssinante = Math.max(0, parseFloat(descontoAssinante) || 0);
+        const vLastro = Math.max(0, parseFloat(valorLastroPlano) || 0);
+        const pctDescEletroposto = Math.max(0, parseFloat(descontoEletroposto) || 0);
 
-        // 2º Item: (-) Fio B
-        const pctRealFioB = tBruta > 0 ? (vFioB / tBruta) * 100 : 0;
+        // 2º Item: (-) Desconto do Assinante / Usuário no Eletroposto (% sobre o Lastro)
+        const vDescEletroposto = vLastro * (pctDescEletroposto / 100);
+        const pctRealDescEletroposto = pctDescEletroposto;
 
-        // 3º Item: (-) Desconto do Assinante (% sobre Tarifa Bruta)
-        const vDescAssinante = tBruta * (pctDescAssinante / 100);
-        const pctRealDescAssinante = pctDescAssinante;
-
-        // 4º Item: (=) Base de Cálculo Líquida
-        const baseLiquida = tBruta - vFioB - vDescAssinante;
-        const pctRealBaseLiquida = tBruta > 0 ? (baseLiquida / tBruta) * 100 : 0;
+        // 3º Item: (=) Base de Cálculo Líquida (Sem Fio B, pois já foi deduzido no Plano de Assinatura)
+        const baseLiquida = vLastro - vDescEletroposto;
+        const pctRealBaseLiquida = vLastro > 0 ? (baseLiquida / vLastro) * 100 : 0;
 
         // Percentuais dos Cargos sobre a Base de Cálculo Líquida
         const pctB2W = Math.max(0, parseFloat(regrasRecorrente.b2w) || 0);
@@ -251,7 +231,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         const pctPPF = Math.max(0, parseFloat(regrasRecorrente.ppf) || 0);
         const pctAssinanteConect = Math.max(0, parseFloat(regrasRecorrente.assinante_conect) || 0);
 
-        // Valores unitários em R$/kWh sobre a Base Líquida
         const basePositiva = Math.max(0, baseLiquida);
         const vB2W = basePositiva * (pctB2W / 100);
         const vLider = basePositiva * (pctLider / 100);
@@ -260,18 +239,18 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         const vPPF = basePositiva * (pctPPF / 100);
         const vAssinanteConect = basePositiva * (pctAssinanteConect / 100);
 
-        // Percentuais Reais sobre a Tarifa Bruta
-        const pctRealB2W = tBruta > 0 ? (vB2W / tBruta) * 100 : 0;
-        const pctRealLider = tBruta > 0 ? (vLider / tBruta) * 100 : 0;
-        const pctRealPPE = tBruta > 0 ? (vPPE / tBruta) * 100 : 0;
-        const pctRealPPP = tBruta > 0 ? (vPPP / tBruta) * 100 : 0;
-        const pctRealPPF = tBruta > 0 ? (vPPF / tBruta) * 100 : 0;
-        const pctRealAssinanteConect = tBruta > 0 ? (vAssinanteConect / tBruta) * 100 : 0;
+        // Percentuais Reais sobre o Lastro do Plano de Assinatura
+        const pctRealB2W = vLastro > 0 ? (vB2W / vLastro) * 100 : 0;
+        const pctRealLider = vLastro > 0 ? (vLider / vLastro) * 100 : 0;
+        const pctRealPPE = vLastro > 0 ? (vPPE / vLastro) * 100 : 0;
+        const pctRealPPP = vLastro > 0 ? (vPPP / vLastro) * 100 : 0;
+        const pctRealPPF = vLastro > 0 ? (vPPF / vLastro) * 100 : 0;
+        const pctRealAssinanteConect = vLastro > 0 ? (vAssinanteConect / vLastro) * 100 : 0;
 
-        // Para travar a Margem Livre contra déficit, usa-se o maior % entre PPE, PPP e PPF (teto da categoria Parceiro Power)
+        // Teto de segurança entre PPE, PPP e PPF
         const pctParceiroPowerTeto = Math.max(pctPPE, pctPPP, pctPPF);
         const vParceiroPowerTeto = basePositiva * (pctParceiroPowerTeto / 100);
-        const pctRealParceiroPowerTeto = tBruta > 0 ? (vParceiroPowerTeto / tBruta) * 100 : 0;
+        const pctRealParceiroPowerTeto = vLastro > 0 ? (vParceiroPowerTeto / vLastro) * 100 : 0;
 
         let tetoLabel = 'PPE';
         if (pctPPP >= pctPPE && pctPPP >= pctPPF) tetoLabel = 'PPP';
@@ -281,33 +260,30 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         const totalDeducoesBase = vB2W + vLider + vParceiroPowerTeto + vAssinanteConect;
         const totalPctSobreBase = pctB2W + pctLider + pctParceiroPowerTeto + pctAssinanteConect;
 
-        // (=) Líquido Efetivo do Fornecedor
+        // (=) Líquido Efetivo do Fornecedor / Operador Eletroposto
         const liquidoEfetivoFornecedor = baseLiquida - totalDeducoesBase;
-        const pctRealLiquidoFornecedor = tBruta > 0 ? (liquidoEfetivoFornecedor / tBruta) * 100 : 0;
+        const pctRealLiquidoFornecedor = vLastro > 0 ? (liquidoEfetivoFornecedor / vLastro) * 100 : 0;
 
-        // Piso Contratual do Fornecedor (% sobre Tarifa Bruta)
+        // Piso Contratual do Fornecedor (% sobre o Lastro)
         const pctPisoFornecedor = Math.max(0, parseFloat(pisoFornecedorPct) || 0);
-        const vPisoFornecedor = tBruta * (pctPisoFornecedor / 100);
+        const vPisoFornecedor = vLastro * (pctPisoFornecedor / 100);
         const pctRealPisoFornecedor = pctPisoFornecedor;
 
         // MARGEM LIVRE / EXCEDENTE
         const margemLivre = liquidoEfetivoFornecedor - vPisoFornecedor;
-        const pctRealMargemLivre = tBruta > 0 ? (margemLivre / tBruta) * 100 : 0;
+        const pctRealMargemLivre = vLastro > 0 ? (margemLivre / vLastro) * 100 : 0;
 
-        // Validação de Déficit (Não pode ser deficitário)
         const isDeficitario =
-            tBruta <= 0 ||
+            vLastro <= 0 ||
             baseLiquida <= 0 ||
             liquidoEfetivoFornecedor < 0 ||
             margemLivre < -0.000001;
 
         return {
-            tBruta,
-            vFioB,
-            pctRealFioB,
-            pctDescAssinante,
-            vDescAssinante,
-            pctRealDescAssinante,
+            vLastro,
+            pctDescEletroposto,
+            vDescEletroposto,
+            pctRealDescEletroposto,
             baseLiquida,
             pctRealBaseLiquida,
             pctB2W,
@@ -343,11 +319,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             pctRealMargemLivre,
             isDeficitario
         };
-    }, [tarifaBruta, fioB, descontoAssinante, regrasRecorrente, pisoFornecedorPct]);
+    }, [valorLastroPlano, descontoEletroposto, regrasRecorrente, pisoFornecedorPct]);
 
     if (!isOpen) return null;
 
-    // Handlers de alteração de percentuais
     const handleRecorrentePctChange = (campo, value) => {
         setRegrasRecorrente(prev => ({
             ...prev,
@@ -359,7 +334,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         setFaturasElegiveisStart(prev => {
             if (prev.includes(faturaNum)) {
                 if (prev.length === 1) {
-                    showAlert('Pelo menos uma fatura deve ser selecionada na modalidade Start.', 'warning');
+                    showAlert('Pelo menos um ciclo deve ser selecionado no Start.', 'warning');
                     return prev;
                 }
                 return prev.filter(f => f !== faturaNum).sort((a, b) => a - b);
@@ -379,7 +354,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }));
     };
 
-    // Verifica se alguma fatura do Start ultrapassa 100% da Base Líquida
     const startHasDeficit = faturasElegiveisStart.some(fatNum => {
         const r = regrasStart[fatNum] || {};
         const maxPP = Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0, parseFloat(r.ppf) || 0);
@@ -396,12 +370,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         e.preventDefault();
 
         if (!nome.trim()) {
-            showAlert('Por favor, informe o Nome do Plano.', 'error');
+            showAlert('Por favor, informe o Nome do Plano de Eletroposto.', 'error');
             return;
         }
 
         if (bloqueadoPorDeficit) {
-            showAlert('Operação bloqueada: O plano apresenta resultado deficitário. Ajuste os percentuais para que a Margem Livre seja positiva.', 'error');
+            showAlert('Operação bloqueada: O plano de Eletroposto apresenta resultado deficitário. Ajuste os percentuais.', 'error');
             return;
         }
 
@@ -414,7 +388,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             ppp: parseFloat(regrasRecorrente.ppp) || 0,
             ppf: parseFloat(regrasRecorrente.ppf) || 0,
             assinante_conect: parseFloat(regrasRecorrente.assinante_conect) || 0,
-            // Chaves de compatibilidade legada
             associacao: parseFloat(regrasRecorrente.b2w) || 0,
             coordenador: parseFloat(regrasRecorrente.lider) || 0,
             embaixador: Math.max(parseFloat(regrasRecorrente.ppe) || 0, parseFloat(regrasRecorrente.ppp) || 0),
@@ -436,7 +409,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
         const payload = {
             nome: nome.trim(),
-            desconto_assinante: parseFloat(descontoAssinante) || 0,
+            desconto_assinante: parseFloat(descontoEletroposto) || 0,
             ativo,
             recompensas_ativo: recompensasAtivo,
             tipo_recompensa: tipoRecompensa,
@@ -449,14 +422,22 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 }
             },
             recorrente_config: {
+                categoria_plano: 'eletroposto',
                 vigencia_tipo: 'status_ativo_entidade',
-                meses: null, // Vinculado ao status ativo da entidade no sistema
+                meses: null,
+                plano_assinatura_vinculado: {
+                    id: selectedSubPlanId || null,
+                    nome: planoVinculadoNome,
+                    concessionaria_nome: concessionariaOrigem,
+                    tarifa_bruta_concessionaria: tarifaOrigem,
+                    desconto_plano_pct: descontoOrigemPct,
+                    valor_lastro_eletroposto: calc.vLastro
+                },
                 lastro_tarifario: {
-                    concessionaria_key: selectedConsKey,
-                    concessionaria_nome: concessionariaNome,
-                    subgrupo: subgrupoTarifario,
-                    tarifa_bruta: calc.tBruta,
-                    fio_b: calc.vFioB,
+                    tipo_lastro: 'plano_assinatura_sem_fio_b',
+                    concessionaria_nome: `${planoVinculadoNome} (${concessionariaOrigem})`,
+                    tarifa_bruta: calc.vLastro,
+                    fio_b: 0, // Fio B já deduzido no Plano de Assinatura
                     base_calculo_liquida: Number(calc.baseLiquida.toFixed(6)),
                     piso_fornecedor_pct: calc.pctPisoFornecedor,
                     liquido_efetivo_fornecedor: Number(calc.liquidoEfetivoFornecedor.toFixed(6)),
@@ -475,20 +456,20 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     .eq('id', planToEdit.id);
 
                 if (error) throw error;
-                showAlert('Plano de assinatura atualizado com sucesso!', 'success');
+                showAlert('Plano de Eletroposto atualizado com sucesso!', 'success');
             } else {
                 const { error } = await supabase
                     .from('planos_assinatura_energia')
                     .insert([payload]);
 
                 if (error) throw error;
-                showAlert('Plano de assinatura criado com sucesso!', 'success');
+                showAlert('Plano de Eletroposto criado com sucesso!', 'success');
             }
 
             if (onSave) onSave();
             onClose();
         } catch (err) {
-            console.error('Erro ao salvar plano:', err);
+            console.error('Erro ao salvar plano de eletroposto:', err);
             showAlert('Erro ao salvar plano: ' + (err.message || 'Erro desconhecido'), 'error');
         } finally {
             setLoading(false);
@@ -520,8 +501,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         transition: all 0.2s ease;
                     }
                     .crm-input:focus {
-                        border-color: #3b82f6 !important;
-                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+                        border-color: #10b981 !important;
+                        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
                         outline: none;
                     }
                     .ledger-row {
@@ -538,36 +519,36 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     }
                 `}</style>
 
-                {/* HEADER PREMIUM (Padrão UI/UX CRM) */}
+                {/* HEADER PREMIUM (UI/UX CRM) */}
                 <div style={{
                     padding: '1.4rem 2rem',
-                    background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                    background: 'linear-gradient(135deg, #064e3b 0%, #1e293b 100%)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     color: '#ffffff'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <div style={{
                             width: '48px', height: '48px', borderRadius: '14px',
-                            background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(96, 165, 250, 0.35)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa'
+                            background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(52, 211, 153, 0.35)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399'
                         }}>
-                            <Zap size={24} />
+                            <BatteryCharging size={24} />
                         </div>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                                 <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                                    {planToEdit ? 'Editar Plano de Assinatura & Recompensas' : 'Novo Plano de Assinatura & Recompensas'}
+                                    {planToEdit ? 'Editar Plano de Eletroposto & Recompensas' : 'Novo Plano de Eletroposto & Recompensas'}
                                 </h3>
                                 <span style={{
                                     fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.6rem',
-                                    borderRadius: '20px', background: 'rgba(16, 185, 129, 0.2)',
-                                    color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)'
+                                    borderRadius: '20px', background: 'rgba(59, 130, 246, 0.25)',
+                                    color: '#93c5fd', border: '1px solid rgba(147, 197, 253, 0.35)'
                                 }}>
-                                    Lastro Concessionária
+                                    Lastro: Plano de Assinatura (Isento de Fio B)
                                 </span>
                             </div>
-                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-                                Simulação em tempo real por R$/kWh com trava antidéficit e vigência vinculada ao status ativo
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
+                                Ponto de partida = Tarifa da Concessionária menos o Desconto do Assinante do Plano vinculado
                             </p>
                         </div>
                     </div>
@@ -594,7 +575,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.5rem'
                     }}>
 
-                        {/* BLOCO 1: IDENTIFICAÇÃO DO PLANO E SELETOR DE CONCESSIONÁRIA (LASTRO) */}
+                        {/* BLOCO 1: VINCULAÇÃO AO PLANO DE ASSINATURA (LASTRO DO ELETROPOSTO) */}
                         <div style={{
                             background: '#ffffff', padding: '1.5rem', borderRadius: '20px',
                             border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
@@ -604,13 +585,13 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 marginBottom: '1.1rem', flexWrap: 'wrap', gap: '0.75rem'
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                                    <Building2 size={18} color="#3b82f6" />
+                                    <Link2 size={18} color="#059669" />
                                     <h4 style={{ margin: 0, fontSize: '0.96rem', color: '#1e293b', fontWeight: 700 }}>
-                                        1. Identificação do Plano e Concessionária de Referência (Lastro)
+                                        1. Identificação e Plano de Assinatura Vinculado (Lastro)
                                     </h4>
                                 </div>
 
-                                {/* Status do Plano */}
+                                {/* Status Ativo */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                                     <span style={{
                                         fontSize: '0.76rem', fontWeight: 700,
@@ -619,7 +600,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         border: `1px solid ${ativo ? '#22c55e' : '#cbd5e1'}`,
                                         padding: '0.25rem 0.7rem', borderRadius: '20px'
                                     }}>
-                                        {ativo ? '● Plano Ativo' : '○ Plano Inativo'}
+                                        {ativo ? '● Eletroposto Ativo' : '○ Inativo'}
                                     </span>
                                     <button
                                         type="button"
@@ -639,16 +620,16 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1fr', gap: '1rem' }}>
-                                {/* Nome do Plano */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.7fr', gap: '1rem' }}>
+                                {/* Nome do Plano de Eletroposto */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
-                                        Nome Comercial do Plano *
+                                        Nome do Plano de Eletroposto *
                                     </label>
                                     <input
                                         type="text"
                                         className="crm-input"
-                                        placeholder="Ex: Plano Ultra Conect 15%"
+                                        placeholder="Ex: Eletroposto Ultra Mobility"
                                         value={nome}
                                         onChange={e => setNome(e.target.value)}
                                         required
@@ -660,88 +641,66 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     />
                                 </div>
 
-                                {/* Seletor de Concessionária */}
+                                {/* Seletor do Plano de Assinatura que serve de Lastro */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
-                                        Selecionar Concessionária (Define Tarifa e Fio B)
+                                        Selecionar Plano de Assinatura Vinculado (Define o Lastro sem Fio B) *
                                     </label>
                                     <select
                                         className="crm-input"
-                                        value={selectedConsKey}
-                                        onChange={handleSelectConcessionaria}
+                                        value={selectedSubPlanId}
+                                        onChange={handleSelectSubscriptionPlan}
                                         style={{
                                             width: '100%', padding: '0.75rem 0.95rem', borderRadius: '12px',
                                             border: '1px solid #cbd5e1', fontSize: '0.86rem', color: '#1e293b',
                                             background: '#ffffff', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer'
                                         }}
                                     >
-                                        <option value="">
-                                            {loadingCons ? 'Carregando concessionárias...' : `Personalizado / ${concessionariaNome} (R$ ${formatCurrencyUnit(tarifaBruta, 4)})`}
-                                        </option>
-                                        {concessionarias.map((c, idx) => {
-                                            const key = `${c.Concessionaria}__${c.UF}`;
-                                            const tVal = Number(c['Tarifa Concessionaria'] || 0).toFixed(4);
-                                            const fVal = Number(c['Fio B'] || 0).toFixed(4);
+                                        {subscriptionPlans.length === 0 && (
+                                            <option value="">
+                                                Referência Padrão ({planoVinculadoNome} — Lastro R$ {formatCurrencyUnit(valorLastroPlano, 4)}/kWh)
+                                            </option>
+                                        )}
+                                        {subscriptionPlans.map(subPlan => {
+                                            const info = extractSubscriptionPlanLastro(subPlan);
                                             return (
-                                                <option key={`${key}_${idx}`} value={key}>
-                                                    {c.Concessionaria} ({c.UF}) — Tarifa R$ {tVal} | Fio B R$ {fVal}
+                                                <option key={subPlan.id} value={subPlan.id}>
+                                                    {subPlan.nome} ({info.concessionariaNome}: R$ {formatCurrencyUnit(info.tarifaConcessionaria, 4)} - {formatPct(info.descontoPlanoPct)}% = Lastro R$ {formatCurrencyUnit(info.lastroEletroposto, 4)}/kWh)
                                                 </option>
                                             );
                                         })}
                                     </select>
                                 </div>
-
-                                {/* Subgrupo Tarifário */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
-                                        Subgrupo de Referência
-                                    </label>
-                                    <select
-                                        className="crm-input"
-                                        value={subgrupoTarifario}
-                                        onChange={e => handleSelectSubgrupo(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '0.75rem 0.95rem', borderRadius: '12px',
-                                            border: '1px solid #cbd5e1', fontSize: '0.86rem', color: '#1e293b',
-                                            background: '#ffffff', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer'
-                                        }}
-                                    >
-                                        <option value="B1 Residencial">B1 Residencial</option>
-                                        <option value="B2 Rural">B2 Rural</option>
-                                        <option value="B3 Comercial">B3 Comercial</option>
-                                        <option value="Grupo A">Grupo A</option>
-                                    </select>
-                                </div>
                             </div>
 
-                            {/* Cards Rápidos de Resumo do Lastro */}
+                            {/* Composição Explicativa do Lastro Herdado do Plano de Assinatura */}
                             <div style={{
                                 display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.85rem',
                                 marginTop: '1.1rem', paddingTop: '1.1rem', borderTop: '1px solid #f1f5f9'
                             }}>
                                 <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                     <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>
-                                        Tarifa Bruta ({concessionariaNome})
+                                        Origem ({concessionariaOrigem} - {descontoOrigemPct}%)
                                     </span>
-                                    <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                                        R$ {formatCurrencyUnit(calc.tBruta, 4)} <small style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>/kWh</small>
+                                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                                        R$ {formatCurrencyUnit(tarifaOrigem, 4)} - {formatPct(descontoOrigemPct)}% = R$ {formatCurrencyUnit(calc.vLastro, 4)}
                                     </span>
                                 </div>
 
-                                <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>
-                                        (-) Fio B ({formatPct(calc.pctRealFioB)}%)
+                                <div style={{ background: '#ecfdf5', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #a7f3d0' }}>
+                                    <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: 700, display: 'block' }}>
+                                        Fio B (Isento no Eletroposto)
                                     </span>
-                                    <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#dc2626' }}>
-                                        - R$ {formatCurrencyUnit(calc.vFioB, 4)}
+                                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#059669' }}>
+                                        Já deduzido na Assinatura
                                     </span>
                                 </div>
 
                                 <div style={{ background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                                     <span style={{ fontSize: '0.72rem', color: '#1d4ed8', fontWeight: 700, display: 'block' }}>
-                                        (=) Base de Cálculo Líquida
+                                        (=) Base Líquida Eletroposto
                                     </span>
-                                    <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1e40af' }}>
+                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1e40af' }}>
                                         R$ {formatCurrencyUnit(calc.baseLiquida, 4)} <small style={{ fontSize: '0.72rem' }}>({formatPct(calc.pctRealBaseLiquida)}%)</small>
                                     </span>
                                 </div>
@@ -759,7 +718,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         Margem Livre / Excedente
                                     </span>
                                     <span style={{
-                                        fontSize: '1.05rem', fontWeight: 800,
+                                        fontSize: '1rem', fontWeight: 800,
                                         color: calc.isDeficitario ? '#dc2626' : '#16a34a'
                                     }}>
                                         {calc.margemLivre >= 0 ? '+ ' : ''}R$ {formatCurrencyUnit(calc.margemLivre, 6)}
@@ -768,39 +727,36 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                             </div>
                         </div>
 
-                        {/* BLOCO 2: CONFIGURAÇÃO DE RECOMPENSAS E MATRIZ DINÂMICA */}
+                        {/* BLOCO 2: RECOMPENSAS E DEMONSTRATIVO DO ELETROPOSTO */}
                         <div style={{
                             background: '#ffffff', padding: '1.5rem', borderRadius: '20px',
                             border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
-                            {/* Cabeçalho Recompensas + Vigência Vinculada ao Status Ativo */}
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                 marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem'
                             }}>
                                 <div>
                                     <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <Sparkles size={19} color="#3b82f6" />
-                                        2. Estrutura de Recompensas & Comissionamento
+                                        <Sparkles size={19} color="#059669" />
+                                        2. Estrutura de Recompensas do Eletroposto
                                     </h4>
                                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                                        Cargos: <strong>B2W</strong>, <strong>Líder</strong>, <strong>Parceiro Power (PPE / PPP / PPF)</strong> e <strong>Assinante Conect</strong>
+                                        Sem incidência de Fio B • Cargos: <strong>B2W</strong>, <strong>Líder</strong>, <strong>Parceiro Power (PPE / PPP / PPF)</strong> e <strong>Assinante Conect</strong>
                                     </p>
                                 </div>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
-                                    {/* Badge de Vigência Vinculada ao Status Ativo */}
                                     <div style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
-                                        background: '#eff6ff', border: '1px solid #93c5fd',
-                                        color: '#1d4ed8', padding: '0.4rem 0.85rem', borderRadius: '12px',
+                                        background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                        color: '#047857', padding: '0.4rem 0.85rem', borderRadius: '12px',
                                         fontSize: '0.76rem', fontWeight: 700
                                     }}>
-                                        <Activity size={15} color="#2563eb" />
+                                        <Activity size={15} color="#059669" />
                                         Vigência: Vinculada ao Status Ativo no Sistema
                                     </div>
 
-                                    {/* Toggle Recompensas */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: recompensasAtivo ? '#16a34a' : '#64748b' }}>
                                             {recompensasAtivo ? 'Recompensas Ativas' : 'Desativadas'}
@@ -826,7 +782,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
                             {recompensasAtivo ? (
                                 <>
-                                    {/* Seletor de Modalidade (Recorrente | Start | Híbrido) */}
+                                    {/* Modalidades */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.85rem', marginBottom: '1.5rem' }}>
                                         <button
                                             type="button"
@@ -840,7 +796,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                                                 <span style={{ fontWeight: 800, fontSize: '0.88rem', color: tipoRecompensa === 'recorrente' ? '#15803d' : '#1e293b' }}>
-                                                    Recorrente (Lastro Mensal)
+                                                    Recorrente (Por kWh Recarregado)
                                                 </span>
                                                 {tipoRecompensa === 'recorrente' && <Check size={16} color="#15803d" />}
                                             </div>
@@ -861,12 +817,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                                                 <span style={{ fontWeight: 800, fontSize: '0.88rem', color: tipoRecompensa === 'start' ? '#1d4ed8' : '#1e293b' }}>
-                                                    Start (Pagamento Único)
+                                                    Start (Adesão Eletroposto)
                                                 </span>
                                                 {tipoRecompensa === 'start' && <Check size={16} color="#1d4ed8" />}
                                             </div>
                                             <span style={{ fontSize: '0.73rem', color: '#64748b', display: 'block' }}>
-                                                Bonificação nas faturas iniciais (1ª, 2ª ou 3ª fatura)
+                                                Bonificação nos ciclos iniciais (1º, 2º ou 3º ciclo)
                                             </span>
                                         </button>
 
@@ -892,9 +848,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         </button>
                                     </div>
 
-                                    {/* =====================================================================
-                                        BLOCO RECORRENTE DINÂMICO (BASEADO NO PRINT COM FIO B EM 2º LUGAR)
-                                       ===================================================================== */}
+                                    {/* DEMONSTRATIVO RECORRENTE DO ELETROPOSTO (SEM FIO B) */}
                                     {(tipoRecompensa === 'recorrente' || tipoRecompensa === 'hibrido') && (
                                         <div style={{
                                             borderRadius: '18px', border: '1px solid #cbd5e1',
@@ -902,28 +856,27 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                             boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
                                             marginBottom: tipoRecompensa === 'hibrido' ? '1.5rem' : 0
                                         }}>
-                                            {/* Barra de Título da Demonstrativo Recorrente */}
                                             <div style={{
                                                 padding: '1rem 1.25rem',
-                                                background: 'linear-gradient(90deg, #0f172a 0%, #1e293b 100%)',
+                                                background: 'linear-gradient(90deg, #064e3b 0%, #0f172a 100%)',
                                                 color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                                 flexWrap: 'wrap', gap: '0.5rem'
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                    <TrendingUp size={18} color="#38bdf8" />
+                                                    <TrendingUp size={18} color="#34d399" />
                                                     <span style={{ fontWeight: 800, fontSize: '0.9rem', letterSpacing: '0.01em' }}>
-                                                        Demonstrativo Dinâmico do Bloco Recorrente (R$/kWh)
+                                                        Demonstrativo Dinâmico — Eletroposto (Sem Fio B • Lastro: {planoVinculadoNome})
                                                     </span>
                                                 </div>
                                                 <span style={{
-                                                    fontSize: '0.74rem', color: '#cbd5e1', background: 'rgba(255,255,255,0.08)',
+                                                    fontSize: '0.74rem', color: '#d1fae5', background: 'rgba(255,255,255,0.1)',
                                                     padding: '0.25rem 0.65rem', borderRadius: '8px'
                                                 }}>
-                                                    Vigência: <strong style={{ color: '#4ade80' }}>Enquanto Entidade Ativa</strong>
+                                                    Fio B já deduzido no Plano de Assinatura
                                                 </span>
                                             </div>
 
-                                            {/* Cabeçalho da Tabela (Esquerda: Item | Centro: % Referência | Direita: R$/kWh e % Real s/ Tarifa) */}
+                                            {/* Cabeçalho da Tabela */}
                                             <div style={{
                                                 display: 'grid',
                                                 gridTemplateColumns: '2.3fr 1.35fr 1.15fr 1fr',
@@ -940,16 +893,19 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 <div>Item / Destinação</div>
                                                 <div style={{ textAlign: 'center' }}>% Referência</div>
                                                 <div style={{ textAlign: 'right' }}>Valor Unitário (R$/kWh)</div>
-                                                <div style={{ textAlign: 'right' }}>% Real s/ Tarifa Bruta</div>
+                                                <div style={{ textAlign: 'right' }}>% Real s/ Lastro</div>
                                             </div>
 
-                                            {/* 1º ITEM: TARIFA BRUTA CONCESSIONÁRIA */}
+                                            {/* 1º ITEM: LASTRO DO PLANO DE ASSINATURA (TARIFA - DESCONTO DO PLANO) */}
                                             <div className="ledger-row" style={{ background: '#ffffff' }}>
-                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span>Tarifa Bruta {concessionariaNome}</span>
+                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem', display: 'flex', flexDirection: 'column' }}>
+                                                    <span>Lastro: {planoVinculadoNome}</span>
+                                                    <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
+                                                        Tarifa {concessionariaOrigem} (R$ {formatCurrencyUnit(tarifaOrigem, 4)}) - Desconto Plano ({formatPct(descontoOrigemPct)}%)
+                                                    </small>
                                                 </div>
                                                 <div style={{ textAlign: 'center', fontSize: '0.84rem', fontWeight: 700, color: '#334155' }}>
-                                                    100%
+                                                    100% (Sem Fio B)
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.3rem' }}>
                                                     <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>R$</span>
@@ -958,8 +914,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         step="0.0001"
                                                         min="0"
                                                         className="crm-input"
-                                                        value={tarifaBruta}
-                                                        onChange={e => setTarifaBruta(e.target.value)}
+                                                        value={valorLastroPlano}
+                                                        onChange={e => setValorLastroPlano(e.target.value)}
                                                         style={{
                                                             width: '96px', padding: '0.38rem 0.55rem', borderRadius: '8px',
                                                             border: '1px solid #cbd5e1', fontSize: '0.86rem', fontWeight: 800,
@@ -972,45 +928,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 2º ITEM DA LISTA: (-) FIO B */}
-                                            <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                                                    <span>(-) Fio B</span>
-                                                    <span style={{
-                                                        fontSize: '0.68rem', background: '#f1f5f9', color: '#64748b',
-                                                        padding: '0.12rem 0.45rem', borderRadius: '6px', fontWeight: 600
-                                                    }}>
-                                                        2º Item • Regulatório
-                                                    </span>
-                                                </div>
-                                                <div style={{ textAlign: 'center', fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
-                                                    Concessionária
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.3rem' }}>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>- R$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.0001"
-                                                        min="0"
-                                                        className="crm-input"
-                                                        value={fioB}
-                                                        onChange={e => setFioB(e.target.value)}
-                                                        style={{
-                                                            width: '96px', padding: '0.38rem 0.55rem', borderRadius: '8px',
-                                                            border: '1px solid #cbd5e1', fontSize: '0.86rem', fontWeight: 700,
-                                                            textAlign: 'right', color: '#dc2626'
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                    {formatPct(calc.pctRealFioB)}%
-                                                </div>
-                                            </div>
-
-                                            {/* 3º ITEM DA LISTA: (-) DESCONTO DO ASSINANTE */}
+                                            {/* 2º ITEM: (-) DESCONTO ELETROPOSTO / ASSINANTE */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
-                                                    (-) Desconto do Assinante
+                                                    (-) Desconto do Assinante (Eletroposto)
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
                                                     <input
@@ -1019,45 +940,45 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         min="0"
                                                         max="100"
                                                         className="crm-input"
-                                                        value={descontoAssinante}
-                                                        onChange={e => setDescontoAssinante(e.target.value)}
+                                                        value={descontoEletroposto}
+                                                        onChange={e => setDescontoEletroposto(e.target.value)}
                                                         style={{
                                                             width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
-                                                            border: '1px solid #93c5fd', background: '#eff6ff',
-                                                            fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', color: '#1d4ed8'
+                                                            border: '1px solid #6ee7b7', background: '#ecfdf5',
+                                                            fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', color: '#047857'
                                                         }}
                                                     />
-                                                    <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>% s/ Tarifa</span>
+                                                    <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>% s/ Lastro</span>
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626', fontSize: '0.88rem' }}>
-                                                    - R$ {formatCurrencyUnit(calc.vDescAssinante, 4)}
+                                                    - R$ {formatCurrencyUnit(calc.vDescEletroposto, 4)}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                    {formatPct(calc.pctRealDescAssinante)}%
+                                                    {formatPct(calc.pctRealDescEletroposto)}%
                                                 </div>
                                             </div>
 
-                                            {/* 4º ITEM: (=) BASE DE CÁLCULO LÍQUIDA */}
+                                            {/* 3º ITEM: (=) BASE DE CÁLCULO LÍQUIDA */}
                                             <div className="ledger-row" style={{
-                                                background: '#f0f9ff',
-                                                borderTop: '1px solid #bae6fd',
-                                                borderBottom: '2px solid #bae6fd'
+                                                background: '#ecfdf5',
+                                                borderTop: '1px solid #a7f3d0',
+                                                borderBottom: '2px solid #a7f3d0'
                                             }}>
-                                                <div style={{ fontWeight: 800, color: '#0369a1', fontSize: '0.92rem' }}>
+                                                <div style={{ fontWeight: 800, color: '#047857', fontSize: '0.92rem' }}>
                                                     (=) Base de Cálculo Líquida
                                                 </div>
-                                                <div style={{ textAlign: 'center', color: '#0369a1', fontWeight: 700 }}>
+                                                <div style={{ textAlign: 'center', color: '#047857', fontWeight: 700 }}>
                                                     —
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>
                                                     R$ {formatCurrencyUnit(calc.baseLiquida, 4)}
                                                 </div>
-                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0369a1', fontSize: '0.88rem' }}>
+                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#047857', fontSize: '0.88rem' }}>
                                                     {formatPct(calc.pctRealBaseLiquida)}%
                                                 </div>
                                             </div>
 
-                                            {/* 5º ITEM: (-) B2W (GESTÃO / PLATAFORMA) */}
+                                            {/* 4º ITEM: (-) B2W (GESTÃO / PLATAFORMA) */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
                                                     (-) B2W (Gestão / Plataforma)
@@ -1087,7 +1008,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 6º ITEM: (-) LÍDER */}
+                                            {/* 5º ITEM: (-) LÍDER */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
                                                     (-) Líder
@@ -1117,12 +1038,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 7º GRUPO: (-) PARCEIRO POWER (PPE, PPP e PPF) */}
-                                            <div style={{
-                                                background: '#fafaf9',
-                                                borderBottom: '1px solid #e2e8f0'
-                                            }}>
-                                                {/* Sub-header do Grupo Parceiro Power indicando o teto considerado */}
+                                            {/* 6º GRUPO: (-) PARCEIRO POWER (PPE, PPP e PPF) */}
+                                            <div style={{ background: '#fafaf9', borderBottom: '1px solid #e2e8f0' }}>
                                                 <div style={{
                                                     padding: '0.55rem 1.25rem',
                                                     background: '#f8fafc',
@@ -1132,19 +1049,19 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     alignItems: 'center'
                                                 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 800, color: '#1e293b' }}>
-                                                        <Award size={15} color="#3b82f6" />
+                                                        <Award size={15} color="#059669" />
                                                         <span>(-) Categorias Parceiro Power</span>
                                                     </div>
                                                     <span style={{
-                                                        fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8',
-                                                        background: '#eff6ff', padding: '0.15rem 0.55rem', borderRadius: '6px',
-                                                        border: '1px solid #bfdbfe'
+                                                        fontSize: '0.72rem', fontWeight: 700, color: '#047857',
+                                                        background: '#ecfdf5', padding: '0.15rem 0.55rem', borderRadius: '6px',
+                                                        border: '1px solid #a7f3d0'
                                                     }}>
                                                         Teto na Margem: {calc.tetoLabel} ({formatPct(calc.pctParceiroPowerTeto)}% s/ Base = - R$ {formatCurrencyUnit(calc.vParceiroPowerTeto, 5)})
                                                     </span>
                                                 </div>
 
-                                                {/* PPE - Parceiro Power Embaixador */}
+                                                {/* PPE */}
                                                 <div className="ledger-row" style={{ paddingLeft: '2rem' }}>
                                                     <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                         <span style={{
@@ -1181,7 +1098,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     </div>
                                                 </div>
 
-                                                {/* PPP - Parceiro Power Premium */}
+                                                {/* PPP */}
                                                 <div className="ledger-row" style={{ paddingLeft: '2rem' }}>
                                                     <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                         <span style={{
@@ -1218,7 +1135,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     </div>
                                                 </div>
 
-                                                {/* PPF - Parceiro Power Free */}
+                                                {/* PPF */}
                                                 <div className="ledger-row" style={{ paddingLeft: '2rem', borderBottom: 'none' }}>
                                                     <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                         <span style={{
@@ -1256,7 +1173,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 8º ITEM: (-) ASSINANTE CONECT */}
+                                            {/* 7º ITEM: (-) ASSINANTE CONECT */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                     <Users size={15} color="#10b981" />
@@ -1287,7 +1204,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 9º ITEM: (=) LÍQUIDO EFETIVO DO FORNECEDOR */}
+                                            {/* 8º ITEM: (=) LÍQUIDO EFETIVO DO FORNECEDOR / OPERADOR */}
                                             <div className="ledger-row" style={{
                                                 background: '#f8fafc',
                                                 borderTop: '2px solid #cbd5e1',
@@ -1307,7 +1224,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 10º ITEM: PISO CONTRATUAL DO FORNECEDOR (50% s/ Tarifa por padrão, editável) */}
+                                            {/* 9º ITEM: PISO CONTRATUAL DO FORNECEDOR */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
                                                     Piso Contratual do Fornecedor ({formatPct(calc.pctPisoFornecedor, 0)}%)
@@ -1327,7 +1244,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                             textAlign: 'center', color: '#0f172a'
                                                         }}
                                                     />
-                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Tarifa</span>
+                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Lastro</span>
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
                                                     R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}
@@ -1337,7 +1254,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                 </div>
                                             </div>
 
-                                            {/* 11º ITEM: MARGEM LIVRE / EXCEDENTE (COM TRAVA ANTIDÉFICIT) */}
+                                            {/* 10º ITEM: MARGEM LIVRE / EXCEDENTE */}
                                             <div className="ledger-row" style={{
                                                 background: calc.isDeficitario ? '#fef2f2' : '#f0fdf4',
                                                 borderTop: `2px solid ${calc.isDeficitario ? '#ef4444' : '#22c55e'}`,
@@ -1378,7 +1295,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                         </div>
                                     )}
 
-                                    {/* PAINEL START (PAGAMENTO ÚNICO NAS FATURAS INICIAIS) */}
+                                    {/* PAINEL START */}
                                     {(tipoRecompensa === 'start' || tipoRecompensa === 'hibrido') && (
                                         <div style={{
                                             border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '18px',
@@ -1393,12 +1310,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         Start
                                                     </span>
                                                     <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                        Distribuição nas Faturas Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
+                                                        Distribuição nos Ciclos Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
                                                     </span>
                                                 </div>
-                                                <span style={{ fontSize: '0.76rem', color: '#1d4ed8', fontWeight: 600 }}>
-                                                    Selecione as faturas elegíveis:
-                                                </span>
                                             </div>
 
                                             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -1426,7 +1340,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                             }}>
                                                                 {isChecked && <Check size={12} color="white" />}
                                                             </div>
-                                                            Fatura {fatNum} {fatNum === 2 && <span style={{ fontSize: '0.72rem', fontWeight: 500 }}>(Padrão)</span>}
+                                                            Ciclo {fatNum}
                                                         </button>
                                                     );
                                                 })}
@@ -1446,7 +1360,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                                                                 <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                                    Fatura {fatNum} — Repasse Único (% sobre Base Líquida)
+                                                                    Ciclo {fatNum} — Repasse Único (% sobre Base Líquida)
                                                                 </span>
                                                                 <span style={{
                                                                     fontSize: '0.75rem', fontWeight: 800,
@@ -1507,12 +1421,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     padding: '1.5rem', textAlign: 'center', background: '#f8fafc',
                                     borderRadius: '14px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '0.85rem'
                                 }}>
-                                    Este plano está configurado apenas com o <strong>Desconto Direto de {formatPct(calc.pctDescAssinante)}%</strong> ao assinante, sem distribuição de recompensas para rede.
+                                    Plano de Eletroposto configurado apenas com <strong>Desconto Direto de {formatPct(calc.pctDescEletroposto)}%</strong> sobre o Lastro ({planoVinculadoNome}).
                                 </div>
                             )}
                         </div>
 
-                        {/* ALERTA DE BLOQUEIO SE DEFICITÁRIO */}
                         {bloqueadoPorDeficit && (
                             <div style={{
                                 background: '#fef2f2', border: '1px solid #ef4444', borderRadius: '16px',
@@ -1524,19 +1437,19 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     <strong style={{ display: 'block', fontSize: '0.9rem' }}>
                                         Trava Antidéficit Acionada — Não é permitido salvar plano deficitário
                                     </strong>
-                                    O Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>), gerando um déficit de <strong>R$ {formatCurrencyUnit(Math.abs(calc.margemLivre), 6)}/kWh</strong>. Reduza o desconto ou os percentuais dos cargos para prosseguir.
+                                    O Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>), gerando um déficit de <strong>R$ {formatCurrencyUnit(Math.abs(calc.margemLivre), 6)}/kWh</strong>.
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* FOOTER DE AÇÕES (Padrão UI/UX CRM) */}
+                    {/* FOOTER */}
                     <div style={{
                         padding: '1.15rem 2rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                     }}>
                         <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                            <Percent size={15} color="#3b82f6" />
+                            <Percent size={15} color="#059669" />
                             <span>
                                 Total de Repasses na Base Líquida: <strong style={{ color: '#0f172a' }}>{formatPct(calc.totalPctSobreBase)}%</strong> (R$ {formatCurrencyUnit(calc.totalDeducoesBase, 5)}/kWh)
                             </span>
@@ -1549,7 +1462,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 style={{
                                     padding: '0.75rem 1.4rem', borderRadius: '14px', border: '1px solid #cbd5e1',
                                     background: '#ffffff', color: '#475569', fontWeight: 700, fontSize: '0.88rem',
-                                    cursor: 'pointer', transition: 'all 0.15s'
+                                    cursor: 'pointer'
                                 }}
                             >
                                 Cancelar
@@ -1561,16 +1474,15 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     padding: '0.75rem 2rem', borderRadius: '14px', border: 'none',
                                     background: bloqueadoPorDeficit
                                         ? '#94a3b8'
-                                        : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                        : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                                     color: '#ffffff', fontWeight: 800, fontSize: '0.88rem',
                                     cursor: (loading || bloqueadoPorDeficit) ? 'not-allowed' : 'pointer',
                                     display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 10px 15px -3px rgba(37, 99, 235, 0.3)',
-                                    transition: 'all 0.2s'
+                                    boxShadow: bloqueadoPorDeficit ? 'none' : '0 10px 15px -3px rgba(5, 150, 105, 0.3)'
                                 }}
                             >
                                 <Save size={18} />
-                                {loading ? 'Salvando...' : (planToEdit ? 'Salvar Alterações' : 'Criar Plano de Assinatura')}
+                                {loading ? 'Salvando...' : (planToEdit ? 'Salvar Alterações' : 'Criar Plano de Eletroposto')}
                             </button>
                         </div>
                     </div>

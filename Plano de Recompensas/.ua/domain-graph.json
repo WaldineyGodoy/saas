@@ -1,0 +1,204 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "Domínios de Negócio — Plano de Recompensas HUB B2W",
+    "languages": ["pt-BR"],
+    "frameworks": ["React", "Supabase"],
+    "description": "Fluxos de negócio em português (pt-BR) para o Plano de Recompensas HUB B2W Energia Solar: Base Líquida, Árvore Multinível L1-L4 (Ultra 15% e Premium 20%), Governança Premium Pass / Safra Fechada e Ecossistema HUB.",
+    "analyzedAt": "2026-09-24T15:08:00-03:00",
+    "gitCommitHash": "HEAD"
+  },
+  "nodes": [
+    {
+      "id": "domain:comissionamento-multinivel",
+      "type": "domain",
+      "name": "1. Motor de Comissionamento & Base Líquida",
+      "summary": "Apuração da Base Líquida Faturável (Tarifa s/ CIP menos Fio B menos Desconto) e distribuição nos planos Ultra (Recorrente L1-L4 com teto de 5%) e Premium (Start 100% 1ª fatura).",
+      "tags": ["base-liquida", "plano-ultra", "plano-premium", "teto-5-porcento"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Fatura Energia", "Base Líquida (R$ 0,657/kWh)", "Plano Ultra (15%)", "Plano Premium (20%)"],
+        "businessRules": [
+          "Nenhuma comissão incide sobre a CIP ou sobre o Fio B (Lei 14.300)",
+          "Teto máximo do pool no Plano Ultra travado em 5% da Base Líquida",
+          "Assinante Originador recebe 2% em crédito na própria fatura sobre L1 (66 indicados = conta zerada)",
+          "Embaixador recebe 4% em L1 e 2% em L2 (corte em L3)",
+          "Coordenador recebe 1% em L1, L2 e L3 (corte em L4)"
+        ]
+      }
+    },
+    {
+      "id": "domain:governanca-carreira",
+      "type": "domain",
+      "name": "2. Governança de Carreira & Safra Fechada",
+      "summary": "Ascensão de Embaixador a Coordenador via licença Premium Pass (R$ 1.900) com indenização de 50% ao Coordenador original e congelamento da carteira antiga (Safra Fechada / Grandfathering).",
+      "tags": ["premium-pass", "safra-fechada", "coordenador", "embaixador"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Premium Pass (R$ 1.900)", "Embaixador", "Novo Coordenador", "Coordenador Original"],
+        "businessRules": [
+          "Adesão ao Premium Pass custa R$ 1.900 (à vista ou amortizado com comissões Start Premium)",
+          "50% (R$ 950) indenizam o Coordenador original e 50% (R$ 950) ficam com a B2W",
+          "Safra Passada congelada: mantém 4% (L1) e 2% (L2) de Embaixador sem somar +1% de Coordenação",
+          "Safra Futura emancipada: recebe 1% de Coordenação em L1-L3 da nova rede (ou 5%/3%/1% em venda direta)"
+        ]
+      }
+    },
+    {
+      "id": "domain:ecossistema-hub",
+      "type": "domain",
+      "name": "3. Ecossistema HUB (Usinas, EPC, Corretores e Eletropostos)",
+      "summary": "Expansão B2B para captação de terrenos, investidores de usinas solares, integradores EPC e arbitragem energética via rede de eletropostos.",
+      "tags": ["usinas", "integrador-epc", "corretor", "eletropostos"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": ["Usina Solar GD", "Integrador EPC", "Corretor de Imóveis", "Investidor", "Eletroposto AC/DC"],
+        "businessRules": [
+          "Integrador EPC retém 100% da margem de engenharia + O&M mensal + Fee R$ 0,01 a R$ 0,02/kWh",
+          "Corretor escolhe entre Liquidez Imediata (1,5%-2% Capex) ou Pensão Energética (1% Capex + 1% receita por 24-36m)",
+          "Arbitragem em Eletropostos vende energia a R$ 1,80–R$ 2,50/kWh elevando o yield do investidor"
+        ]
+      }
+    },
+    {
+      "id": "flow:apuracao-fatura-ultra",
+      "type": "flow",
+      "name": "Fluxo de Apuração e Repasse Mensal (Plano Ultra 15%)",
+      "summary": "Desde o pagamento da fatura pelo assinante até o lançamento no razão contábil (conta 2.1.2) e abatimento na conta do originador.",
+      "tags": ["fluxo", "fatura", "razao-2-1-2"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "step:pagamento-compensado",
+      "type": "step",
+      "name": "1. Compensação Bancária da Fatura",
+      "summary": "Valida o pagamento efetivo da fatura pelo assinante final (trava contra inadimplência).",
+      "tags": ["etapa", "caixa"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:calculo-base-liquida",
+      "type": "step",
+      "name": "2. Cálculo da Base Líquida (R$ 0,657/kWh)",
+      "summary": "Deduz CIP, Fio B (R$ 0,21/kWh) e o desconto comercial de 15% (R$ 0,153/kWh) da tarifa bruta.",
+      "tags": ["etapa", "base-liquida"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:split-niveis-l1-l4",
+      "type": "step",
+      "name": "3. Split por Nível (Originador 2%, Embaixador 4%/2%, Coordenador 1%)",
+      "summary": "Aplica as regras de corte L1 a L4 e credita na conta contábil 2.1.2 (Comissões a Pagar) ou fatura do Assinante Originador.",
+      "tags": ["etapa", "split", "ledger"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "flow:promocao-safra-fechada",
+      "type": "flow",
+      "name": "Fluxo de Ascensão de Carreira (Premium Pass)",
+      "summary": "Habilitação do Embaixador para Coordenador preservando o teto de 5% via Safra Fechada.",
+      "tags": ["fluxo", "carreira", "safra-fechada"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "step:aquisicao-premium-pass",
+      "type": "step",
+      "name": "1. Aquisição do Premium Pass (R$ 1.900)",
+      "summary": "Pagamento à vista ou amortização com saldo de comissões Start do Plano Premium.",
+      "tags": ["etapa", "adesao"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:split-indenizacao",
+      "type": "step",
+      "name": "2. Indenização 50/50 (R$ 950 Coordenador Original / R$ 950 B2W)",
+      "summary": "Compensa imediatamente o líder anterior pela emancipação da equipe.",
+      "tags": ["etapa", "indenizacao"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:separacao-safras",
+      "type": "step",
+      "name": "3. Congelamento de Safra Passada e Abertura de Safra Nova",
+      "summary": "Contratos antigos seguem pagando 4%/2% ao promovido e 1% ao Coordenador antigo; contratos novos pagam 1% (L1-L3) ao novo Coordenador.",
+      "tags": ["etapa", "grandfathering"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "domain:comissionamento-multinivel",
+      "target": "domain:governanca-carreira",
+      "type": "cross_domain",
+      "direction": "forward",
+      "weight": 0.9,
+      "description": "Comissões Start Premium financiam o Premium Pass e respeitam o teto de 5%"
+    },
+    {
+      "source": "domain:ecossistema-hub",
+      "target": "domain:comissionamento-multinivel",
+      "type": "cross_domain",
+      "direction": "forward",
+      "weight": 0.8,
+      "description": "Usinas geram os créditos kWh comercializados nos Planos Ultra e Premium"
+    },
+    {
+      "source": "domain:comissionamento-multinivel",
+      "target": "flow:apuracao-fatura-ultra",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:apuracao-fatura-ultra",
+      "target": "step:pagamento-compensado",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:pagamento-compensado",
+      "target": "step:calculo-base-liquida",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:calculo-base-liquida",
+      "target": "step:split-niveis-l1-l4",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:governanca-carreira",
+      "target": "flow:promocao-safra-fechada",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:promocao-safra-fechada",
+      "target": "step:aquisicao-premium-pass",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:aquisicao-premium-pass",
+      "target": "step:split-indenizacao",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:split-indenizacao",
+      "target": "step:separacao-safras",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    }
+  ],
+  "layers": [],
+  "tour": []
+}
