@@ -18,12 +18,17 @@ import {
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
+// Ordem do ciclo do fornecedor. O status é calculado no banco
+// (fn_recalculate_supplier_status); o kanban só move para dentro e para
+// fora de Inativo, que é a única decisão manual.
 const KANBAN_STATUSES = [
-    { status: 'ativacao', label: 'Em Ativação', color: '#854d0e', bg: '#fef9c3' },
+    { status: 'cadastrado', label: 'Cadastrado', color: '#475569', bg: '#f1f5f9' },
     { status: 'contrato_assinado', label: 'Contrato Assinado', color: '#1e40af', bg: '#dbeafe' },
+    { status: 'ativacao', label: 'Em Ativação', color: '#854d0e', bg: '#fef9c3' },
     { status: 'ativo', label: 'Ativo', color: '#166534', bg: '#dcfce7' },
     { status: 'inativo', label: 'Inativo', color: '#991b1b', bg: '#fee2e2' }
 ];
+const STATUS_INATIVO = KANBAN_STATUSES[4];
 
 function KanbanCard({ supplier, onClick, isOverlay }) {
     const {
@@ -35,7 +40,7 @@ function KanbanCard({ supplier, onClick, isOverlay }) {
         isDragging
     } = useSortable({ id: supplier.id, disabled: !!isOverlay });
 
-    const statusConfig = KANBAN_STATUSES.find(s => s.status === supplier.status) || KANBAN_STATUSES[3];
+    const statusConfig = KANBAN_STATUSES.find(s => s.status === supplier.status) || STATUS_INATIVO;
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -202,6 +207,16 @@ export default function SupplierList() {
 
         const activeSupplier = suppliers.find(p => p.id === activeId);
         if (activeSupplier && activeSupplier.status !== newStatus) {
+            const entrando = newStatus === 'inativo';
+            const saindo = activeSupplier.status === 'inativo';
+            if (!entrando && !saindo) {
+                alert('O status do fornecedor é calculado pelos contratos e pelas usinas. Só é possível mover para Inativo ou tirar de Inativo.');
+                return;
+            }
+            // Saindo de Inativo volta ao primeiro degrau; o cálculo do banco
+            // o reposiciona conforme contratos e usinas.
+            if (saindo) newStatus = 'cadastrado';
+
             // Optimistic update
             setSuppliers(prev => prev.map(p => {
                 if (p.id === activeId) return { ...p, status: newStatus };
@@ -409,7 +424,7 @@ export default function SupplierList() {
                             </thead>
                             <tbody>
                                 {filteredSuppliers.map(s => {
-                                    const statusConfig = KANBAN_STATUSES.find(st => st.status === s.status) || KANBAN_STATUSES[3];
+                                    const statusConfig = KANBAN_STATUSES.find(st => st.status === s.status) || STATUS_INATIVO;
                                     return (
                                         <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                             <td style={{ padding: '1.2rem 1.5rem' }}>

@@ -51,6 +51,16 @@ const CAMPOS_CONDICOES = [
     { key: 'prazoHonorarios', label: 'Prazo de honorários (dias)' }
 ];
 
+
+// Rótulos do status calculado. A ordem é a do ciclo do fornecedor.
+const STATUS_FORNECEDOR = {
+    cadastrado: { rotulo: 'Cadastrado', cor: '#475569', fundo: '#f1f5f9' },
+    contrato_assinado: { rotulo: 'Contrato Assinado', cor: '#1e40af', fundo: '#dbeafe' },
+    ativacao: { rotulo: 'Em Ativação', cor: '#854d0e', fundo: '#fef9c3' },
+    ativo: { rotulo: 'Ativo', cor: '#166534', fundo: '#dcfce7' },
+    inativo: { rotulo: 'Inativo', cor: '#991b1b', fundo: '#fee2e2' }
+};
+
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
     const { showAlert, showConfirm } = useUI();
@@ -115,7 +125,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         cnpj: '',
         email: '',
         phone: '',
-        status: 'ativacao',
+        status: 'cadastrado',
+        contrato_assinado_em: '',
         legal_partner_name: '',
         legal_partner_cpf: '',
         pix_key: '',
@@ -137,7 +148,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 cnpj: supplier.cnpj || '',
                 email: supplier.email || '',
                 phone: supplier.phone || '',
-                status: supplier.status || 'ativacao',
+                status: supplier.status || 'cadastrado',
+                contrato_assinado_em: supplier.contrato_assinado_em
+                    ? supplier.contrato_assinado_em.slice(0, 10) : '',
                 legal_partner_name: supplier.legal_partner_name || '',
                 legal_partner_cpf: supplier.legal_partner_cpf || '',
                 pix_key: supplier.pix_key || '',
@@ -1149,7 +1162,16 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         cnpj: formData.cnpj,
         email: formData.email,
         phone: formData.phone ? formData.phone.replace(/\D/g, '') : '',
-        status: formData.status,
+        // O status é calculado no banco (fn_recalculate_supplier_status). A
+        // tela só grava a entrada e a saída de Inativo; mandar sempre o valor
+        // carregado ao abrir desfaria o que o cálculo mudou nesse meio-tempo.
+        ...(formData.status !== (supplier?.status || 'cadastrado')
+            ? { status: formData.status }
+            : {}),
+        // Só se mudou: a data da Autentique tem hora e o campo mostra o dia.
+        ...((formData.contrato_assinado_em || '') !== (supplier?.contrato_assinado_em?.slice(0, 10) || '')
+            ? { contrato_assinado_em: formData.contrato_assinado_em || null }
+            : {}),
         legal_partner_name: formData.legal_partner_name,
         legal_partner_cpf: formData.legal_partner_cpf,
         pix_key: formData.pix_key,
@@ -1839,16 +1861,43 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                         <CheckCircle size={20} color="#34d399" /> Status Operacional
                                     </h4>
                                     <div className="form-group">
-                                        <select
-                                            style={{ ...inputStyle, fontWeight: 'bold' }}
-                                            value={formData.status}
-                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                        >
-                                            <option value="ativacao">🟠 Em Ativação</option>
-                                            <option value="contrato_assinado">🔵 Contrato Assinado</option>
-                                            <option value="ativo">🟢 Ativo</option>
-                                            <option value="inativo">🔴 Inativo</option>
-                                        </select>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                                            <span style={{
+                                                padding: '0.4rem 0.9rem', borderRadius: '999px', fontWeight: 700, fontSize: '0.85rem',
+                                                color: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).cor,
+                                                background: (STATUS_FORNECEDOR[formData.status] || STATUS_FORNECEDOR.cadastrado).fundo
+                                            }}>
+                                                {(STATUS_FORNECEDOR[formData.status] || { rotulo: formData.status }).rotulo}
+                                            </span>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: '#991b1b', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.status === 'inativo'}
+                                                    onChange={e => setFormData({
+                                                        ...formData,
+                                                        status: e.target.checked
+                                                            ? 'inativo'
+                                                            : (supplier?.status && supplier.status !== 'inativo' ? supplier.status : 'cadastrado')
+                                                    })}
+                                                />
+                                                Inativo
+                                            </label>
+                                        </div>
+                                        <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>
+                                            Calculado pelos contratos e pelas usinas: Compra e Venda assinada → Contrato Assinado; Gestão assinada → Em Ativação; Gestão + usina em conexão, gerando ou manutenção → Ativo. Só "Inativo" é escolhido à mão.
+                                        </small>
+                                    </div>
+                                    <div className="form-group" style={{ marginTop: '1rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Contrato de Gestão assinado em</label>
+                                        <input
+                                            type="date"
+                                            style={inputStyle}
+                                            value={formData.contrato_assinado_em}
+                                            onChange={e => setFormData({ ...formData, contrato_assinado_em: e.target.value })}
+                                        />
+                                        <small style={{ display: 'block', marginTop: '0.35rem', color: '#64748b', fontSize: '0.75rem' }}>
+                                            Preenchido sozinho quando a assinatura é pela Autentique. Assinado por fora (papel, gov.br)? Informe a data aqui.
+                                        </small>
                                     </div>
                                 </div>
 
