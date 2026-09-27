@@ -2655,21 +2655,16 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             if (operationError) throw operationError;
 
             if (usinaId && isUCsModified) {
-                // Clear all links first (or handle intelligently)
-                await supabase.from('consumer_units').update({ usina_id: null, prioridade: null }).eq('usina_id', usinaId);
-
-                if (selectedUCs.length > 0) {
-                    // Update each UC with usina_id and priority
-                    const updatePromises = selectedUCs.map((uc, index) =>
-                        supabase.from('consumer_units')
-                            .update({
-                                usina_id: usinaId,
-                                prioridade: index + 1
-                            })
-                            .eq('id', uc.id)
-                    );
-                    await Promise.all(updatePromises);
-                }
+                // Uma transação só, com a diferença: sai quem foi removido,
+                // entra quem foi adicionado (UG primeiro), o resto só muda de
+                // prioridade. O antigo "desvincula todas e revincula em
+                // paralelo" perdeu 3 beneficiárias da Bom Jesus II em
+                // 27/09/2026 e ainda assim mostrou "sucesso".
+                const { error: vinculosError } = await supabase.rpc('fn_salvar_vinculos_usina', {
+                    p_usina_id: usinaId,
+                    p_uc_ids: selectedUCs.map(uc => uc.id)
+                });
+                if (vinculosError) throw vinculosError;
 
                 // If monthly details are populated, save them to generation_production
                 if (monthlyDetails) {
