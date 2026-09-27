@@ -43,6 +43,13 @@ alter table public.suppliers
 
 alter table public.suppliers alter column status set default 'cadastrado';
 
+-- 'ativacao' passa a significar Gestao assinada. Quem esta nele sem data de
+-- Gestao era o antigo "recem-cadastrado" (em 27/09/2026: so a Ana Paola).
+update public.suppliers
+   set status = 'cadastrado'
+ where status = 'ativacao'
+   and contrato_assinado_em is null;
+
 comment on column public.suppliers.contrato_assinado_em is
     'Quando o Contrato de GESTAO foi assinado. Preenchida pelo autentique-webhook ou a mao. Leva o fornecedor a ativacao (Em Ativacao).';
 
