@@ -1783,7 +1783,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
                 if (formData.modalidade === 'auto_consumo_remoto') {
                     const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
-                    if (geradoraUC && activeUc.subscriber_id !== geradoraUC.subscriber_id) {
+                    if (geradoraUC && activeUc.titular_fatura_id !== geradoraUC.titular_fatura_id) {
                         showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
                         return;
                     }
@@ -2523,7 +2523,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                 // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
                                                 if (formData.modalidade === 'auto_consumo_remoto') {
                                                     const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
-                                                    if (geradoraUC && uc.subscriber_id !== geradoraUC.subscriber_id) {
+                                                    if (geradoraUC && uc.titular_fatura_id !== geradoraUC.titular_fatura_id) {
                                                         showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
                                                         return;
                                                     }
@@ -4144,7 +4144,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     // Validate UCs titularity before changing
                                                     const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
                                                     if (geradoraUC) {
-                                                        const hasDifferentTitular = selectedUCs.some(uc => uc.subscriber_id !== geradoraUC.subscriber_id);
+                                                        const hasDifferentTitular = selectedUCs.some(uc => uc.titular_fatura_id !== geradoraUC.titular_fatura_id);
                                                         if (hasDifferentTitular) {
                                                             showAlert('Não é possível alterar para Auto Consumo Remoto pois existem UCs vinculadas com titularidade diferente da Unidade Geradora.', 'warning');
                                                             return;
