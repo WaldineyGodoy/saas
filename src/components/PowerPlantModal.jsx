@@ -345,6 +345,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
 
     // Options Lists
     const statusOptions = [
+        { value: 'pre_operacao', label: 'Pré-Operação' },
         { value: 'gerando', label: 'Gerando' },
         { value: 'em_conexao', label: 'Em Conexão' },
         { value: 'manutencao', label: 'Manutenção' },
@@ -380,7 +381,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [formData, setFormData] = useState({
         supplier_id: '',
         name: '',
-        status: 'em_conexao',
+        status: 'pre_operacao',
+        compra_venda_assinada_em: '',
         modalidade: 'geracao_compartilhada',
         valor_investido: '', // Stored as string for formatting
         qtd_modulos: '',
@@ -1056,7 +1058,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             setFormData({
                 supplier_id: usina.supplier_id || '',
                 name: usina.name || '',
-                status: usina.status || 'em_conexao',
+                status: usina.status || 'pre_operacao',
+                compra_venda_assinada_em: usina.compra_venda_assinada_em
+                    ? usina.compra_venda_assinada_em.slice(0, 10) : '',
                 modalidade: ['gd1', 'gd2', 'gd3', 'geracao_distribuida'].includes(usina.modalidade) ? 'geracao_compartilhada' : (usina.modalidade || 'geracao_compartilhada'),
                 valor_investido: usina.valor_investido ? formatCurrency(usina.valor_investido) : '',
                 qtd_modulos: usina.qtd_modulos || '',
@@ -2584,6 +2588,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             name: formData.name,
             concessionaria: formData.concessionaria,
             status: formData.status,
+            // Só grava a data se ela mudou: a da Autentique tem hora, e
+            // regravar o dia puro a truncaria a cada salvamento.
+            ...((formData.compra_venda_assinada_em || '') !== (usina?.compra_venda_assinada_em?.slice(0, 10) || '')
+                ? { compra_venda_assinada_em: formData.compra_venda_assinada_em || null }
+                : {}),
             modalidade: formData.modalidade,
             modalidade_gd: formData.modalidade_gd,
             valor_investido: valorInvestidoNum,
@@ -2873,6 +2882,19 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                         >
                                             {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                         </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: '#475569', fontWeight: 600 }}>Compra e Venda assinada em</label>
+                                        <input
+                                            type="date"
+                                            value={formData.compra_venda_assinada_em}
+                                            onChange={e => setFormData({ ...formData, compra_venda_assinada_em: e.target.value })}
+                                            style={{ width: '100%', padding: '0.8rem 1rem', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '1rem', background: 'white', outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                        <small style={{ display: 'block', marginTop: '0.35rem', color: '#64748b', fontSize: '0.75rem' }}>
+                                            Preenchido sozinho quando a assinatura é pela Autentique. Leva o fornecedor a Contrato Assinado.
+                                        </small>
                                     </div>
 
                                     <div>
