@@ -8,12 +8,12 @@ import {
     BatteryCharging,
     ShieldCheck,
     AlertTriangle,
-    TrendingUp,
     Award,
     Users,
-    Zap,
     Activity,
-    Link2
+    Link2,
+    Lock,
+    GitBranch
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
@@ -34,7 +34,41 @@ const formatPct = (val, decimals = 2) => {
     });
 };
 
-// Extrai o valor do Lastro (Tarifa da Concessionária - Desconto do Assinante do Plano)
+const DEFAULT_MULTILEVEL_RULES = {
+    b2w: {
+        max_niveis: 4,
+        niveis: { L1: '10', L2: '10', L3: '10', L4: '10' }
+    },
+    lider: {
+        max_niveis: 3,
+        niveis: { L1: '1', L2: '1', L3: '1', L4: '0' }
+    },
+    ppe: {
+        max_niveis: 2,
+        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
+    },
+    ppp: {
+        max_niveis: 2,
+        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
+    },
+    ppf: {
+        max_niveis: 1,
+        niveis: { L1: '2', L2: '0', L3: '0', L4: '0' }
+    },
+    assinante_conect: {
+        max_niveis: 1,
+        niveis: { L1: '0', L2: '2', L3: '2', L4: '2' }
+    }
+};
+
+const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
+const LEVEL_LABELS = {
+    L1: { short: 'Nível L1', desc: 'Venda Direta (Parceiro Power)' },
+    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Conect)' },
+    L3: { short: 'Nível L3', desc: '2ª Indicação (Corte Parceiro Power)' },
+    L4: { short: 'Nível L4+', desc: 'Expansão Profunda (Corte Líder)' }
+};
+
 export const extractSubscriptionPlanLastro = (planoAssinatura) => {
     if (!planoAssinatura) {
         return {
@@ -69,6 +103,7 @@ export default function EletropostoPlanModal({
 }) {
     const { showAlert } = useUI();
     const [loading, setLoading] = useState(false);
+    const [activeLevelView, setActiveLevelView] = useState('L1');
 
     // Plano de Assinatura Vinculado (Lastro do Eletroposto)
     const [selectedSubPlanId, setSelectedSubPlanId] = useState('');
@@ -77,8 +112,7 @@ export default function EletropostoPlanModal({
     const [tarifaOrigem, setTarifaOrigem] = useState(1.0300);
     const [descontoOrigemPct, setDescontoOrigemPct] = useState(15);
 
-    // Valor do Lastro (Tarifa Concessionária - Desconto Assinante do Plano Vinculado)
-    // Sem Fio B, pois já foi deduzido no Plano de Assinatura!
+    // Valor do Lastro (Somente Leitura: Tarifa Concessionária - Desconto Assinante do Plano Vinculado)
     const [valorLastroPlano, setValorLastroPlano] = useState('0.8755');
 
     // Estado Principal do Plano de Eletroposto
@@ -86,22 +120,15 @@ export default function EletropostoPlanModal({
     const [descontoEletroposto, setDescontoEletroposto] = useState('10');
     const [ativo, setAtivo] = useState(true);
     const [recompensasAtivo, setRecompensasAtivo] = useState(true);
-    const [tipoRecompensa, setTipoRecompensa] = useState('recorrente'); // 'start' | 'recorrente' | 'hibrido'
+    const [tipoRecompensa, setTipoRecompensa] = useState('recorrente');
 
     // Piso Contratual do Fornecedor / Operador (% sobre o Lastro)
     const [pisoFornecedorPct, setPisoFornecedorPct] = useState('50');
 
-    // Cargos no Bloco Recorrente (% sobre a Base de Cálculo Líquida do Eletroposto)
-    const [regrasRecorrente, setRegrasRecorrente] = useState({
-        b2w: '10',
-        lider: '1',
-        ppe: '4',
-        ppp: '4',
-        ppf: '2',
-        assinante_conect: '2'
-    });
+    // Regras Multinível (L1, L2, L3, L4+)
+    const [regrasMultinivel, setRegrasMultinivel] = useState(DEFAULT_MULTILEVEL_RULES);
 
-    // Configuração Start (Recargas / Faturas Iniciais)
+    // Configuração Start
     const [faturasElegiveisStart, setFaturasElegiveisStart] = useState([1]);
     const [regrasStart, setRegrasStart] = useState({
         1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
@@ -109,9 +136,9 @@ export default function EletropostoPlanModal({
         3: { b2w: '0', lider: '0', ppe: '0', ppp: '0', ppf: '0', assinante_conect: '0' }
     });
 
-    // Inicializa dados ao abrir o modal
     useEffect(() => {
         if (!isOpen) return;
+        setActiveLevelView('L1');
 
         if (planToEdit) {
             setNome(planToEdit.nome || '');
@@ -132,15 +159,11 @@ export default function EletropostoPlanModal({
             setValorLastroPlano(String(lastro.tarifa_bruta ?? vinc.valor_lastro_eletroposto ?? '0.8755'));
             setPisoFornecedorPct(String(lastro.piso_fornecedor_pct ?? '50'));
 
-            const rRec = recCfg.regras || {};
-            setRegrasRecorrente({
-                b2w: String(rRec.b2w ?? rRec.associacao ?? '10'),
-                lider: String(rRec.lider ?? rRec.coordenador ?? '1'),
-                ppe: String(rRec.ppe ?? rRec.embaixador ?? '4'),
-                ppp: String(rRec.ppp ?? rRec.embaixador ?? '4'),
-                ppf: String(rRec.ppf ?? '2'),
-                assinante_conect: String(rRec.assinante_conect ?? rRec.assinante ?? '2')
-            });
+            if (recCfg.regras_multinivel) {
+                setRegrasMultinivel(recCfg.regras_multinivel);
+            } else {
+                setRegrasMultinivel(DEFAULT_MULTILEVEL_RULES);
+            }
 
             if (planToEdit.start_config) {
                 setFaturasElegiveisStart(planToEdit.start_config.faturas_elegiveis || [1]);
@@ -159,7 +182,6 @@ export default function EletropostoPlanModal({
                 });
             }
         } else {
-            // Novo plano de eletroposto: vincula automaticamente ao 1º Plano de Assinatura disponível
             const defaultSubPlan = subscriptionPlans.find(p => p.ativo) || subscriptionPlans[0] || null;
             const info = extractSubscriptionPlanLastro(defaultSubPlan);
 
@@ -175,14 +197,7 @@ export default function EletropostoPlanModal({
             setDescontoOrigemPct(info.descontoPlanoPct);
             setValorLastroPlano(info.lastroEletroposto.toFixed(4));
             setPisoFornecedorPct('50');
-            setRegrasRecorrente({
-                b2w: '10',
-                lider: '1',
-                ppe: '4',
-                ppp: '4',
-                ppf: '2',
-                assinante_conect: '2'
-            });
+            setRegrasMultinivel(DEFAULT_MULTILEVEL_RULES);
             setFaturasElegiveisStart([1]);
             setRegrasStart({
                 1: { b2w: '0', lider: '50', ppe: '50', ppp: '40', ppf: '20', assinante_conect: '0' },
@@ -192,7 +207,6 @@ export default function EletropostoPlanModal({
         }
     }, [planToEdit, isOpen, subscriptionPlans]);
 
-    // Handler ao trocar o Plano de Assinatura que serve de Lastro
     const handleSelectSubscriptionPlan = (e) => {
         const subId = e.target.value;
         setSelectedSubPlanId(subId);
@@ -209,75 +223,159 @@ export default function EletropostoPlanModal({
         }
     };
 
-    // MOTOR DE CÁLCULO DINÂMICO DO ELETROPOSTO
-    // Lastro = Tarifa da Concessionária menos o Desconto do Assinante ofertado no Plano de Assinatura (SEM Fio B!)
+    const isLevelAllowedForRole = (roleKey, levelKey, maxNiveis) => {
+        const levelIdx = LEVEL_KEYS.indexOf(levelKey) + 1;
+        if (roleKey === 'assinante_conect') {
+            if (maxNiveis === 0) return false;
+            return levelIdx >= 2;
+        }
+        return levelIdx <= maxNiveis;
+    };
+
+    const handleRoleMaxLevelsChange = (roleKey, newMaxStr) => {
+        const newMax = parseInt(newMaxStr, 10);
+        setRegrasMultinivel(prev => {
+            const currentRole = prev[roleKey];
+            const updatedNiveis = { ...currentRole.niveis };
+
+            LEVEL_KEYS.forEach((lk, idx) => {
+                const lvNum = idx + 1;
+                if (roleKey === 'assinante_conect') {
+                    if (newMax === 0 || lvNum === 1) {
+                        updatedNiveis[lk] = '0';
+                    } else if (Number(updatedNiveis[lk]) === 0) {
+                        updatedNiveis[lk] = '2';
+                    }
+                } else {
+                    if (lvNum > newMax) {
+                        updatedNiveis[lk] = '0';
+                    } else if (Number(updatedNiveis[lk]) === 0) {
+                        const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
+                        updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
+                    }
+                }
+            });
+
+            return {
+                ...prev,
+                [roleKey]: {
+                    max_niveis: newMax,
+                    niveis: updatedNiveis
+                }
+            };
+        });
+    };
+
+    const handleRoleLevelPctChange = (roleKey, levelKey, val) => {
+        setRegrasMultinivel(prev => ({
+            ...prev,
+            [roleKey]: {
+                ...prev[roleKey],
+                niveis: {
+                    ...prev[roleKey].niveis,
+                    [levelKey]: val
+                }
+            }
+        }));
+    };
+
+    // MOTOR DE CÁLCULO DINÂMICO MULTINÍVEL DO ELETROPOSTO (SEM FIO B)
     const calc = useMemo(() => {
         const vLastro = Math.max(0, parseFloat(valorLastroPlano) || 0);
         const pctDescEletroposto = Math.max(0, parseFloat(descontoEletroposto) || 0);
 
-        // 2º Item: (-) Desconto do Assinante / Usuário no Eletroposto (% sobre o Lastro)
         const vDescEletroposto = vLastro * (pctDescEletroposto / 100);
         const pctRealDescEletroposto = pctDescEletroposto;
 
-        // 3º Item: (=) Base de Cálculo Líquida (Sem Fio B, pois já foi deduzido no Plano de Assinatura)
         const baseLiquida = vLastro - vDescEletroposto;
         const pctRealBaseLiquida = vLastro > 0 ? (baseLiquida / vLastro) * 100 : 0;
-
-        // Percentuais dos Cargos sobre a Base de Cálculo Líquida
-        const pctB2W = Math.max(0, parseFloat(regrasRecorrente.b2w) || 0);
-        const pctLider = Math.max(0, parseFloat(regrasRecorrente.lider) || 0);
-        const pctPPE = Math.max(0, parseFloat(regrasRecorrente.ppe) || 0);
-        const pctPPP = Math.max(0, parseFloat(regrasRecorrente.ppp) || 0);
-        const pctPPF = Math.max(0, parseFloat(regrasRecorrente.ppf) || 0);
-        const pctAssinanteConect = Math.max(0, parseFloat(regrasRecorrente.assinante_conect) || 0);
-
         const basePositiva = Math.max(0, baseLiquida);
-        const vB2W = basePositiva * (pctB2W / 100);
-        const vLider = basePositiva * (pctLider / 100);
-        const vPPE = basePositiva * (pctPPE / 100);
-        const vPPP = basePositiva * (pctPPP / 100);
-        const vPPF = basePositiva * (pctPPF / 100);
-        const vAssinanteConect = basePositiva * (pctAssinanteConect / 100);
 
-        // Percentuais Reais sobre o Lastro do Plano de Assinatura
-        const pctRealB2W = vLastro > 0 ? (vB2W / vLastro) * 100 : 0;
-        const pctRealLider = vLastro > 0 ? (vLider / vLastro) * 100 : 0;
-        const pctRealPPE = vLastro > 0 ? (vPPE / vLastro) * 100 : 0;
-        const pctRealPPP = vLastro > 0 ? (vPPP / vLastro) * 100 : 0;
-        const pctRealPPF = vLastro > 0 ? (vPPF / vLastro) * 100 : 0;
-        const pctRealAssinanteConect = vLastro > 0 ? (vAssinanteConect / vLastro) * 100 : 0;
-
-        // Teto de segurança entre PPE, PPP e PPF
-        const pctParceiroPowerTeto = Math.max(pctPPE, pctPPP, pctPPF);
-        const vParceiroPowerTeto = basePositiva * (pctParceiroPowerTeto / 100);
-        const pctRealParceiroPowerTeto = vLastro > 0 ? (vParceiroPowerTeto / vLastro) * 100 : 0;
-
-        let tetoLabel = 'PPE';
-        if (pctPPP >= pctPPE && pctPPP >= pctPPF) tetoLabel = 'PPP';
-        if (pctPPE >= pctPPP && pctPPE >= pctPPF) tetoLabel = 'PPE';
-        if (pctPPF > pctPPE && pctPPF > pctPPP) tetoLabel = 'PPF';
-
-        const totalDeducoesBase = vB2W + vLider + vParceiroPowerTeto + vAssinanteConect;
-        const totalPctSobreBase = pctB2W + pctLider + pctParceiroPowerTeto + pctAssinanteConect;
-
-        // (=) Líquido Efetivo do Fornecedor / Operador Eletroposto
-        const liquidoEfetivoFornecedor = baseLiquida - totalDeducoesBase;
-        const pctRealLiquidoFornecedor = vLastro > 0 ? (liquidoEfetivoFornecedor / vLastro) * 100 : 0;
-
-        // Piso Contratual do Fornecedor (% sobre o Lastro)
         const pctPisoFornecedor = Math.max(0, parseFloat(pisoFornecedorPct) || 0);
         const vPisoFornecedor = vLastro * (pctPisoFornecedor / 100);
         const pctRealPisoFornecedor = pctPisoFornecedor;
 
-        // MARGEM LIVRE / EXCEDENTE
-        const margemLivre = liquidoEfetivoFornecedor - vPisoFornecedor;
-        const pctRealMargemLivre = vLastro > 0 ? (margemLivre / vLastro) * 100 : 0;
+        const byLevel = {};
+        let anyLevelDeficit = false;
+        let worstDeficitLevel = null;
 
-        const isDeficitario =
-            vLastro <= 0 ||
-            baseLiquida <= 0 ||
-            liquidoEfetivoFornecedor < 0 ||
-            margemLivre < -0.000001;
+        LEVEL_KEYS.forEach(lk => {
+            const getPct = (roleKey) => {
+                const roleCfg = regrasMultinivel[roleKey];
+                if (!roleCfg) return 0;
+                if (!isLevelAllowedForRole(roleKey, lk, roleCfg.max_niveis)) return 0;
+                return Math.max(0, parseFloat(roleCfg.niveis?.[lk]) || 0);
+            };
+
+            const pctB2W = getPct('b2w');
+            const pctLider = getPct('lider');
+            const pctPPE = getPct('ppe');
+            const pctPPP = getPct('ppp');
+            const pctPPF = getPct('ppf');
+            const pctAssinanteConect = getPct('assinante_conect');
+
+            const vB2W = basePositiva * (pctB2W / 100);
+            const vLider = basePositiva * (pctLider / 100);
+            const vPPE = basePositiva * (pctPPE / 100);
+            const vPPP = basePositiva * (pctPPP / 100);
+            const vPPF = basePositiva * (pctPPF / 100);
+            const vAssinanteConect = basePositiva * (pctAssinanteConect / 100);
+
+            const pctRealB2W = vLastro > 0 ? (vB2W / vLastro) * 100 : 0;
+            const pctRealLider = vLastro > 0 ? (vLider / vLastro) * 100 : 0;
+            const pctRealPPE = vLastro > 0 ? (vPPE / vLastro) * 100 : 0;
+            const pctRealPPP = vLastro > 0 ? (vPPP / vLastro) * 100 : 0;
+            const pctRealPPF = vLastro > 0 ? (vPPF / vLastro) * 100 : 0;
+            const pctRealAssinanteConect = vLastro > 0 ? (vAssinanteConect / vLastro) * 100 : 0;
+
+            const pctParceiroPowerTeto = Math.max(pctPPE, pctPPP, pctPPF);
+            const vParceiroPowerTeto = basePositiva * (pctParceiroPowerTeto / 100);
+            const pctRealParceiroPowerTeto = vLastro > 0 ? (vParceiroPowerTeto / vLastro) * 100 : 0;
+
+            let tetoLabel = 'PPE';
+            if (pctParceiroPowerTeto === 0) tetoLabel = 'Corte (0%)';
+            else if (pctPPP >= pctPPE && pctPPP >= pctPPF) tetoLabel = 'PPP';
+            else if (pctPPE >= pctPPP && pctPPE >= pctPPF) tetoLabel = 'PPE';
+            else tetoLabel = 'PPF';
+
+            const totalDeducoesBase = vB2W + vLider + vParceiroPowerTeto + vAssinanteConect;
+            const totalPctSobreBase = pctB2W + pctLider + pctParceiroPowerTeto + pctAssinanteConect;
+
+            const liquidoEfetivoFornecedor = baseLiquida - totalDeducoesBase;
+            const pctRealLiquidoFornecedor = vLastro > 0 ? (liquidoEfetivoFornecedor / vLastro) * 100 : 0;
+
+            const margemLivre = liquidoEfetivoFornecedor - vPisoFornecedor;
+            const pctRealMargemLivre = vLastro > 0 ? (margemLivre / vLastro) * 100 : 0;
+
+            const isLevelDeficit =
+                vLastro <= 0 ||
+                baseLiquida <= 0 ||
+                liquidoEfetivoFornecedor < 0 ||
+                margemLivre < -0.000001;
+
+            if (isLevelDeficit) {
+                anyLevelDeficit = true;
+                if (!worstDeficitLevel || margemLivre < byLevel[worstDeficitLevel].margemLivre) {
+                    worstDeficitLevel = lk;
+                }
+            }
+
+            byLevel[lk] = {
+                pctB2W, vB2W, pctRealB2W,
+                pctLider, vLider, pctRealLider,
+                pctPPE, vPPE, pctRealPPE,
+                pctPPP, vPPP, pctRealPPP,
+                pctPPF, vPPF, pctRealPPF,
+                pctParceiroPowerTeto, vParceiroPowerTeto, pctRealParceiroPowerTeto, tetoLabel,
+                pctAssinanteConect, vAssinanteConect, pctRealAssinanteConect,
+                totalDeducoesBase, totalPctSobreBase,
+                liquidoEfetivoFornecedor, pctRealLiquidoFornecedor,
+                margemLivre, pctRealMargemLivre,
+                isLevelDeficit
+            };
+        });
+
+        const currentView = byLevel[activeLevelView] || byLevel.L1;
 
         return {
             vLastro,
@@ -286,49 +384,17 @@ export default function EletropostoPlanModal({
             pctRealDescEletroposto,
             baseLiquida,
             pctRealBaseLiquida,
-            pctB2W,
-            vB2W,
-            pctRealB2W,
-            pctLider,
-            vLider,
-            pctRealLider,
-            pctPPE,
-            vPPE,
-            pctRealPPE,
-            pctPPP,
-            vPPP,
-            pctRealPPP,
-            pctPPF,
-            vPPF,
-            pctRealPPF,
-            pctParceiroPowerTeto,
-            vParceiroPowerTeto,
-            pctRealParceiroPowerTeto,
-            tetoLabel,
-            pctAssinanteConect,
-            vAssinanteConect,
-            pctRealAssinanteConect,
-            totalDeducoesBase,
-            totalPctSobreBase,
-            liquidoEfetivoFornecedor,
-            pctRealLiquidoFornecedor,
             pctPisoFornecedor,
             vPisoFornecedor,
             pctRealPisoFornecedor,
-            margemLivre,
-            pctRealMargemLivre,
-            isDeficitario
+            byLevel,
+            currentView,
+            isDeficitario: anyLevelDeficit,
+            worstDeficitLevel: worstDeficitLevel || activeLevelView
         };
-    }, [valorLastroPlano, descontoEletroposto, regrasRecorrente, pisoFornecedorPct]);
+    }, [valorLastroPlano, descontoEletroposto, regrasMultinivel, pisoFornecedorPct, activeLevelView]);
 
     if (!isOpen) return null;
-
-    const handleRecorrentePctChange = (campo, value) => {
-        setRegrasRecorrente(prev => ({
-            ...prev,
-            [campo]: value
-        }));
-    };
 
     const toggleFaturaStart = (faturaNum) => {
         setFaturasElegiveisStart(prev => {
@@ -375,23 +441,24 @@ export default function EletropostoPlanModal({
         }
 
         if (bloqueadoPorDeficit) {
-            showAlert('Operação bloqueada: O plano de Eletroposto apresenta resultado deficitário. Ajuste os percentuais.', 'error');
+            showAlert(`Operação bloqueada: O plano apresenta resultado deficitário no ${calc.worstDeficitLevel}. Ajuste os percentuais.`, 'error');
             return;
         }
 
         setLoading(true);
 
+        const l1View = calc.byLevel.L1;
         const numRec = {
-            b2w: parseFloat(regrasRecorrente.b2w) || 0,
-            lider: parseFloat(regrasRecorrente.lider) || 0,
-            ppe: parseFloat(regrasRecorrente.ppe) || 0,
-            ppp: parseFloat(regrasRecorrente.ppp) || 0,
-            ppf: parseFloat(regrasRecorrente.ppf) || 0,
-            assinante_conect: parseFloat(regrasRecorrente.assinante_conect) || 0,
-            associacao: parseFloat(regrasRecorrente.b2w) || 0,
-            coordenador: parseFloat(regrasRecorrente.lider) || 0,
-            embaixador: Math.max(parseFloat(regrasRecorrente.ppe) || 0, parseFloat(regrasRecorrente.ppp) || 0),
-            assinante: parseFloat(regrasRecorrente.assinante_conect) || 0
+            b2w: l1View.pctB2W,
+            lider: l1View.pctLider,
+            ppe: l1View.pctPPE,
+            ppp: l1View.pctPPP,
+            ppf: l1View.pctPPF,
+            assinante_conect: calc.byLevel.L2.pctAssinanteConect,
+            associacao: l1View.pctB2W,
+            coordenador: l1View.pctLider,
+            embaixador: Math.max(l1View.pctPPE, l1View.pctPPP),
+            assinante: calc.byLevel.L2.pctAssinanteConect
         };
 
         const formatStartRulesPayload = (r = {}) => ({
@@ -437,13 +504,20 @@ export default function EletropostoPlanModal({
                     tipo_lastro: 'plano_assinatura_sem_fio_b',
                     concessionaria_nome: `${planoVinculadoNome} (${concessionariaOrigem})`,
                     tarifa_bruta: calc.vLastro,
-                    fio_b: 0, // Fio B já deduzido no Plano de Assinatura
+                    fio_b: 0,
                     base_calculo_liquida: Number(calc.baseLiquida.toFixed(6)),
                     piso_fornecedor_pct: calc.pctPisoFornecedor,
-                    liquido_efetivo_fornecedor: Number(calc.liquidoEfetivoFornecedor.toFixed(6)),
-                    margem_livre_excedente: Number(calc.margemLivre.toFixed(6))
+                    liquido_efetivo_fornecedor: Number(l1View.liquidoEfetivoFornecedor.toFixed(6)),
+                    margem_livre_excedente: Number(l1View.margemLivre.toFixed(6)),
+                    superavit_por_nivel: {
+                        L1: Number(calc.byLevel.L1.margemLivre.toFixed(6)),
+                        L2: Number(calc.byLevel.L2.margemLivre.toFixed(6)),
+                        L3: Number(calc.byLevel.L3.margemLivre.toFixed(6)),
+                        L4: Number(calc.byLevel.L4.margemLivre.toFixed(6))
+                    }
                 },
-                regras: numRec
+                regras: numRec,
+                regras_multinivel: regrasMultinivel
             },
             updated_at: new Date().toISOString()
         };
@@ -476,6 +550,109 @@ export default function EletropostoPlanModal({
         }
     };
 
+    const renderMultilevelCenterControl = (roleKey, optionsList) => {
+        const cfg = regrasMultinivel[roleKey];
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%' }}>
+                <select
+                    className="crm-input"
+                    value={cfg.max_niveis}
+                    onChange={e => handleRoleMaxLevelsChange(roleKey, e.target.value)}
+                    style={{
+                        padding: '0.32rem 0.45rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f8fafc',
+                        fontSize: '0.73rem',
+                        fontWeight: 700,
+                        color: '#334155',
+                        cursor: 'pointer',
+                        minWidth: '112px'
+                    }}
+                >
+                    {optionsList.map(opt => (
+                        <option key={opt.val} value={opt.val}>{opt.label}</option>
+                    ))}
+                </select>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.3rem', flex: 1 }}>
+                    {LEVEL_KEYS.map(lk => {
+                        const allowed = isLevelAllowedForRole(roleKey, lk, cfg.max_niveis);
+                        const isFocusedLevel = activeLevelView === lk;
+                        const val = allowed ? (cfg.niveis?.[lk] ?? '0') : '0';
+
+                        return (
+                            <div
+                                key={lk}
+                                onClick={() => setActiveLevelView(lk)}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    background: !allowed
+                                        ? '#f1f5f9'
+                                        : isFocusedLevel
+                                            ? '#ecfdf5'
+                                            : '#ffffff',
+                                    border: `1px solid ${
+                                        isFocusedLevel
+                                            ? '#10b981'
+                                            : allowed
+                                                ? '#cbd5e1'
+                                                : '#e2e8f0'
+                                    }`,
+                                    borderRadius: '7px',
+                                    padding: '0.18rem 0.25rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s'
+                                }}
+                            >
+                                <span style={{
+                                    fontSize: '0.62rem',
+                                    fontWeight: 800,
+                                    color: isFocusedLevel ? '#047857' : allowed ? '#64748b' : '#94a3b8',
+                                    lineHeight: 1.1
+                                }}>
+                                    {lk === 'L4' ? 'L4+' : lk}
+                                </span>
+                                {allowed ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1px' }}>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            value={val}
+                                            onChange={e => handleRoleLevelPctChange(roleKey, lk, e.target.value)}
+                                            style={{
+                                                width: '38px',
+                                                border: 'none',
+                                                background: 'transparent',
+                                                fontSize: '0.76rem',
+                                                fontWeight: 800,
+                                                color: '#0f172a',
+                                                textAlign: 'center',
+                                                outline: 'none',
+                                                padding: 0
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 700 }}>%</span>
+                                    </div>
+                                ) : (
+                                    <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#94a3b8', padding: '0.08rem 0' }}>
+                                        Corte
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    const cv = calc.currentView;
+
     return (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -483,7 +660,7 @@ export default function EletropostoPlanModal({
             justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(8px)', padding: '1rem'
         }}>
             <div style={{
-                background: '#ffffff', width: '100%', maxWidth: '980px', borderRadius: '30px',
+                background: '#ffffff', width: '100%', maxWidth: '1060px', borderRadius: '30px',
                 maxHeight: '94vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
                 animation: 'crmModalFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -507,10 +684,10 @@ export default function EletropostoPlanModal({
                     }
                     .ledger-row {
                         display: grid;
-                        grid-template-columns: 2.3fr 1.35fr 1.15fr 1fr;
+                        grid-template-columns: 1.9fr 2.3fr 1.05fr 0.9fr;
                         align-items: center;
                         gap: 0.75rem;
-                        padding: 0.75rem 1.25rem;
+                        padding: 0.7rem 1.25rem;
                         border-bottom: 1px solid #f1f5f9;
                         transition: background 0.15s ease;
                     }
@@ -519,9 +696,9 @@ export default function EletropostoPlanModal({
                     }
                 `}</style>
 
-                {/* HEADER PREMIUM (UI/UX CRM) */}
+                {/* HEADER PREMIUM */}
                 <div style={{
-                    padding: '1.4rem 2rem',
+                    padding: '1.35rem 2rem',
                     background: 'linear-gradient(135deg, #064e3b 0%, #1e293b 100%)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     color: '#ffffff'
@@ -544,11 +721,11 @@ export default function EletropostoPlanModal({
                                     borderRadius: '20px', background: 'rgba(59, 130, 246, 0.25)',
                                     color: '#93c5fd', border: '1px solid rgba(147, 197, 253, 0.35)'
                                 }}>
-                                    Lastro: Plano de Assinatura (Isento de Fio B)
+                                    Lastro: Plano de Assinatura (Sem Fio B) • Multinível L1 a L4+
                                 </span>
                             </div>
                             <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                                Ponto de partida = Tarifa da Concessionária menos o Desconto do Assinante do Plano vinculado
+                                Ponto de partida fixo no Plano de Assinatura vinculado (Tarifa Concessionária menos Desconto do Assinante)
                             </p>
                         </div>
                     </div>
@@ -559,39 +736,35 @@ export default function EletropostoPlanModal({
                         style={{
                             background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)',
                             cursor: 'pointer', color: '#f8fafc', padding: '0.55rem', borderRadius: '12px',
-                            display: 'flex', transition: 'all 0.2s'
+                            display: 'flex'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
                     >
                         <X size={18} />
                     </button>
                 </div>
 
-                {/* BODY SCROLLABLE */}
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div className="crm-scrollbar" style={{
-                        padding: '1.75rem 2rem', overflowY: 'auto', flex: 1,
-                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.5rem'
+                        padding: '1.65rem 2rem', overflowY: 'auto', flex: 1,
+                        background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '1.4rem'
                     }}>
 
-                        {/* BLOCO 1: VINCULAÇÃO AO PLANO DE ASSINATURA (LASTRO DO ELETROPOSTO) */}
+                        {/* BLOCO 1: ALINHAMENTO HORIZONTAL PERFEITO E LINHA ÚNICA */}
                         <div style={{
-                            background: '#ffffff', padding: '1.5rem', borderRadius: '20px',
+                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
                             border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                marginBottom: '1.1rem', flexWrap: 'wrap', gap: '0.75rem'
+                                marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem'
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
                                     <Link2 size={18} color="#059669" />
-                                    <h4 style={{ margin: 0, fontSize: '0.96rem', color: '#1e293b', fontWeight: 700 }}>
+                                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#1e293b', fontWeight: 700 }}>
                                         1. Identificação e Plano de Assinatura Vinculado (Lastro)
                                     </h4>
                                 </div>
 
-                                {/* Status Ativo */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                                     <span style={{
                                         fontSize: '0.76rem', fontWeight: 700,
@@ -620,10 +793,17 @@ export default function EletropostoPlanModal({
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.7fr', gap: '1rem' }}>
-                                {/* Nome do Plano de Eletroposto */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1.2fr 1.8fr',
+                                gap: '1rem',
+                                alignItems: 'end'
+                            }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{
+                                        display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569',
+                                        marginBottom: '0.42rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                    }}>
                                         Nome do Plano de Eletroposto *
                                     </label>
                                     <input
@@ -634,24 +814,26 @@ export default function EletropostoPlanModal({
                                         onChange={e => setNome(e.target.value)}
                                         required
                                         style={{
-                                            width: '100%', padding: '0.75rem 0.95rem', borderRadius: '12px',
+                                            width: '100%', height: '44px', padding: '0 0.95rem', borderRadius: '12px',
                                             border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#1e293b',
                                             boxSizing: 'border-box', fontWeight: 600
                                         }}
                                     />
                                 </div>
 
-                                {/* Seletor do Plano de Assinatura que serve de Lastro */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
-                                        Selecionar Plano de Assinatura Vinculado (Define o Lastro sem Fio B) *
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{
+                                        display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569',
+                                        marginBottom: '0.42rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                    }}>
+                                        Selecionar Plano de Assinatura Vinculado (Define Lastro sem Fio B) *
                                     </label>
                                     <select
                                         className="crm-input"
                                         value={selectedSubPlanId}
                                         onChange={handleSelectSubscriptionPlan}
                                         style={{
-                                            width: '100%', padding: '0.75rem 0.95rem', borderRadius: '12px',
+                                            width: '100%', height: '44px', padding: '0 0.95rem', borderRadius: '12px',
                                             border: '1px solid #cbd5e1', fontSize: '0.86rem', color: '#1e293b',
                                             background: '#ffffff', boxSizing: 'border-box', fontWeight: 600, cursor: 'pointer'
                                         }}
@@ -672,77 +854,24 @@ export default function EletropostoPlanModal({
                                     </select>
                                 </div>
                             </div>
-
-                            {/* Composição Explicativa do Lastro Herdado do Plano de Assinatura */}
-                            <div style={{
-                                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.85rem',
-                                marginTop: '1.1rem', paddingTop: '1.1rem', borderTop: '1px solid #f1f5f9'
-                            }}>
-                                <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, display: 'block' }}>
-                                        Origem ({concessionariaOrigem} - {descontoOrigemPct}%)
-                                    </span>
-                                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
-                                        R$ {formatCurrencyUnit(tarifaOrigem, 4)} - {formatPct(descontoOrigemPct)}% = R$ {formatCurrencyUnit(calc.vLastro, 4)}
-                                    </span>
-                                </div>
-
-                                <div style={{ background: '#ecfdf5', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #a7f3d0' }}>
-                                    <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: 700, display: 'block' }}>
-                                        Fio B (Isento no Eletroposto)
-                                    </span>
-                                    <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#059669' }}>
-                                        Já deduzido na Assinatura
-                                    </span>
-                                </div>
-
-                                <div style={{ background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                    <span style={{ fontSize: '0.72rem', color: '#1d4ed8', fontWeight: 700, display: 'block' }}>
-                                        (=) Base Líquida Eletroposto
-                                    </span>
-                                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1e40af' }}>
-                                        R$ {formatCurrencyUnit(calc.baseLiquida, 4)} <small style={{ fontSize: '0.72rem' }}>({formatPct(calc.pctRealBaseLiquida)}%)</small>
-                                    </span>
-                                </div>
-
-                                <div style={{
-                                    background: calc.isDeficitario ? '#fef2f2' : '#f0fdf4',
-                                    padding: '0.75rem 1rem', borderRadius: '12px',
-                                    border: `1px solid ${calc.isDeficitario ? '#ef4444' : '#22c55e'}`
-                                }}>
-                                    <span style={{
-                                        fontSize: '0.72rem',
-                                        color: calc.isDeficitario ? '#b91c1c' : '#15803d',
-                                        fontWeight: 700, display: 'block'
-                                    }}>
-                                        Margem Livre / Excedente
-                                    </span>
-                                    <span style={{
-                                        fontSize: '1rem', fontWeight: 800,
-                                        color: calc.isDeficitario ? '#dc2626' : '#16a34a'
-                                    }}>
-                                        {calc.margemLivre >= 0 ? '+ ' : ''}R$ {formatCurrencyUnit(calc.margemLivre, 6)}
-                                    </span>
-                                </div>
-                            </div>
                         </div>
 
-                        {/* BLOCO 2: RECOMPENSAS E DEMONSTRATIVO DO ELETROPOSTO */}
+                        {/* BLOCO 2: DEMONSTRATIVO MULTINÍVEL DO ELETROPOSTO */}
                         <div style={{
-                            background: '#ffffff', padding: '1.5rem', borderRadius: '20px',
+                            background: '#ffffff', padding: '1.4rem 1.5rem', borderRadius: '20px',
                             border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem'
+                                marginBottom: '1.15rem', flexWrap: 'wrap', gap: '0.75rem'
                             }}>
                                 <div>
                                     <h4 style={{ margin: 0, fontSize: '1rem', color: '#0f172a', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <Sparkles size={19} color="#059669" />
-                                        2. Estrutura de Recompensas do Eletroposto
+                                        2. Estrutura de Recompensas & Níveis do Eletroposto (Sem Fio B)
                                     </h4>
-                                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                                        Sem incidência de Fio B • Cargos: <strong>B2W</strong>, <strong>Líder</strong>, <strong>Parceiro Power (PPE / PPP / PPF)</strong> e <strong>Assinante Conect</strong>
+                                    <p style={{ margin: '0.22rem 0 0 0', fontSize: '0.79rem', color: '#64748b' }}>
+                                        Parametrize quantos níveis cada função recebe e acompanhe o Superávit de L1 a L4+
                                     </p>
                                 </div>
 
@@ -750,8 +879,8 @@ export default function EletropostoPlanModal({
                                     <div style={{
                                         display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
                                         background: '#ecfdf5', border: '1px solid #6ee7b7',
-                                        color: '#047857', padding: '0.4rem 0.85rem', borderRadius: '12px',
-                                        fontSize: '0.76rem', fontWeight: 700
+                                        color: '#047857', padding: '0.38rem 0.85rem', borderRadius: '12px',
+                                        fontSize: '0.75rem', fontWeight: 700
                                     }}>
                                         <Activity size={15} color="#059669" />
                                         Vigência: Vinculada ao Status Ativo no Sistema
@@ -782,73 +911,36 @@ export default function EletropostoPlanModal({
 
                             {recompensasAtivo ? (
                                 <>
-                                    {/* Modalidades */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.85rem', marginBottom: '1.5rem' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setTipoRecompensa('recorrente')}
-                                            style={{
-                                                padding: '0.9rem 1.1rem', borderRadius: '14px', border: '2px solid',
-                                                borderColor: tipoRecompensa === 'recorrente' ? '#22c55e' : '#e2e8f0',
-                                                background: tipoRecompensa === 'recorrente' ? '#f0fdf4' : '#ffffff',
-                                                cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: tipoRecompensa === 'recorrente' ? '#15803d' : '#1e293b' }}>
-                                                    Recorrente (Por kWh Recarregado)
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.85rem', marginBottom: '1.35rem' }}>
+                                        {[
+                                            { id: 'recorrente', title: 'Recorrente (Multinível L1 a L4+)', sub: 'Repasse contínuo enquanto a entidade estiver Ativa', color: '#15803d', border: '#22c55e', bg: '#f0fdf4' },
+                                            { id: 'start', title: 'Start (Adesão Eletroposto)', sub: 'Bonificação nos ciclos iniciais (1º, 2º ou 3º ciclo)', color: '#1d4ed8', border: '#3b82f6', bg: '#eff6ff' },
+                                            { id: 'hibrido', title: 'Híbrido (Start + Recorrente)', sub: 'Bônus de entrada + Recorrência por níveis', color: '#6d28d9', border: '#8b5cf6', bg: '#f5f3ff' }
+                                        ].map(mod => (
+                                            <button
+                                                key={mod.id}
+                                                type="button"
+                                                onClick={() => setTipoRecompensa(mod.id)}
+                                                style={{
+                                                    padding: '0.85rem 1.1rem', borderRadius: '14px', border: '2px solid',
+                                                    borderColor: tipoRecompensa === mod.id ? mod.border : '#e2e8f0',
+                                                    background: tipoRecompensa === mod.id ? mod.bg : '#ffffff',
+                                                    cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.22rem' }}>
+                                                    <span style={{ fontWeight: 800, fontSize: '0.86rem', color: tipoRecompensa === mod.id ? mod.color : '#1e293b' }}>
+                                                        {mod.title}
+                                                    </span>
+                                                    {tipoRecompensa === mod.id && <Check size={16} color={mod.color} />}
+                                                </div>
+                                                <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block' }}>
+                                                    {mod.sub}
                                                 </span>
-                                                {tipoRecompensa === 'recorrente' && <Check size={16} color="#15803d" />}
-                                            </div>
-                                            <span style={{ fontSize: '0.73rem', color: '#64748b', display: 'block' }}>
-                                                Repasse contínuo enquanto a entidade estiver Ativa
-                                            </span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setTipoRecompensa('start')}
-                                            style={{
-                                                padding: '0.9rem 1.1rem', borderRadius: '14px', border: '2px solid',
-                                                borderColor: tipoRecompensa === 'start' ? '#3b82f6' : '#e2e8f0',
-                                                background: tipoRecompensa === 'start' ? '#eff6ff' : '#ffffff',
-                                                cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: tipoRecompensa === 'start' ? '#1d4ed8' : '#1e293b' }}>
-                                                    Start (Adesão Eletroposto)
-                                                </span>
-                                                {tipoRecompensa === 'start' && <Check size={16} color="#1d4ed8" />}
-                                            </div>
-                                            <span style={{ fontSize: '0.73rem', color: '#64748b', display: 'block' }}>
-                                                Bonificação nos ciclos iniciais (1º, 2º ou 3º ciclo)
-                                            </span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setTipoRecompensa('hibrido')}
-                                            style={{
-                                                padding: '0.9rem 1.1rem', borderRadius: '14px', border: '2px solid',
-                                                borderColor: tipoRecompensa === 'hibrido' ? '#8b5cf6' : '#e2e8f0',
-                                                background: tipoRecompensa === 'hibrido' ? '#f5f3ff' : '#ffffff',
-                                                cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: tipoRecompensa === 'hibrido' ? '#6d28d9' : '#1e293b' }}>
-                                                    Híbrido (Start + Recorrente)
-                                                </span>
-                                                {tipoRecompensa === 'hibrido' && <Check size={16} color="#6d28d9" />}
-                                            </div>
-                                            <span style={{ fontSize: '0.73rem', color: '#64748b', display: 'block' }}>
-                                                Bônus de entrada + Recorrência vitalícia (status ativo)
-                                            </span>
-                                        </button>
+                                            </button>
+                                        ))}
                                     </div>
 
-                                    {/* DEMONSTRATIVO RECORRENTE DO ELETROPOSTO (SEM FIO B) */}
                                     {(tipoRecompensa === 'recorrente' || tipoRecompensa === 'hibrido') && (
                                         <div style={{
                                             borderRadius: '18px', border: '1px solid #cbd5e1',
@@ -856,84 +948,127 @@ export default function EletropostoPlanModal({
                                             boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
                                             marginBottom: tipoRecompensa === 'hibrido' ? '1.5rem' : 0
                                         }}>
+                                            {/* Barra Superior do Demonstrativo com Seletor de Nível */}
                                             <div style={{
-                                                padding: '1rem 1.25rem',
+                                                padding: '0.9rem 1.25rem',
                                                 background: 'linear-gradient(90deg, #064e3b 0%, #0f172a 100%)',
                                                 color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                flexWrap: 'wrap', gap: '0.5rem'
+                                                flexWrap: 'wrap', gap: '0.75rem'
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                    <TrendingUp size={18} color="#34d399" />
-                                                    <span style={{ fontWeight: 800, fontSize: '0.9rem', letterSpacing: '0.01em' }}>
-                                                        Demonstrativo Dinâmico — Eletroposto (Sem Fio B • Lastro: {planoVinculadoNome})
-                                                    </span>
+                                                    <GitBranch size={18} color="#34d399" />
+                                                    <div>
+                                                        <span style={{ fontWeight: 800, fontSize: '0.9rem', display: 'block' }}>
+                                                            Demonstrativo Eletroposto — {LEVEL_LABELS[activeLevelView].short}: {LEVEL_LABELS[activeLevelView].desc}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.72rem', color: '#a7f3d0' }}>
+                                                            Fio B isento (já deduzido no Plano de Assinatura)
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <span style={{
-                                                    fontSize: '0.74rem', color: '#d1fae5', background: 'rgba(255,255,255,0.1)',
-                                                    padding: '0.25rem 0.65rem', borderRadius: '8px'
+
+                                                <div style={{
+                                                    display: 'inline-flex', background: 'rgba(15, 23, 42, 0.65)',
+                                                    padding: '0.25rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.12)',
+                                                    gap: '0.25rem'
                                                 }}>
-                                                    Fio B já deduzido no Plano de Assinatura
-                                                </span>
+                                                    {LEVEL_KEYS.map(lk => {
+                                                        const isSelected = activeLevelView === lk;
+                                                        const lvSuperavit = calc.byLevel[lk].margemLivre;
+                                                        const lvDeficit = calc.byLevel[lk].isLevelDeficit;
+                                                        return (
+                                                            <button
+                                                                key={lk}
+                                                                type="button"
+                                                                onClick={() => setActiveLevelView(lk)}
+                                                                style={{
+                                                                    padding: '0.35rem 0.7rem',
+                                                                    borderRadius: '7px',
+                                                                    border: 'none',
+                                                                    cursor: 'pointer',
+                                                                    background: isSelected ? '#10b981' : 'transparent',
+                                                                    color: isSelected ? '#ffffff' : '#cbd5e1',
+                                                                    fontWeight: 800,
+                                                                    fontSize: '0.75rem',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.35rem'
+                                                                }}
+                                                            >
+                                                                <span>{lk === 'L4' ? 'Nível L4+' : `Nível ${lk}`}</span>
+                                                                <span style={{
+                                                                    fontSize: '0.66rem',
+                                                                    padding: '0.05rem 0.35rem',
+                                                                    borderRadius: '4px',
+                                                                    background: lvDeficit
+                                                                        ? 'rgba(239, 68, 68, 0.25)'
+                                                                        : isSelected
+                                                                            ? 'rgba(255,255,255,0.2)'
+                                                                            : 'rgba(34, 197, 94, 0.2)',
+                                                                    color: lvDeficit ? '#fca5a5' : isSelected ? '#ffffff' : '#4ade80'
+                                                                }}>
+                                                                    {lvSuperavit >= 0 ? `+${formatPct(calc.byLevel[lk].pctRealMargemLivre, 1)}%` : 'Déficit'}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
 
                                             {/* Cabeçalho da Tabela */}
                                             <div style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: '2.3fr 1.35fr 1.15fr 1fr',
+                                                gridTemplateColumns: '1.9fr 2.3fr 1.05fr 0.9fr',
                                                 gap: '0.75rem',
-                                                padding: '0.75rem 1.25rem',
+                                                padding: '0.7rem 1.25rem',
                                                 background: '#f1f5f9',
                                                 borderBottom: '1px solid #e2e8f0',
-                                                fontSize: '0.74rem',
+                                                fontSize: '0.73rem',
                                                 fontWeight: 800,
                                                 color: '#475569',
                                                 textTransform: 'uppercase',
                                                 letterSpacing: '0.03em'
                                             }}>
                                                 <div>Item / Destinação</div>
-                                                <div style={{ textAlign: 'center' }}>% Referência</div>
-                                                <div style={{ textAlign: 'right' }}>Valor Unitário (R$/kWh)</div>
+                                                <div style={{ textAlign: 'center' }}>Direito de Níveis & Alíquotas (% s/ Base)</div>
+                                                <div style={{ textAlign: 'right' }}>Valor {activeLevelView === 'L4' ? 'L4+' : activeLevelView} (R$/kWh)</div>
                                                 <div style={{ textAlign: 'right' }}>% Real s/ Lastro</div>
                                             </div>
 
-                                            {/* 1º ITEM: LASTRO DO PLANO DE ASSINATURA (TARIFA - DESCONTO DO PLANO) */}
+                                            {/* 1º ITEM: LASTRO DO PLANO DE ASSINATURA (SOMENTE LEITURA) */}
                                             <div className="ledger-row" style={{ background: '#ffffff' }}>
-                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem', display: 'flex', flexDirection: 'column' }}>
-                                                    <span>Lastro: {planoVinculadoNome}</span>
-                                                    <small style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
-                                                        Tarifa {concessionariaOrigem} (R$ {formatCurrencyUnit(tarifaOrigem, 4)}) - Desconto Plano ({formatPct(descontoOrigemPct)}%)
+                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.86rem', display: 'flex', flexDirection: 'column' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                        <span>Lastro: {planoVinculadoNome}</span>
+                                                        <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.22rem',
+                                                            fontSize: '0.65rem', background: '#f1f5f9', color: '#64748b',
+                                                            padding: '0.1rem 0.4rem', borderRadius: '6px', fontWeight: 600
+                                                        }}>
+                                                            <Lock size={10} /> Fixo Plano Assinatura
+                                                        </span>
+                                                    </div>
+                                                    <small style={{ fontSize: '0.71rem', color: '#64748b', fontWeight: 600 }}>
+                                                        Tarifa {concessionariaOrigem} (R$ {formatCurrencyUnit(tarifaOrigem, 4)}) - Desconto ({formatPct(descontoOrigemPct)}%)
                                                     </small>
                                                 </div>
-                                                <div style={{ textAlign: 'center', fontSize: '0.84rem', fontWeight: 700, color: '#334155' }}>
-                                                    100% (Sem Fio B)
+                                                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#047857' }}>
+                                                    100% (Isento de Fio B)
                                                 </div>
-                                                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.3rem' }}>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>R$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.0001"
-                                                        min="0"
-                                                        className="crm-input"
-                                                        value={valorLastroPlano}
-                                                        onChange={e => setValorLastroPlano(e.target.value)}
-                                                        style={{
-                                                            width: '96px', padding: '0.38rem 0.55rem', borderRadius: '8px',
-                                                            border: '1px solid #cbd5e1', fontSize: '0.86rem', fontWeight: 800,
-                                                            textAlign: 'right', color: '#0f172a'
-                                                        }}
-                                                    />
+                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                                                    R$ {formatCurrencyUnit(calc.vLastro, 4)}
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: '0.86rem' }}>
                                                     100,00%
                                                 </div>
                                             </div>
 
-                                            {/* 2º ITEM: (-) DESCONTO ELETROPOSTO / ASSINANTE */}
+                                            {/* 2º ITEM: (-) DESCONTO DO ASSINANTE (ELETROPOSTO) */}
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
                                                     (-) Desconto do Assinante (Eletroposto)
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                                                     <input
                                                         type="number"
                                                         step="0.01"
@@ -943,7 +1078,7 @@ export default function EletropostoPlanModal({
                                                         value={descontoEletroposto}
                                                         onChange={e => setDescontoEletroposto(e.target.value)}
                                                         style={{
-                                                            width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
+                                                            width: '78px', padding: '0.36rem 0.5rem', borderRadius: '8px',
                                                             border: '1px solid #6ee7b7', background: '#ecfdf5',
                                                             fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', color: '#047857'
                                                         }}
@@ -964,13 +1099,13 @@ export default function EletropostoPlanModal({
                                                 borderTop: '1px solid #a7f3d0',
                                                 borderBottom: '2px solid #a7f3d0'
                                             }}>
-                                                <div style={{ fontWeight: 800, color: '#047857', fontSize: '0.92rem' }}>
+                                                <div style={{ fontWeight: 800, color: '#047857', fontSize: '0.9rem' }}>
                                                     (=) Base de Cálculo Líquida
                                                 </div>
-                                                <div style={{ textAlign: 'center', color: '#047857', fontWeight: 700 }}>
-                                                    —
+                                                <div style={{ textAlign: 'center', color: '#047857', fontWeight: 700, fontSize: '0.8rem' }}>
+                                                    Base sobre a qual incidem os níveis L1 a L4+
                                                 </div>
-                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>
+                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>
                                                     R$ {formatCurrencyUnit(calc.baseLiquida, 4)}
                                                 </div>
                                                 <div style={{ textAlign: 'right', fontWeight: 800, color: '#047857', fontSize: '0.88rem' }}>
@@ -978,249 +1113,193 @@ export default function EletropostoPlanModal({
                                                 </div>
                                             </div>
 
-                                            {/* 4º ITEM: (-) B2W (GESTÃO / PLATAFORMA) */}
+                                            {/* 4º ITEM: (-) B2W */}
                                             <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
                                                     (-) B2W (Gestão / Plataforma)
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        max="100"
-                                                        className="crm-input"
-                                                        value={regrasRecorrente.b2w}
-                                                        onChange={e => handleRecorrentePctChange('b2w', e.target.value)}
-                                                        style={{
-                                                            width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
-                                                            border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                            textAlign: 'center', color: '#0f172a'
-                                                        }}
-                                                    />
-                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                <div>
+                                                    {renderMultilevelCenterControl('b2w', [
+                                                        { val: 4, label: 'Todos (L1 a L4+)' },
+                                                        { val: 3, label: 'Até 3 Níveis (L3)' },
+                                                        { val: 2, label: 'Até 2 Níveis (L2)' },
+                                                        { val: 1, label: 'Apenas L1' }
+                                                    ])}
                                                 </div>
-                                                <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 600 }}>
-                                                    - R$ {formatCurrencyUnit(calc.vB2W, 5)}
+                                                <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 700 }}>
+                                                    - R$ {formatCurrencyUnit(cv.vB2W, 5)}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                    {formatPct(calc.pctRealB2W)}%
+                                                    {formatPct(cv.pctRealB2W)}%
                                                 </div>
                                             </div>
 
                                             {/* 5º ITEM: (-) LÍDER */}
                                             <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem' }}>
-                                                    (-) Líder
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem' }}>
+                                                    (-) Líder / Coordenador
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        max="100"
-                                                        className="crm-input"
-                                                        value={regrasRecorrente.lider}
-                                                        onChange={e => handleRecorrentePctChange('lider', e.target.value)}
-                                                        style={{
-                                                            width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
-                                                            border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                            textAlign: 'center', color: '#0f172a'
-                                                        }}
-                                                    />
-                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                <div>
+                                                    {renderMultilevelCenterControl('lider', [
+                                                        { val: 3, label: '3 Níveis (L1-L3)' },
+                                                        { val: 2, label: '2 Níveis (L1-L2)' },
+                                                        { val: 1, label: '1 Nível (L1)' },
+                                                        { val: 4, label: 'Todos (L1-L4+)' },
+                                                        { val: 0, label: 'Sem Recorrência' }
+                                                    ])}
                                                 </div>
-                                                <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 600 }}>
-                                                    - R$ {formatCurrencyUnit(calc.vLider, 6)}
+                                                <div style={{ textAlign: 'right', color: cv.pctLider > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 700 }}>
+                                                    {cv.pctLider > 0 ? `- R$ ${formatCurrencyUnit(cv.vLider, 6)}` : 'R$ 0,0000 (Corte)'}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                    {formatPct(calc.pctRealLider)}%
+                                                    {formatPct(cv.pctRealLider)}%
                                                 </div>
                                             </div>
 
-                                            {/* 6º GRUPO: (-) PARCEIRO POWER (PPE, PPP e PPF) */}
+                                            {/* 6º GRUPO: (-) PARCEIRO POWER */}
                                             <div style={{ background: '#fafaf9', borderBottom: '1px solid #e2e8f0' }}>
                                                 <div style={{
-                                                    padding: '0.55rem 1.25rem',
+                                                    padding: '0.5rem 1.25rem',
                                                     background: '#f8fafc',
                                                     borderBottom: '1px dashed #e2e8f0',
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center'
                                                 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 800, color: '#1e293b' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.81rem', fontWeight: 800, color: '#1e293b' }}>
                                                         <Award size={15} color="#059669" />
-                                                        <span>(-) Categorias Parceiro Power</span>
+                                                        <span>(-) Categorias Parceiro Power (PPE / PPP / PPF)</span>
                                                     </div>
                                                     <span style={{
-                                                        fontSize: '0.72rem', fontWeight: 700, color: '#047857',
+                                                        fontSize: '0.71rem', fontWeight: 700, color: '#047857',
                                                         background: '#ecfdf5', padding: '0.15rem 0.55rem', borderRadius: '6px',
                                                         border: '1px solid #a7f3d0'
                                                     }}>
-                                                        Teto na Margem: {calc.tetoLabel} ({formatPct(calc.pctParceiroPowerTeto)}% s/ Base = - R$ {formatCurrencyUnit(calc.vParceiroPowerTeto, 5)})
+                                                        Teto no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {cv.tetoLabel} ({formatPct(cv.pctParceiroPowerTeto)}% s/ Base = - R$ {formatCurrencyUnit(cv.vParceiroPowerTeto, 5)})
                                                     </span>
                                                 </div>
 
                                                 {/* PPE */}
-                                                <div className="ledger-row" style={{ paddingLeft: '2rem' }}>
-                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <div className="ledger-row" style={{ paddingLeft: '1.75rem' }}>
+                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                         <span style={{
                                                             background: '#fef3c7', color: '#b45309', fontWeight: 800,
-                                                            fontSize: '0.7rem', padding: '0.12rem 0.45rem', borderRadius: '6px',
+                                                            fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '6px',
                                                             border: '1px solid #fde68a'
                                                         }}>
                                                             PPE
                                                         </span>
-                                                        <span>(-) Parceiro Power Embaixador (PPE)</span>
+                                                        <span>Parceiro Power Embaixador</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            className="crm-input"
-                                                            value={regrasRecorrente.ppe}
-                                                            onChange={e => handleRecorrentePctChange('ppe', e.target.value)}
-                                                            style={{
-                                                                width: '72px', padding: '0.35rem 0.5rem', borderRadius: '8px',
-                                                                border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                                textAlign: 'center', color: '#0f172a'
-                                                            }}
-                                                        />
-                                                        <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                    <div>
+                                                        {renderMultilevelCenterControl('ppe', [
+                                                            { val: 2, label: '2 Níveis (L1-L2)' },
+                                                            { val: 3, label: '3 Níveis (L1-L3)' },
+                                                            { val: 1, label: '1 Nível (L1)' },
+                                                            { val: 0, label: 'Desativado' }
+                                                        ])}
                                                     </div>
-                                                    <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                        - R$ {formatCurrencyUnit(calc.vPPE, 5)}
+                                                    <div style={{ textAlign: 'right', color: cv.pctPPE > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
+                                                        {cv.pctPPE > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPE, 5)}` : 'R$ 0,0000 (Corte)'}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.84rem', fontWeight: 600 }}>
-                                                        {formatPct(calc.pctRealPPE)}%
+                                                        {formatPct(cv.pctRealPPE)}%
                                                     </div>
                                                 </div>
 
                                                 {/* PPP */}
-                                                <div className="ledger-row" style={{ paddingLeft: '2rem' }}>
-                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <div className="ledger-row" style={{ paddingLeft: '1.75rem' }}>
+                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                         <span style={{
                                                             background: '#e0f2fe', color: '#0369a1', fontWeight: 800,
-                                                            fontSize: '0.7rem', padding: '0.12rem 0.45rem', borderRadius: '6px',
+                                                            fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '6px',
                                                             border: '1px solid #bae6fd'
                                                         }}>
                                                             PPP
                                                         </span>
-                                                        <span>(-) Parceiro Power Premium (PPP)</span>
+                                                        <span>Parceiro Power Premium</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            className="crm-input"
-                                                            value={regrasRecorrente.ppp}
-                                                            onChange={e => handleRecorrentePctChange('ppp', e.target.value)}
-                                                            style={{
-                                                                width: '72px', padding: '0.35rem 0.5rem', borderRadius: '8px',
-                                                                border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                                textAlign: 'center', color: '#0f172a'
-                                                            }}
-                                                        />
-                                                        <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                    <div>
+                                                        {renderMultilevelCenterControl('ppp', [
+                                                            { val: 2, label: '2 Níveis (L1-L2)' },
+                                                            { val: 3, label: '3 Níveis (L1-L3)' },
+                                                            { val: 1, label: '1 Nível (L1)' },
+                                                            { val: 0, label: 'Desativado' }
+                                                        ])}
                                                     </div>
-                                                    <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                        - R$ {formatCurrencyUnit(calc.vPPP, 5)}
+                                                    <div style={{ textAlign: 'right', color: cv.pctPPP > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
+                                                        {cv.pctPPP > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPP, 5)}` : 'R$ 0,0000 (Corte)'}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.84rem', fontWeight: 600 }}>
-                                                        {formatPct(calc.pctRealPPP)}%
+                                                        {formatPct(cv.pctRealPPP)}%
                                                     </div>
                                                 </div>
 
                                                 {/* PPF */}
-                                                <div className="ledger-row" style={{ paddingLeft: '2rem', borderBottom: 'none' }}>
-                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <div className="ledger-row" style={{ paddingLeft: '1.75rem', borderBottom: 'none' }}>
+                                                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                         <span style={{
                                                             background: '#f1f5f9', color: '#475569', fontWeight: 800,
-                                                            fontSize: '0.7rem', padding: '0.12rem 0.45rem', borderRadius: '6px',
+                                                            fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: '6px',
                                                             border: '1px solid #cbd5e1'
                                                         }}>
                                                             PPF
                                                         </span>
-                                                        <span>(-) Parceiro Power Free (PPF)</span>
+                                                        <span>Parceiro Power Free</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                        <input
-                                                            type="number"
-                                                            step="0.01"
-                                                            min="0"
-                                                            max="100"
-                                                            className="crm-input"
-                                                            value={regrasRecorrente.ppf}
-                                                            onChange={e => handleRecorrentePctChange('ppf', e.target.value)}
-                                                            style={{
-                                                                width: '72px', padding: '0.35rem 0.5rem', borderRadius: '8px',
-                                                                border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                                textAlign: 'center', color: '#0f172a'
-                                                            }}
-                                                        />
-                                                        <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                    <div>
+                                                        {renderMultilevelCenterControl('ppf', [
+                                                            { val: 1, label: '1 Nível (L1)' },
+                                                            { val: 2, label: '2 Níveis (L1-L2)' },
+                                                            { val: 0, label: 'Desativado' }
+                                                        ])}
                                                     </div>
-                                                    <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                        - R$ {formatCurrencyUnit(calc.vPPF, 5)}
+                                                    <div style={{ textAlign: 'right', color: cv.pctPPF > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
+                                                        {cv.pctPPF > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPF, 5)}` : 'R$ 0,0000 (Corte)'}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.84rem', fontWeight: 600 }}>
-                                                        {formatPct(calc.pctRealPPF)}%
+                                                        {formatPct(cv.pctRealPPF)}%
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* 7º ITEM: (-) ASSINANTE CONECT */}
                                             <div className="ledger-row">
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                     <Users size={15} color="#10b981" />
                                                     <span>(-) Assinante Conect</span>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        max="100"
-                                                        className="crm-input"
-                                                        value={regrasRecorrente.assinante_conect}
-                                                        onChange={e => handleRecorrentePctChange('assinante_conect', e.target.value)}
-                                                        style={{
-                                                            width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
-                                                            border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
-                                                            textAlign: 'center', color: '#0f172a'
-                                                        }}
-                                                    />
-                                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>% s/ Base</span>
+                                                <div>
+                                                    {renderMultilevelCenterControl('assinante_conect', [
+                                                        { val: 1, label: '1 Nível Direto (L2+)' },
+                                                        { val: 0, label: 'Sem MGM (0%)' }
+                                                    ])}
                                                 </div>
-                                                <div style={{ textAlign: 'right', color: '#334155', fontSize: '0.86rem', fontWeight: 600 }}>
-                                                    - R$ {formatCurrencyUnit(calc.vAssinanteConect, 5)}
+                                                <div style={{ textAlign: 'right', color: cv.pctAssinanteConect > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 600 }}>
+                                                    {cv.pctAssinanteConect > 0 ? `- R$ ${formatCurrencyUnit(cv.vAssinanteConect, 5)}` : 'R$ 0,0000 (N/A L1)'}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
-                                                    {formatPct(calc.pctRealAssinanteConect)}%
+                                                    {formatPct(cv.pctRealAssinanteConect)}%
                                                 </div>
                                             </div>
 
-                                            {/* 8º ITEM: (=) LÍQUIDO EFETIVO DO FORNECEDOR / OPERADOR */}
+                                            {/* 8º ITEM: (=) LÍQUIDO EFETIVO DO FORNECEDOR */}
                                             <div className="ledger-row" style={{
                                                 background: '#f8fafc',
                                                 borderTop: '2px solid #cbd5e1',
                                                 borderBottom: '1px solid #cbd5e1'
                                             }}>
-                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>
-                                                    (=) Líquido Efetivo do Fornecedor
+                                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                                                    (=) Líquido Efetivo do Fornecedor ({activeLevelView === 'L4' ? 'L4+' : activeLevelView})
                                                 </div>
-                                                <div style={{ textAlign: 'center', color: '#64748b', fontWeight: 700 }}>
-                                                    —
+                                                <div style={{ textAlign: 'center', color: '#475569', fontWeight: 700, fontSize: '0.78rem' }}>
+                                                    Deduções no {activeLevelView === 'L4' ? 'L4+' : activeLevelView}: {formatPct(cv.totalPctSobreBase)}% s/ Base (- R$ {formatCurrencyUnit(cv.totalDeducoesBase, 5)})
                                                 </div>
-                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.94rem' }}>
-                                                    R$ {formatCurrencyUnit(calc.liquidoEfetivoFornecedor, 6)}
+                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.92rem' }}>
+                                                    R$ {formatCurrencyUnit(cv.liquidoEfetivoFornecedor, 6)}
                                                 </div>
-                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
-                                                    {formatPct(calc.pctRealLiquidoFornecedor)}%
+                                                <div style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>
+                                                    {formatPct(cv.pctRealLiquidoFornecedor)}%
                                                 </div>
                                             </div>
 
@@ -1239,7 +1318,7 @@ export default function EletropostoPlanModal({
                                                         value={pisoFornecedorPct}
                                                         onChange={e => setPisoFornecedorPct(e.target.value)}
                                                         style={{
-                                                            width: '72px', padding: '0.38rem 0.5rem', borderRadius: '8px',
+                                                            width: '72px', padding: '0.35rem 0.5rem', borderRadius: '8px',
                                                             border: '1px solid #cbd5e1', fontSize: '0.84rem', fontWeight: 700,
                                                             textAlign: 'center', color: '#0f172a'
                                                         }}
@@ -1254,164 +1333,107 @@ export default function EletropostoPlanModal({
                                                 </div>
                                             </div>
 
-                                            {/* 10º ITEM: MARGEM LIVRE / EXCEDENTE */}
+                                            {/* 10º ITEM: MARGEM LIVRE / SUPERÁVIT */}
                                             <div className="ledger-row" style={{
-                                                background: calc.isDeficitario ? '#fef2f2' : '#f0fdf4',
-                                                borderTop: `2px solid ${calc.isDeficitario ? '#ef4444' : '#22c55e'}`,
-                                                borderBottom: 'none',
-                                                padding: '1rem 1.25rem'
+                                                background: cv.isLevelDeficit ? '#fef2f2' : '#f0fdf4',
+                                                borderTop: `2px solid ${cv.isLevelDeficit ? '#ef4444' : '#22c55e'}`,
+                                                borderBottom: '1px solid #e2e8f0',
+                                                padding: '0.9rem 1.25rem'
                                             }}>
                                                 <div style={{
                                                     fontWeight: 900,
-                                                    color: calc.isDeficitario ? '#b91c1c' : '#15803d',
-                                                    fontSize: '0.95rem',
+                                                    color: cv.isLevelDeficit ? '#b91c1c' : '#15803d',
+                                                    fontSize: '0.92rem',
                                                     display: 'flex', alignItems: 'center', gap: '0.5rem'
                                                 }}>
-                                                    {calc.isDeficitario ? (
-                                                        <AlertTriangle size={18} color="#dc2626" />
-                                                    ) : (
-                                                        <ShieldCheck size={18} color="#16a34a" />
-                                                    )}
-                                                    <span>MARGEM LIVRE / EXCEDENTE</span>
+                                                    {cv.isLevelDeficit ? <AlertTriangle size={18} color="#dc2626" /> : <ShieldCheck size={18} color="#16a34a" />}
+                                                    <span>MARGEM LIVRE / SUPERÁVIT ({activeLevelView === 'L4' ? 'NÍVEL L4+' : `NÍVEL ${activeLevelView}`})</span>
                                                 </div>
-                                                <div style={{ textAlign: 'center', fontWeight: 700, color: calc.isDeficitario ? '#dc2626' : '#15803d', fontSize: '0.78rem' }}>
-                                                    {calc.isDeficitario ? 'DÉFICIT BLOQUEADO' : 'SUPERÁVIT VALIDADO'}
+                                                <div style={{ textAlign: 'center', fontWeight: 700, color: cv.isLevelDeficit ? '#dc2626' : '#15803d', fontSize: '0.78rem' }}>
+                                                    {cv.isLevelDeficit ? 'DÉFICIT DETECTADO NESTE NÍVEL' : 'SUPERÁVIT OPERACIONAL GARANTIDO'}
                                                 </div>
                                                 <div style={{
                                                     textAlign: 'right', fontWeight: 900,
-                                                    color: calc.isDeficitario ? '#dc2626' : '#15803d',
-                                                    fontSize: '1rem'
+                                                    color: cv.isLevelDeficit ? '#dc2626' : '#15803d',
+                                                    fontSize: '0.98rem'
                                                 }}>
-                                                    {calc.margemLivre >= 0 ? '+ ' : '- '}R$ {formatCurrencyUnit(Math.abs(calc.margemLivre), 6)}
+                                                    {cv.margemLivre >= 0 ? '+ ' : '- '}R$ {formatCurrencyUnit(Math.abs(cv.margemLivre), 6)}
                                                 </div>
                                                 <div style={{
                                                     textAlign: 'right', fontWeight: 900,
-                                                    color: calc.isDeficitario ? '#dc2626' : '#15803d',
-                                                    fontSize: '0.95rem'
+                                                    color: cv.isLevelDeficit ? '#dc2626' : '#15803d',
+                                                    fontSize: '0.94rem'
                                                 }}>
-                                                    {calc.pctRealMargemLivre >= 0 ? '+ ' : '- '}{formatPct(Math.abs(calc.pctRealMargemLivre))}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* PAINEL START */}
-                                    {(tipoRecompensa === 'start' || tipoRecompensa === 'hibrido') && (
-                                        <div style={{
-                                            border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: '18px',
-                                            padding: '1.25rem'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{
-                                                        background: '#2563eb', color: 'white', fontSize: '0.7rem',
-                                                        fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '6px', textTransform: 'uppercase'
-                                                    }}>
-                                                        Start
-                                                    </span>
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                        Distribuição nos Ciclos Iniciais (% sobre Base Líquida: R$ {formatCurrencyUnit(calc.baseLiquida, 4)}/kWh)
-                                                    </span>
+                                                    {cv.pctRealMargemLivre >= 0 ? '+ ' : '- '}{formatPct(Math.abs(cv.pctRealMargemLivre))}%
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                                                {[1, 2, 3].map(fatNum => {
-                                                    const isChecked = faturasElegiveisStart.includes(fatNum);
-                                                    return (
-                                                        <button
-                                                            key={fatNum}
-                                                            type="button"
-                                                            onClick={() => toggleFaturaStart(fatNum)}
-                                                            style={{
-                                                                flex: 1, padding: '0.6rem 0.85rem', borderRadius: '10px',
-                                                                border: isChecked ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                                                                background: isChecked ? '#ffffff' : '#f8fafc',
-                                                                color: isChecked ? '#1d4ed8' : '#64748b',
-                                                                fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem'
-                                                            }}
-                                                        >
-                                                            <div style={{
-                                                                width: '16px', height: '16px', borderRadius: '4px',
-                                                                background: isChecked ? '#2563eb' : 'transparent',
-                                                                border: isChecked ? 'none' : '1.5px solid #94a3b8',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                            }}>
-                                                                {isChecked && <Check size={12} color="white" />}
-                                                            </div>
-                                                            Ciclo {fatNum}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                                {faturasElegiveisStart.map(fatNum => {
-                                                    const r = regrasStart[fatNum] || {};
-                                                    const maxPP = Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0, parseFloat(r.ppf) || 0);
-                                                    const somaPct = (parseFloat(r.b2w) || 0) + (parseFloat(r.lider) || 0) + maxPP + (parseFloat(r.assinante_conect) || 0);
-                                                    const excedeu = somaPct > 100;
-
-                                                    return (
-                                                        <div key={fatNum} style={{
-                                                            background: '#ffffff', padding: '1rem 1.25rem', borderRadius: '12px',
-                                                            border: `1px solid ${excedeu ? '#ef4444' : '#bfdbfe'}`
-                                                        }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e3a8a' }}>
-                                                                    Ciclo {fatNum} — Repasse Único (% sobre Base Líquida)
-                                                                </span>
-                                                                <span style={{
-                                                                    fontSize: '0.75rem', fontWeight: 800,
-                                                                    color: excedeu ? '#dc2626' : '#15803d',
-                                                                    background: excedeu ? '#fef2f2' : '#f0fdf4',
-                                                                    padding: '0.2rem 0.6rem', borderRadius: '8px'
+                                            {/* PAINEL COMPARATIVO DE SUPERÁVIT DOS 4 NÍVEIS */}
+                                            <div style={{ padding: '1rem 1.25rem', background: '#f8fafc' }}>
+                                                <div style={{
+                                                    fontSize: '0.74rem', fontWeight: 800, color: '#475569',
+                                                    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.65rem',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                }}>
+                                                    <span>Resumo Comparativo de Superávit por Nível da Rede (L1 a L4+)</span>
+                                                    <span style={{ color: '#059669', fontWeight: 700, textTransform: 'none' }}>
+                                                        Clique em qualquer card para detalhar o nível na tabela acima
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                                                    {LEVEL_KEYS.map(lk => {
+                                                        const lv = calc.byLevel[lk];
+                                                        const isCurrent = activeLevelView === lk;
+                                                        return (
+                                                            <div
+                                                                key={lk}
+                                                                onClick={() => setActiveLevelView(lk)}
+                                                                style={{
+                                                                    padding: '0.75rem 0.9rem',
+                                                                    borderRadius: '12px',
+                                                                    cursor: 'pointer',
+                                                                    background: lv.isLevelDeficit
+                                                                        ? '#fef2f2'
+                                                                        : isCurrent
+                                                                            ? '#ffffff'
+                                                                            : '#f0fdf4',
+                                                                    border: `2px solid ${
+                                                                        lv.isLevelDeficit
+                                                                            ? '#ef4444'
+                                                                            : isCurrent
+                                                                                ? '#10b981'
+                                                                                : '#bbf7d0'
+                                                                    }`,
+                                                                    boxShadow: isCurrent ? '0 4px 10px rgba(16, 185, 129, 0.12)' : 'none',
+                                                                    transition: 'all 0.15s'
+                                                                }}
+                                                            >
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                                                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
+                                                                        {LEVEL_LABELS[lk].short}
+                                                                    </span>
+                                                                    <span style={{
+                                                                        fontSize: '0.68rem', fontWeight: 700,
+                                                                        padding: '0.1rem 0.4rem', borderRadius: '6px',
+                                                                        background: lv.isLevelDeficit ? '#fee2e2' : '#dcfce7',
+                                                                        color: lv.isLevelDeficit ? '#b91c1c' : '#15803d'
+                                                                    }}>
+                                                                        Pool: {formatPct(lv.totalPctSobreBase, 1)}% Base
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{
+                                                                    fontSize: '0.96rem', fontWeight: 900,
+                                                                    color: lv.isLevelDeficit ? '#dc2626' : '#16a34a'
                                                                 }}>
-                                                                    Total comprometido: {formatPct(somaPct)}% da Base Líquida
-                                                                </span>
+                                                                    {lv.margemLivre >= 0 ? '+ ' : '- '}R$ {formatCurrencyUnit(Math.abs(lv.margemLivre), 6)}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.71rem', color: '#64748b', marginTop: '0.15rem', fontWeight: 600 }}>
+                                                                    Superávit: <strong>{lv.pctRealMargemLivre >= 0 ? '+' : '-'}{formatPct(Math.abs(lv.pctRealMargemLivre))}%</strong> s/ Lastro
+                                                                </div>
                                                             </div>
-
-                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.6rem' }}>
-                                                                {[
-                                                                    { key: 'b2w', label: 'B2W (%)' },
-                                                                    { key: 'lider', label: 'Líder (%)' },
-                                                                    { key: 'ppe', label: 'PPE (%)' },
-                                                                    { key: 'ppp', label: 'PPP (%)' },
-                                                                    { key: 'ppf', label: 'PPF (%)' },
-                                                                    { key: 'assinante_conect', label: 'Assin. Conect (%)' }
-                                                                ].map(item => {
-                                                                    const pctVal = parseFloat(r[item.key]) || 0;
-                                                                    const rsVal = Math.max(0, calc.baseLiquida) * (pctVal / 100);
-                                                                    return (
-                                                                        <div key={item.key}>
-                                                                            <label style={{ display: 'block', fontSize: '0.7rem', color: '#475569', fontWeight: 700, marginBottom: '0.25rem' }}>
-                                                                                {item.label}
-                                                                            </label>
-                                                                            <input
-                                                                                type="number"
-                                                                                step="0.01"
-                                                                                min="0"
-                                                                                max="100"
-                                                                                className="crm-input"
-                                                                                value={r[item.key] ?? ''}
-                                                                                onChange={e => handleStartPctChange(fatNum, item.key, e.target.value)}
-                                                                                style={{
-                                                                                    width: '100%', padding: '0.45rem 0.5rem', borderRadius: '8px',
-                                                                                    border: '1px solid #cbd5e1', fontSize: '0.82rem', fontWeight: 700,
-                                                                                    boxSizing: 'border-box', textAlign: 'center'
-                                                                                }}
-                                                                            />
-                                                                            <span style={{ display: 'block', fontSize: '0.68rem', color: '#64748b', textAlign: 'center', marginTop: '0.2rem', fontWeight: 600 }}>
-                                                                                R$ {formatCurrencyUnit(rsVal, 4)}
-                                                                            </span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -1435,9 +1457,9 @@ export default function EletropostoPlanModal({
                                 <AlertTriangle size={22} color="#dc2626" style={{ flexShrink: 0 }} />
                                 <div style={{ fontSize: '0.84rem', lineHeight: 1.4 }}>
                                     <strong style={{ display: 'block', fontSize: '0.9rem' }}>
-                                        Trava Antidéficit Acionada — Não é permitido salvar plano deficitário
+                                        Trava Antidéficit Acionada ({calc.worstDeficitLevel}) — Não é permitido salvar plano deficitário
                                     </strong>
-                                    O Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>), gerando um déficit de <strong>R$ {formatCurrencyUnit(Math.abs(calc.margemLivre), 6)}/kWh</strong>.
+                                    No <strong>{calc.worstDeficitLevel}</strong>, o Líquido Efetivo do Fornecedor (<strong>R$ {formatCurrencyUnit(calc.byLevel[calc.worstDeficitLevel]?.liquidoEfetivoFornecedor, 6)}/kWh</strong>) está abaixo do Piso Contratual (<strong>R$ {formatCurrencyUnit(calc.vPisoFornecedor, 6)}/kWh</strong>).
                                 </div>
                             </div>
                         )}
@@ -1448,10 +1470,22 @@ export default function EletropostoPlanModal({
                         padding: '1.15rem 2rem', background: '#ffffff', borderTop: '1px solid #e2e8f0',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                     }}>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                            <Percent size={15} color="#059669" />
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <Percent size={15} color="#059669" />
+                                Superávit L1: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L1.margemLivre, 5)}</strong>
+                            </span>
+                            <span>•</span>
                             <span>
-                                Total de Repasses na Base Líquida: <strong style={{ color: '#0f172a' }}>{formatPct(calc.totalPctSobreBase)}%</strong> (R$ {formatCurrencyUnit(calc.totalDeducoesBase, 5)}/kWh)
+                                Superávit L2: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L2.margemLivre, 5)}</strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                                Superávit L3: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L3.margemLivre, 5)}</strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                                Superávit L4+: <strong style={{ color: '#16a34a' }}>+R$ {formatCurrencyUnit(calc.byLevel.L4.margemLivre, 5)}</strong>
                             </span>
                         </div>
 

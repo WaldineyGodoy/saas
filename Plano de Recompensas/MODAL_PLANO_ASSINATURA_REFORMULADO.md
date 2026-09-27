@@ -1,54 +1,45 @@
-# Especificação Técnica: Modais de Planos de Assinatura e Eletropostos
+# Reformulação dos Modais: Energia por Assinatura & Eletropostos (Matriz Multinível + UI/UX CRM)
 
-> **Diretório do Projeto:** `Plano de Recompensas`  
-> **Componentes Implementados:**
-> - [`src/pages/settings/components/PlanModal.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/components/PlanModal.jsx) *(Plano de Assinatura — Lastro na Concessionária)*
-> - [`src/pages/settings/components/EletropostoPlanModal.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/components/EletropostoPlanModal.jsx) *(Plano de Eletroposto — Lastro no Plano de Assinatura, sem Fio B)*
-> - [`src/pages/settings/PlansServicesSettings.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/PlansServicesSettings.jsx) *(Central de Planos e Serviços com abas ativas)*
-
----
-
-## 1. Plano de Assinatura (`PlanModal.jsx`)
-
-* **Lastro e Ponto de Partida:** Tarifa Bruta da Concessionária selecionada (via `view_concessionarias_resumo`).
-* **Ordem do Demonstrativo Recorrente:**
-  1. `Tarifa Bruta [Concessionária]` (`100%`)
-  2. `(-) Fio B` *(2º Item da Lista — Custo Regulatório)*
-  3. `(-) Desconto do Assinante` (`% s/ Tarifa`)
-  4. `(=) Base de Cálculo Líquida` (`Tarifa Bruta - Fio B - Desconto do Assinante`)
-  5. `(-) B2W (Gestão / Plataforma)` (`% s/ Base`)
-  6. `(-) Líder` (`% s/ Base`)
-  7. `(-) Categorias Parceiro Power`:
-     * `PPE — Parceiro Power Embaixador` (`% s/ Base`)
-     * `PPP — Parceiro Power Premium` (`% s/ Base`)
-     * `PPF — Parceiro Power Free` (`% s/ Base`)
-  8. `(-) Assinante Conect` (`% s/ Base`)
-  9. `(=) Líquido Efetivo do Fornecedor`
-  10. `Piso Contratual do Fornecedor` (`50% s/ Tarifa` por padrão, editável)
-  11. `MARGEM LIVRE / EXCEDENTE` (`Líquido Efetivo - Piso Contratual`, com trava antidéficit).
+Este documento consolida a arquitetura financeira, regras de negócio multinível (`L1`, `L2`, `L3`, `L4+`) e melhorias de UI/UX aplicadas nos modais:
+- [`src/pages/settings/components/PlanModal.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/components/PlanModal.jsx) (Energia por Assinatura)
+- [`src/pages/settings/components/EletropostoPlanModal.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/components/EletropostoPlanModal.jsx) (Eletropostos)
+- [`src/pages/settings/PlansServicesSettings.jsx`](file:///c:/Users/Godoy/Documents/HTML/WorkSpace%201%20Antigravity/src/pages/settings/PlansServicesSettings.jsx) (Gestão unificada com abas ativas)
 
 ---
 
-## 2. Plano de Eletropostos (`EletropostoPlanModal.jsx`)
+## 1. Correções de UI/UX Implementadas
 
-* **Lastro e Ponto de Partida:** Vinculado a um **Plano de Assinatura** cadastrado.
-  $$\text{Lastro Eletroposto} = \text{Tarifa Bruta da Concessionária} - \text{Desconto do Assinante ofertado no Plano de Assinatura}$$
-  *(Exemplo: Tarifa Cosern `R$ 1,0300` - Desconto do Plano `15%` (`R$ 0,1545`) = **Lastro `R$ 0,8755 / kWh`**).*
-* **Isenção de Fio B:** O **Fio B não é considerado** no demonstrativo do Eletroposto, pois já foi deduzido na formação do Plano de Assinatura vinculado.
-* **Ordem do Demonstrativo Recorrente (Eletroposto):**
-  1. `Lastro: [Plano de Assinatura Vinculado]` (`100% Sem Fio B` | `R$ 0,8755`)
-  2. `(-) Desconto do Assinante (Eletroposto)` (`% s/ Lastro`)
-  3. `(=) Base de Cálculo Líquida` (`Lastro - Desconto Eletroposto`)
-  4. `(-) B2W (Gestão / Plataforma)` (`% s/ Base`)
-  5. `(-) Líder` (`% s/ Base`)
-  6. `(-) Categorias Parceiro Power` (`PPE`, `PPP` e `PPF` com teto de segurança automático)
-  7. `(-) Assinante Conect` (`% s/ Base`)
-  8. `(=) Líquido Efetivo do Fornecedor`
-  9. `Piso Contratual do Fornecedor` (`50% s/ Lastro` por padrão, editável)
-  10. `MARGEM LIVRE / EXCEDENTE` (`Líquido Efetivo - Piso Contratual`, com trava antidéficit).
+### 1.1. Alinhamento Horizontal Estrito no Bloco 1
+- **Rótulo em Linha Única (`white-space: nowrap`):** O título `"Selecionar Concessionária (Define Tarifa e Fio B)"` não quebra mais em duas linhas, mantendo a mesma altura de label dos demais campos da fileira (`Nome do Plano` e `Desconto Assinante (%)`).
+- **Nivelamento na Base (`alignItems: 'end'` + `height: '44px'`):** Todos os `inputs` e `selects` da primeira fileira possuem exatamente `44px` de altura e alinhamento inferior na grid CSS, eliminando qualquer degrau visual.
+
+### 1.2. Bloqueio de Edição no Demonstrativo Dinâmico (`Read-Only`)
+- **Em Planos de Assinatura (`PlanModal.jsx`):**
+  - Os campos **Tarifa Bruta (Concessionária)** e **Fio B - Valor Unitário** dentro do *Demonstrativo Dinâmico* são **somente leitura (`read-only`)**, identificados com badge `<Lock /> Fixo Concessionária` e `<Lock /> Fixo Fio B`.
+  - A alteração desses valores ocorre exclusivamente pela seleção da Concessionária no Bloco 1 ou nas configurações da Concessionária.
+- **Em Planos de Eletropostos (`EletropostoPlanModal.jsx`):**
+  - O campo **Lastro (Plano de Assinatura)** e a linha **Fio B (Isento / R$ 0,0000)** são **somente leitura (`read-only`)**, derivados automaticamente do Plano de Assinatura vinculado (`Tarifa da Concessionária - Desconto do Assinante do Plano`).
 
 ---
 
-## 3. Regras Globais de Governança Aplicadas em Ambos
-* **Vigência:** Vinculada ao **Status Ativo da Entidade no Sistema** (`vigencia_tipo: 'status_ativo_entidade'`), sem a limitação anterior de 48 meses.
-* **Trava Antidéficit:** Bloqueio automático de gravação caso `Margem Livre / Excedente < 0`.
+## 2. Matriz de Variações por Níveis de Recompensa (Marketing Multinível - MMN)
+
+Dentro do **Demonstrativo Dinâmico**, o sistema agora calcula simultaneamente o **Superávit / Margem Livre** para cada nível da árvore de indicação (`L1`, `L2`, `L3` e `L4+`), permitindo configurar:
+1. **Direito de Recebimento (`Até Nível L1 / L2 / L3 / L4+ / Infinito`):** Quantos níveis de profundidade cada cargo tem direito a receber. Quando o nível simulado ultrapassa o limite do cargo (`max_niveis`), o sistema aplica automaticamente o **Corte de Nível (`0%`)**.
+2. **Percentuais por Nível (`L1`, `L2`, `L3`, `L4+`):** Permite visualizar e editar individualmente a alíquota de cada cargo em cada geração ou alternar para a **Visão Matriz Completa (L1 a L4+)** lado a lado.
+
+### Tabela de Comissionamento e Evolução do Superávit (Exemplo Referência: Cosern R$ 1,03 / Fio B R$ 0,2130 / Desc. 15%)
+- **Base de Cálculo Líquida (Assinatura):** $\text{R\$ } 1,0300 - \text{R\$ } 0,2130 - \text{R\$ } 0,1545 = \mathbf{\text{R\$ } 0,6625/\text{kWh}}$ (`64,32%` da Tarifa)
+- **Mínimo Exigido pelo Fornecedor:** `50,00%` da Tarifa ($\text{R\$ } 0,5150/\text{kWh}$)
+
+| Cargo / Função | Direito (`max_niveis`) | Nível 1 (Venda Direta) | Nível 2 (1ª Indicação) | Nível 3 (2ª Indicação) | Nível 4+ (Rede Profunda) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Comissão Gestão B2W** | **Infinito (`L1 a L4+`)** | `10,00%` (R$ 0,06625) | `10,00%` (R$ 0,06625) | `10,00%` (R$ 0,06625) | `10,00%` (R$ 0,06625) |
+| **Líder Regional** | **Até 3 Níveis (`L1 a L3`)** | `1,00%` (R$ 0,006625) | `1,00%` (R$ 0,006625) | `1,00%` (R$ 0,006625) | `0,00%` *(Corte L4+)* |
+| **Parceiro Power (PPE / PPP)** | **Até 2 Níveis (`L1 e L2`)** | `4,00%` (R$ 0,02650) | `2,00%` (R$ 0,01325) | `0,00%` *(Corte L3)* | `0,00%` *(Corte L4+)* |
+| **Assinante Conect (MGM)** | **Infinito a partir de L2** | `0,00%` *(Sem ind.)* | `2,00%` (R$ 0,01325) | `2,00%` (R$ 0,01325) | `2,00%` (R$ 0,01325) |
+| **Soma Comissões (% s/ Base)** | — | **15,00% s/ Base** (`9,65% Tarifa`) | **15,00% s/ Base** (`9,65% Tarifa`) | **13,00% s/ Base** (`8,36% Tarifa`) | **12,00% s/ Base** (`7,72% Tarifa`) |
+| **Líquido Fornecedor / Usina** | — | **R$ 0,563125** (`54,67%`) | **R$ 0,563125** (`54,67%`) | **R$ 0,576375** (`55,96%`) | **R$ 0,583000** (`56,60%`) |
+| **Superávit / Margem Livre** | — | **+R$ 0,048125 (+4,67%)** | **+R$ 0,048125 (+4,67%)** | **+R$ 0,061375 (+5,96%)** | **+R$ 0,068000 (+6,60%)** |
+
+> **Trava Anti-Déficit Multinível:** O botão de salvamento valida todos os 4 níveis (`L1`, `L2`, `L3`, `L4+`). Se qualquer nível ficar abaixo do repasse mínimo do fornecedor, o modal bloqueia a gravação e indica exatamente qual nível está deficitário.
