@@ -790,7 +790,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
             return {
                 ...prev,
                 subscriber_id: subscriberId,
-                cpf_cnpj_fatura: prev.cpf_cnpj_fatura || (sub ? sub.cpf_cnpj : '')
+                // Com titular da conta definido, o documento é o dele.
+                cpf_cnpj_fatura: prev.titular_fatura_id ? prev.cpf_cnpj_fatura : (prev.cpf_cnpj_fatura || (sub ? sub.cpf_cnpj : ''))
             };
         });
         if (subscriberId) {
@@ -1908,7 +1909,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                                             setFormData(prev => ({ 
                                                                                 ...prev, 
                                                                                 titular_fatura_id: s.id,
-                                                                                cpf_cnpj_fatura: prev.cpf_cnpj_fatura || s.cpf_cnpj,
+                                                                                // Documento é sempre o do titular (o banco também garante).
+                                                                                cpf_cnpj_fatura: s.cpf_cnpj || prev.cpf_cnpj_fatura,
                                                                                 portal_credentials: semSenha(s.portal_credentials) || prev.portal_credentials || { url: '', login: '' }
                                                                             }));
                                                                             setTitularSearchTerm('');
