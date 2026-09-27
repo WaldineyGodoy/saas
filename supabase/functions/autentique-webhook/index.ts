@@ -150,37 +150,60 @@ serve(async (req) => {
             for (const sig of assinaturas) {
                 if (!sig.signer_id) continue;
 
-                // Fornecedor: 'ativacao' -> 'contrato_assinado'. Parar em
-                // 'contrato_assinado' e não avançar para 'ativo' é
-                // deliberado: um fornecedor 'ativo' é aquele cuja usina está
-                // gerando, e a assinatura acontece muito antes da conexão.
+                // Fornecedor: grava a DATA do contrato assinado; o status é
+                // calculado no banco (fn_recalculate_supplier_status). Antes,
+                // qualquer documento — até Compra e Venda — virava "Contrato
+                // de Gestão assinado" e promovia o fornecedor.
+                //
+                // Gestão sem tipo: o SupplierModal só passou a carimbar
+                // document_type='gestao' em 27/09/2026. Documento de usina
+                // sempre tem usina_id.
                 if (sig.signer_type === 'supplier') {
-                    const { error: supErr } = await supabaseAdmin
-                        .from('suppliers')
-                        .update({ status: 'contrato_assinado' })
-                        .eq('id', sig.signer_id)
-                        // Só avança quem ainda está em ativação: um fornecedor
-                        // já 'ativo' (ou inativo) não pode regredir porque a
-                        // Autentique reenviou o evento.
-                        .eq('status', 'ativacao');
+                    const agora = new Date().toISOString();
+                    const ehGestao = sig.document_type === 'gestao'
+                        || (!sig.document_type && !sig.usina_id);
+                    let assinado: string | null = null;
 
-                    if (supErr) {
-                        console.error(`Falha ao promover fornecedor ${sig.signer_id}:`, supErr);
-                        continue;
+                    if (ehGestao) {
+                        // .is(null): reenvio do evento não reescreve a data.
+                        const { error } = await supabaseAdmin
+                            .from('suppliers')
+                            .update({ contrato_assinado_em: agora })
+                            .eq('id', sig.signer_id)
+                            .is('contrato_assinado_em', null);
+                        if (error) {
+                            console.error(`Falha ao datar a Gestão do fornecedor ${sig.signer_id}:`, error);
+                            continue;
+                        }
+                        assinado = 'Contrato de Gestão';
+                    } else if (sig.document_type === 'compra_venda' && sig.usina_id) {
+                        const { error } = await supabaseAdmin
+                            .from('usinas')
+                            .update({ compra_venda_assinada_em: agora })
+                            .eq('id', sig.usina_id)
+                            .is('compra_venda_assinada_em', null);
+                        if (error) {
+                            console.error(`Falha ao datar a Compra e Venda da usina ${sig.usina_id}:`, error);
+                            continue;
+                        }
+                        assinado = 'Contrato de Compra e Venda';
                     }
 
-                    promovidos.push(sig.signer_id);
-
-                    await supabaseAdmin.from('crm_history').insert({
-                        entity_type: 'supplier',
-                        entity_id: sig.signer_id,
-                        content: 'Contrato de Gestão assinado digitalmente. Status alterado para "Contrato Assinado".',
-                        metadata: {
-                            autentique_doc_id: docId,
-                            signature_id: sig.id,
-                            origem: 'autentique-webhook'
-                        }
-                    });
+                    if (assinado) {
+                        promovidos.push(sig.signer_id);
+                        await supabaseAdmin.from('crm_history').insert({
+                            entity_type: 'supplier',
+                            entity_id: sig.signer_id,
+                            content: `${assinado} assinado digitalmente.`,
+                            metadata: {
+                                autentique_doc_id: docId,
+                                signature_id: sig.id,
+                                document_type: sig.document_type,
+                                usina_id: sig.usina_id,
+                                origem: 'autentique-webhook'
+                            }
+                        });
+                    }
                     continue;
                 }
 

@@ -442,7 +442,9 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             // ao link que o cliente recebeu.
             await supabase
                 .from('signatures')
-                .update({ short_url: finalLink })
+                // document_type: sem ele o webhook não distinguia a Gestão de
+                // uma Compra e Venda e promovia o fornecedor por qualquer uma.
+                .update({ short_url: finalLink, document_type: 'gestao' })
                 .eq('autentique_doc_id', result.documentId);
             setSignatureLink(finalLink);
 
