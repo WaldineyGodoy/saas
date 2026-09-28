@@ -212,3 +212,22 @@ Motivo: `PlanModal.jsx` ainda grava as chaves legadas (`associacao`, `embaixador
 - [ ] **Step 4:** ligar o modal ao módulo, sem mexer no layout; `npm run build`.
 - [ ] **Step 5:** salvar um plano pela tela em ambiente local e conferir por SELECT que o JSON gravado continua normalizado (se não houver como logar, descrever o teste manual para o dono).
 - [ ] **Step 6:** commit `fix(recompensas): tela de planos grava a matriz acordada`.
+
+---
+
+### Task 10: anon não escolhe o próprio cargo (achado da Task 5)
+
+Motivo: a guarda `fn_originador_guarda_campos_sensiveis` retorna cedo quando `auth.uid()` é nulo — condição pensada para `service_role`, mas que também vale para o cadastro público (`anon`). Com a policy `originators_v2_anon_signup`, qualquer pessoa pode se cadastrar como embaixador já gravando `cargo='ppe'` (5% de recorrência), `lider_id` e licença. Antes da Task 2 isso não pagava nada; com o motor ligado, paga.
+
+**Files:** Create `supabase/migrations/20260928f_anon_sem_cargo.sql`, `supabase/tests/split_anon_sem_cargo.test.sql`
+
+**Regras:**
+- Distinguir `service_role` de `anon` na guarda: usar `current_setting('request.jwt.claims', true)::jsonb->>'role'` (ou `current_user`/`auth.role()`), em vez de tratar `auth.uid() IS NULL` como contexto confiável.
+- No INSERT vindo de `anon` (ou de qualquer papel não interno), normalizar em silêncio: `cargo := 'ppf'`, `lider_id := NULL`, licença zerada, além do que já é normalizado hoje (`split_commission`, `short_url`).
+- `service_role` e papel interno seguem podendo gravar o que quiserem.
+- Nada muda no cadastro público em si: quem se cadastra continua virando originador, só não escolhe a própria faixa.
+
+- [ ] **Step 1: teste primeiro** — simular `anon` (`set_config('role','anon')` + claims sem `sub`) inserindo com `cargo='ppe'`, `lider_id` e licença: as três devem sair normalizadas; `service_role` inserindo com `cargo='ppe'` mantém; papel interno idem; o cadastro público existente continua funcionando (INSERT com as colunas do formulário). RED antes.
+- [ ] **Step 2:** migração, aplicar, GREEN.
+- [ ] **Step 3:** conferir que os 8 originadores reais seguem em `ppf` e que nenhum ganhou `lider_id`.
+- [ ] **Step 4:** commit `fix(seguranca): cadastro publico nao escolhe cargo nem licenca`.
