@@ -125,7 +125,7 @@ Regras: percentual = `regras[papel].niveis['L'||nivel]`, zero quando `nivel > ma
 
 Regras:
 - **Assinante Conect:** dono da UC apontada por `indicado_por_uc_id`; nível 1 sempre; entra com `suspenso: true` se o assinante dele não estiver `ativo`.
-- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; entra com `suspenso: true` se o `status` do originador não for ativo; `cargo` define o percentual; **PPP com `licenca_status = 'vencida'` entra com `suspenso: true`** (recorrência suspensa; o motor manda o percentual dele para a B2W).
+- **Parceiro:** originador do assinante da UC (`subscribers.originator_id`); nível = 1 quando a UC não veio de indicação, 2 quando veio (um salto), 3+ conforme a cadeia, com teto de 50 saltos; entra com `suspenso: true` se o `status` do originador não for ativo; `cargo` define o percentual; **PPP com licença vencida entra com `suspenso: true`** — a checagem compara `licenca_vencimento < current_date` (o `licenca_status` gravado só reflete a última escrita da linha e pode envelhecer) (recorrência suspensa; o motor manda o percentual dele para a B2W).
 - **Líder:** `lider_id` do parceiro; nível = o mesmo nível do parceiro; entra com `suspenso: true` se inativo.
 - **Recebedor inativo** (originador, líder ou assinante do Conect): entra com `suspenso: true`, como a licença vencida — o percentual é absorvido pela B2W.
 - Sem assinante, sem originador ou com UC geradora: array vazio.
