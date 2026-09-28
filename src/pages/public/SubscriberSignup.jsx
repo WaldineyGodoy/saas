@@ -82,6 +82,10 @@ export default function SubscriberSignup() {
     const paramPhone = searchParams.get('phone') || '';
     const paramCep = searchParams.get('cep') || '';
     const paramOriginatorId = searchParams.get('originator_id') || '';
+    // Assinante Conect: quem chegou pelo link de indicação de um assinante.
+    // Vem do iframe da simulação (`?indicador=`) e também vale quando o
+    // cliente abre o /contrato direto com o parâmetro na URL.
+    const paramIndicador = searchParams.get('indicador') || '';
     const paramLeadId = searchParams.get('lead_id') || '';
     const paramDiscountPercent = searchParams.get('discount_percent') || '0';
     const paramSavingsAnnual = searchParams.get('savings_annual') || '0';
@@ -293,6 +297,7 @@ export default function SubscriberSignup() {
                 p_uf: formData.uf,
                 p_ibge: formData.ibge || null,
                 p_originator_id: uuidOuNulo(paramOriginatorId),
+                p_indicador_assinante_id: uuidOuNulo(paramIndicador),
                 p_lead_id: uuidOuNulo(paramLeadId),
                 p_ucs: consumerUnits.map(uc => ({
                     numero_uc: uc.numero_uc,

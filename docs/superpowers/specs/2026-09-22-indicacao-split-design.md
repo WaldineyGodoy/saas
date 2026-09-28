@@ -70,6 +70,18 @@ O `originators_v2.split_commission.start` do motor antigo deixa de ser lido.
 - `fn_criar_assinante_publico` aceita `p_indicador_assinante_id` (texto; UUID inválido é ignorado, como o originador). A UC criada recebe `indicado_por_uc_id` = primeira UC do indicador, e o assinante herda o `originator_id` do indicador quando não vier outro — é assim que o Parceiro Power e o Líder continuam na linha.
 - Link e contagem de indicados aparecem no modal do assinante e no painel dele.
 
+### §4.1 Implementado em 28/09/2026
+
+Migração `20260928a_assinante_conect_link`, Edge Function `assinante-short-url`, módulo puro `src/lib/assinanteConect.js` e componente `src/components/subscriber/AssinanteConect.jsx`. O que ficou decidido na implementação:
+
+- **Seção "Assinante Conect"** na aba Dados do modal do assinante e no painel dele (`SubscriberDashboard`): link, **QR Code**, copiar, compartilhar no WhatsApp, baixar o QR, contagem de assinantes e de leads da rede, e quem o indicou.
+- **O QR é gerado no navegador** (`qrcode`, sem serviço de terceiro): o link carrega o id do assinante, e mandá-lo para um gerador externo entregaria a carteira de clientes.
+- **Quem indica:** só `contrato_assinado`, `ativo` ou `ativo_inadimplente` — a mesma lista no gatilho, na Edge Function e no front. Antes de assinar, a seção explica que o link nasce com o contrato.
+- **Keyword do YOURLS:** `<primeiro nome>-c<4 chars do id>`. O `c` separa o espaço de nomes do link do embaixador; sem ele, homônimos com o mesmo prefixo de id disputariam a mesma keyword e o encurtador entregaria o link de um para o outro.
+- **A raiz não precisou mudar:** o `Calculator` já repassa a query inteira ao iframe de `crm/simulacao`, então `indicador` chega ao `LeadCaptureForm`, que grava `leads.indicador_assinante_id` e o repassa ao `/contrato`.
+- **Guarda de ciclo** também entre pessoas (`trg_assinante_indicador_sem_ciclo`), além da que já existe por UC: rede em círculo faz a contagem de indicados girar para sempre.
+- **Fora desta entrega:** o saldo de abatimento e o extrato (dependem de `creditos_indicacao`, Task 7 do plano do split) e o backfill de link para os assinantes que já existem — hoje só o Waldiney Godoy tem link, gerado na verificação.
+
 ## §5 Como o Assinante Conect recebe
 
 Decisão do dono (22/09, mantida): **abatimento na própria fatura**.

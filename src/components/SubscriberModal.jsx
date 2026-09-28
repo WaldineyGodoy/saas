@@ -12,6 +12,7 @@ import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
+import AssinanteConect from './subscriber/AssinanteConect';
 import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -2237,6 +2238,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     placeholder="(00) 00000-0000"
                                     style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                 />
+                            </div>
+
+                            {/* Assinante Conect: link e QR Code de indicacao. Fica nos dados
+                                cadastrais, e nao numa aba propria, porque e informacao do
+                                assinante (como o telefone) e nao uma operacao a executar. */}
+                            <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem' }}>
+                                <AssinanteConect subscriber={subscriber} profile={profile} />
                             </div>
                             </div>
                         )}

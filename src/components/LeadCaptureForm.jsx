@@ -19,6 +19,14 @@ export default function LeadCaptureForm() {
     const originatorId = searchParams.get('id');
     const originatorName = searchParams.get('name') || searchParams.get('originador');
 
+    // Assinante Conect: o link de indicação do assinante é
+    // `raiz/?indicador=<uuid>&name=<primeiro nome>`, e o `Calculator` da
+    // landing repassa a query inteira para este iframe. Parâmetro separado
+    // do `id` de propósito: um lead pode vir do assinante e continuar
+    // pertencendo ao embaixador dele, que é como o Parceiro Power segue
+    // recebendo (ver src/lib/assinanteConect.js).
+    const indicadorAssinanteId = searchParams.get('indicador');
+
     const [form, setForm] = useState({
         name: '',
         email: '',
@@ -113,6 +121,7 @@ export default function LeadCaptureForm() {
             // Validate UUID for originator_id to prevent database errors (invalid input syntax for type uuid)
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             const validOriginatorId = (originatorId && uuidRegex.test(originatorId)) ? originatorId : null;
+            const validIndicadorId = (indicadorAssinanteId && uuidRegex.test(indicadorAssinanteId)) ? indicadorAssinanteId : null;
 
             // O id é gerado no cliente para que o insert não precise de
             // `.select()` — devolver a linha exigia uma policy de SELECT para
@@ -138,7 +147,8 @@ export default function LeadCaptureForm() {
                 tarifa_concessionaria: Number(offerData?.['Tarifa Concessionaria']) || 0,
                 desconto_assinante: Number(offerData?.['Desconto Assinante']) || 0,
                 status: 'simulacao', // Default status
-                originator_id: validOriginatorId // Only send if valid UUID
+                originator_id: validOriginatorId, // Only send if valid UUID
+                indicador_assinante_id: validIndicadorId
             };
 
             const { error } = await supabase.from('leads').insert(payload);
@@ -174,6 +184,7 @@ export default function LeadCaptureForm() {
         params.append('cep', form.cep);
         params.append('consumo', form.consumo);
         if (originatorId) params.append('originator_id', originatorId);
+        if (indicadorAssinanteId) params.append('indicador', indicadorAssinanteId);
         if (savedLead?.id) params.append('lead_id', savedLead.id);
         if (form.concessionaria) params.append('concessionaria', form.concessionaria);
 
