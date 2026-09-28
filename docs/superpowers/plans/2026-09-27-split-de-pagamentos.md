@@ -14,6 +14,7 @@
 - Testes SQL: bloco `DO $$ … $$` terminando em `RAISE EXCEPTION 'SANDBOX_OK'`; rodar pelo MCP `execute_sql`; **sucesso = erro `SANDBOX_OK`**. Nunca deixar resíduo.
 - **Dinheiro real:** o razão de produção (`ledger_entries`) não pode ganhar, perder ou alterar lançamento por causa deste trabalho. Toda verificação compara a impressão digital (contagem + soma) antes e depois.
 - **Substituição direta:** o motor antigo de comissão (`originators_v2.split_commission`) deixa de ser lido. Os R$ 135,91 já lançados na conta 2.1.2 (8 lançamentos, abr–ago/2026) ficam intactos.
+- **Base de cálculo (decisão do dono, 27/09/2026, após a Task 1):** `invoices.valor_a_pagar − invoices.valor_concessionaria`, o que a fatura apurou. A fórmula `kWh × (tarifa − Fio B − desconto)` do documento fica só como referência do simulador; nos dados reais elas divergem 8,8% em média e até 34,9%.
 - Percentuais (níveis **relativos a quem recebe**): B2W 10% fixo; Líder 1% nos níveis 1–3; PPE 5%/2%; PPP 4%/2%; PPF 2%/2%; Assinante Conect 2% só no nível 1. Piso do fornecedor: 50% da tarifa bruta, configurável por plano.
 - **Supressão sempre vai para a B2W** (decisões do dono, 27/09/2026): PPP com licença anual vencida tem a recorrência suspensa (0%), e o mesmo vale para recebedor inativo (originador, líder ou assinante indicador). Em todos esses casos o percentual é absorvido pela B2W, nunca pelo fornecedor.
 - PPE: promoção automática ao ser PPP com 1000 assinantes ativos na rede; rebaixamento nunca é automático.
