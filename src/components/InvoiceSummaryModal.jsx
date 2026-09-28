@@ -1414,62 +1414,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                             </div>
                         </div>
 
-                        {/* Status da Fatura do Assinante - Editável */}
-                        <div style={{ 
-                            background: '#f8fafc', 
-                            padding: '1rem', 
-                            borderRadius: '16px', 
-                            marginBottom: '1.5rem',
-                            border: '1px solid #e2e8f0'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                <div>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Fatura do Assinante</span>
-                                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginTop: '0.2rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</div>
-                                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>UC: {consumerUnit?.numero_uc}</div>
-                                </div>
-                                {updatingFaturaStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
-                            </div>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
-                                {[
-                                    { id: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb' },
-                                    { id: 'a_vencer', label: 'A Vencer', color: '#854d0e' },
-                                    { id: 'atrasado', label: 'Atrasado', color: '#dc2626' },
-                                    { id: 'confirmado', label: 'Confirmado', color: '#0891b2' },
-                                    { id: 'pago', label: 'Pago', color: '#166534' },
-                                    { id: 'cancelado', label: 'Cancelado', color: '#64748b' }
-                                ].map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => handleUpdateFaturaStatus(s.id)}
-                                        // As faixas de status ficam visiveis para todo mundo
-                                        // (sao a leitura do estado da fatura), mas so' papel
-                                        // interno clica. O banco recusa a escrita de qualquer
-                                        // forma; aqui o botao apenas nao finge que aceita.
-                                        disabled={updatingFaturaStatus || !podeEscrever}
-                                        style={{
-                                            padding: '0.5rem 0.1rem',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            fontSize: '0.75rem',
-                                            fontWeight: faturaStatus === s.id ? '800' : '600',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            background: faturaStatus === s.id ? s.color : 'transparent',
-                                            color: faturaStatus === s.id ? 'white' : '#64748b',
-                                            boxShadow: faturaStatus === s.id ? `0 4px 12px ${s.color}40` : 'none',
-                                            whiteSpace: 'nowrap',
-                                            textAlign: 'center'
-                                        }}
-                                    >
-                                        {s.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Energy Bill Status Toggle - Manual Override */}
+                        {/* Status da Conta de Energia (Bloco 1) */}
                         <div style={{ 
                             background: '#f1f5f9', 
                             padding: '1rem', 
@@ -1481,7 +1426,7 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Conta de energia</span>
                                 {updatingStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
                             </div>
-                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
                                  {(() => {
                                      const today = new Date();
                                      today.setHours(0, 0, 0, 0);
@@ -1526,6 +1471,27 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      </button>
                                  ))})()}
                              </div>
+
+                             {/* Titular e UC Info */}
+                             <div style={{ padding: '0.75rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                 <div>
+                                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem' }}>Titular da conta de energia na concessionária:</span>
+                                     <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                                         {consumerUnit?.titular_fatura?.name || consumerUnit?.titular_conta || 'Não informado'}
+                                     </span>
+                                 </div>
+                                 <div>
+                                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem' }}>CPF/CNPJ:</span>
+                                     <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                                         {consumerUnit?.titular_fatura?.cpf_cnpj || 'Não informado'}
+                                     </span>
+                                 </div>
+                                 <div style={{ marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0' }}>
+                                     <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem' }}>UC:</span>
+                                     <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{consumerUnit?.numero_uc || 'Não informado'}</span>
+                                 </div>
+                             </div>
+
                              {energyStatus === 'inconsistente' && linkedProtocol && (
                                  <div style={{ marginTop: '0.85rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.85rem', display: 'flex', justifyContent: 'center' }}>
                                      <button
@@ -1561,6 +1527,83 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
                                      </button>
                                  </div>
                              )}
+                        </div>
+
+                        {/* Status da Fatura do Assinante (Bloco 2) */}
+                        <div style={{ 
+                            background: '#f8fafc', 
+                            padding: '1rem', 
+                            borderRadius: '16px', 
+                            marginBottom: '1.5rem',
+                            border: '1px solid #e2e8f0'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Status da Fatura do Assinante</span>
+                                {updatingFaturaStatus && <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>Salvando...</span>}
+                            </div>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '12px', marginBottom: '1rem' }}>
+                                {[
+                                    { id: 'sem_faturamento', label: 'Sem Faturamento', color: '#2563eb' },
+                                    { id: 'a_vencer', label: 'A Vencer', color: '#854d0e' },
+                                    { id: 'atrasado', label: 'Atrasado', color: '#dc2626' },
+                                    { id: 'confirmado', label: 'Confirmado', color: '#0891b2' },
+                                    { id: 'pago', label: 'Pago', color: '#166534' },
+                                    { id: 'cancelado', label: 'Cancelado', color: '#64748b' }
+                                ].map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => handleUpdateFaturaStatus(s.id)}
+                                        // As faixas de status ficam visiveis para todo mundo
+                                        // (sao a leitura do estado da fatura), mas so' papel
+                                        // interno clica. O banco recusa a escrita de qualquer
+                                        // forma; aqui o botao apenas nao finge que aceita.
+                                        disabled={updatingFaturaStatus || !podeEscrever}
+                                        style={{
+                                            padding: '0.5rem 0.1rem',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            fontSize: '0.75rem',
+                                            fontWeight: faturaStatus === s.id ? '800' : '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            background: faturaStatus === s.id ? s.color : 'transparent',
+                                            color: faturaStatus === s.id ? 'white' : '#64748b',
+                                            boxShadow: faturaStatus === s.id ? `0 4px 12px ${s.color}40` : 'none',
+                                            whiteSpace: 'nowrap',
+                                            textAlign: 'center'
+                                        }}
+                                    >
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Assinante, Identificação e Endereço Info */}
+                            <div style={{ padding: '0.75rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem' }}>Nome do Assinante:</span>
+                                    <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{consumerUnit?.subscribers?.name || 'Assinante'}</span>
+                                </div>
+                                
+                                <div>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem' }}>Identificação da Fatura:</span>
+                                    <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                                        {(() => {
+                                            const ident = consumerUnit?.identification || consumerUnit?.titular_conta || 'Unidade Consumidora';
+                                            const parts = ident.split(/\s+/).filter(Boolean);
+                                            return parts.length <= 2 ? ident : `${parts[0]} ${parts[1]}`;
+                                        })()}
+                                    </span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginRight: '0.5rem', marginTop: '0.15rem' }}>Endereço da UC:</span>
+                                    <span style={{ fontWeight: 600, color: '#475569', fontSize: '0.85rem' }}>
+                                        {consumerUnit?.address?.rua ? `${consumerUnit.address.rua}${consumerUnit.address.numero ? `, Nº ${consumerUnit.address.numero}` : ''}${consumerUnit.address.complemento ? ` - ${consumerUnit.address.complemento}` : ''} - ${consumerUnit.address.bairro || ''} - ${consumerUnit.address.cidade ? `${consumerUnit.address.cidade}/${consumerUnit.address.uf || ''}` : ''}` : 'Não informado'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
     
                         {/* Grid de Valores */}
