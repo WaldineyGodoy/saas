@@ -17,6 +17,12 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
+import {
+    MATRIZ_PADRAO,
+    MAX_NIVEIS,
+    normalizarRecorrenteConfig,
+    semChavesLegadas
+} from '../../../lib/planoRecompensas';
 
 const formatCurrencyUnit = (val, decimals = 4) => {
     const num = Number(val) || 0;
@@ -34,32 +40,14 @@ const formatPct = (val, decimals = 2) => {
     });
 };
 
-const DEFAULT_MULTILEVEL_RULES = {
-    b2w: {
-        max_niveis: 4,
-        niveis: { L1: '10', L2: '10', L3: '10', L4: '10' }
-    },
-    lider: {
-        max_niveis: 3,
-        niveis: { L1: '1', L2: '1', L3: '1', L4: '0' }
-    },
-    ppe: {
-        max_niveis: 2,
-        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
-    },
-    ppp: {
-        max_niveis: 2,
-        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
-    },
-    ppf: {
-        max_niveis: 1,
-        niveis: { L1: '2', L2: '0', L3: '0', L4: '0' }
-    },
-    assinante_conect: {
-        max_niveis: 1,
-        niveis: { L1: '0', L2: '2', L3: '2', L4: '2' }
-    }
-};
+// Fonte única: src/lib/planoRecompensas.js (matriz acordada com o dono,
+// decisão de 28/09/2026) — nenhum default divergente aqui.
+const DEFAULT_MULTILEVEL_RULES = Object.fromEntries(
+    Object.keys(MATRIZ_PADRAO).map(cargo => [
+        cargo,
+        { max_niveis: MAX_NIVEIS[cargo], niveis: { ...MATRIZ_PADRAO[cargo] } }
+    ])
+);
 
 const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
 const LEVEL_LABELS = {
@@ -459,30 +447,16 @@ export default function EletropostoPlanModal({
         setLoading(true);
 
         const l1View = calc.byLevel.L1;
-        const numRec = {
-            b2w: l1View.pctB2W,
-            lider: l1View.pctLider,
-            ppe: l1View.pctPPE,
-            ppp: l1View.pctPPP,
-            ppf: l1View.pctPPF,
-            assinante_conect: calc.byLevel.L2.pctAssinanteConect,
-            associacao: l1View.pctB2W,
-            coordenador: l1View.pctLider,
-            embaixador: Math.max(l1View.pctPPE, l1View.pctPPP),
-            assinante: calc.byLevel.L2.pctAssinanteConect
-        };
 
-        const formatStartRulesPayload = (r = {}) => ({
+        // Sem chaves legadas (associacao/embaixador/coordenador/assinante):
+        // a tela grava só o vocabulário moderno (global-constraints.md).
+        const formatStartRulesPayload = (r = {}) => semChavesLegadas({
             b2w: parseFloat(r.b2w) || 0,
             lider: parseFloat(r.lider) || 0,
             ppe: parseFloat(r.ppe) || 0,
             ppp: parseFloat(r.ppp) || 0,
             ppf: parseFloat(r.ppf) || 0,
-            assinante_conect: parseFloat(r.assinante_conect) || 0,
-            associacao: parseFloat(r.b2w) || 0,
-            coordenador: parseFloat(r.lider) || 0,
-            embaixador: Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0),
-            assinante: parseFloat(r.assinante_conect) || 0
+            assinante_conect: parseFloat(r.assinante_conect) || 0
         });
 
         const payload = {
@@ -499,7 +473,10 @@ export default function EletropostoPlanModal({
                     3: formatStartRulesPayload(regrasStart[3])
                 }
             },
-            recorrente_config: {
+            // normalizarRecorrenteConfig recalcula regras_multinivel (matriz
+            // acordada, respeitando o que já estava dentro do max_niveis) e
+            // deriva regras (flat) do nível 1 -- sem nenhuma chave legada.
+            recorrente_config: normalizarRecorrenteConfig({
                 categoria_plano: 'eletroposto',
                 vigencia_tipo: 'status_ativo_entidade',
                 meses: null,
@@ -527,9 +504,8 @@ export default function EletropostoPlanModal({
                         L4: Number(calc.byLevel.L4.margemLivre.toFixed(6))
                     }
                 },
-                regras: numRec,
                 regras_multinivel: regrasMultinivel
-            },
+            }),
             updated_at: new Date().toISOString()
         };
 
@@ -1243,7 +1219,7 @@ export default function EletropostoPlanModal({
                                                         }}>
                                                             PPP
                                                         </span>
-                                                        <span>Parceiro Power Premium</span>
+                                                        <span>Parceiro Power Pro</span>
                                                     </div>
                                                     <div>
                                                         {renderMultilevelCenterControl('ppp', [
