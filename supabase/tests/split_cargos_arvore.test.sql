@@ -181,6 +181,28 @@ BEGIN
     RAISE EXCEPTION 'FALHOU: ciclo na cadeia deu SQLSTATE % (esperado 22023): %', v_state, v_erro;
   END IF;
 
+  -- 5d) fix F2: UPDATE de coluna nao relacionada numa UC que ja tem
+  -- indicado_por_uc_id (v_uc2 -> v_uc1) tem que passar direto, sem
+  -- revalidar a cadeia (curto-circuito de TG_OP='UPDATE' + valor inalterado).
+  UPDATE public.consumer_units SET numero_uc = 'SANDBOX-UC2-LEITURA' WHERE id = v_uc2;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  IF v_n <> 1 THEN
+    RAISE EXCEPTION 'FALHOU: UPDATE de coluna nao relacionada foi recusado numa UC com indicado_por_uc_id (curto-circuito F2 quebrado)';
+  END IF;
+
+  -- 5e) o curto-circuito do F2 so vale quando indicado_por_uc_id NAO muda;
+  -- um ciclo real (novo valor) continua recusado. Ciclo direto de 2 saltos,
+  -- diferente do de 5c (3 saltos), para nao depender so daquele caminho.
+  v_erro := NULL; v_state := NULL;
+  BEGIN
+    UPDATE public.consumer_units SET indicado_por_uc_id = v_uc2 WHERE id = v_uc1;
+  EXCEPTION WHEN others THEN v_erro := SQLERRM; v_state := SQLSTATE;
+  END;
+  IF v_erro IS NULL THEN RAISE EXCEPTION 'FALHOU: ciclo direto uc1<->uc2 nao foi recusado apos o curto-circuito F2'; END IF;
+  IF v_state <> '22023' THEN
+    RAISE EXCEPTION 'FALHOU: ciclo direto uc1<->uc2 deu SQLSTATE % (esperado 22023): %', v_state, v_erro;
+  END IF;
+
   -- ======================================================================
   -- 6) backfill: os 8 originadores existentes ficaram em ppf, sem lider_id
   -- ======================================================================
