@@ -19,12 +19,12 @@ export default function LeadCaptureForm() {
     const originatorId = searchParams.get('id');
     const originatorName = searchParams.get('name') || searchParams.get('originador');
 
-    // Assinante Conect: o link de indicação do assinante é
+    // Assinante Connect: o link de indicação do assinante é
     // `raiz/?indicador=<uuid>&name=<primeiro nome>`, e o `Calculator` da
     // landing repassa a query inteira para este iframe. Parâmetro separado
     // do `id` de propósito: um lead pode vir do assinante e continuar
     // pertencendo ao embaixador dele, que é como o Parceiro Power segue
-    // recebendo (ver src/lib/assinanteConect.js).
+    // recebendo (ver src/lib/assinanteConnect.js).
     const indicadorAssinanteId = searchParams.get('indicador');
 
     const [form, setForm] = useState({

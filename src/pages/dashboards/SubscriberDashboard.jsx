@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
-import AssinanteConect from '../../components/subscriber/AssinanteConect';
+import AssinanteConnect from '../../components/subscriber/AssinanteConnect';
 
 export default function SubscriberDashboard() {
     const { user, profile } = useAuth();
@@ -44,7 +44,7 @@ export default function SubscriberDashboard() {
 
             // To make it robust:
             // `status`, `short_url` e `indicador_assinante_id` vem por causa da
-            // secao Assinante Conect: e aqui que o assinante ve o proprio link
+            // secao Assinante Connect: e aqui que o assinante ve o proprio link
             // de indicacao, e nao so o time interno pelo modal.
             const { data: subData } = await supabase.from('subscribers')
                 .select('id, name, status, short_url, indicador_assinante_id')
@@ -150,7 +150,7 @@ export default function SubscriberDashboard() {
 
             {subscriber && (
                 <div style={{ marginBottom: '2rem' }}>
-                    <AssinanteConect subscriber={subscriber} profile={profile} />
+                    <AssinanteConnect subscriber={subscriber} profile={profile} />
                 </div>
             )}
 

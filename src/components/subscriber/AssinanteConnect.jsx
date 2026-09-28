@@ -3,16 +3,16 @@ import QRCode from 'qrcode';
 import { Users, Copy, Check, Download, RefreshCw, MessageCircle, Link2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
-    buildLinkConect,
+    buildLinkConnect,
     podeIndicar,
     textoCompartilhar,
     urlWhatsappCompartilhar,
     nomeArquivoQr,
-} from '../../lib/assinanteConect';
+} from '../../lib/assinanteConnect';
 import { ehPapelInterno } from '../../lib/papeis';
 
 /**
- * Seção "Assinante Conect" do modal do assinante.
+ * Seção "Assinante Connect" do modal do assinante.
  *
  * No Plano de Recompensas o assinante indica como o embaixador: quem ele
  * traz entra na árvore por `consumer_units.indicado_por_uc_id` e ele recebe
@@ -41,7 +41,7 @@ const CAIXA = {
     background: '#f8fafc',
 };
 
-export default function AssinanteConect({ subscriber, profile }) {
+export default function AssinanteConnect({ subscriber, profile }) {
     const [shortUrl, setShortUrl] = useState(subscriber?.short_url || null);
     const [qr, setQr] = useState('');
     const [copiado, setCopiado] = useState(false);
@@ -60,7 +60,7 @@ export default function AssinanteConect({ subscriber, profile }) {
     useEffect(() => { setShortUrl(subscriber?.short_url || null); }, [subscriber?.short_url]);
 
     const link = useMemo(
-        () => buildLinkConect({ ...(subscriber || {}), short_url: shortUrl }),
+        () => buildLinkConnect({ ...(subscriber || {}), short_url: shortUrl }),
         [subscriber, shortUrl]
     );
 
@@ -152,7 +152,7 @@ export default function AssinanteConect({ subscriber, profile }) {
         <div style={{ ...CAIXA, background: 'white' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
                 <Users size={20} color="#003366" />
-                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#003366' }}>Assinante Conect</h4>
+                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#003366' }}>Assinante Connect</h4>
             </div>
             <p style={{ margin: '0 0 1rem', color: '#64748b', fontSize: '0.85rem' }}>
                 Link e QR Code de indicação. Quem assinar por aqui entra na rede deste assinante, e a recompensa

@@ -1,5 +1,5 @@
 /**
- * Fonte única do link de indicação do Assinante Conect.
+ * Fonte única do link de indicação do Assinante Connect.
  *
  * No Plano de Recompensas o assinante também indica: quem ele traz entra
  * como UC filha na árvore (`consumer_units.indicado_por_uc_id`) e ele passa
@@ -58,7 +58,7 @@ export const buildConviteAssinanteUrl = (subscriber) => {
  * assinatura e a volta do YOURLS a coluna fica nula por alguns instantes —
  * daí o fallback para a URL longa, que é plenamente funcional.
  */
-export const buildLinkConect = (subscriber) => {
+export const buildLinkConnect = (subscriber) => {
     if (!subscriber?.id) return '';
     return subscriber.short_url || buildConviteAssinanteUrl(subscriber);
 };
@@ -78,12 +78,12 @@ export const textoCompartilhar = (subscriber, link) => {
 export const urlWhatsappCompartilhar = (texto) => (texto ? `https://wa.me/?text=${encodeURIComponent(texto)}` : '');
 
 /** Nome do arquivo que o navegador salva ao baixar o QR. Sem acento e sem
- *  espaço porque isso já chegou ao Windows como `qrcode-conect-inA?s.png`. */
+ *  espaço porque isso já chegou ao Windows como `qrcode-connect-inA?s.png`. */
 export const nomeArquivoQr = (subscriber) => {
     const slug = primeiroNome(subscriber?.name)
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
-    return `qrcode-conect-${slug || (subscriber?.id || '').slice(0, 8)}.png`;
+    return `qrcode-connect-${slug || (subscriber?.id || '').slice(0, 8)}.png`;
 };

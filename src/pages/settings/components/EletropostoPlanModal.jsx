@@ -64,7 +64,7 @@ const DEFAULT_MULTILEVEL_RULES = {
 const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
 const LEVEL_LABELS = {
     L1: { short: 'Nível L1', desc: 'Venda Direta (Parceiro Power)' },
-    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Conect)' },
+    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Connect)' },
     L3: { short: 'Nível L3', desc: '2ª Indicação (Corte Parceiro Power)' },
     L4: { short: 'Nível L4+', desc: 'Expansão Profunda (Corte Líder)' }
 };
@@ -1293,7 +1293,7 @@ export default function EletropostoPlanModal({
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                     <Users size={15} color="#10b981" />
-                                                    <span>(-) Assinante Conect</span>
+                                                    <span>(-) Assinante Connect</span>
                                                 </div>
                                                 <div>
                                                     {renderMultilevelCenterControl('assinante_conect', [

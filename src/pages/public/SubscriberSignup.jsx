@@ -82,7 +82,7 @@ export default function SubscriberSignup() {
     const paramPhone = searchParams.get('phone') || '';
     const paramCep = searchParams.get('cep') || '';
     const paramOriginatorId = searchParams.get('originator_id') || '';
-    // Assinante Conect: quem chegou pelo link de indicação de um assinante.
+    // Assinante Connect: quem chegou pelo link de indicação de um assinante.
     // Vem do iframe da simulação (`?indicador=`) e também vale quando o
     // cliente abre o /contrato direto com o parâmetro na URL.
     const paramIndicador = searchParams.get('indicador') || '';

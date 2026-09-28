@@ -4,12 +4,12 @@ import {
     STATUS_PODE_INDICAR,
     primeiroNome,
     buildConviteAssinanteUrl,
-    buildLinkConect,
+    buildLinkConnect,
     podeIndicar,
     textoCompartilhar,
     urlWhatsappCompartilhar,
     nomeArquivoQr,
-} from '../src/lib/assinanteConect';
+} from '../src/lib/assinanteConnect';
 
 const ID = 'aa11bb22-cc33-dd44-ee55-ff6677889900';
 
@@ -44,17 +44,17 @@ describe('buildConviteAssinanteUrl', () => {
     });
 });
 
-describe('buildLinkConect', () => {
+describe('buildLinkConnect', () => {
     it('prefere o link curto quando existe', () => {
-        expect(buildLinkConect({ id: ID, name: 'Maria', short_url: 'https://link.b2wenergia.com.br/maria-caa11' }))
+        expect(buildLinkConnect({ id: ID, name: 'Maria', short_url: 'https://link.b2wenergia.com.br/maria-caa11' }))
             .toBe('https://link.b2wenergia.com.br/maria-caa11');
     });
     it('cai na URL longa enquanto o YOURLS nao respondeu', () => {
-        expect(buildLinkConect({ id: ID, name: 'Maria' }))
+        expect(buildLinkConnect({ id: ID, name: 'Maria' }))
             .toBe(`${LANDING_RAIZ}?indicador=${ID}&name=Maria`);
     });
     it('sem id devolve vazio', () => {
-        expect(buildLinkConect({ name: 'Maria' })).toBe('');
+        expect(buildLinkConnect({ name: 'Maria' })).toBe('');
     });
 });
 
@@ -101,9 +101,9 @@ describe('urlWhatsappCompartilhar', () => {
 
 describe('nomeArquivoQr', () => {
     it('gera nome de arquivo sem acento nem espaco', () => {
-        expect(nomeArquivoQr({ id: ID, name: 'Inês Célia Ramos' })).toBe('qrcode-conect-ines.png');
+        expect(nomeArquivoQr({ id: ID, name: 'Inês Célia Ramos' })).toBe('qrcode-connect-ines.png');
     });
     it('cai num nome generico quando nao ha nome', () => {
-        expect(nomeArquivoQr({ id: ID })).toBe('qrcode-conect-aa11bb22.png');
+        expect(nomeArquivoQr({ id: ID })).toBe('qrcode-connect-aa11bb22.png');
     });
 });
