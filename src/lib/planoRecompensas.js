@@ -47,13 +47,20 @@ const isNumeroValido = (v) => v !== undefined && v !== null && v !== '' && !Numb
 /**
  * Normaliza a config multinivel de um cargo: completa niveis faltantes com o
  * default da matriz acordada, respeita valor ja salvo dentro do max_niveis
- * (mesmo que diferente do default, mesmo que zero) e zera qualquer nivel
- * acima do max_niveis configurado.
+ * (mesmo que diferente do default, mesmo que zero), zera qualquer nivel
+ * acima do max_niveis configurado, e NUNCA deixa o max_niveis salvo passar
+ * do teto acordado para o cargo (fix round 1, F1: um max_niveis explicito
+ * acima do teto -- ex.: ppe/ppp com 3 -- estava sendo aceito como estava,
+ * permitindo L3 pago para cargos cujo teto e 2).
  */
 function normalizarCargo(cargo, cfgCargo) {
     const cfg = cfgCargo || {};
     const maxNiveisSalvo = Number(cfg.max_niveis);
-    const maxNiveis = Number.isFinite(maxNiveisSalvo) ? maxNiveisSalvo : MAX_NIVEIS[cargo];
+    const tetoDoCargo = MAX_NIVEIS[cargo] ?? 0;
+    const maxNiveis = Math.min(
+        Number.isFinite(maxNiveisSalvo) ? maxNiveisSalvo : tetoDoCargo,
+        tetoDoCargo
+    );
     const niveisSalvos = cfg.niveis || {};
     const defaultCargo = MATRIZ_PADRAO[cargo] || { L1: '0', L2: '0', L3: '0', L4: '0' };
 
@@ -116,6 +123,23 @@ export function normalizarRecorrenteConfig(cfg) {
         regras_multinivel,
         regras
     };
+}
+
+/**
+ * Verifica se um cargo tem direito a receber em determinado nivel (L1..L4),
+ * de acordo com o max_niveis efetivo configurado na tela -- sempre clampado
+ * ao teto do cargo (MAX_NIVEIS), fonte unica. B2W (gestao/plataforma)
+ * recebe em todos os niveis, sempre. Os demais cargos -- incluindo
+ * assinante_conect -- recebem em L1..max_niveis, sem nenhum deslocamento
+ * especial (fix round 1, F2: assinante_conect era tratado, no modal, como
+ * se so recebesse a partir de L2, mas a matriz acordada paga em L1).
+ */
+export function nivelPermitidoParaCargo(cargo, levelKey, maxNiveisAtual) {
+    if (cargo === 'b2w') return true;
+    const levelIdx = LEVEL_KEYS.indexOf(levelKey) + 1;
+    if (levelIdx <= 0) return false;
+    const teto = Math.min(Number(maxNiveisAtual) || 0, MAX_NIVEIS[cargo] ?? 0);
+    return levelIdx <= teto;
 }
 
 /**

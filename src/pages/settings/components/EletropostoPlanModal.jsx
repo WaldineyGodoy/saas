@@ -21,6 +21,7 @@ import {
     MATRIZ_PADRAO,
     MAX_NIVEIS,
     normalizarRecorrenteConfig,
+    nivelPermitidoParaCargo,
     semChavesLegadas
 } from '../../../lib/planoRecompensas';
 
@@ -211,15 +212,11 @@ export default function EletropostoPlanModal({
         }
     };
 
-    const isLevelAllowedForRole = (roleKey, levelKey, maxNiveis) => {
-        if (roleKey === 'b2w') return true; // B2W (Gestão / Plataforma) recebe recorrência fixa em todos os níveis
-        const levelIdx = LEVEL_KEYS.indexOf(levelKey) + 1;
-        if (roleKey === 'assinante_conect') {
-            if (maxNiveis === 0) return false;
-            return levelIdx >= 2;
-        }
-        return levelIdx <= maxNiveis;
-    };
+    // Fonte única em src/lib/planoRecompensas.js (fix round 1, F2: aqui
+    // havia um deslocamento hardcoded para assinante_conect que não batia
+    // com a matriz acordada, que paga em L1).
+    const isLevelAllowedForRole = (roleKey, levelKey, maxNiveis) =>
+        nivelPermitidoParaCargo(roleKey, levelKey, maxNiveis);
 
     const handleFixedB2WPctChange = (val) => {
         setRegrasMultinivel(prev => ({
@@ -231,27 +228,22 @@ export default function EletropostoPlanModal({
         }));
     };
 
+    // newMax nunca passa do teto acordado para o cargo (fix round 1, F1) --
+    // e assinante_conect segue a mesma regra genérica dos demais cargos
+    // (fix round 1, F2: nada de deslocar o L1 para zero/forçar L2).
     const handleRoleMaxLevelsChange = (roleKey, newMaxStr) => {
-        const newMax = parseInt(newMaxStr, 10);
+        const newMax = Math.min(parseInt(newMaxStr, 10) || 0, MAX_NIVEIS[roleKey] ?? 0);
         setRegrasMultinivel(prev => {
             const currentRole = prev[roleKey];
             const updatedNiveis = { ...currentRole.niveis };
 
             LEVEL_KEYS.forEach((lk, idx) => {
                 const lvNum = idx + 1;
-                if (roleKey === 'assinante_conect') {
-                    if (newMax === 0 || lvNum === 1) {
-                        updatedNiveis[lk] = '0';
-                    } else if (Number(updatedNiveis[lk]) === 0) {
-                        updatedNiveis[lk] = '2';
-                    }
-                } else {
-                    if (lvNum > newMax) {
-                        updatedNiveis[lk] = '0';
-                    } else if (Number(updatedNiveis[lk]) === 0) {
-                        const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
-                        updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
-                    }
+                if (lvNum > newMax) {
+                    updatedNiveis[lk] = '0';
+                } else if (Number(updatedNiveis[lk]) === 0) {
+                    const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
+                    updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
                 }
             });
 
@@ -1146,7 +1138,6 @@ export default function EletropostoPlanModal({
                                                         { val: 3, label: '3 Níveis (L1-L3)' },
                                                         { val: 2, label: '2 Níveis (L1-L2)' },
                                                         { val: 1, label: '1 Nível (L1)' },
-                                                        { val: 4, label: 'Todos (L1-L4+)' },
                                                         { val: 0, label: 'Sem Recorrência' }
                                                     ])}
                                                 </div>
@@ -1196,7 +1187,6 @@ export default function EletropostoPlanModal({
                                                     <div>
                                                         {renderMultilevelCenterControl('ppe', [
                                                             { val: 2, label: '2 Níveis (L1-L2)' },
-                                                            { val: 3, label: '3 Níveis (L1-L3)' },
                                                             { val: 1, label: '1 Nível (L1)' },
                                                             { val: 0, label: 'Desativado' }
                                                         ])}
@@ -1224,7 +1214,6 @@ export default function EletropostoPlanModal({
                                                     <div>
                                                         {renderMultilevelCenterControl('ppp', [
                                                             { val: 2, label: '2 Níveis (L1-L2)' },
-                                                            { val: 3, label: '3 Níveis (L1-L3)' },
                                                             { val: 1, label: '1 Nível (L1)' },
                                                             { val: 0, label: 'Desativado' }
                                                         ])}
@@ -1273,12 +1262,12 @@ export default function EletropostoPlanModal({
                                                 </div>
                                                 <div>
                                                     {renderMultilevelCenterControl('assinante_conect', [
-                                                        { val: 1, label: '1 Nível Direto (L2+)' },
+                                                        { val: 1, label: '1 Nível Direto (L1)' },
                                                         { val: 0, label: 'Sem MGM (0%)' }
                                                     ])}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: cv.pctAssinanteConect > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 600 }}>
-                                                    {cv.pctAssinanteConect > 0 ? `- R$ ${formatCurrencyUnit(cv.vAssinanteConect, 5)}` : 'R$ 0,0000 (N/A L1)'}
+                                                    {cv.pctAssinanteConect > 0 ? `- R$ ${formatCurrencyUnit(cv.vAssinanteConect, 5)}` : 'R$ 0,0000 (Corte)'}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>
                                                     {formatPct(cv.pctRealAssinanteConect)}%

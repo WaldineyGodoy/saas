@@ -3,7 +3,8 @@ import {
     CARGOS,
     MATRIZ_PADRAO,
     MAX_NIVEIS,
-    normalizarRecorrenteConfig
+    normalizarRecorrenteConfig,
+    nivelPermitidoParaCargo
 } from '../src/lib/planoRecompensas.js';
 
 const CHAVES_LEGADAS = ['associacao', 'embaixador', 'coordenador', 'assinante'];
@@ -150,5 +151,96 @@ describe('normalizarRecorrenteConfig', () => {
 
         expect(out.vigencia_tipo).toBe('status_ativo_entidade');
         expect(out.lastro_tarifario).toEqual({ tarifa_bruta: 1.03, fio_b: 0.213 });
+    });
+});
+
+// ---------------------------------------------------------------------
+// Fix round 1 (revisão de código, 28/09/2026)
+//
+// F1: um max_niveis explicito acima do teto acordado (ex.: ppe/ppp com 3,
+// que a tela ainda oferecia como opção) era aceito como estava -- gravando
+// um L3 real para cargos cujo teto é 2. A tela grava o que o usuário
+// escolher; quem tem que barrar é o normalizador.
+//
+// F2: assinante_conect era tratado (fora da lib, direto nos modais) como
+// se só recebesse a partir de L2, embora a matriz acordada pague em L1.
+// Isso subestimava a dedução de L1 no demonstrativo (superávit inflado) e
+// podia deixar passar um plano deficitário pelo bloqueio de salvamento.
+// ---------------------------------------------------------------------
+
+describe('F1 - max_niveis explicito nunca passa do teto do cargo', () => {
+    test.each([
+        ['ppe', 3, 2],
+        ['ppp', 3, 2],
+        ['ppf', 4, 2],
+        ['lider', 4, 3],
+        ['assinante_conect', 2, 1],
+        ['b2w', 6, 4]
+    ])('%s: max_niveis salvo como %i é clampado para o teto %i', (cargo, maxSalvo, tetoEsperado) => {
+        const cfg = { regras_multinivel: { [cargo]: { max_niveis: maxSalvo, niveis: {} } } };
+        const out = normalizarRecorrenteConfig(cfg);
+
+        expect(out.regras_multinivel[cargo].max_niveis).toBe(tetoEsperado);
+    });
+
+    test('ppe com max_niveis salvo 3 e L3 preenchido: o clamp zera o L3 (não fica pagando acima do teto)', () => {
+        const cfg = {
+            regras_multinivel: {
+                ppe: { max_niveis: 3, niveis: { L1: '5', L2: '2', L3: '2', L4: '0' } }
+            }
+        };
+
+        const out = normalizarRecorrenteConfig(cfg);
+
+        expect(out.regras_multinivel.ppe).toEqual({
+            max_niveis: 2,
+            niveis: { L1: '5', L2: '2', L3: '0', L4: '0' }
+        });
+    });
+
+    test('lider com max_niveis salvo 4 (Todos): clampado para o teto 3, L4 zerado', () => {
+        const cfg = {
+            regras_multinivel: {
+                lider: { max_niveis: 4, niveis: { L1: '1', L2: '1', L3: '1', L4: '1' } }
+            }
+        };
+
+        const out = normalizarRecorrenteConfig(cfg);
+
+        expect(out.regras_multinivel.lider).toEqual({
+            max_niveis: 3,
+            niveis: { L1: '1', L2: '1', L3: '1', L4: '0' }
+        });
+    });
+});
+
+describe('F2 - nivelPermitidoParaCargo (fonte única de níveis habilitados)', () => {
+    test('assinante_conect recebe em L1 (não em L2+), teto 1', () => {
+        expect(nivelPermitidoParaCargo('assinante_conect', 'L1', 1)).toBe(true);
+        expect(nivelPermitidoParaCargo('assinante_conect', 'L2', 1)).toBe(false);
+        expect(nivelPermitidoParaCargo('assinante_conect', 'L3', 1)).toBe(false);
+        expect(nivelPermitidoParaCargo('assinante_conect', 'L4', 1)).toBe(false);
+    });
+
+    test('assinante_conect com max_niveis 0 não recebe em nenhum nível', () => {
+        expect(nivelPermitidoParaCargo('assinante_conect', 'L1', 0)).toBe(false);
+    });
+
+    test('b2w recebe em todos os níveis, mesmo com max_niveis 0 (gestão/plataforma)', () => {
+        expect(nivelPermitidoParaCargo('b2w', 'L1', 0)).toBe(true);
+        expect(nivelPermitidoParaCargo('b2w', 'L4', 0)).toBe(true);
+    });
+
+    test('cargos padrão (lider/ppe/ppp/ppf) seguem levelIdx <= max_niveis, sem deslocamento', () => {
+        expect(nivelPermitidoParaCargo('ppe', 'L1', 2)).toBe(true);
+        expect(nivelPermitidoParaCargo('ppe', 'L2', 2)).toBe(true);
+        expect(nivelPermitidoParaCargo('ppe', 'L3', 2)).toBe(false);
+    });
+
+    test('nivelPermitidoParaCargo também clampa o maxNiveisAtual ao teto do cargo', () => {
+        // mesmo que alguém passe maxNiveisAtual=3 para ppe (teto real 2),
+        // L3 continua bloqueado -- a função nunca confia cegamente no valor recebido
+        expect(nivelPermitidoParaCargo('ppe', 'L3', 3)).toBe(false);
+        expect(nivelPermitidoParaCargo('ppe', 'L2', 3)).toBe(true);
     });
 });
