@@ -191,3 +191,24 @@ Regras:
 - Link de indicação do assinante (short_url, raiz, `p_indicador_assinante_id` na RPC de adesão).
 - Eletropostos.
 - Baixa do repasse ao originador no razão.
+
+---
+
+### Task 9: Alinhar a tela de Planos à matriz acordada (decisão do dono, 28/09/2026)
+
+Motivo: `PlanModal.jsx` ainda grava as chaves legadas (`associacao`, `embaixador`, `coordenador`, `assinante`) e defaults divergentes de `ppf` e `assinante_conect`. No próximo salvamento pela tela, a normalização da Task 3 se perde e o motor passa a pagar errado.
+
+**Files:**
+- Modify: `src/pages/settings/components/PlanModal.jsx` (e `EletropostoPlanModal.jsx` se compartilhar a matriz)
+- Create: `tests/plano-matriz.test.js` (Vitest, regras puras)
+
+**Interfaces:**
+- Extrair para `src/lib/planoRecompensas.js`: `CARGOS = ['lider','ppe','ppp','ppf','assinante_conect']`, `MATRIZ_PADRAO` (ppe 5/2/0/0, ppp 4/2/0/0, ppf 2/2/0/0, lider 1/1/1/0, b2w 10/10/10/10, assinante_conect 2/0/0/0), `MAX_NIVEIS` (ppe/ppp/ppf 2, lider 3, b2w 4, assinante_conect 1), `normalizarRecorrenteConfig(cfg)` → objeto sem chaves legadas, com `regras_multinivel` completo e `regras` derivado do nível 1.
+- O modal passa a ler e gravar por essas funções; nenhum default divergente no componente.
+
+- [ ] **Step 1:** coordenar com a sessão dona do arquivo (ver ledger) e conferir `git log -3 -- src/pages/settings/components/PlanModal.jsx`; se houver alteração não commitada de outra sessão, PARAR e reportar.
+- [ ] **Step 2:** testes Vitest de `normalizarRecorrenteConfig` (remove legadas, completa níveis faltantes, respeita valor já salvo dentro do `max_niveis`, zera acima do `max_niveis`) → RED.
+- [ ] **Step 3:** implementar `src/lib/planoRecompensas.js` → GREEN.
+- [ ] **Step 4:** ligar o modal ao módulo, sem mexer no layout; `npm run build`.
+- [ ] **Step 5:** salvar um plano pela tela em ambiente local e conferir por SELECT que o JSON gravado continua normalizado (se não houver como logar, descrever o teste manual para o dono).
+- [ ] **Step 6:** commit `fix(recompensas): tela de planos grava a matriz acordada`.
