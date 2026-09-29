@@ -31,6 +31,17 @@
 --  13.  plano com "niveis": null -> plano_sem_matriz;
 --  14.  papel que o plano paga e o razao nao tem conta -> RAISE EXCEPTION.
 --
+-- Fix round 2 (29/09/2026):
+--  15.  residuo de arredondamento: valor_a_pagar com mais de duas casas -- a
+--       transacao fecha EXATAMENTE em zero, o banco registra o valor recebido
+--       e quem absorve a fracao de centavo e o fornecedor (G1);
+--  16.  fatura bloqueada por uc_sem_usina volta a ser lancavel depois que
+--       alguem conserta o vinculo -- e so uma vez (G2).
+--
+-- OBS: o caso 14 troca fn_participantes_recompensa DENTRO da transacao, entao
+-- ele tem de continuar sendo o ULTIMO caso do arquivo. Casos novos entram
+-- ANTES dele.
+--
 -- Rodar pelo MCP execute_sql. Sucesso = erro 'SANDBOX_OK' (tudo desfeito).
 
 DO $$
@@ -109,6 +120,9 @@ DECLARE
     v_usina_orfao     uuid;
     v_msg             text;
     v_pegou           boolean := false;
+
+    -- fix round 2
+    v_residuo         numeric;
 BEGIN
     -- ------------------------------------------------------------------
     -- 0. pre-requisitos estruturais
@@ -207,7 +221,7 @@ BEGIN
     INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id)
     VALUES ('SANDBOX Task6 PPE', 'ppe', true, v_lider) RETURNING id INTO v_ppe;
 
-    INSERT INTO public.originators_v2 (name, cargo, ativo)
+    INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id)
     VALUES ('SANDBOX Task6 PPE sem lider', 'ppe', true, NULL) RETURNING id INTO v_ppe2;
 
     -- PPP com licenca vencida ONTEM: recorrencia suspensa, valor vai para a B2W
@@ -927,6 +941,169 @@ BEGIN
     IF (v_gestao, v_forn, v_total) IS DISTINCT FROM (0::numeric, -1000::numeric, 0::numeric) THEN
         RAISE EXCEPTION 'FALHA caso 13: 3.1.1=% 2.1.1=% soma=% (esperado 0 / -1000 / 0)',
             v_gestao, v_forn, v_total;
+    END IF;
+
+    -- ==================================================================
+    -- CASO 15 -- RESIDUO DE ARREDONDAMENTO (achado G1).
+    --   invoices.valor_a_pagar e numeric SEM escala: 38 das 96 faturas reais
+    --   tem mais de duas casas. Com valor_a_pagar 371,36480000000006 e
+    --   concessionaria 196,62 a base e 174,74480000000006, e o motor arredonda
+    --   a base na entrada (174,74). Antes do fix os 0,0048 abaixo do centavo
+    --   ficavam sem contrapartida e a transacao fechava em +0,0048 --
+    --   lancamento orfao, exatamente o que o Global Constraint do razao
+    --   proibe. Agora quem absorve o residuo e o FORNECEDOR: o banco continua
+    --   registrando o dinheiro que entrou de verdade e a B2W e os
+    --   beneficiarios continuam com duas casas.
+    --   Montagem igual a do caso 1 (rateio padrao: PPE com lider, piso 50).
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c15') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 371.36480000000006, 196.62, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT transaction_id INTO v_txn
+      FROM public.ledger_entries WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1;
+    IF v_txn IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 15: a fatura com centavos quebrados nao gerou lancamento nenhum';
+    END IF;
+
+    -- a) a transacao fecha EXATAMENTE em zero, sem tolerancia nenhuma
+    SELECT COALESCE(SUM(amount), 0) INTO v_total
+      FROM public.ledger_entries WHERE transaction_id = v_txn;
+    IF v_total <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 15 (residuo): a transacao nao fecha em zero, soma = % -- o residuo abaixo do centavo ficou orfao no razao', v_total;
+    END IF;
+
+    -- b) o razao registra o DINHEIRO QUE ENTROU, nao uma versao arredondada
+    SELECT amount INTO v_bank
+      FROM public.ledger_entries
+     WHERE transaction_id = v_txn AND account_id = v_acc_bank
+       AND description = 'Recebimento Fatura ' || v_inv;
+    IF v_bank IS DISTINCT FROM 371.36480000000006::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 15: o recebimento no banco veio %, esperado 371.36480000000006 (o razao registra o valor recebido, nunca uma versao arredondada)', v_bank;
+    END IF;
+
+    -- c) gestao da B2W e recompensas nunca ficam com fracao de centavo
+    SELECT COUNT(*) INTO v_n
+      FROM public.ledger_entries
+     WHERE transaction_id = v_txn
+       AND account_id IN (v_acc_gestao, v_acc_comissoes, v_acc_conect)
+       AND amount <> round(amount, 2);
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 15: % lancamento(s) de gestao/recompensa com mais de duas casas -- o residuo foi parar em quem nao devia absorve-lo', v_n;
+    END IF;
+
+    -- d) quem absorve a fracao de centavo e o fornecedor (2.1.1)
+    SELECT amount INTO v_forn
+      FROM public.ledger_entries
+     WHERE transaction_id = v_txn AND account_id = v_acc_investidor;
+    IF v_forn = round(v_forn, 2) THEN
+        RAISE EXCEPTION 'FALHA caso 15: o repasse ao fornecedor (%) nao carrega o residuo -- ele e o residual do rateio e e quem garante a soma exata', v_forn;
+    END IF;
+
+    -- e) o congelamento tem de dizer quanto de residuo foi absorvido
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec IS NULL OR v_rec->>'residuo_fornecedor' IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 15: recompensas_aplicadas.residuo_fornecedor nao foi congelado';
+    END IF;
+    v_residuo := (v_rec->>'residuo_fornecedor')::numeric;
+    IF v_residuo = 0 THEN
+        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor congelado = 0, mas a base (%) tem mais de duas casas', v_rec->>'base';
+    END IF;
+    IF v_residuo IS DISTINCT FROM ((v_rec->>'base')::numeric - round((v_rec->>'base')::numeric, 2)) THEN
+        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor = %, esperado base - round(base,2) (base congelada = %)',
+            v_residuo, v_rec->>'base';
+    END IF;
+
+    -- ==================================================================
+    -- CASO 16 -- FATURA BLOQUEADA volta a ser lancavel (achado G2).
+    --   UC sem usina bloqueia a transacao inteira e congela lancado:false.
+    --   Antes do fix a trava de dupla execucao olhava so "existe
+    --   recompensas_aplicadas" e prendia a fatura PARA SEMPRE: depois de
+    --   alguem consertar o vinculo da UC, a passagem por 'pago' era recusada
+    --   e o dinheiro recebido nunca chegava ao razao (banco, gestao e repasse
+    --   todos ausentes), sem saida a nao ser SQL na mao. Agora a trava olha o
+    --   campo 'lancado': bloqueia o que foi lancado de fato e solta o que
+    --   ficou congelado como nao lancado -- e uma vez so.
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c16') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    -- 1) primeira passagem por 'pago': bloqueada, nada no razao
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT COUNT(*) INTO v_n FROM public.ledger_entries WHERE reference_id = v_inv;
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 16: UC sem usina lancou % linha(s) no razao, esperado nenhuma', v_n;
+    END IF;
+
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec IS NULL OR v_rec->>'motivo' IS DISTINCT FROM 'uc_sem_usina' THEN
+        RAISE EXCEPTION 'FALHA caso 16: motivo = %, esperado uc_sem_usina', COALESCE(v_rec->>'motivo', '<nulo>');
+    END IF;
+    IF (v_rec->>'lancado')::boolean IS DISTINCT FROM false THEN
+        RAISE EXCEPTION 'FALHA caso 16: lancado = %, esperado false', COALESCE(v_rec->>'lancado', '<nulo>');
+    END IF;
+
+    -- 2) alguem conserta o vinculo da UC
+    UPDATE public.consumer_units SET usina_id = v_usina WHERE id = v_uc;
+
+    -- 3) a fatura volta a passar por 'pago'
+    UPDATE public.invoices SET status = 'a_vencer' WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'pago'     WHERE id = v_inv;
+
+    -- 4) agora a transacao COMPLETA tem de ter sido lancada
+    SELECT transaction_id INTO v_txn
+      FROM public.ledger_entries WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1;
+    IF v_txn IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 16: consertado o vinculo da UC, a fatura continuou presa -- dinheiro recebido e nunca lancado';
+    END IF;
+
+    SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_bank AND amount > 0), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount), 0)
+      INTO v_bank, v_gestao, v_com, v_forn, v_total
+      FROM public.ledger_entries WHERE transaction_id = v_txn;
+
+    IF (v_bank, v_gestao, v_com, v_forn) IS DISTINCT FROM (1000::numeric, -100::numeric, -60::numeric, -840::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 16: a transacao relancada veio incompleta: 1.1.1.01=% 3.1.1=% 2.1.2=% 2.1.1=% (esperado 1000 / -100 / -60 / -840)',
+            v_bank, v_gestao, v_com, v_forn;
+    END IF;
+    IF v_total <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 16: a transacao relancada nao fecha em zero, soma = %', v_total;
+    END IF;
+
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF (v_rec->>'lancado')::boolean IS DISTINCT FROM true THEN
+        RAISE EXCEPTION 'FALHA caso 16: depois do relancamento lancado = %, esperado true', COALESCE(v_rec->>'lancado', '<nulo>');
+    END IF;
+    IF v_rec->>'motivo' IS DISTINCT FROM 'recorrencia' THEN
+        RAISE EXCEPTION 'FALHA caso 16: depois do relancamento motivo = %, esperado recorrencia', COALESCE(v_rec->>'motivo', '<nulo>');
+    END IF;
+
+    -- 5) destravada nao quer dizer relancavel sempre: a TERCEIRA passagem por
+    --    'pago' ja encontra lancado:true e nao pode duplicar nada.
+    UPDATE public.invoices SET status = 'a_vencer' WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'pago'     WHERE id = v_inv;
+
+    SELECT COUNT(DISTINCT transaction_id) INTO v_n
+      FROM public.ledger_entries WHERE reference_id = v_inv AND reference_type = 'invoice';
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA caso 16: depois de destravada, a fatura gerou % transacoes no razao, esperado 1', v_n;
     END IF;
 
     -- ==================================================================
