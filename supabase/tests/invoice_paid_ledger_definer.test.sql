@@ -107,6 +107,15 @@ BEGIN
     -- tipo_recompensa EXPLICITO a partir da Task 11 (20260929d): o default da
     -- coluna e 'start', e plano 'start' nao paga recorrencia fora da fatura
     -- elegivel -- este teste mede a recorrencia, entao pinamos 'recorrente'.
+    -- Task 12 (20260929e): a base virou consumo_compensado x (tarifa x
+    -- (1 - desconto/100) - Fio B). Com tarifa 1,20, Fio B 0,20 e plano sem
+    -- desconto a tarifa liquida e 1,00/kWh, entao consumo_compensado = v_base
+    -- reproduz exatamente a base de antes e os tres valores esperados nao
+    -- mudam.
+    INSERT INTO public."Concessionaria"
+        ("Cod. Ibge", "Município", "Concessionaria", "UF", "Tarifa Concessionaria", "Fio B")
+    VALUES ('SBX16-C1', 'Sandbox Task16', 'SANDBOX Task16 conc', 'RN', 1.20, 0.20);
+
     INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
     VALUES ('SANDBOX Plano Task16', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', '{
       "b2w":   {"niveis": {"L1": "10", "L2": "10", "L3": "10", "L4": "10"}, "max_niveis": 4},
@@ -130,13 +139,14 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, short_url)
     VALUES (v_orig, 'sandbox://task16/definer') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task16 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', v_base, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', v_base, 0, CURRENT_DATE + 5, v_base) RETURNING id INTO v_inv;
 
-    -- base = valor_a_pagar (concessionaria zerada) = 1000; teto = 500 (piso 50%):
+    -- base = 1000 kWh compensados x 1,00 (tarifa 1,20 - Fio B 0,20, sem
+    -- desconto no plano) = 1000; teto = 500 (piso 50%):
     --   2.1.2 comissoes  = PPE nivel 1, 5%          -> -50
     --   3.1.1 gestao B2W = matriz b2w L1, 10%       -> -100
     --   2.1.1 investidor = residual, 1000 - 150     -> -850

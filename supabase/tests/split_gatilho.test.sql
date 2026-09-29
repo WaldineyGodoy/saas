@@ -38,6 +38,19 @@
 --  16.  fatura bloqueada por uc_sem_usina volta a ser lancavel depois que
 --       alguem conserta o vinculo -- e so uma vez (G2).
 --
+-- Task 12 (29/09/2026) -- atualizacao das FIXTURES, nao das assercoes:
+--   a base saiu de `valor_a_pagar - valor_concessionaria` e virou
+--   `consumo_compensado x (tarifa x (1 - desconto/100) - Fio B)`, com tarifa e
+--   Fio B do cadastro da concessionaria. As UCs deste arquivo passaram a ter
+--   concessionaria cadastrada (tarifa 1,20 / Fio B 0,20 -> liquida 1,00) e as
+--   faturas, consumo_compensado igual a base que tinham antes -- por isso
+--   NENHUM numero esperado mudou. As unicas mudancas de assercao sao:
+--     * caso 9 usa uma concessionaria de Fio B maior que a tarifa, unico jeito
+--       de a formula nova dar base negativa;
+--     * caso 15 compara residuo_fornecedor com caixa_liquido em vez de base,
+--       porque base e caixa deixaram de ser o mesmo numero e quem tem de
+--       fechar a transacao e o caixa.
+--
 -- OBS: o caso 14 troca fn_participantes_recompensa DENTRO da transacao, entao
 -- ele tem de continuar sendo o ULTIMO caso do arquivo. Casos novos entram
 -- ANTES dele.
@@ -197,6 +210,25 @@ BEGIN
     -- ------------------------------------------------------------------
     -- fixture comum
     -- ------------------------------------------------------------------
+    -- Task 12 (20260929e): a base deixou de ser valor_a_pagar -
+    -- valor_concessionaria e passou a ser consumo_compensado x (tarifa x
+    -- (1 - desconto/100) - Fio B), com tarifa e Fio B vindos do cadastro da
+    -- concessionaria. Para que TODOS os numeros deste arquivo continuem os
+    -- mesmos, o cadastro sandbox tem tarifa 1,20 e Fio B 0,20 e os planos nao
+    -- tem desconto (0), o que da tarifa liquida 1,00/kWh: cada fatura recebe
+    -- consumo_compensado igual a base que ela tinha antes. Quem esta medindo a
+    -- DIVISAO nao muda; quem mede a BASE e supabase/tests/split_base_compensada.test.sql.
+    INSERT INTO public."Concessionaria"
+        ("Cod. Ibge", "Município", "Concessionaria", "UF", "Tarifa Concessionaria", "Fio B")
+    VALUES ('SBX6-C1', 'Sandbox Task6', 'SANDBOX Task6 conc', 'RN', 1.20, 0.20);
+
+    -- Cadastro com Fio B MAIOR que a tarifa: tarifa liquida -0,20/kWh. E o
+    -- unico jeito de a formula nova produzir base NEGATIVA, que e o que o
+    -- caso 9 (prejuizo compartilhado) precisa medir.
+    INSERT INTO public."Concessionaria"
+        ("Cod. Ibge", "Município", "Concessionaria", "UF", "Tarifa Concessionaria", "Fio B")
+    VALUES ('SBX6-C2', 'Sandbox Task6 Fio Maior', 'SANDBOX Task6 fio maior', 'RN', 1.00, 1.20);
+
     -- tipo_recompensa EXPLICITO a partir da Task 11 (20260929d): o default da
     -- coluna e 'start', e em plano 'start' parceiro/lider/Conect so recebem na
     -- fatura elegivel -- nas demais nao recebem nada. Os casos abaixo testam a
@@ -253,11 +285,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c1') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -363,11 +395,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe2, 'ativo', 'sandbox://task6/c2', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -405,11 +437,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppp, 'ativo', 'sandbox://task6/c3') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -445,11 +477,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c4') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -498,11 +530,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c5', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_p88, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_p88, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -564,11 +596,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c5b', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_p95, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_p95, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -603,11 +635,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c6') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, fatura_consumo_terceiro)
-    VALUES (v_sub, v_usina, 'geradora', 'ativo', false) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, fatura_consumo_terceiro, concessionaria, address)
+    VALUES (v_sub, v_usina, 'geradora', 'ativo', false, 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -623,18 +655,21 @@ BEGIN
 
     -- ==================================================================
     -- CASO 7 -- banco / taxa Asaas / concessionaria IDENTICOS aos de hoje.
-    --   valor_a_pagar 1000, concessionaria 300 -> base 700
+    --   valor_a_pagar 1000, concessionaria 300, 700 kWh compensados -> base 700
     --   1.1.1.01 = 1000 - 1.99 = 998.01 | 4.1.1 = 1.99 | 2.1.3.01 = -300
     --   B2W 70 | PPE 35 | Lider 7 | fornecedor 588
+    --   Task 12: os 300 da concessionaria continuam lancados em 2.1.3.01 como
+    --   obrigacao separada, mas NAO abatem mais a base -- a base e a energia
+    --   compensada. O fornecedor e o residual do CAIXA: 700 - 70 - 42 = 588.
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c7') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, asaas_payment_id)
-    VALUES (v_uc, 'a_vencer', 1000, 300, CURRENT_DATE + 5, 'pay_sandbox_task6') RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, asaas_payment_id, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 300, CURRENT_DATE + 5, 'pay_sandbox_task6', 700) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -656,7 +691,7 @@ BEGIN
             v_bank, v_taxa, v_conces;
     END IF;
     IF (v_gestao, v_com, v_forn) IS DISTINCT FROM (-70::numeric, -42::numeric, -588::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 7: a base da recompensa nao e (valor_a_pagar - valor_concessionaria): 3.1.1=% 2.1.2=% 2.1.1=% (esperado -70 / -42 / -588)',
+        RAISE EXCEPTION 'FALHA caso 7: o rateio sobre a energia compensada (700 kWh x 1,00) mudou: 3.1.1=% 2.1.2=% 2.1.1=% (esperado -70 / -42 / -588)',
             v_gestao, v_com, v_forn;
     END IF;
     IF v_total <> 0 THEN
@@ -696,11 +731,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c8') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_start, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_start, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -739,8 +774,8 @@ BEGIN
     END IF;
 
     -- segunda fatura da mesma UC: ordinal 2, fora de faturas_elegiveis = [1]
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 35) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 35, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -756,7 +791,11 @@ BEGIN
 
     -- ==================================================================
     -- CASO 9 -- BASE NEGATIVA: prejuizo compartilhado.
-    --   valor_a_pagar 100, concessionaria 300 -> base -200.
+    --   1000 kWh compensados na concessionaria de Fio B maior que a tarifa
+    --   (1,00 - 1,20 = -0,20/kWh) -> base -200. Com a base da Task 12 e esse o
+    --   unico caminho para base negativa: cadastro em que o Fio B supera a
+    --   tarifa com desconto. valor_a_pagar 100 e concessionaria 300 deixam o
+    --   caixa tambem em -200, entao os lancamentos sao os mesmos de antes.
     --   Decisao do dono de 18/08/2026, RECONFIRMADA em 28/09/2026: a B2W
     --   absorve a fatia dela do prejuizo; parceiro/lider/Conect nao recebem
     --   nada (percentual de base negativa nao e recompensa).
@@ -767,11 +806,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c9') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 fio maior', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 100, 300, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 100, 300, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -818,11 +857,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c10') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago'              WHERE id = v_inv;
     UPDATE public.invoices SET status = 'ag_emissao_boleto' WHERE id = v_inv;
@@ -851,15 +890,17 @@ BEGIN
 
     -- ==================================================================
     -- CASO 11 -- valor_a_pagar nulo: base 0, nada estoura, tudo zerado.
+    --   Task 12: sem consumo_compensado a base tambem e 0 (caminho
+    --   sem_compensacao), e o caixa tambem e 0 -- o fornecedor fica com nada.
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c11') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', NULL, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', NULL, 0, CURRENT_DATE + 5, NULL) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -889,11 +930,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c12') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, NULL, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -926,11 +967,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c13') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_nula, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_nula, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -965,15 +1006,20 @@ BEGIN
     --   registrando o dinheiro que entrou de verdade e a B2W e os
     --   beneficiarios continuam com duas casas.
     --   Montagem igual a do caso 1 (rateio padrao: PPE com lider, piso 50).
+    --   Task 12: a base agora vem de 174,7448 kWh compensados x 1,00, e o
+    --   residuo que o fornecedor absorve passou a ser o do CAIXA
+    --   (valor_a_pagar - valor_concessionaria), que e quem tem de fechar a
+    --   transacao. Por isso a assercao (e) compara com caixa_liquido, nao com
+    --   a base.
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c15') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 371.36480000000006, 196.62, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 371.36480000000006, 196.62, CURRENT_DATE + 5, 174.7448) RETURNING id INTO v_inv;
 
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
 
@@ -1023,12 +1069,15 @@ BEGIN
         RAISE EXCEPTION 'FALHA caso 15: recompensas_aplicadas.residuo_fornecedor nao foi congelado';
     END IF;
     v_residuo := (v_rec->>'residuo_fornecedor')::numeric;
-    IF v_residuo = 0 THEN
-        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor congelado = 0, mas a base (%) tem mais de duas casas', v_rec->>'base';
+    IF v_rec->>'caixa_liquido' IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 15: o congelamento precisa guardar caixa_liquido -- desde a Task 12 ele nao e mais igual a base';
     END IF;
-    IF v_residuo IS DISTINCT FROM ((v_rec->>'base')::numeric - round((v_rec->>'base')::numeric, 2)) THEN
-        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor = %, esperado base - round(base,2) (base congelada = %)',
-            v_residuo, v_rec->>'base';
+    IF v_residuo = 0 THEN
+        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor congelado = 0, mas o caixa (%) tem mais de duas casas', v_rec->>'caixa_liquido';
+    END IF;
+    IF v_residuo IS DISTINCT FROM ((v_rec->>'caixa_liquido')::numeric - round((v_rec->>'caixa_liquido')::numeric, 2)) THEN
+        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor = %, esperado caixa_liquido - round(caixa_liquido,2) (caixa congelado = %)',
+            v_residuo, v_rec->>'caixa_liquido';
     END IF;
 
     -- ==================================================================
@@ -1045,11 +1094,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c16') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, NULL, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     -- 1) primeira passagem por 'pago': bloqueada, nada no razao
     UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
@@ -1140,11 +1189,11 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c14') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
-    VALUES (v_sub, v_usina_orfao, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_orfao, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
-    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
-    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
 
     BEGIN
         UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
