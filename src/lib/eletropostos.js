@@ -28,18 +28,29 @@ export const statusConfig = (status) =>
 // A usina nunca e gravada no eletroposto: vem da UC.
 export const usinaDoEletroposto = (eletroposto) => eletroposto?.consumer_unit?.usina || null;
 
+const soDigitos = (v) => String(v ?? '').replace(/\D/g, '');
+
+// O numero da UC e gravado com pontuacao (2.100.615.032-02) e costuma ser
+// digitado sem ela: com 3 digitos ou mais, compara tambem so os digitos.
+export const casaBusca = (termo, valores) => {
+    const t = String(termo ?? '').trim().toLowerCase();
+    if (!t) return true;
+    const digitos = soDigitos(t);
+    return valores.some(v => {
+        const s = String(v ?? '').toLowerCase();
+        return s.includes(t) || (digitos.length >= 3 && soDigitos(s).includes(digitos));
+    });
+};
+
 export const filtrarEletropostos = (lista, filtros = {}) => {
     const { busca = '', status = '', usinaId = '', supplierId = '', originatorId = '' } = filtros;
-    const termo = busca.trim().toLowerCase();
 
     return (lista || []).filter(e => {
         if (status && e.status !== status) return false;
         if (usinaId && usinaDoEletroposto(e)?.id !== usinaId) return false;
         if (supplierId && !(e.fornecedores || []).some(f => f.supplier_id === supplierId)) return false;
         if (originatorId && e.originator_id !== originatorId) return false;
-        if (!termo) return true;
-        return [e.nome, e.consumer_unit?.numero_uc, e.endereco?.cidade]
-            .some(v => String(v || '').toLowerCase().includes(termo));
+        return casaBusca(busca, [e.nome, e.consumer_unit?.numero_uc, e.endereco?.cidade]);
     });
 };
 

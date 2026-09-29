@@ -10,6 +10,7 @@ import {
     paraPayloadFornecedores,
     montarPayloadEletroposto,
     mensagemErroEletroposto,
+    casaBusca,
 } from '../lib/eletropostos';
 
 const ABAS = [
@@ -116,12 +117,10 @@ export default function EletropostoModal({ eletroposto, somenteLeitura = false, 
     }, [form.consumer_unit_id, opcoes.ucs, eletroposto?.consumer_unit]);
 
     const ucsDisponiveis = useMemo(() => {
-        const termo = buscaUc.trim().toLowerCase();
-        const livres = opcoes.ucs.filter(u => !opcoes.ucsOcupadas.has(u.id) && u.id !== form.consumer_unit_id);
-        const achadas = termo
-            ? livres.filter(u => [u.numero_uc, u.subscriber?.name].some(v => String(v || '').toLowerCase().includes(termo)))
-            : livres;
-        return achadas.slice(0, 50);
+        return opcoes.ucs
+            .filter(u => !opcoes.ucsOcupadas.has(u.id) && u.id !== form.consumer_unit_id)
+            .filter(u => casaBusca(buscaUc, [u.numero_uc, u.subscriber?.name]))
+            .slice(0, 50);
     }, [buscaUc, opcoes.ucs, opcoes.ucsOcupadas, form.consumer_unit_id]);
 
     const soma = somaPercentuais(fornecedores);

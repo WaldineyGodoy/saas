@@ -10,6 +10,7 @@ import {
     paraPayloadFornecedores,
     montarPayloadEletroposto,
     mensagemErroEletroposto,
+    casaBusca,
 } from './eletropostos.js';
 
 const E1 = {
@@ -110,4 +111,16 @@ test('mensagem de erro: UC ja usada, plano errado e generico', () => {
     );
     assert.equal(mensagemErroEletroposto({ message: 'falhou' }), 'falhou');
     assert.equal(mensagemErroEletroposto(null), 'Erro desconhecido.');
+});
+
+test('busca: numero da UC casa com ou sem pontuacao', () => {
+    const e = { ...E1, consumer_unit: { ...E1.consumer_unit, numero_uc: '2.100.615.032-02' } };
+    assert.deepEqual(filtrarEletropostos([e, E2], { busca: '2100615' }).map(x => x.id), ['e1']);
+    assert.deepEqual(filtrarEletropostos([e, E2], { busca: '2.100.615' }).map(x => x.id), ['e1']);
+    assert.deepEqual(filtrarEletropostos([e, E2], { busca: '032-02' }).map(x => x.id), ['e1']);
+    assert.equal(casaBusca('2100615', ['2.100.615.032-02']), true);
+    assert.equal(casaBusca('paulo', ['2.100.615.032-02', 'Paulo Vitor']), true);
+    assert.equal(casaBusca('', ['qualquer']), true);
+    // dois digitos soltos nao casam por digito (evita "12" achar metade da base)
+    assert.equal(casaBusca('12', ['1.2']), false);
 });
