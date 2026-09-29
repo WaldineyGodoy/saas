@@ -231,3 +231,22 @@ Motivo: a guarda `fn_originador_guarda_campos_sensiveis` retorna cedo quando `au
 - [ ] **Step 2:** migração, aplicar, GREEN.
 - [ ] **Step 3:** conferir que os 8 originadores reais seguem em `ppf` e que nenhum ganhou `lider_id`.
 - [ ] **Step 4:** commit `fix(seguranca): cadastro publico nao escolhe cargo nem licenca`.
+
+---
+
+### Task 11: Bônus Start (decisões do dono, 28/09/2026)
+
+Motivo: a Task 6 detecta e congela o Start, mas aplica a recorrência, porque `start_config.regras` traz um percentual único por cargo, sem nível, e nos planos salvos ele soma 100% da base contra um piso de 50%.
+
+**Regras decididas:**
+- O percentual do Start vale **somente no nível 1** (venda direta).
+- Quem está no nível 2 ou mais **não recebe recorrência** nas faturas de Start quando o plano é do tipo `start`. Em plano `ambos` (híbrido), o nível 2+ segue na recorrência normal; em plano `recorrente`, o Start não existe.
+- A fonte do comportamento é `planos_assinatura_energia.tipo_recompensa` (`start` | `recorrente` | `ambos`).
+- O **Start é isento do piso do fornecedor**: nas faturas elegíveis não há corte, mesmo que o fornecedor receba menos que o piso ou nada. O congelamento na fatura tem de deixar isso explícito (`piso_ignorado: true`), para o investidor poder auditar.
+- Elegibilidade: `start_config.faturas_elegiveis` contém o ordinal da fatura paga daquela UC (1, 2 ou 3).
+
+**Files:** Create `supabase/migrations/20260929a_bonus_start.sql`, `supabase/tests/split_bonus_start.test.sql`
+
+- [ ] **Step 1: teste primeiro** — plano `start` com fatura elegível: parceiro nível 1 recebe o percentual do Start, líder idem, fornecedor pode ficar abaixo do piso e nada é cortado; parceiro nível 2 não recebe nada; plano `ambos` com fatura elegível: nível 1 no Start e nível 2 na recorrência; plano `recorrente` ignora `start_config`; fatura fora de `faturas_elegiveis` cai na recorrência; o congelamento grava `bonus_start` com ordinal, regras e `piso_ignorado`.
+- [ ] **Step 2:** RED. **Step 3:** migração (só o gatilho muda; o motor puro continua com a mesma assinatura — passe o teto como `NULL`? **não**: o motor recusa teto nulo, então passe um teto igual à base, que na prática não corta, e registre no congelamento que o piso foi ignorado). **Step 4:** aplicar, GREEN, razão intacto.
+- [ ] **Step 5:** commit `feat(recompensas): bonus start no nivel 1, isento do piso`.
