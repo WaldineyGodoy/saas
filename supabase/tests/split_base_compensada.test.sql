@@ -50,7 +50,16 @@
 --  11.  congelamento: base, formula, kWh, tarifa, Fio B e desconto usados;
 --  12.  a conta da concessionaria continua lancada em 2.1.3.01 como obrigacao
 --       separada, e a soma da transacao fecha em ZERO EXATO, inclusive com
---       valor_a_pagar de mais de duas casas (o fornecedor e o residual).
+--       valor_a_pagar de mais de duas casas.
+--
+-- Task 13 (29/09/2026) -- atualizacao das ASSERCOES DO LADO DO RAZAO, nao do
+-- assunto deste arquivo. A base (energia compensada) e os bloqueios de
+-- cadastro continuam exatamente iguais; o que mudou foi QUEM absorve a
+-- diferenca entre a base e o caixa. Na Task 12 era o fornecedor (2.1.1 =
+-- residual do CAIXA); por decisao do dono passou a ser o assinante, na conta
+-- nova 1.1.2, e o fornecedor voltou a ser o residual DA BASE. Cada numero de
+-- 2.1.1 que mudou esta anotado no caso correspondente, e cada caso ganhou a
+-- assercao de 1.1.2 que faltava -- nenhuma assercao foi afrouxada.
 --
 -- Rodar pelo MCP execute_sql. Sucesso = erro 'SANDBOX_OK' (tudo desfeito).
 
@@ -61,6 +70,7 @@ DECLARE
     v_acc_taxa        uuid;  -- 4.1.1
     v_acc_gestao      uuid;  -- 3.1.1
     v_acc_investidor  uuid;  -- 2.1.1
+    v_acc_receber     uuid;  -- 1.1.2 (Task 13)
     v_acc_comissoes   uuid;  -- 2.1.2
     v_acc_conces      uuid;  -- 2.1.3.01
     v_acc_conect      uuid;  -- 2.1.6
@@ -101,6 +111,7 @@ DECLARE
     v_com             numeric;
     v_conect          numeric;
     v_forn            numeric;
+    v_receber         numeric;
     v_total           numeric;
     v_n               integer;
 
@@ -117,9 +128,11 @@ BEGIN
     SELECT id INTO v_acc_comissoes  FROM public.ledger_accounts WHERE code = '2.1.2';
     SELECT id INTO v_acc_conces     FROM public.ledger_accounts WHERE code = '2.1.3.01';
     SELECT id INTO v_acc_conect     FROM public.ledger_accounts WHERE code = '2.1.6';
+    SELECT id INTO v_acc_receber    FROM public.ledger_accounts WHERE code = '1.1.2';
 
     IF v_acc_bank IS NULL OR v_acc_gestao IS NULL OR v_acc_comissoes IS NULL
-       OR v_acc_investidor IS NULL OR v_acc_conces IS NULL OR v_acc_conect IS NULL THEN
+       OR v_acc_investidor IS NULL OR v_acc_conces IS NULL OR v_acc_conect IS NULL
+       OR v_acc_receber IS NULL THEN
         RAISE EXCEPTION 'FALHA: plano de contas incompleto para rodar o teste';
     END IF;
 
@@ -226,8 +239,11 @@ BEGIN
     --     1000 kWh x (1,25 x 0,80 - 0,25) = 1000 x 0,75 = 750,00
     --   valor_a_pagar 1000 e concessionaria 0 -> caixa 1000
     --     3.1.1 = -75 (10%% de 750) | 2.1.2 = -(37,50 + 7,50) = -45
-    --     2.1.1 = -(1000 - 75 - 45) = -880
-    --   (com a base antiga -- caixa 1000 -- seriam -100 / -60 / -840)
+    --     2.1.1 = -(750 - 75 - 45) = -630   <- Task 13
+    --     1.1.2 = 750 - 1000 = -250 (o assinante pagou mais que a base)
+    --   (com a base antiga -- caixa 1000 -- seriam -100 / -60 / -840; na Task
+    --    12, com o fornecedor no residual do CAIXA, 2.1.1 era -880 e nao havia
+    --    1.1.2 -- o investidor levava 250 que sao saldo do assinante)
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task12/c1') RETURNING id INTO v_sub;
@@ -277,13 +293,15 @@ BEGIN
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_conect), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_receber), 0),
            COALESCE(SUM(amount), 0)
-      INTO v_gestao, v_com, v_conect, v_forn, v_total
+      INTO v_gestao, v_com, v_conect, v_forn, v_receber, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-75::numeric, -45::numeric, 0::numeric, -880::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 2: 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -75 / -45 / 0 / -880 -- base 750 da compensada, nao 1000 do caixa)',
-            v_gestao, v_com, v_conect, v_forn;
+    IF (v_gestao, v_com, v_conect, v_forn, v_receber)
+       IS DISTINCT FROM (-75::numeric, -45::numeric, 0::numeric, -630::numeric, -250::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 2: 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% 1.1.2=% (esperado -75 / -45 / 0 / -630 / -250 -- base 750 da compensada, nao 1000 do caixa; o fornecedor e o residual da BASE e a diferenca e saldo do assinante)',
+            v_gestao, v_com, v_conect, v_forn, v_receber;
     END IF;
     IF v_total <> 0 THEN
         RAISE EXCEPTION 'FALHA caso 2: a transacao nao fecha em zero, soma = %', v_total;
@@ -322,8 +340,11 @@ BEGIN
     --   recebia. Base nova: 750 -> a recompensa e devida.
     --     2.1.3.01 = -300 (a conta continua lancada, so nao abate a base)
     --     3.1.1 = -75 | 2.1.2 = -45
-    --     2.1.1 = -(100 - 300 - 75 - 45) = +320  (o fornecedor e o residual
-    --             do caixa, e neste mes ele DEVE, nao recebe)
+    --     2.1.1 = -(750 - 75 - 45) = -630  <- Task 13: o fornecedor e o
+    --             residual DA BASE e RECEBE; na Task 12 ele era o residual do
+    --             caixa (+320), ou seja, era DEBITADO dos R$ 950 de
+    --             parcelamento/IP/consumo nao compensado, que sao do assinante
+    --     1.1.2 = 750 - (100 - 300) = +950 (o assinante DEVE esse saldo)
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task12/c3') RETURNING id INTO v_sub;
@@ -347,13 +368,15 @@ BEGIN
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_receber), 0),
            COALESCE(SUM(amount), 0)
-      INTO v_conces, v_gestao, v_com, v_forn, v_total
+      INTO v_conces, v_gestao, v_com, v_forn, v_receber, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_conces, v_gestao, v_com, v_forn) IS DISTINCT FROM (-300::numeric, -75::numeric, -45::numeric, 320::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 3 (o caso das 25): 2.1.3.01=% 3.1.1=% 2.1.2=% 2.1.1=% (esperado -300 / -75 / -45 / 320 -- houve compensacao, logo a comissao e devida mesmo com a conta da concessionaria maior que a cobranca)',
-            v_conces, v_gestao, v_com, v_forn;
+    IF (v_conces, v_gestao, v_com, v_forn, v_receber)
+       IS DISTINCT FROM (-300::numeric, -75::numeric, -45::numeric, -630::numeric, 950::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 3 (o caso das 25): 2.1.3.01=% 3.1.1=% 2.1.2=% 2.1.1=% 1.1.2=% (esperado -300 / -75 / -45 / -630 / 950 -- houve compensacao, logo a comissao e devida mesmo com a conta da concessionaria maior que a cobranca, e o rombo e do assinante, nao do investidor)',
+            v_conces, v_gestao, v_com, v_forn, v_receber;
     END IF;
     IF v_total <> 0 THEN
         RAISE EXCEPTION 'FALHA caso 3: a transacao nao fecha em zero, soma = %', v_total;
@@ -368,7 +391,10 @@ BEGIN
     -- ==================================================================
     -- CASO 4 -- fatura SEM compensacao: base zero, ninguem recebe.
     --   valor_a_pagar 500, consumo_compensado NULL.
-    --     3.1.1 = 0 | 2.1.2 = 0 | 2.1.1 = -500 (residual do caixa)
+    --     3.1.1 = 0 | 2.1.2 = 0 | 2.1.1 = 0  <- Task 13: sem base nao ha
+    --             residual da base, entao o fornecedor nao repassa nada (na
+    --             Task 12 ele levava os -500 do caixa)
+    --     1.1.2 = 0 - 500 = -500 (o caixa inteiro vira saldo do assinante)
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task12/c4') RETURNING id INTO v_sub;
@@ -397,13 +423,15 @@ BEGIN
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_conect), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_receber), 0),
            COALESCE(SUM(amount), 0)
-      INTO v_gestao, v_com, v_conect, v_forn, v_total
+      INTO v_gestao, v_com, v_conect, v_forn, v_receber, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (0::numeric, 0::numeric, 0::numeric, -500::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 4 (sem compensacao): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado 0 / 0 / 0 / -500)',
-            v_gestao, v_com, v_conect, v_forn;
+    IF (v_gestao, v_com, v_conect, v_forn, v_receber)
+       IS DISTINCT FROM (0::numeric, 0::numeric, 0::numeric, 0::numeric, -500::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 4 (sem compensacao): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% 1.1.2=% (esperado 0 / 0 / 0 / 0 / -500 -- sem base o fornecedor nao repassa nada e o caixa inteiro fica com o assinante)',
+            v_gestao, v_com, v_conect, v_forn, v_receber;
     END IF;
     IF v_total <> 0 THEN
         RAISE EXCEPTION 'FALHA caso 4: a transacao nao fecha em zero, soma = %', v_total;
@@ -530,7 +558,10 @@ BEGIN
     -- ==================================================================
     -- CASO 9 -- classe B3: usa as colunas _B3 do cadastro.
     --   1000 kWh x (1,00 x 0,80 - 0,10) = 700,00
-    --     3.1.1 = -70 | 2.1.2 = -(35 + 7) = -42 | 2.1.1 = -(1000 - 112) = -888
+    --     3.1.1 = -70 | 2.1.2 = -(35 + 7) = -42
+    --     2.1.1 = -(700 - 112) = -588  <- Task 13 (na Task 12 era -888, o
+    --             residual do caixa 1000)
+    --     1.1.2 = 700 - 1000 = -300
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task12/c9') RETURNING id INTO v_sub;
@@ -560,13 +591,15 @@ BEGIN
     SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_receber), 0),
            COALESCE(SUM(amount), 0)
-      INTO v_gestao, v_com, v_forn, v_total
+      INTO v_gestao, v_com, v_forn, v_receber, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_forn) IS DISTINCT FROM (-70::numeric, -42::numeric, -888::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 9 (classe B3): 3.1.1=% 2.1.2=% 2.1.1=% (esperado -70 / -42 / -888 -- base 700 pelas colunas _B3)',
-            v_gestao, v_com, v_forn;
+    IF (v_gestao, v_com, v_forn, v_receber)
+       IS DISTINCT FROM (-70::numeric, -42::numeric, -588::numeric, -300::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 9 (classe B3): 3.1.1=% 2.1.2=% 2.1.1=% 1.1.2=% (esperado -70 / -42 / -588 / -300 -- base 700 pelas colunas _B3)',
+            v_gestao, v_com, v_forn, v_receber;
     END IF;
     IF v_total <> 0 THEN
         RAISE EXCEPTION 'FALHA caso 9: a transacao nao fecha em zero, soma = %', v_total;
@@ -604,9 +637,12 @@ BEGIN
     --   reais de producao), 233 kWh compensados -> base 174,75.
     --     3.1.1 = -17,48 (10%% de 174,75, arredondado)
     --     2.1.2 = -(8,74 + 1,75) = -10,49
-    --     2.1.1 = -(371,36480000000006 - 196,62 - 17,48 - 10,49)
-    --           = -146,77480000000006  (o fornecedor e o residual do caixa
-    --             e e quem carrega a fracao de centavo)
+    --     2.1.1 = -(174,75 - 17,48 - 10,49) = -146,78  <- Task 13: o
+    --             fornecedor e o residual DA BASE, com duas casas exatas (na
+    --             Task 12 ele era -146,77480000000006 e carregava a fracao)
+    --     1.1.2 = 174,75 - 174,74480000000006 = 0,00519999999999994
+    --             (quem carrega a fracao de centavo agora e o saldo do
+    --              assinante: ela vem do dinheiro que ELE pagou)
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task12/c12') RETURNING id INTO v_sub;
@@ -632,8 +668,9 @@ BEGIN
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
            COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_receber), 0),
            COALESCE(SUM(amount), 0)
-      INTO v_bank, v_taxa, v_conces, v_gestao, v_com, v_forn, v_total
+      INTO v_bank, v_taxa, v_conces, v_gestao, v_com, v_forn, v_receber, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
     IF v_total <> 0 THEN
@@ -645,21 +682,31 @@ BEGIN
     IF (v_taxa, v_conces) IS DISTINCT FROM (1.99::numeric, -196.62::numeric) THEN
         RAISE EXCEPTION 'FALHA caso 12: taxa/concessionaria mudaram: 4.1.1=% 2.1.3.01=% (esperado 1.99 / -196.62)', v_taxa, v_conces;
     END IF;
-    IF (v_gestao, v_com) IS DISTINCT FROM (-17.48::numeric, -10.49::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 12: 3.1.1=% 2.1.2=% (esperado -17.48 / -10.49 -- 10%%, 5%% e 1%% de 174,75)', v_gestao, v_com;
+    IF (v_gestao, v_com, v_forn) IS DISTINCT FROM (-17.48::numeric, -10.49::numeric, -146.78::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 12: 3.1.1=% 2.1.2=% 2.1.1=% (esperado -17.48 / -10.49 / -146.78 -- 10%%, 5%% e 1%% de 174,75 e o residual da base)', v_gestao, v_com, v_forn;
     END IF;
 
+    -- Task 13: gestao, recompensas E o repasse ao fornecedor ficam com duas
+    -- casas; a fracao de centavo vai toda para a conta a receber.
     SELECT COUNT(*) INTO v_n
       FROM public.ledger_entries
      WHERE transaction_id = v_txn
-       AND account_id IN (v_acc_gestao, v_acc_comissoes, v_acc_conect)
+       AND account_id IN (v_acc_gestao, v_acc_comissoes, v_acc_conect, v_acc_investidor)
        AND amount <> round(amount, 2);
     IF v_n <> 0 THEN
-        RAISE EXCEPTION 'FALHA caso 12: % lancamento(s) de gestao/recompensa com mais de duas casas', v_n;
+        RAISE EXCEPTION 'FALHA caso 12: % lancamento(s) de gestao/recompensa/repasse com mais de duas casas', v_n;
     END IF;
 
-    IF v_forn = round(v_forn, 2) THEN
-        RAISE EXCEPTION 'FALHA caso 12: o repasse ao fornecedor (%) nao carrega o residuo -- ele e o residual do caixa e e quem garante a soma exata', v_forn;
+    SELECT COUNT(*) INTO v_n
+      FROM public.ledger_entries WHERE transaction_id = v_txn AND account_id = v_acc_receber;
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA caso 12: a conta 1.1.2 recebeu % lancamento(s), esperado exatamente 1', v_n;
+    END IF;
+    IF v_receber = round(v_receber, 2) THEN
+        RAISE EXCEPTION 'FALHA caso 12: o saldo do assinante (%) nao carrega o residuo -- alguem tem de absorve-lo para a soma fechar em zero exato', v_receber;
+    END IF;
+    IF v_receber IS DISTINCT FROM (174.75::numeric - (371.36480000000006::numeric - 196.62::numeric)) THEN
+        RAISE EXCEPTION 'FALHA caso 12: 1.1.2 = %, esperado base - caixa = 174.75 - 174.74480000000006', v_receber;
     END IF;
 
     SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;

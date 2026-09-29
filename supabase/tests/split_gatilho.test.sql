@@ -34,7 +34,8 @@
 -- Fix round 2 (29/09/2026):
 --  15.  residuo de arredondamento: valor_a_pagar com mais de duas casas -- a
 --       transacao fecha EXATAMENTE em zero, o banco registra o valor recebido
---       e quem absorve a fracao de centavo e o fornecedor (G1);
+--       e quem absorve a fracao de centavo e a conta a receber do assinante
+--       (G1 + Task 13);
 --  16.  fatura bloqueada por uc_sem_usina volta a ser lancavel depois que
 --       alguem conserta o vinculo -- e so uma vez (G2).
 --
@@ -47,9 +48,16 @@
 --   NENHUM numero esperado mudou. As unicas mudancas de assercao sao:
 --     * caso 9 usa uma concessionaria de Fio B maior que a tarifa, unico jeito
 --       de a formula nova dar base negativa;
---     * caso 15 compara residuo_fornecedor com caixa_liquido em vez de base,
---       porque base e caixa deixaram de ser o mesmo numero e quem tem de
---       fechar a transacao e o caixa.
+--     * caso 15 compara o residuo com caixa_liquido em vez de base, porque
+--       base e caixa deixaram de ser o mesmo numero e quem tem de fechar a
+--       transacao e o caixa.
+--
+-- Task 13 (29/09/2026) -- unica assercao tocada: o caso 15. O fornecedor
+--   deixou de ser o residual do CAIXA e voltou a ser o residual DA BASE, entao
+--   quem absorve a fracao de centavo passou a ser a conta a receber do
+--   assinante (1.1.2). Nos demais casos base e caixa sao o mesmo numero (a
+--   fixture da Task 12 fez consumo_compensado = base), a diferenca e zero,
+--   1.1.2 nao recebe lancamento e NENHUM numero mudou.
 --
 -- OBS: o caso 14 troca fn_participantes_recompensa DENTRO da transacao, entao
 -- ele tem de continuar sendo o ULTIMO caso do arquivo. Casos novos entram
@@ -67,6 +75,7 @@ DECLARE
     v_acc_comissoes   uuid;  -- 2.1.2
     v_acc_conces      uuid;  -- 2.1.3.01
     v_acc_conect      uuid;  -- 2.1.6  (novo nesta task)
+    v_acc_receber     uuid;  -- 1.1.2  (Task 13)
 
     v_conta_nome      text;
     v_conta_tipo      text;
@@ -118,6 +127,7 @@ DECLARE
     v_com             numeric;
     v_conect          numeric;
     v_forn            numeric;
+    v_receber         numeric;   -- 1.1.2 (Task 13)
     v_conces          numeric;
     v_total           numeric;
     v_n               integer;
@@ -146,6 +156,11 @@ BEGIN
     SELECT id INTO v_acc_investidor FROM public.ledger_accounts WHERE code = '2.1.1';
     SELECT id INTO v_acc_comissoes  FROM public.ledger_accounts WHERE code = '2.1.2';
     SELECT id INTO v_acc_conces     FROM public.ledger_accounts WHERE code = '2.1.3.01';
+    SELECT id INTO v_acc_receber    FROM public.ledger_accounts WHERE code = '1.1.2';
+
+    IF v_acc_receber IS NULL THEN
+        RAISE EXCEPTION 'FALHA: conta 1.1.2 (Contas a Receber de Assinantes) nao existe no plano de contas';
+    END IF;
 
     SELECT a.id, a.name, a.type, p.code
       INTO v_acc_conect, v_conta_nome, v_conta_tipo, v_conta_pai
@@ -660,7 +675,9 @@ BEGIN
     --   B2W 70 | PPE 35 | Lider 7 | fornecedor 588
     --   Task 12: os 300 da concessionaria continuam lancados em 2.1.3.01 como
     --   obrigacao separada, mas NAO abatem mais a base -- a base e a energia
-    --   compensada. O fornecedor e o residual do CAIXA: 700 - 70 - 42 = 588.
+    --   compensada. Task 13: o fornecedor e o residual DA BASE,
+    --   700 - 70 - 42 = 588; aqui base e caixa coincidem (1000 - 300 = 700),
+    --   entao o numero e o mesmo das duas formas e 1.1.2 nao lanca nada.
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c7') RETURNING id INTO v_sub;
@@ -1007,10 +1024,15 @@ BEGIN
     --   beneficiarios continuam com duas casas.
     --   Montagem igual a do caso 1 (rateio padrao: PPE com lider, piso 50).
     --   Task 12: a base agora vem de 174,7448 kWh compensados x 1,00, e o
-    --   residuo que o fornecedor absorve passou a ser o do CAIXA
-    --   (valor_a_pagar - valor_concessionaria), que e quem tem de fechar a
-    --   transacao. Por isso a assercao (e) compara com caixa_liquido, nao com
-    --   a base.
+    --   residuo que tem de ser absorvido passou a ser o do CAIXA
+    --   (valor_a_pagar - valor_concessionaria), que e quem fecha a transacao.
+    --   Por isso a assercao (e) compara com caixa_liquido, nao com a base.
+    --   Task 13: quem absorve o residuo deixou de ser o FORNECEDOR e passou a
+    --   ser a CONTA A RECEBER DO ASSINANTE (1.1.2). Com a base arredondada
+    --   pelo motor (174,74):
+    --     3.1.1 = -17,47 | 2.1.2 = -(8,74 + 1,75) = -10,49
+    --     2.1.1 = -(174,74 - 17,47 - 10,49) = -146,78 (duas casas exatas)
+    --     1.1.2 = 174,74 - 174,74480000000006 = -0,00480000000006
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c15') RETURNING id INTO v_sub;
@@ -1055,29 +1077,57 @@ BEGIN
         RAISE EXCEPTION 'FALHA caso 15: % lancamento(s) de gestao/recompensa com mais de duas casas -- o residuo foi parar em quem nao devia absorve-lo', v_n;
     END IF;
 
-    -- d) quem absorve a fracao de centavo e o fornecedor (2.1.1)
+    -- d) Task 13: o fornecedor recebe o residual DA BASE, com duas casas
+    --    exatas, e quem carrega a fracao de centavo e a conta a receber do
+    --    assinante (1.1.2), num lancamento so.
     SELECT amount INTO v_forn
       FROM public.ledger_entries
      WHERE transaction_id = v_txn AND account_id = v_acc_investidor;
-    IF v_forn = round(v_forn, 2) THEN
-        RAISE EXCEPTION 'FALHA caso 15: o repasse ao fornecedor (%) nao carrega o residuo -- ele e o residual do rateio e e quem garante a soma exata', v_forn;
+    IF v_forn IS DISTINCT FROM -146.78::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 15: 2.1.1 = %, esperado -146.78 (residual da base 174,74 menos 17,47 de gestao e 10,49 de recompensas) -- o fornecedor nao pode carregar o residuo do caixa', v_forn;
     END IF;
 
-    -- e) o congelamento tem de dizer quanto de residuo foi absorvido
-    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
-    IF v_rec IS NULL OR v_rec->>'residuo_fornecedor' IS NULL THEN
-        RAISE EXCEPTION 'FALHA caso 15: recompensas_aplicadas.residuo_fornecedor nao foi congelado';
+    SELECT COUNT(*) INTO v_n
+      FROM public.ledger_entries WHERE transaction_id = v_txn AND account_id = v_acc_receber;
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA caso 15: a conta 1.1.2 recebeu % lancamento(s), esperado exatamente 1 (quem absorve o residuo e um lancamento so)', v_n;
     END IF;
-    v_residuo := (v_rec->>'residuo_fornecedor')::numeric;
+
+    SELECT amount INTO v_receber
+      FROM public.ledger_entries
+     WHERE transaction_id = v_txn AND account_id = v_acc_receber;
+    IF v_receber = round(v_receber, 2) THEN
+        RAISE EXCEPTION 'FALHA caso 15: o saldo do assinante (%) nao carrega o residuo -- alguem tem de absorve-lo para a soma fechar em zero exato', v_receber;
+    END IF;
+    IF v_receber IS DISTINCT FROM (174.74::numeric - (371.36480000000006::numeric - 196.62::numeric)) THEN
+        RAISE EXCEPTION 'FALHA caso 15: 1.1.2 = %, esperado base arredondada - caixa = 174.74 - 174.74480000000006', v_receber;
+    END IF;
+
+    -- e) o congelamento tem de dizer quanto de residuo foi absorvido E POR
+    --    QUEM (Task 13: a chave residuo_fornecedor virou residuo_caixa +
+    --    residuo_absorvido_por, porque o fornecedor nao absorve mais nada)
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec IS NULL OR v_rec->>'residuo_caixa' IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 15: recompensas_aplicadas.residuo_caixa nao foi congelado';
+    END IF;
+    v_residuo := (v_rec->>'residuo_caixa')::numeric;
     IF v_rec->>'caixa_liquido' IS NULL THEN
         RAISE EXCEPTION 'FALHA caso 15: o congelamento precisa guardar caixa_liquido -- desde a Task 12 ele nao e mais igual a base';
     END IF;
     IF v_residuo = 0 THEN
-        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor congelado = 0, mas o caixa (%) tem mais de duas casas', v_rec->>'caixa_liquido';
+        RAISE EXCEPTION 'FALHA caso 15: residuo_caixa congelado = 0, mas o caixa (%) tem mais de duas casas', v_rec->>'caixa_liquido';
     END IF;
     IF v_residuo IS DISTINCT FROM ((v_rec->>'caixa_liquido')::numeric - round((v_rec->>'caixa_liquido')::numeric, 2)) THEN
-        RAISE EXCEPTION 'FALHA caso 15: residuo_fornecedor = %, esperado caixa_liquido - round(caixa_liquido,2) (caixa congelado = %)',
+        RAISE EXCEPTION 'FALHA caso 15: residuo_caixa = %, esperado caixa_liquido - round(caixa_liquido,2) (caixa congelado = %)',
             v_residuo, v_rec->>'caixa_liquido';
+    END IF;
+    IF v_rec->>'residuo_absorvido_por' IS DISTINCT FROM 'conta_receber_assinante' THEN
+        RAISE EXCEPTION 'FALHA caso 15: residuo_absorvido_por = %, esperado conta_receber_assinante -- o investidor nao absorve mais a fracao de centavo',
+            COALESCE(v_rec->>'residuo_absorvido_por', '<nulo>');
+    END IF;
+    IF (v_rec->>'conta_receber_assinante')::numeric IS DISTINCT FROM v_receber THEN
+        RAISE EXCEPTION 'FALHA caso 15: conta_receber_assinante congelado = %, mas o razao lancou % em 1.1.2',
+            v_rec->>'conta_receber_assinante', v_receber;
     END IF;
 
     -- ==================================================================

@@ -37,7 +37,11 @@
 --       tipo_recompensa, e o teto registrado = base;
 --   9.  residuo: valor_a_pagar com mais de duas casas na fatura do Start --
 --       a transacao fecha EXATAMENTE em zero e quem absorve a fracao de
---       centavo e o fornecedor.
+--       centavo e a conta a receber do assinante (1.1.2), porque desde a
+--       Task 13 o fornecedor recebe o residual DA BASE, ja fechado em duas
+--       casas pelo motor. Nos demais casos deste arquivo base e caixa sao o
+--       mesmo numero (a fixture da Task 12 fez consumo_compensado = base),
+--       1.1.2 nao recebe lancamento e nenhum numero mudou.
 --
 -- Em TODOS os casos a soma dos lancamentos da transacao tem de ser 0.
 --
@@ -53,6 +57,7 @@ DECLARE
     v_acc_comissoes   uuid;  -- 2.1.2
     v_acc_conces      uuid;  -- 2.1.3.01
     v_acc_conect      uuid;  -- 2.1.6
+    v_acc_receber     uuid;  -- 1.1.2 (Task 13)
 
     -- matriz de recorrencia acordada pelo dono (identica a de producao)
     c_matriz constant jsonb := '{
@@ -115,9 +120,10 @@ BEGIN
     SELECT id INTO v_acc_comissoes  FROM public.ledger_accounts WHERE code = '2.1.2';
     SELECT id INTO v_acc_conces     FROM public.ledger_accounts WHERE code = '2.1.3.01';
     SELECT id INTO v_acc_conect     FROM public.ledger_accounts WHERE code = '2.1.6';
+    SELECT id INTO v_acc_receber    FROM public.ledger_accounts WHERE code = '1.1.2';
 
     IF v_acc_bank IS NULL OR v_acc_gestao IS NULL OR v_acc_comissoes IS NULL
-       OR v_acc_investidor IS NULL OR v_acc_conect IS NULL THEN
+       OR v_acc_investidor IS NULL OR v_acc_conect IS NULL OR v_acc_receber IS NULL THEN
         RAISE EXCEPTION 'FALHA: plano de contas incompleto para rodar o teste';
     END IF;
 
@@ -544,9 +550,12 @@ BEGIN
     --   174,74480000000006; 174,7448 kWh compensados x 1,00 -> base
     --   174,7448, arredondada pelo motor para 174,74:
     --     b2w 60% -> 104,84 | ppe 20% -> 34,95 | lider 20% -> 34,95
-    --     fornecedor = 0 + residuo (0,00480000000006)
-    --   A transacao tem de fechar EXATAMENTE em zero, com o residuo no
-    --   fornecedor (nunca na gestao nem nas recompensas).
+    --     fornecedor = residual DA BASE = 174,74 - 104,84 - 69,90 = 0,00
+    --     1.1.2      = 174,74 - 174,74480000000006 = -0,00480000000006
+    --   A transacao tem de fechar EXATAMENTE em zero. Task 13: o residuo
+    --   deixou de ficar no fornecedor (que agora e o residual da base, fechado
+    --   em duas casas pelo motor) e passou para a conta a receber do
+    --   assinante -- nunca na gestao nem nas recompensas.
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task11/c9') RETURNING id INTO v_sub;
@@ -593,14 +602,29 @@ BEGIN
     SELECT COUNT(*) INTO v_n
       FROM public.ledger_entries
      WHERE transaction_id = v_txn
-       AND account_id IN (v_acc_gestao, v_acc_comissoes, v_acc_conect)
+       AND account_id IN (v_acc_gestao, v_acc_comissoes, v_acc_conect, v_acc_investidor)
        AND amount <> round(amount, 2);
     IF v_n <> 0 THEN
-        RAISE EXCEPTION 'FALHA caso 9: % lancamento(s) de gestao/recompensa com mais de duas casas', v_n;
+        RAISE EXCEPTION 'FALHA caso 9: % lancamento(s) de gestao/recompensa/repasse com mais de duas casas', v_n;
     END IF;
 
+    IF v_forn IS DISTINCT FROM 0::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 9: 2.1.1 = %, esperado 0 (o Premium entrega 100%% da base na 2a fatura, e o fornecedor e o residual DA BASE)', v_forn;
+    END IF;
+
+    SELECT COUNT(*) INTO v_n
+      FROM public.ledger_entries WHERE transaction_id = v_txn AND account_id = v_acc_receber;
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA caso 9: a conta 1.1.2 recebeu % lancamento(s), esperado exatamente 1 (quem absorve o residuo e um lancamento so)', v_n;
+    END IF;
+
+    SELECT amount INTO v_forn
+      FROM public.ledger_entries WHERE transaction_id = v_txn AND account_id = v_acc_receber;
     IF v_forn = round(v_forn, 2) THEN
-        RAISE EXCEPTION 'FALHA caso 9: o repasse ao fornecedor (%) nao carrega o residuo -- ele e o residual do rateio e e quem garante a soma exata', v_forn;
+        RAISE EXCEPTION 'FALHA caso 9: o saldo do assinante (%) nao carrega o residuo -- alguem tem de absorve-lo para a soma fechar em zero exato', v_forn;
+    END IF;
+    IF v_forn IS DISTINCT FROM (174.74::numeric - (371.36480000000006::numeric - 196.62::numeric)) THEN
+        RAISE EXCEPTION 'FALHA caso 9: 1.1.2 = %, esperado base arredondada - caixa = 174.74 - 174.74480000000006', v_forn;
     END IF;
 
     RAISE EXCEPTION 'SANDBOX_OK';
