@@ -16,6 +16,7 @@ import SubscriberList from './dashboards/SubscriberList';
 import OriginatorList from './dashboards/OriginatorList';
 import SupplierList from './dashboards/SupplierList';
 import PowerPlantList from './dashboards/PowerPlantList';
+import EletropostoList from './dashboards/EletropostoList';
 import InvoiceListManager from './dashboards/InvoiceListManager';
 import ConsumerUnitList from './dashboards/ConsumerUnitList';
 import BillingList from './dashboards/BillingList';
@@ -141,6 +142,7 @@ export default function Dashboard() {
         // 7. Usinas
         if (suppliersAllowed.includes(role)) {
             items.push({ id: 'power_plants', label: 'Usinas', icon: 'bi-lightning-charge' });
+            items.push({ id: 'eletropostos', label: 'Eletropostos', icon: 'bi-ev-station' });
             items.push({ id: 'rateio_list', label: 'Lista de Rateio', icon: 'bi-list-check' });
             items.push({ id: 'protocols', label: 'Protocolos', icon: 'bi-clipboard-check' });
             items.push({ id: 'grid_map', label: 'Rede (Mapa)', icon: 'bi-map' });
@@ -195,6 +197,7 @@ export default function Dashboard() {
             case 'originators_list': return <OriginatorList />;
             case 'suppliers_list': return <SupplierList />;
             case 'power_plants': return <PowerPlantList />;
+            case 'eletropostos': return <EletropostoList />;
             case 'consumer_units': return <ConsumerUnitList />;
             case 'energy_bills': return <InvoiceListManager key="energy_bills" initialTab="contas_energia" hideTabs={true} />;
             case 'invoices': return <InvoiceListManager key="invoices" initialTab="faturas" hideTabs={true} />;
