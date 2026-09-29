@@ -14,7 +14,8 @@
 - Testes SQL: bloco `DO $$ … $$` terminando em `RAISE EXCEPTION 'SANDBOX_OK'`; rodar pelo MCP `execute_sql`; **sucesso = erro `SANDBOX_OK`**. Nunca deixar resíduo.
 - **Dinheiro real:** o razão de produção (`ledger_entries`) não pode ganhar, perder ou alterar lançamento por causa deste trabalho. Toda verificação compara a impressão digital (contagem + soma) antes e depois.
 - **Substituição direta:** o motor antigo de comissão (`originators_v2.split_commission`) deixa de ser lido. Os R$ 135,91 já lançados na conta 2.1.2 (8 lançamentos, abr–ago/2026) ficam intactos.
-- **Base de cálculo (decisão do dono, 27/09/2026, após a Task 1):** `invoices.valor_a_pagar − invoices.valor_concessionaria`, o que a fatura apurou. A fórmula `kWh × (tarifa − Fio B − desconto)` do documento fica só como referência do simulador; nos dados reais elas divergem 8,8% em média e até 34,9%.
+- **Base de cálculo — decisão revista pelo dono em 29/09/2026 (Task 12).** A base passa a ser `kWh compensado × (tarifa − Fio B) − desconto do assinante`: *"as comissões serão sobre a energia compensada. Se houve energia compensada a comissão é devida, mesmo que a conta do assinante esteja zerada ou negativa devido a outros débitos, como parcelamentos, IP, e consumo excedente que não foi compensado."* **Tarifa e Fio B vêm do cadastro da concessionária** (`Concessionaria`, editado no modal da concessionária); o desconto vem do plano.
+  - A decisão anterior (27/09, após a Task 1) era `invoices.valor_a_pagar − invoices.valor_concessionaria`, e foi ela que as Tasks 4 a 6 implementaram. O que a derrubou: `valor_concessionaria` traz a conta **inteira** (IP, parcelamento, consumo não compensado) e é abatida da base, enquanto a fatura cobra só a compensada. Em **25 das 60 faturas pagas** isso zera ou nega a base mesmo tendo havido compensação — R$ 29.068,33 de receita de compensada que pagaria zero de recompensa.
 - Percentuais (níveis **relativos a quem recebe**): B2W 10% fixo; Líder 1% nos níveis 1–3; PPE 5%/2%; PPP 4%/2%; PPF 2%/2%; Assinante Conect 2% só no nível 1. Piso do fornecedor: 50% da tarifa bruta, configurável por plano.
 - **Supressão sempre vai para a B2W** (decisões do dono, 27/09/2026): PPP com licença anual vencida tem a recorrência suspensa (0%), e o mesmo vale para recebedor inativo (originador, líder ou assinante indicador). Em todos esses casos o percentual é absorvido pela B2W, nunca pelo fornecedor.
 - PPE: promoção automática ao ser PPP com 1000 assinantes ativos na rede; rebaixamento nunca é automático.
@@ -240,13 +241,41 @@ Motivo: a Task 6 detecta e congela o Start, mas aplica a recorrência, porque `s
 
 **Regras decididas:**
 - O percentual do Start vale **somente no nível 1** (venda direta).
-- Quem está no nível 2 ou mais **não recebe recorrência** nas faturas de Start quando o plano é do tipo `start`. Em plano `ambos` (híbrido), o nível 2+ segue na recorrência normal; em plano `recorrente`, o Start não existe.
-- A fonte do comportamento é `planos_assinatura_energia.tipo_recompensa` (`start` | `recorrente` | `ambos`).
+- A fonte do comportamento é `planos_assinatura_energia.tipo_recompensa`, e o dono fixou os três tipos em 29/09/2026:
+  - **`start` — somente bônus.** Na fatura elegível paga o Start; em **todas as outras faturas** da UC parceiro, líder e Conect não recebem nada (sobra a gestão da B2W, que é fixa, e o fornecedor com o residual).
+  - **`recorrente` — somente recorrência.** `start_config` é ignorado por inteiro.
+  - **`ambos` (híbrido) — Start + recorrência.** Na fatura elegível o nível 1 recebe o Start e o nível 2+ segue a recorrência; nas demais faturas, recorrência normal.
 - O **Start é isento do piso do fornecedor**: nas faturas elegíveis não há corte, mesmo que o fornecedor receba menos que o piso ou nada. O congelamento na fatura tem de deixar isso explícito (`piso_ignorado: true`), para o investidor poder auditar.
 - Elegibilidade: `start_config.faturas_elegiveis` contém o ordinal da fatura paga daquela UC (1, 2 ou 3).
 
-**Files:** Create `supabase/migrations/20260929a_bonus_start.sql`, `supabase/tests/split_bonus_start.test.sql`
+**Files:** Create `supabase/migrations/20260929d_bonus_start.sql` (o `a` do nome original foi tomado; `20260929b` e `c` são o fix round da Task 6), `supabase/tests/split_bonus_start.test.sql`
 
 - [ ] **Step 1: teste primeiro** — plano `start` com fatura elegível: parceiro nível 1 recebe o percentual do Start, líder idem, fornecedor pode ficar abaixo do piso e nada é cortado; parceiro nível 2 não recebe nada; plano `ambos` com fatura elegível: nível 1 no Start e nível 2 na recorrência; plano `recorrente` ignora `start_config`; fatura fora de `faturas_elegiveis` cai na recorrência; o congelamento grava `bonus_start` com ordinal, regras e `piso_ignorado`.
 - [ ] **Step 2:** RED. **Step 3:** migração (só o gatilho muda; o motor puro continua com a mesma assinatura — passe o teto como `NULL`? **não**: o motor recusa teto nulo, então passe um teto igual à base, que na prática não corta, e registre no congelamento que o piso foi ignorado). **Step 4:** aplicar, GREEN, razão intacto.
 - [ ] **Step 5:** commit `feat(recompensas): bonus start no nivel 1, isento do piso`.
+
+---
+
+### Task 12: Base sobre a energia compensada (decisão do dono, 29/09/2026)
+
+Motivo: a base de hoje (`valor_a_pagar − valor_concessionaria`) abate da recompensa a conta inteira da concessionária, que inclui iluminação pública, parcelamento e consumo não compensado. Em 25 das 60 faturas pagas ela fica zerada ou negativa **tendo havido compensação** — R$ 29.068,33 de receita de compensada sem nenhuma recompensa. Decisão do dono: *"se houve energia compensada a comissão é devida"*.
+
+**Fórmula:** `base = kWh compensado × (tarifa − Fio B) − desconto do assinante`.
+
+**Fontes (nesta ordem, e nenhuma outra):**
+- `kWh compensado` = `invoices.consumo_compensado`.
+- `tarifa` e `Fio B` = **cadastro da concessionária** (`Concessionaria`, resolvida por concessionária + UF + classe/grupo; as colunas por classe `_B2`, `_B3`, `_A` já existem). O dono: *"o valor do Fio B deve estar cadastrado em configuração, conta de energia no modal da concessionária"*. **Nunca** `invoices.fio_b_apurado`, que é zero nas 60 faturas pagas, nem `invoices.tarifa_concessionaria`, ausente em 40 delas.
+- `desconto do assinante` = **o plano** (`planos_assinatura_energia`), que já é a fonte de desconto desde a Task 3.
+- Hoje as 19 UCs ativas são todas Neoenergia Cosern, e as 143 linhas dessa concessionária têm Fio B preenchido.
+
+**Efeito:** a conta da concessionária deixa de abater a base. Ela continua lançada no razão como obrigação separada (2.1.3.01) — as duas obrigações na mesma linha de `invoices` já eram separadas no razão. O repasse ao fornecedor passa a ser calculado sobre a base nova.
+
+**Files:** Create `supabase/migrations/20260929e_base_energia_compensada.sql`, `supabase/tests/split_base_compensada.test.sql`
+
+- [ ] **Step 1: teste primeiro** — resolução de tarifa/Fio B pela concessionária e classe da UC; base com desconto do plano; fatura com compensação e conta da concessionária maior que a cobrança (o caso das 25) paga recompensa; fatura sem compensação não paga nada; UC de concessionária sem cadastro ou sem Fio B **falha com motivo gravado na fatura**, nunca calcula com zero em silêncio; a soma da transação continua fechando em zero exato, inclusive com centavo quebrado.
+- [ ] **Step 2:** RED, com a mensagem de falha verbatim.
+- [ ] **Step 3:** `fn_base_recompensa_fatura(p_invoice)` isolada e testável, e o gatilho passando a usá-la; o congelamento grava a base, a fórmula, o kWh, a tarifa, o Fio B e o desconto usados, para o investidor auditar.
+- [ ] **Step 4:** aplicar, GREEN, razão de produção intacto; rodar também `split_gatilho`, `split_bonus_start` e `invoice_paid_ledger_definer`.
+- [ ] **Step 5:** commit `feat(recompensas): base sobre a energia compensada`.
+
+**Fora desta tarefa (para o dono):** as faturas já pagas não são recalculadas — o motor novo vale das próximas em diante, como as Tasks 4 a 6. O campo de Fio B no modal da concessionária, se ainda não estiver na tela, é tarefa de frontend.
