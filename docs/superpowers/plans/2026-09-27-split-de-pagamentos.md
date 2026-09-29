@@ -279,3 +279,24 @@ Motivo: a base de hoje (`valor_a_pagar − valor_concessionaria`) abate da recom
 - [ ] **Step 5:** commit `feat(recompensas): base sobre a energia compensada`.
 
 **Fora desta tarefa (para o dono):** as faturas já pagas não são recalculadas — o motor novo vale das próximas em diante, como as Tasks 4 a 6. O campo de Fio B no modal da concessionária, se ainda não estiver na tela, é tarefa de frontend.
+
+---
+
+### Task 13: o rombo de caixa vira conta a receber do assinante (decisão do dono, 29/09/2026)
+
+Motivo: com a Task 12 a base (energia compensada) deixou de ser o mesmo número que o caixa da fatura (`valor_a_pagar − valor_concessionaria`). Alguém tem de absorver a diferença, senão o razão não fecha. A Task 12 entregou isso caindo no **fornecedor**: numa fatura real (assinante pagou R$ 398,78, conta da concessionária R$ 766,98, 428 kWh compensados, base R$ 351,69) o investidor era debitado em R$ 413,92 por um débito que é do assinante — parcelamento, iluminação pública e consumo não compensado.
+
+**Decisão do dono:** a diferença **vira conta a receber do assinante**. A B2W adiantou um débito que não é dela; o fornecedor recebe o repasse calculado sobre a base.
+
+- **Conta nova:** `1.1.2 — Contas a Receber de Assinantes`, tipo `asset` (o código está livre, entre `1.1.1 Bancos` e `1.1.3 Adiantamentos a Investidores`).
+- **Fornecedor volta a ser o residual da BASE**, que é o que o motor puro devolve (`fornecedor_base`), e não mais o residual do caixa.
+- **O lançamento que fecha a transação** passa a ser `base − caixa` em `1.1.2`, com `reference_type = 'subscriber'`: positivo quando o assinante ainda deve, negativo quando ele está adiantado. É o saldo do ciclo com aquele assinante.
+- O congelamento grava o valor e o sinal, para a tela do assinante poder mostrar o saldo.
+
+**Files:** Create `supabase/migrations/20260929f_conta_receber_assinante.sql`, `supabase/tests/split_conta_receber.test.sql`
+
+- [ ] **Step 1: teste primeiro** — fatura em que a conta supera a cobrança (o caso das 10): fornecedor recebe o residual da base e **não** é debitado do rombo; `1.1.2` recebe a diferença com o assinante como referência; soma da transação em zero exato. Fatura normal (caixa maior que a base): o sinal se inverte e `1.1.2` fica negativa. Fatura sem compensação: base zero, `1.1.2` absorve o caixa inteiro. Centavo quebrado continua fechando em zero. E os quatro testes que já existem continuam `SANDBOX_OK`.
+- [ ] **Step 2:** RED com a mensagem verbatim. **Step 3:** migração (conta nova + `CREATE OR REPLACE` do gatilho a partir do corpo da `20260929e`). **Step 4:** aplicar, GREEN, razão de produção intacto.
+- [ ] **Step 5:** commit `feat(recompensas): rombo de caixa vira conta a receber do assinante`.
+
+**Fora desta tarefa (para o dono):** a rotina de cobrança desse saldo e a tela onde ele aparece. A conta `1.1.2` vai acumular saldo sem consumidor, como aconteceu com a `2.1.6` — vale decidir quem lê.
