@@ -197,20 +197,29 @@ BEGIN
     -- ------------------------------------------------------------------
     -- fixture comum
     -- ------------------------------------------------------------------
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Task6 piso50', 10, 50, jsonb_build_object('regras_multinivel', c_matriz))
+    -- tipo_recompensa EXPLICITO a partir da Task 11 (20260929d): o default da
+    -- coluna e 'start', e em plano 'start' parceiro/lider/Conect so recebem na
+    -- fatura elegivel -- nas demais nao recebem nada. Os casos abaixo testam a
+    -- RECORRENCIA, entao o plano tem de dizer que e recorrente; sem isso eles
+    -- passariam a medir o caminho errado.
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 piso50', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', c_matriz))
     RETURNING id INTO v_plano;
 
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Task6 piso88', 10, 88, jsonb_build_object('regras_multinivel', c_matriz))
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 piso88', 'recorrente', 10, 88, jsonb_build_object('regras_multinivel', c_matriz))
     RETURNING id INTO v_plano_p88;
 
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Task6 piso95', 10, 95, jsonb_build_object('regras_multinivel', c_matriz))
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 piso95', 'recorrente', 10, 95, jsonb_build_object('regras_multinivel', c_matriz))
     RETURNING id INTO v_plano_p95;
 
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config, start_config)
-    VALUES ('SANDBOX Task6 start', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
+    -- caso 8: plano RECORRENTE com start_config preenchido -- a elegibilidade
+    -- da fatura e detectada e congelada, mas o Start nao se aplica neste tipo
+    -- de plano (a aplicacao em plano start/hibrido e coberta por
+    -- supabase/tests/split_bonus_start.test.sql).
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config, start_config)
+    VALUES ('SANDBOX Task6 start', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
             '{"faturas_elegiveis": [1],
               "regras": {"1": {"b2w": 0, "lider": 50, "ppe": 50, "ppp": 40, "ppf": 20, "assinante_conect": 0}}}'::jsonb)
     RETURNING id INTO v_plano_start;
@@ -678,10 +687,11 @@ BEGIN
     END IF;
 
     -- ==================================================================
-    -- CASO 8 -- bonus Start: a 1a fatura paga da UC e elegivel pelo plano.
-    --   Enquanto o nivel do Start nao for definido pelo dono, o gatilho
-    --   APLICA A RECORRENCIA e apenas REGISTRA a elegibilidade -- por isso
-    --   3.1.1 tem de continuar -100 (10%), nunca 0 (b2w do start_config).
+    -- CASO 8 -- bonus Start: a 1a fatura paga da UC e elegivel pelo plano,
+    --   mas o plano e do tipo 'recorrente' -- e nesse tipo o Start NAO existe
+    --   (decisao do dono, 29/09/2026, Task 11). O gatilho REGISTRA a
+    --   elegibilidade de calendario e APLICA A RECORRENCIA -- por isso 3.1.1
+    --   tem de continuar -100 (10%), nunca 0 (b2w do start_config).
     -- ==================================================================
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c8') RETURNING id INTO v_sub;
@@ -717,7 +727,7 @@ BEGIN
             v_rec->'bonus_start'->>'elegivel';
     END IF;
     IF (v_rec->'bonus_start'->>'aplicado')::boolean IS DISTINCT FROM false THEN
-        RAISE EXCEPTION 'FALHA caso 8: bonus_start.aplicado = %, esperado false enquanto o nivel do Start nao for definido',
+        RAISE EXCEPTION 'FALHA caso 8: bonus_start.aplicado = %, esperado false (plano tipo_recompensa=recorrente ignora o start_config)',
             v_rec->'bonus_start'->>'aplicado';
     END IF;
     IF (v_rec->'bonus_start'->>'fatura_ordinal')::int IS DISTINCT FROM 1 THEN
@@ -1113,8 +1123,8 @@ BEGIN
     --   fn_participantes_recompensa e trocada DENTRO desta transacao (some no
     --   rollback) -- por isso este e o ULTIMO caso do arquivo.
     -- ==================================================================
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Task6 papel orfao', 10, 50,
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 papel orfao', 'recorrente', 10, 50,
             '{"regras_multinivel": {"b2w": {"niveis": {"L1":"10"}, "max_niveis": 4},
                                     "papel_inexistente": {"niveis": {"L1":"3"}, "max_niveis": 1}}}'::jsonb)
     RETURNING id INTO v_plano_orfao;

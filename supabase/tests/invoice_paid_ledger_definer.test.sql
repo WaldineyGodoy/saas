@@ -104,8 +104,11 @@ BEGIN
     -- tem EXECUTE para service_role, entao so um gatilho SECURITY DEFINER
     -- dono postgres consegue montar o rateio -- se a funcao perder isso, os
     -- lancamentos abaixo mudam.
-    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Plano Task16', 10, 50, jsonb_build_object('regras_multinivel', '{
+    -- tipo_recompensa EXPLICITO a partir da Task 11 (20260929d): o default da
+    -- coluna e 'start', e plano 'start' nao paga recorrencia fora da fatura
+    -- elegivel -- este teste mede a recorrencia, entao pinamos 'recorrente'.
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Plano Task16', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', '{
       "b2w":   {"niveis": {"L1": "10", "L2": "10", "L3": "10", "L4": "10"}, "max_niveis": 4},
       "lider": {"niveis": {"L1": "1",  "L2": "1",  "L3": "1",  "L4": "0"},  "max_niveis": 3},
       "ppe":   {"niveis": {"L1": "5",  "L2": "2",  "L3": "0",  "L4": "0"},  "max_niveis": 2},
