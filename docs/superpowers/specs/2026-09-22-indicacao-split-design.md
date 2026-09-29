@@ -18,7 +18,11 @@ Estado real em 27/09/2026:
 
 ## §1 A matriz
 
-Base de cálculo líquida = **tarifa bruta da concessionária − Fio B − desconto do assinante**. Tudo abaixo incide sobre ela.
+Base de cálculo = **kWh compensado × (tarifa − Fio B) − desconto do assinante**. Tudo abaixo incide sobre ela.
+
+**Fontes, decididas pelo dono em 29/09/2026 (Task 12 do plano):** o kWh vem de `invoices.consumo_compensado`; **tarifa e Fio B vêm do cadastro da concessionária** (tabela `Concessionaria`, editada no modal da concessionária), nunca de `invoices.fio_b_apurado` (zero nas 60 faturas pagas) nem de `invoices.tarifa_concessionaria` (ausente em 40); o desconto vem do plano.
+
+A regra por trás: *se houve energia compensada, a comissão é devida* — mesmo que a conta do assinante esteja zerada ou negativa por outros débitos (parcelamento, iluminação pública, consumo excedente não compensado). Entre 27/09 e 29/09 a base foi `valor_a_pagar − valor_concessionaria`, e as migrações `20260928i`/`20260929b`/`20260929c` a implementam; o que a derrubou foi `valor_concessionaria` trazer a conta inteira e abatê-la da base, zerando ou negativando a recompensa em **25 das 60 faturas pagas** que tinham compensação.
 
 **Os níveis são relativos a quem recebe** (decisão do dono, 27/09/2026), não à profundidade absoluta da UC: cada beneficiário olha a distância entre ele e a UC que gerou a fatura. Por fatura, cada papel paga no máximo um beneficiário.
 
