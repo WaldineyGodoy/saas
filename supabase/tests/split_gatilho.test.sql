@@ -22,6 +22,15 @@
 --      retorno do motor;
 --  10. a funcao continua SECURITY DEFINER, dona postgres, search_path fixo.
 --
+-- Fix round 1 (29/09/2026):
+--   9.  base negativa -> prejuizo compartilhado: a B2W absorve a fatia dela
+--       (decisao do dono 18/08/2026, reconfirmada 28/09/2026);
+--  10.  execucao dupla (pago -> outro status -> pago) NAO duplica a transacao;
+--  11.  valor_a_pagar nulo;
+--  12.  UC sem usina -> nao lanca nada e grava o motivo;
+--  13.  plano com "niveis": null -> plano_sem_matriz;
+--  14.  papel que o plano paga e o razao nao tem conta -> RAISE EXCEPTION.
+--
 -- Rodar pelo MCP execute_sql. Sucesso = erro 'SANDBOX_OK' (tudo desfeito).
 
 DO $$
@@ -92,6 +101,14 @@ DECLARE
     v_rec             jsonb;
     v_ben             jsonb;
     v_desc            text;
+
+    -- fix round 1
+    v_plano_nula      uuid;
+    v_plano_orfao     uuid;
+    v_usina_nula      uuid;
+    v_usina_orfao     uuid;
+    v_msg             text;
+    v_pegou           boolean := false;
 BEGIN
     -- ------------------------------------------------------------------
     -- 0. pre-requisitos estruturais
@@ -710,6 +727,255 @@ BEGIN
     END IF;
     IF (v_rec->'bonus_start'->>'elegivel')::boolean IS DISTINCT FROM false THEN
         RAISE EXCEPTION 'FALHA caso 8: a 2a fatura nao esta em faturas_elegiveis = [1] e nao podia ser elegivel';
+    END IF;
+
+
+    -- ==================================================================
+    -- CASO 9 -- BASE NEGATIVA: prejuizo compartilhado.
+    --   valor_a_pagar 100, concessionaria 300 -> base -200.
+    --   Decisao do dono de 18/08/2026, RECONFIRMADA em 28/09/2026: a B2W
+    --   absorve a fatia dela do prejuizo; parceiro/lider/Conect nao recebem
+    --   nada (percentual de base negativa nao e recompensa).
+    --   Fatia da B2W = 10% de -200 = -20 (NEGATIVA no congelamento); no razao
+    --   sai com o sinal invertido, como toda receita, logo 3.1.1 = +20.
+    --   Fornecedor = -200 - (-20) = -180 -> 2.1.1 = +180.
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c9') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 100, 300, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT transaction_id INTO v_txn
+      FROM public.ledger_entries WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1;
+
+    SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_conect), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount), 0)
+      INTO v_gestao, v_com, v_conect, v_forn, v_total
+      FROM public.ledger_entries WHERE transaction_id = v_txn;
+
+    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (20::numeric, 0::numeric, 0::numeric, 180::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 9 (base negativa): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado 20 / 0 / 0 / 180 -- a B2W tem de absorver a fatia dela)',
+            v_gestao, v_com, v_conect, v_forn;
+    END IF;
+    IF v_total <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 9: a transacao nao fecha em zero, soma = %', v_total;
+    END IF;
+
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF (v_rec->'resultado'->'b2w'->>'valor')::numeric <> -20 THEN
+        RAISE EXCEPTION 'FALHA caso 9: a fatia congelada da B2W tem de ser NEGATIVA (-20), veio %',
+            v_rec->'resultado'->'b2w'->>'valor';
+    END IF;
+    IF v_rec->>'motivo' IS DISTINCT FROM 'base_negativa' THEN
+        RAISE EXCEPTION 'FALHA caso 9: motivo = %, esperado base_negativa', COALESCE(v_rec->>'motivo', '<nulo>');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.ledger_entries
+                    WHERE transaction_id = v_txn AND account_id = v_acc_gestao
+                      AND description = 'Gestão B2W — Prejuízo Compartilhado') THEN
+        RAISE EXCEPTION 'FALHA caso 9: o lancamento em 3.1.1 nao esta marcado como prejuizo compartilhado';
+    END IF;
+
+    -- ==================================================================
+    -- CASO 10 -- execucao dupla NAO pode duplicar a transacao.
+    --   pago -> ag_emissao_boleto -> pago -> confirmado -> pago gerava, antes
+    --   do fix, uma transacao COMPLETA por passagem (banco, gestao, comissoes
+    --   e repasse em dobro), cada uma fechando em zero -- por isso a assercao
+    --   "fecha em zero" sozinha nao protegia.
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c10') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago'              WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'ag_emissao_boleto' WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'pago'              WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'confirmado'        WHERE id = v_inv;
+    UPDATE public.invoices SET status = 'pago'              WHERE id = v_inv;
+
+    SELECT COUNT(DISTINCT transaction_id) INTO v_n
+      FROM public.ledger_entries WHERE reference_id = v_inv AND reference_type = 'invoice';
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA caso 10 (execucao dupla): a fatura gerou % transacoes no razao, esperado 1', v_n;
+    END IF;
+
+    SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0)
+      INTO v_gestao, v_com, v_forn
+      FROM public.ledger_entries
+     WHERE transaction_id = (SELECT transaction_id FROM public.ledger_entries
+                              WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1);
+
+    IF (v_gestao, v_com, v_forn) IS DISTINCT FROM (-100::numeric, -60::numeric, -840::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 10: rateio duplicado: 3.1.1=% 2.1.2=% 2.1.1=% (esperado -100 / -60 / -840)',
+            v_gestao, v_com, v_forn;
+    END IF;
+
+    -- ==================================================================
+    -- CASO 11 -- valor_a_pagar nulo: base 0, nada estoura, tudo zerado.
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c11') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', NULL, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT transaction_id INTO v_txn
+      FROM public.ledger_entries WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1;
+    IF v_txn IS NULL THEN
+        RAISE EXCEPTION 'FALHA caso 11: valor_a_pagar nulo nao gerou transacao nenhuma';
+    END IF;
+
+    SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_comissoes), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount), 0)
+      INTO v_gestao, v_com, v_forn, v_total
+      FROM public.ledger_entries WHERE transaction_id = v_txn;
+
+    IF (v_gestao, v_com, v_forn, v_total) IS DISTINCT FROM (0::numeric, 0::numeric, 0::numeric, 0::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 11 (valor_a_pagar nulo): 3.1.1=% 2.1.2=% 2.1.1=% soma=% (esperado 0 / 0 / 0 / 0)',
+            v_gestao, v_com, v_forn, v_total;
+    END IF;
+
+    -- ==================================================================
+    -- CASO 12 -- UC sem usina: nao da para saber de quem e o repasse.
+    --   Antes do fix lancava 2.1.1 com reference_id NULL (repasse sem dono) e
+    --   uma transacao pela metade. Agora nao lanca NADA e grava o motivo.
+    -- ==================================================================
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c12') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT COUNT(*) INTO v_n FROM public.ledger_entries WHERE reference_id = v_inv;
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 12 (UC sem usina): lancou % linha(s) no razao, esperado nenhuma', v_n;
+    END IF;
+
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec IS NULL OR v_rec->>'motivo' IS DISTINCT FROM 'uc_sem_usina' THEN
+        RAISE EXCEPTION 'FALHA caso 12: motivo = %, esperado uc_sem_usina', COALESCE(v_rec->>'motivo', '<nulo>');
+    END IF;
+    IF (v_rec->>'lancado')::boolean IS DISTINCT FROM false THEN
+        RAISE EXCEPTION 'FALHA caso 12: lancado = %, esperado false', COALESCE(v_rec->>'lancado', '<nulo>');
+    END IF;
+
+    -- ==================================================================
+    -- CASO 13 -- plano com "niveis": null.
+    --   jsonb null NAO e SQL NULL: com o IS NULL antigo isso passava batido,
+    --   o motor devolvia b2w 0% e a fatura saia como "recorrencia" com a
+    --   gestao zerada em silencio. Agora cai em plano_sem_matriz.
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 matriz nula', 10, 50,
+            '{"regras_multinivel": {"b2w": {"niveis": null, "max_niveis": 4}}}'::jsonb)
+    RETURNING id INTO v_plano_nula;
+
+    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_nula) RETURNING id INTO v_usina_nula;
+
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c13') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina_nula, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+
+    SELECT transaction_id INTO v_txn
+      FROM public.ledger_entries WHERE reference_id = v_inv AND account_id = v_acc_bank LIMIT 1;
+
+    SELECT COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_gestao), 0),
+           COALESCE(SUM(amount) FILTER (WHERE account_id = v_acc_investidor), 0),
+           COALESCE(SUM(amount), 0)
+      INTO v_gestao, v_forn, v_total
+      FROM public.ledger_entries WHERE transaction_id = v_txn;
+
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec->>'motivo' IS DISTINCT FROM 'plano_sem_matriz' THEN
+        RAISE EXCEPTION 'FALHA caso 13: "niveis": null devia cair em plano_sem_matriz, veio motivo = %',
+            COALESCE(v_rec->>'motivo', '<nulo>');
+    END IF;
+    IF (v_gestao, v_forn, v_total) IS DISTINCT FROM (0::numeric, -1000::numeric, 0::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 13: 3.1.1=% 2.1.1=% soma=% (esperado 0 / -1000 / 0)',
+            v_gestao, v_forn, v_total;
+    END IF;
+
+    -- ==================================================================
+    -- CASO 14 -- papel que o PLANO paga e o razao nao tem conta: estoura.
+    --   Precisa de percentual > 0: papel com valor 0 e pulado antes da
+    --   guarda, entao um plano "orfao" paga 3% a um papel inexistente.
+    --   fn_participantes_recompensa e trocada DENTRO desta transacao (some no
+    --   rollback) -- por isso este e o ULTIMO caso do arquivo.
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX Task6 papel orfao', 10, 50,
+            '{"regras_multinivel": {"b2w": {"niveis": {"L1":"10"}, "max_niveis": 4},
+                                    "papel_inexistente": {"niveis": {"L1":"3"}, "max_niveis": 1}}}'::jsonb)
+    RETURNING id INTO v_plano_orfao;
+
+    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_orfao) RETURNING id INTO v_usina_orfao;
+
+    EXECUTE $f$
+      CREATE OR REPLACE FUNCTION public.fn_participantes_recompensa(p_uc uuid)
+      RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public','pg_temp'
+      AS $body$ SELECT '[{"papel":"papel_inexistente","id":"00000000-0000-0000-0000-000000000001","nivel":1,"suspenso":false}]'::jsonb $body$;
+    $f$;
+
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://task6/c14') RETURNING id INTO v_sub;
+
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status)
+    VALUES (v_sub, v_usina_orfao, 'consumidora', 'ativo') RETURNING id INTO v_uc;
+
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5) RETURNING id INTO v_inv;
+
+    BEGIN
+        UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+    EXCEPTION WHEN others THEN
+        v_pegou := true;
+        v_msg := SQLERRM;
+    END;
+
+    IF NOT v_pegou THEN
+        RAISE EXCEPTION 'FALHA caso 14: papel sem conta no razao NAO estourou -- o gatilho lancou no lugar errado ou engoliu o valor';
+    END IF;
+    IF v_msg NOT LIKE '%papel_inexistente%' OR v_msg NOT LIKE '%nao tem conta no razao%' THEN
+        RAISE EXCEPTION 'FALHA caso 14: estourou com a mensagem errada: %', v_msg;
+    END IF;
+
+    SELECT COUNT(*) INTO v_n FROM public.ledger_entries WHERE reference_id = v_inv;
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA caso 14: sobraram % linha(s) no razao depois do RAISE', v_n;
     END IF;
 
     RAISE EXCEPTION 'SANDBOX_OK';
