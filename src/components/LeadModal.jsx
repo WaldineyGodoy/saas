@@ -588,6 +588,45 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     <User size={18} style={{ color: '#003366' }} /> Dados Principais
                                 </h4>
                                 
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Nome Completo</label>
+                                        <input
+                                            required
+                                            value={formData.name || ''}
+                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>CPF/CNPJ</label>
+                                        <input
+                                            value={formData.cpf_cnpj || ''}
+                                            onChange={e => setFormData({ ...formData, cpf_cnpj: e.target.value })}
+                                            placeholder="000.000.000-00"
+                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Telefone</label>
+                                        <input
+                                            placeholder="55 xx xxxxx xxxx"
+                                            value={formData.phone || ''}
+                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        />
+                                    </div>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Email</label>
+                                        <input
+                                            type="email"
+                                            value={formData.email || ''}
+                                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                            style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.3rem', color: '#64748b', fontWeight: 600 }}>Status</label>
                                     <select
@@ -954,6 +993,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
                             <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <h4 style={{ fontSize: '1rem', color: '#1e293b', marginBottom: '1rem' }}>Últimas Interações</h4>
+                                {lead?.id ? (
                                 <HistoryTimeline 
                                     entityType="lead" 
                                     entityId={lead.id} 
@@ -961,6 +1001,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                     showHeader={false} 
                                     isInline={true}
                                 />
+                                ) : (
+                                    <p style={{ color: '#64748b' }}>Salve o lead primeiro para ver o histórico de interações.</p>
+                                )}
                             </div>
                         </div>
                     )}
