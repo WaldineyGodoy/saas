@@ -328,8 +328,15 @@ BEGIN
        OR (v_rec->'base_componentes'->>'desconto_pct')::numeric IS DISTINCT FROM 20::numeric THEN
         RAISE EXCEPTION 'FALHA caso 11: base_componentes congelado errado: %', v_rec->'base_componentes';
     END IF;
-    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 375::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 11: teto_deducao = %, esperado 375 (piso 50%% sobre a base 750)', v_rec->>'teto_deducao';
+    -- I1 (30/09/2026): o piso incide sobre a TARIFA BRUTA, nao sobre a base.
+    --   piso em R$ = 1000 kWh x 1,25 (tarifa bruta) x 50/100 = 625,00
+    --   teto       = GREATEST(round(750, 2) - 625,00, 0) = 125,00
+    -- Com a formula antiga (base x (1 - 50/100)) o teto era 375 -- mais que o
+    -- dobro do contratual, porque a base ja vem liquida de desconto e Fio B.
+    -- O rateio deste caso soma 120 (75 + 37,50 + 7,50 = 16%% da base) e por
+    -- 5,00 ainda cabe no teto novo: nada e cortado e os lancamentos nao mudam.
+    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 125::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 11: teto_deducao = %, esperado 125 (base 750 - piso 625 = 1000 kWh x 1,25 x 50%%)', v_rec->>'teto_deducao';
     END IF;
 
     -- ==================================================================

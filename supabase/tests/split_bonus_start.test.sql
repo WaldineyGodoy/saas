@@ -240,8 +240,9 @@ BEGIN
     -- CASO 1 + CASO 8 -- plano 'start', fatura ELEGIVEL (ordinal 2), nivel 1.
     --   start_config.regras["2"] = b2w 60, ppe 20, lider 20 -> 100% da base.
     --   3.1.1 = -600 | 2.1.2 = -400 (ppe -200 + lider -200) | 2.1.1 = 0
-    --   O fornecedor fica em ZERO, muito abaixo do piso de 50% (500), e NADA
-    --   pode ser cortado: o Start e isento do piso (teto = base).
+    --   O fornecedor fica em ZERO, muito abaixo do piso de 50% (que desde a
+    --   I1 de 30/09/2026 vale 600 em R$: 1000 kWh x 1,20 de tarifa bruta x
+    --   50%), e NADA pode ser cortado: o Start e isento do piso (teto = base).
     -- ==================================================================
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 35, 1000) RETURNING id INTO v_inv2;
@@ -371,8 +372,9 @@ BEGIN
     --   2a fatura (elegivel): nivel 1 no Start (Conect 0) e nivel 2 na
     --   recorrencia (ppe 2%), tudo isento do piso
     --     3.1.1 = -600 | 2.1.2 = -20 | 2.1.6 = 0 | 2.1.1 = -380
-    --   (com o piso de 50% o teto seria 500 e os 620 seriam cortados; a
-    --    isencao vale para a fatura elegivel inteira)
+    --   (com o piso de 50% sobre a tarifa bruta o teto seria 400 -- 1000 -
+    --    1000 kWh x 1,20 x 50% -- e os 620 seriam cortados; a isencao vale
+    --    para a fatura elegivel inteira)
     -- ==================================================================
     INSERT INTO public.subscribers (status, short_url)
     VALUES ('ativo', 'sandbox://task11/c4-ref') RETURNING id INTO v_sub_ref;
@@ -540,8 +542,14 @@ BEGIN
     IF v_rec->'bonus_start'->>'motivo' IS NULL THEN
         RAISE EXCEPTION 'FALHA caso 7: bonus_start precisa dizer POR QUE o Start nao foi aplicado';
     END IF;
-    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 500::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 7: teto_deducao = %, esperado 500 (piso de 50%% valendo normalmente)', v_rec->>'teto_deducao';
+    -- I1 (30/09/2026): o piso incide sobre a TARIFA BRUTA, nao sobre a base.
+    --   piso em R$ = 1000 kWh x 1,20 (tarifa bruta) x 50/100 = 600,00
+    --   teto       = GREATEST(round(1000, 2) - 600,00, 0) = 400,00
+    -- Com a formula antiga (base x (1 - 50/100)) o teto era 500. O numero
+    -- mudou porque a base ja vem liquida de desconto e de Fio B, e era ai que
+    -- o teto saia mais que o dobro do contratual.
+    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 400::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 7: teto_deducao = %, esperado 400 (base 1000 - piso 600 = 1000 kWh x 1,20 x 50%%)', v_rec->>'teto_deducao';
     END IF;
 
     -- ==================================================================
