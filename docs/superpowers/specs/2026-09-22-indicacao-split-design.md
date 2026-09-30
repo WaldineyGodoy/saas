@@ -37,7 +37,7 @@ A regra por trás: *se houve energia compensada, a comissão é devida* — mesm
 
 - **Assinante Conect** recebe só pela indicação direta (`max_niveis: 1`), um por fatura: quem indicou aquela UC.
 - **Dedução total por fatura:** 16% no pior caso (PPE direto), contra o teto de 22,3% que o piso do fornecedor permite na tarifa Cosern de referência.
-- **Trava anti-déficit:** o líquido do fornecedor nunca fica abaixo do piso contratual (50% da tarifa bruta, configurável por plano). Se ficar, corta na ordem Assinante Conect → Parceiro Power → Líder, grava o corte na fatura e alerta no CRM. A B2W nunca fica negativa.
+- **Trava anti-déficit:** o líquido do fornecedor nunca fica abaixo do piso contratual (50% da **tarifa bruta**, configurável por plano — decisão reafirmada pelo dono em 30/09/2026, quando o código foi corrigido para deixar de aplicar o percentual sobre a base líquida). O teto de dedução é `base − kWh × tarifa_bruta × piso_pct/100`, nunca negativo. Com a Cosern e desconto de 20% isso dá 15,8% da base, **abaixo** dos 16% de uma venda direta de PPE: nessa configuração a trava corta. Se ficar, corta na ordem Assinante Conect → Parceiro Power → Líder, grava o corte na fatura e alerta no CRM. A B2W nunca fica negativa.
 - **Vigência:** vitalícia enquanto a UC estiver ativa e adimplente **e** o recebedor estiver ativo. Sem trava de 48 meses.
 
 ### §1.1 Cargos de parceiro (hierarquia)
