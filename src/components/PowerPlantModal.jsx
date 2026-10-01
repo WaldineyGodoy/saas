@@ -324,7 +324,6 @@ const CAMPOS_COMPRA_VENDA = [
     { key: 'parcela2', label: '2a parcela, equipamentos (R$)' },
     { key: 'parcela3', label: '3a parcela, vistoria (R$)' },
     { key: 'prazoExecucao', label: 'Prazo de execução (dias)' },
-    { key: 'prazoExecucaoReduzido', label: 'Prazo com parecer (dias)' },
     { key: 'amperagem', label: 'Padrão de entrada (A)' },
     { key: 'limiteReforco', label: 'Limite de reforço de rede (R$)' },
     { key: 'valorOpcaoImovel', label: 'Opção de compra do imóvel (R$)' },

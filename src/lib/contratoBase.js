@@ -38,7 +38,16 @@ export const porExtenso = (n) => {
     if (v <= 0) return 'zero';
     if (v === 100) return 'cem';
 
-    if (v > 100) {
+    if (v >= 1000 && v < 1000000) {
+        const mil = Math.floor(v / 1000);
+        const resto = v % 1000;
+        const prefixo = mil === 1 ? 'mil' : `${porExtenso(mil)} mil`;
+        if (resto === 0) return prefixo;
+        if (resto < 100 || resto % 100 === 0) return `${prefixo} e ${porExtenso(resto)}`;
+        return `${prefixo}, ${porExtenso(resto)}`;
+    }
+
+    if (v > 100 && v < 1000) {
         const c = Math.floor(v / 100);
         const resto = v % 100;
         if (c >= 1 && c <= 9) {
@@ -52,6 +61,13 @@ export const porExtenso = (n) => {
     const d = Math.floor(v / 10);
     const u = v % 10;
     return u === 0 ? DEZENAS[d] : `${DEZENAS[d]} e ${UNIDADES[u]}`;
+};
+
+export const extensoReais = (valor) => {
+    const n = Math.round(Number(valor) || 0);
+    if (n <= 0) return '';
+    const txt = porExtenso(n);
+    return `${txt} ${n === 1 ? 'real' : 'reais'}`;
 };
 
 /**
