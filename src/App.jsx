@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import LeadLanding from './pages/public/LeadLanding';
 import OriginatorLanding from './pages/public/OriginatorLanding';
 import SubscriberSignup from './pages/public/SubscriberSignup';
+import ChargingCheckout from './pages/public/ChargingCheckout';
 import Dashboard from './pages/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -54,6 +55,7 @@ function App() {
               <Route path="/cadastro" element={<OriginatorLanding />} />
               <Route path="/cadastro-parceiro" element={<OriginatorLanding />} />
               <Route path="/contrato" element={<SubscriberSignup />} />
+              <Route path="/recarga" element={<ChargingCheckout />} />
               <Route path="/assine" element={<LegacySignupRedirect />} />
               <Route path="/originador" element={<LegacySignupRedirect />} />
               <Route element={<ProtectedRoute />}>
