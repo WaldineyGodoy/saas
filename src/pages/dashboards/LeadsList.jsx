@@ -108,30 +108,6 @@ function KanbanCard({ lead, onClick, isOverlay }) {
                 <span>{new Date(lead.created_at).toLocaleDateString()}</span>
             </div>
 
-            {isSupplierModalOpen && (
-                <SupplierModal
-                    supplier={leadToConvert ? {
-                        name: leadToConvert.name,
-                        email: leadToConvert.email,
-                        phone: leadToConvert.phone,
-                        cnpj: leadToConvert.cpf_cnpj,
-                        lead_id: leadToConvert.id,
-                        address: {
-                            cep: leadToConvert.cep,
-                            logradouro: leadToConvert.rua,
-                            rua: leadToConvert.rua,
-                            numero: leadToConvert.numero,
-                            complemento: leadToConvert.complemento,
-                            bairro: leadToConvert.bairro,
-                            municipio: leadToConvert.cidade,
-                            cidade: leadToConvert.cidade,
-                            uf: leadToConvert.uf
-                        }
-                    } : null}
-                    onClose={() => setIsSupplierModalOpen(false)}
-                    onSave={handleSupplierSaved}
-                />
-            )}
         </div>
     );
 }
@@ -655,6 +631,31 @@ export default function LeadsList() {
                     } : null}
                     onClose={() => setIsSubscriberModalOpen(false)}
                     onSave={handleSubscriberSaved}
+                />
+            )}
+
+            {isSupplierModalOpen && (
+                <SupplierModal
+                    supplier={leadToConvert ? {
+                        name: leadToConvert.name,
+                        email: leadToConvert.email,
+                        phone: leadToConvert.phone,
+                        cnpj: leadToConvert.cpf_cnpj,
+                        lead_id: leadToConvert.id,
+                        address: {
+                            cep: leadToConvert.cep,
+                            logradouro: leadToConvert.rua,
+                            rua: leadToConvert.rua,
+                            numero: leadToConvert.numero,
+                            complemento: leadToConvert.complemento,
+                            bairro: leadToConvert.bairro,
+                            municipio: leadToConvert.cidade,
+                            cidade: leadToConvert.cidade,
+                            uf: leadToConvert.uf
+                        }
+                    } : null}
+                    onClose={() => setIsSupplierModalOpen(false)}
+                    onSave={handleSupplierSaved}
                 />
             )}
         </div>
