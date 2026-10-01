@@ -447,7 +447,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             // dizendo outra coisa se ninguém apertou Salvar antes de enviar.
             await supabase
                 .from('suppliers')
-                .update({ signature_link: finalLink, contract_terms: condicoesParaGravar() })
+                .update({ signature_link: finalLink, contract_terms: condicoesParaGravar(),
+        ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {}) })
                 .eq('id', supplier.id);
 
             // O link curto também vai para a própria assinatura. Sem isto o
@@ -1187,7 +1188,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             cidade: formData.cidade,
             uf: formData.uf
         },
-        contract_terms: condicoesParaGravar()
+        contract_terms: condicoesParaGravar(),
+        ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {})
     });
 
     const handleSubmit = async (e) => {

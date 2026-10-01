@@ -1032,8 +1032,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                             <select
                                 onChange={(e) => {
                                     if (e.target.value) {
-                                        if (e.target.value === 'assinante') {
-                                            onConvert(lead);
+                                        if (e.target.value === 'assinante' || e.target.value === 'fornecedor') {
+                                            onConvert(lead, e.target.value);
                                             onClose();
                                         } else {
                                             alert('Conversão para ' + e.target.value + ' em desenvolvimento!');

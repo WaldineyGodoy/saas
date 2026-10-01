@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import LeadModal from '../../components/LeadModal';
 import SubscriberModal from '../../components/SubscriberModal';
+import SupplierModal from '../../components/SupplierModal';
 import { getTagColor } from '../../lib/tagHelpers';
 import LeadAgenda from '../../components/LeadAgenda';
 import {
@@ -106,6 +107,31 @@ function KanbanCard({ lead, onClick, isOverlay }) {
                 <span>{lead.originator?.name?.split(' ')[0] || '-'}</span>
                 <span>{new Date(lead.created_at).toLocaleDateString()}</span>
             </div>
+
+            {isSupplierModalOpen && (
+                <SupplierModal
+                    supplier={leadToConvert ? {
+                        name: leadToConvert.name,
+                        email: leadToConvert.email,
+                        phone: leadToConvert.phone,
+                        cnpj: leadToConvert.cpf_cnpj,
+                        lead_id: leadToConvert.id,
+                        address: {
+                            cep: leadToConvert.cep,
+                            logradouro: leadToConvert.rua,
+                            rua: leadToConvert.rua,
+                            numero: leadToConvert.numero,
+                            complemento: leadToConvert.complemento,
+                            bairro: leadToConvert.bairro,
+                            municipio: leadToConvert.cidade,
+                            cidade: leadToConvert.cidade,
+                            uf: leadToConvert.uf
+                        }
+                    } : null}
+                    onClose={() => setIsSupplierModalOpen(false)}
+                    onSave={handleSupplierSaved}
+                />
+            )}
         </div>
     );
 }
@@ -153,6 +179,7 @@ export default function LeadsList() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
+    const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
     const [editingLead, setEditingLead] = useState(null);
     const [leadToConvert, setLeadToConvert] = useState(null);
     const [viewMode, setViewMode] = useState('kanban'); // Default to kanban
@@ -236,9 +263,22 @@ export default function LeadsList() {
         setIsModalOpen(false);
     };
 
-    const handleConvert = (lead) => {
+    const handleConvert = (lead, type = 'assinante') => {
         setLeadToConvert(lead);
-        setIsSubscriberModalOpen(true);
+        if (type === 'assinante') {
+            setIsSubscriberModalOpen(true);
+        } else if (type === 'fornecedor') {
+            setIsSupplierModalOpen(true);
+        }
+    };
+
+    const handleSupplierSaved = async () => {
+        try {
+            fetchLeads();
+            alert('Lead convertido em Fornecedor!');
+        } catch (e) {
+            console.error('Erro ao converter', e);
+        }
     };
 
     const handleSubscriberSaved = async (newSubscriber) => {
@@ -520,8 +560,8 @@ export default function LeadsList() {
         <select
             onChange={(e) => {
                 if (e.target.value) {
-                    if (e.target.value === 'assinante') {
-                        handleConvert(lead);
+                    if (e.target.value === 'assinante' || e.target.value === 'fornecedor') {
+                        handleConvert(lead, e.target.value);
                     } else {
                         alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
                     }
