@@ -66,7 +66,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         consumo_kwh: '',
         desconto_assinante: '',
         originator_id: '',
-        tags: []
+        tags: [],
+        cpf_cnpj: ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -92,7 +93,8 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                 consumo_kwh: lead.consumo_kwh || '',
                 desconto_assinante: lead.desconto_assinante || '',
                 originator_id: lead.originator_id || '',
-                tags: lead.tags || []
+                tags: lead.tags || [],
+                cpf_cnpj: lead.cpf_cnpj || ''
             });
         } else {
             if (profile?.role === 'originator') {
