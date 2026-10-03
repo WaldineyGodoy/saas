@@ -83,6 +83,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // leitura de proposito -- a tarifa nao e' digitada, vem do cadastro em
     // Configuracoes -> Conta de Energia. O que faltava era alguem buscar.
     const [tarifaRef, setTarifaRef] = useState(null);
+    const [planos, setPlanos] = useState([]);
     const [isUcNumberLocked, setIsUcNumberLocked] = useState(true);
     const [usinaSearchTerm, setUsinaSearchTerm] = useState('');
     const [showUsinaDropdown, setShowUsinaDropdown] = useState(false);
@@ -230,7 +231,8 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         numero_uc_anterior: '',
         titular_anterior_id: '',
         data_troca_titularidade: '',
-        saldo_remanescente: false
+        saldo_remanescente: false,
+        plano_assinatura_id: ''
     });
 
     // Precisa vir DEPOIS da declaracao de formData: como const, le-la
@@ -251,10 +253,16 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         }
     }, [formData.status]);
 
+    const fetchPlanos = async () => {
+        const { data } = await supabase.from('planos_assinatura_energia').select('id, nome, desconto_assinante').order('nome');
+        setPlanos(data || []);
+    };
+
     useEffect(() => {
         fetchSubscribers();
         fetchUsinas();
         fetchSuppliers();
+        fetchPlanos();
     }, []);
 
     // Assinatura Realtime para a UC específica
@@ -668,7 +676,8 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 saldo_remanescente: !!consumerUnit.saldo_remanescente,
                 last_scraping_status: consumerUnit.last_scraping_status || 'pending',
                 last_scraping_at: consumerUnit.last_scraping_at || null,
-                last_scraping_error: consumerUnit.last_scraping_error || null
+                last_scraping_error: consumerUnit.last_scraping_error || null,
+                plano_assinatura_id: consumerUnit.plano_assinatura_id || ''
             });
         }
     }, [consumerUnit?.id, consumerUnit?.subscriber_id, consumerUnit?.supplier_id]); // Stable dependencies
@@ -690,7 +699,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 if (cancelado) return;
                 setTarifaRef(ref);
 
-                if (ref && parseCurrency(formData.tarifa_concessionaria) === 0) {
+                if (ref) {
                     setFormData(prev => ({
                         ...prev,
                         tarifa_concessionaria: formatCurrency4(ref.tarifa_concessionaria),
@@ -710,19 +719,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
         return () => { cancelado = true; };
     }, [formData.concessionaria, formData.uf]);
 
-    const tarifaBateComCadastro = () =>
-        !!tarifaRef &&
-        Math.abs(parseCurrency(formData.tarifa_concessionaria) - Number(tarifaRef.tarifa_concessionaria)) < 0.00005;
 
-    const aplicarTarifaReferencia = () => {
-        if (!tarifaRef) return;
-        setFormData(prev => ({
-            ...prev,
-            tarifa_concessionaria: formatCurrency4(tarifaRef.tarifa_concessionaria),
-            te: formatCurrency4(tarifaRef.te),
-            tusd: formatCurrency4(tarifaRef.tusd)
-        }));
-    };
 
     // Calculate Tarifa Minima automatically
     useEffect(() => {
@@ -930,6 +927,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 te: parseCurrency(formData.te),
                 tusd: parseCurrency(formData.tusd),
                 fio_b: parseCurrency(formData.fio_b),
+                plano_assinatura_id: formData.plano_assinatura_id || null,
                 desconto_assinante: Number(formData.desconto_assinante),
                 dia_vencimento: Number(formData.dia_vencimento),
                 data_ativacao: formData.data_ativacao || null,
@@ -2490,23 +2488,37 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                             </h4>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                 <div>
-                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Vencimento</label>
+                                                    <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Dia de Vencimento (Gerido pelo Assinante)</label>
                                                     <select
                                                         value={formData.dia_vencimento}
-                                                        onChange={e => setFormData({ ...formData, dia_vencimento: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                        disabled
+                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f1f5f9', cursor: 'not-allowed' }}
                                                     >
                                                         {vencimentoOptions.map(d => <option key={d} value={d}>{d}</option>)}
                                                     </select>
                                                 </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Plano de Serviço</label>
+                                                        <select
+                                                            value={formData.plano_assinatura_id}
+                                                            onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                        >
+                                                            <option value="">Nenhum Plano (Usará fallback manual)</option>
+                                                            {planos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                     <div>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Desconto (%)</label>
+                                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Desconto Herdado (%)</label>
                                                         <input
-                                                            type="number" step="0.01"
-                                                            value={formData.desconto_assinante}
-                                                            onChange={e => setFormData({ ...formData, desconto_assinante: e.target.value })}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                                            type="text"
+                                                            value={formData.plano_assinatura_id ? planos.find(p => p.id === formData.plano_assinatura_id)?.desconto_assinante : formData.desconto_assinante}
+                                                            readOnly
+                                                            disabled
+                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', background: '#f1f5f9', cursor: 'not-allowed' }}
                                                         />
                                                     </div>
                                                     <div>
@@ -2533,24 +2545,9 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                         {formData.tarifa_concessionaria || 'R$ 0,0000'}
                                                     </div>
                                                     {tarifaRef ? (
-                                                        tarifaBateComCadastro() ? (
-                                                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.68rem', color: '#0369a1', opacity: 0.75 }}>
-                                                                Tarifas Concessionárias · {tarifaRef.origem}
-                                                            </p>
-                                                        ) : (
-                                                            <div style={{ marginTop: '0.35rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
-                                                                <span style={{ fontSize: '0.68rem', color: '#b45309' }}>
-                                                                    Cadastro diz {formatCurrency4(tarifaRef.tarifa_concessionaria)}
-                                                                </span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={aplicarTarifaReferencia}
-                                                                    style={{ fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.5rem', border: '1px solid #0369a1', borderRadius: '6px', background: '#fff', color: '#0369a1', cursor: 'pointer' }}
-                                                                >
-                                                                    Usar do cadastro
-                                                                </button>
-                                                            </div>
-                                                        )
+                                                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.68rem', color: '#0369a1', opacity: 0.75 }}>
+                                                            Tarifas Concessionárias · Herdado ({tarifaRef.origem})
+                                                        </p>
                                                     ) : (
                                                         <p style={{ margin: '0.35rem 0 0', fontSize: '0.68rem', color: '#b45309' }}>
                                                             Sem tarifa cadastrada para esta distribuidora em Configurações → Conta de Energia.
