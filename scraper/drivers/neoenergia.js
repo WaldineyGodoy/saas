@@ -541,7 +541,11 @@ module.exports = {
             for (let i = 0; i < totalItens; i++) {
                 const item = itens.nth(i);
                 const digitosDoItem = (await item.innerText().catch(() => '')).replace(/\D/g, '');
-                if (digitosDoItem.includes(paddedUC)) {
+                // Compara com e sem zeros a esquerda: o numero novo da Anatel
+                // tem 11 digitos ("497.653.032-53") e o card o exibe assim; o
+                // preenchimento ate 12 ("049765303253") nunca casava, embora o
+                // portal tivesse achado a UC (03/10/2026, 6 UCs da Guanabara).
+                if (digitosDoItem.includes(paddedUC) || digitosDoItem.includes(digitosUC)) {
                     ucCardRow = item.locator('div.row').first();
                     break;
                 }
@@ -555,7 +559,7 @@ module.exports = {
 
         if (ucCardRow) {
             await ucCardRow.click({ force: true });
-            const pelo = tentados.length > 1 ? ' (pelo número anterior — atualizar o cadastro)' : '';
+            const pelo = tentados.length > 1 ? ' (pelo número anterior)' : '';
             log(`   [Faturista] Card UC ${paddedUC} clicado${pelo}. Portal deve redirecionar...`);
             await page.waitForTimeout(4000); // Aguarda o redirect autônomo do portal
         } else {
