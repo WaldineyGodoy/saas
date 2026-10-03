@@ -393,6 +393,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         servicos_contratados: [],
         service_values: {}, // JSONB for values
         gestao_percentual: '',
+        plano_assinatura_id: '',
         leased_area_id: '',
         cep: '',
         rua: '',
@@ -436,6 +437,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [areasDisponiveis, setAreasDisponiveis] = useState([]);
     const [assinaturas, setAssinaturas] = useState([]);
     const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
+    const [planosRecompensa, setPlanosRecompensa] = useState([]);
     const [enviandoContrato, setEnviandoContrato] = useState(false);
     const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [cancelandoAssinatura, setCancelandoAssinatura] = useState(null);
@@ -471,6 +473,22 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         } finally {
             setCarregandoAssinaturas(false);
         }
+    }, []);
+
+    // Planos que o motor de recompensas pode usar nesta usina. Os de
+    // eletroposto ficam de fora: a base deles e outra (projeto 2).
+    useEffect(() => {
+        (async () => {
+            const { data, error } = await supabase
+                .from('planos_assinatura_energia')
+                .select('id, nome, ativo, tipo_recompensa, desconto_assinante, gestao_percentual, piso_fornecedor_pct, recorrente_config')
+                .order('nome');
+            if (error) {
+                console.error('Erro ao carregar planos de recompensa:', error);
+                return;
+            }
+            setPlanosRecompensa((data || []).filter(pl => pl.recorrente_config?.categoria_plano !== 'eletroposto'));
+        })();
     }, []);
 
     useEffect(() => {
@@ -1071,6 +1089,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 servicos_contratados: usina.servicos_contratados || [],
                 service_values: usina.service_values || {},
                 gestao_percentual: usina.gestao_percentual || '',
+                plano_assinatura_id: usina.plano_assinatura_id || '',
                 leased_area_id: usina.leased_area_id || '',
                 cep: usina.address?.cep || '',
                 rua: usina.address?.rua || '',
@@ -2605,6 +2624,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             servicos_contratados: formData.servicos_contratados,
             service_values: formData.service_values,
             gestao_percentual: Number(formData.gestao_percentual),
+            // String vazia num campo uuid e erro do Postgres, nao "sem plano".
+            plano_assinatura_id: formData.plano_assinatura_id || null,
             // String vazia num campo uuid é erro do Postgres, não "sem valor".
             leased_area_id: formData.leased_area_id || null,
             // Parcelas, prazos e demais condições da aba Contratos. Antes só
@@ -3607,6 +3628,46 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                     </div>
                                 )}
                             </div>
+
+                            {/* Plano de Recompensas: e o que liga o motor de split nesta usina */}
+                            {(() => {
+                                const planoSel = planosRecompensa.find(pl => pl.id === formData.plano_assinatura_id);
+                                const ativoNoBanco = !!usina?.plano_assinatura_id;
+                                return (
+                                    <div style={{ marginTop: '1.5rem', background: '#eff6ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e40af', fontWeight: 700 }}>Plano de Recompensas</h4>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Define o split de cada fatura paga das UCs desta usina</p>
+                                        </div>
+                                        <select
+                                            className="crm-input"
+                                            value={formData.plano_assinatura_id || ''}
+                                            onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
+                                            style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', fontWeight: 600, color: '#1e3a8a' }}
+                                        >
+                                            <option value="">Sem plano (o razão não lança gestão B2W nem recompensas; fornecedor fica com o caixa)</option>
+                                            {planosRecompensa.map(pl => (
+                                                <option key={pl.id} value={pl.id} disabled={!pl.ativo && pl.id !== formData.plano_assinatura_id}>
+                                                    {pl.nome} · {pl.tipo_recompensa} · desconto {Number(pl.desconto_assinante)}%{pl.ativo ? '' : ' (inativo)'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {planoSel && (
+                                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af' }}>
+                                                Gestão B2W {Number(planoSel.gestao_percentual)}% e piso do fornecedor {Number(planoSel.piso_fornecedor_pct)}% da tarifa bruta, ambos do plano.
+                                                Com plano, o razão usa a gestão do plano, não a "Taxa Percentual" acima.
+                                            </p>
+                                        )}
+                                        {(formData.plano_assinatura_id || '') !== (usina?.plano_assinatura_id || '') && (
+                                            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
+                                                {formData.plano_assinatura_id
+                                                    ? 'Ao salvar, toda fatura paga a partir de agora das UCs desta usina passa a lançar gestão, recompensas e repasse pelo plano. Faturas já lançadas não mudam.'
+                                                    : (ativoNoBanco ? 'Ao salvar, as próximas faturas pagas deixam de lançar gestão B2W e recompensas: o fornecedor fica com o caixa inteiro.' : '')}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })()}
 
                             <div style={{ marginTop: '1.5rem' }}>
                                 {/* Sub-tabs for Financeiro */}
