@@ -113,8 +113,11 @@ function parseMesRef(texto) {
     const porAbrev = t.match(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/(\d{4})/);
     if (porAbrev) return `${months[porAbrev[1]]}/${porAbrev[2]}`;
 
-    // Formato numérico: 07/2026
-    const porNumero = t.match(/\b(\d{1,2})\/(\d{4})\b/);
+    // Formato numérico: 07/2026. NUNCA o pedaço final de uma data: em
+    // "10/09/2026" (vencimento de parcela) o "09/2026" é o mês do vencimento,
+    // não a referência da conta. Ler isso como referência gravou contas
+    // fantasmas 09/2026 com o valor da parcela do acordo de 07/2026.
+    const porNumero = t.match(/(?<!\d\/)\b(\d{1,2})\/(\d{4})\b/);
     if (porNumero) return `${porNumero[1].padStart(2, '0')}/${porNumero[2]}`;
 
     return null;
@@ -762,23 +765,30 @@ module.exports = {
         // vencidas -> a vencer -> parceladas -> pagas, e nem toda linha
         // oferece checkbox de 2ª via. Se a conta existe mas não é baixável,
         // registrar o valor é muito melhor que gravar zero.
-        const achadoNoTexto = await page.evaluate((alvoRegex) => {
-            const blocos = [...document.querySelectorAll('div,li,tr')]
-                .map(el => (el.textContent || '').replace(/\s+/g, ' ').trim())
-                .filter(t => t.length > 20 && t.length < 600);
-            return blocos.find(t => new RegExp(alvoRegex, 'i').test(t)) || null;
-        }, mesRefAlvo.replace('/', '\\/')).catch(() => null);
+        //
+        // O bloco tem de TER a referência alvo, lida pelo mesmo parser das
+        // linhas com checkbox -- não basta conter o texto "09/2026". Antes
+        // bastava, e a parcela do acordo de 07/2026 com vencimento 10/09/2026
+        // virava "conta 09/2026 parcelada" (UCs 1.155.950.032-50 e
+        // 998.080.032-84 em 29/09, 1.301.793.032-70 em 03/10/2026). Entre os
+        // blocos que casam fica o menor: um contêiner maior junta várias
+        // linhas e o valor lido seria o da primeira.
+        const blocosDaTela = await page.evaluate(() => [...document.querySelectorAll('div,li,tr')]
+            .map(el => (el.textContent || '').replace(/\s+/g, ' ').trim())
+            .filter(t => t.length > 20 && t.length < 600)
+        ).catch(() => []);
+
+        const achadoNoTexto = (blocosDaTela || [])
+            .filter(t => PADRAO_PARCELADA.test(t) && parseMesRef(t) === mesRefAlvo)
+            .sort((a, b) => a.length - b.length)[0] || null;
 
         if (achadoNoTexto) {
-            const refTexto = parseMesRef(achadoNoTexto);
-            if (refTexto === mesRefAlvo && PADRAO_PARCELADA.test(achadoNoTexto)) {
-                log(`   [Faturista] Fatura [${mesRefAlvo}] existe como PARCELADA, sem opção de download nesta tela.`);
-                return {
-                    resultado: 'parcelada',
-                    ref: mesRefAlvo,
-                    valor: valorDaLinha(achadoNoTexto),
-                };
-            }
+            log(`   [Faturista] Fatura [${mesRefAlvo}] existe como PARCELADA, sem opção de download nesta tela. Linha: "${achadoNoTexto.slice(0, 160)}"`);
+            return {
+                resultado: 'parcelada',
+                ref: mesRefAlvo,
+                valor: valorDaLinha(achadoNoTexto),
+            };
         }
 
         log(`   [Faturista] Referência ${mesRefAlvo} não encontrada. Disponíveis na tela: ${refsVistas.length ? refsVistas.join(', ') : '(nenhuma)'}`);
