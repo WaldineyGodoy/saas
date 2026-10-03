@@ -569,93 +569,66 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         setLoaderMessage('Buscando correspondência de UC via OCR...');
                         let extractedUcNumber = parsedData.numero_uc || parsedData.codigo_cliente || parsedData.conta_contrato;
                         
-                        if (!extractedUcNumber && cleanText) {
-                            const regexMatch = cleanText.match(/(?:Conta Contrato|C[óo]digo do Cliente|Instala[çc][ãa]o)[:\s]*(\d{9,11})/i) ||
-                                               cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
-                                               cleanText.match(/(\d{10})/);
-                            if (regexMatch) {
-                                extractedUcNumber = regexMatch[1] || regexMatch[0];
+                        // Funções auxiliares para limpar strings
+                        const getDigits = (str) => (str ? String(str).replace(/\D/g, '') : '');
+                        
+                        let matchedUc = null;
+                        
+                        // 1. Tenta limpar o número extraído e achar na lista local
+                        if (extractedUcNumber) {
+                            const extractedDigits = getDigits(extractedUcNumber);
+                            if (extractedDigits.length > 0) {
+                                matchedUc = allUcs.find(u => getDigits(u.numero_uc) === extractedDigits) || 
+                                            allUcs.find(u => getDigits(u.numero_uc).includes(extractedDigits) || extractedDigits.includes(getDigits(u.numero_uc)));
                             }
                         }
 
-                        if (extractedUcNumber) {
-                            const cleanUcNum = String(extractedUcNumber).trim();
-                            console.log('Tentando vincular UC automaticamente com o número:', cleanUcNum);
+                        // 2. Fallback PODEROSO: Procura todas as UCs cadastradas diretamente no texto do PDF!
+                        if (!matchedUc && cleanText) {
+                            const cleanTextDigits = getDigits(cleanText);
+                            // Filtra UCs que têm pelo menos 6 dígitos para evitar falsos positivos
+                            const possibleUcs = allUcs.filter(u => {
+                                const ucDigits = getDigits(u.numero_uc);
+                                return ucDigits.length > 5 && cleanTextDigits.includes(ucDigits);
+                            });
+                            
+                            if (possibleUcs.length === 1) {
+                                matchedUc = possibleUcs[0];
+                                console.log('[OCR] UC encontrada pelo fallback de texto completo:', matchedUc.numero_uc);
+                            } else if (possibleUcs.length > 1) {
+                                console.warn('[OCR] Múltiplas UCs encontradas no texto. Ignorando fallback para evitar conflitos.');
+                            }
+                        }
+
+                        if (matchedUc) {
+                            console.log('UC vinculada automaticamente com sucesso:', matchedUc.numero_uc);
+                            currentUcId = matchedUc.id;
+                            extractedDesconto = matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0;
+                            setSelectedUcId(matchedUc.id);
+                            setSelectedUc(matchedUc);
+                            setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
+                            showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
                             
                             // Tenta consertar o tipo de ligação no banco de dados se a UC não tiver
-                            const checkAndPatchUcTipoLigacao = async (ucObj) => {
-                                if (ucObj && !ucObj.tipo_ligacao) {
-                                    const ligacaoMatch = cleanText.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
-                                    if (ligacaoMatch) {
-                                        const foundLigacao = ligacaoMatch[1].toLowerCase();
-                                        ucObj.tipo_ligacao = foundLigacao;
-                                        setSelectedUc({ ...ucObj }); // Atualiza state
-                                        try {
-                                            await supabase
-                                                .from('consumer_units')
-                                                .update({ tipo_ligacao: foundLigacao })
-                                                .eq('id', ucObj.id);
-                                            console.log(`[OCR] UC ${ucObj.numero_uc} não tinha tipo de ligação. OCR encontrou e atualizou no banco para: ${foundLigacao}`);
-                                        } catch (err) {
-                                            console.warn('Erro ao fazer patch do tipo de ligação no DB:', err);
-                                        }
+                            if (!matchedUc.tipo_ligacao) {
+                                const ligacaoMatch = cleanText.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                                if (ligacaoMatch) {
+                                    const foundLigacao = ligacaoMatch[1].toLowerCase();
+                                    matchedUc.tipo_ligacao = foundLigacao;
+                                    setSelectedUc({ ...matchedUc });
+                                    try {
+                                        await supabase
+                                            .from('consumer_units')
+                                            .update({ tipo_ligacao: foundLigacao })
+                                            .eq('id', matchedUc.id);
+                                        console.log(`[OCR] UC ${matchedUc.numero_uc} atualizou tipo de ligação para: ${foundLigacao}`);
+                                    } catch (err) {
+                                        console.warn('Erro ao fazer patch do tipo de ligação no DB:', err);
                                     }
                                 }
-                            };
-
-                            const { data: matchedUc, error: ucFindError } = await supabase
-                                .from('consumer_units')
-                                .select(`
-                                    id, numero_uc, concessionaria, titular_conta, status,
-                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                    plano_assinatura_id,
-                                    planos_assinatura_energia(desconto_assinante),
-                                    subscribers!consumer_units_subscriber_id_fkey(name),
-                                    titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                `)
-                                .eq('numero_uc', cleanUcNum)
-                                .maybeSingle();
-
-                            if (matchedUc) {
-                                currentUcId = matchedUc.id;
-                                extractedDesconto = matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0;
-                                setSelectedUcId(matchedUc.id);
-                                setSelectedUc(matchedUc);
-                                setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
-                                showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
-                                await checkAndPatchUcTipoLigacao(matchedUc);
-                            } else {
-                                // Tentar busca parcial caso haja zeros à esquerda ou outros formatos
-                                const { data: matchedUcPartial } = await supabase
-                                    .from('consumer_units')
-                                    .select(`
-                                        id, numero_uc, concessionaria, titular_conta, status,
-                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                        plano_assinatura_id,
-                                        planos_assinatura_energia(desconto_assinante),
-                                        subscribers!consumer_units_subscriber_id_fkey(name),
-                                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                    `)
-                                    .ilike('numero_uc', `%${cleanUcNum}%`)
-                                    .limit(1);
-
-                                if (matchedUcPartial && matchedUcPartial.length > 0) {
-                                    const matched = matchedUcPartial[0];
-                                    currentUcId = matched.id;
-                                    extractedDesconto = matched.planos_assinatura_energia?.desconto_assinante ?? matched.desconto_assinante ?? 0;
-                                    setSelectedUcId(matched.id);
-                                    setSelectedUc(matched);
-                                    setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
-                                    showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
-                                    await checkAndPatchUcTipoLigacao(matched);
-                                }
                             }
-                            
-                            if (currentUcId && !extractedDesconto) {
-                                // Fallback just in case
-                            } else if (!currentUcId) {
-                                showAlert(`A UC ${cleanUcNum} extraída do PDF não foi encontrada no banco. Selecione a UC manualmente.`, 'warning');
-                            }
+                        } else if (extractedUcNumber) {
+                            showAlert(`A UC extraída do PDF não foi encontrada no banco. Selecione a UC manualmente.`, 'warning');
                         } else {
                             throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
                         }
