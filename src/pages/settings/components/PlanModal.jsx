@@ -143,7 +143,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             setSubgrupoTarifario(lastro.subgrupo || 'B1 Residencial');
             setTarifaBruta(String(lastro.tarifa_bruta ?? '1.0300'));
             setFioB(String(lastro.fio_b ?? '0.2130'));
-            setPisoFornecedorPct(String(lastro.piso_fornecedor_pct ?? '50'));
+            // A coluna é a fonte que o motor lê; o lastro é só o retrato da tela.
+            setPisoFornecedorPct(String(planToEdit.piso_fornecedor_pct ?? lastro.piso_fornecedor_pct ?? '50'));
 
             if (recCfg.regras_multinivel) {
                 setRegrasMultinivel(recCfg.regras_multinivel);
@@ -514,6 +515,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             ativo,
             recompensas_ativo: recompensasAtivo,
             tipo_recompensa: tipoRecompensa,
+            // handle_invoice_paid_ledger lê o piso desta coluna, nunca de
+            // recorrente_config.lastro_tarifario -- gravar só lá deixava o
+            // motor cortando com o piso antigo.
+            piso_fornecedor_pct: calc.pctPisoFornecedor,
             start_config: {
                 faturas_elegiveis: faturasElegiveisStart,
                 regras: {
