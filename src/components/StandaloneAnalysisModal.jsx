@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { deriveReadingStatus } from '../lib/readingStatus';
 import { supabase } from '../lib/supabase';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
-import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info } from 'lucide-react';
+import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info, Save } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { parseInvoice, createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
@@ -162,6 +162,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const digits = str.replace(/\D/g, '');
         const value = Number(digits) / 100;
         return isNegative ? -value : value;
+    };
+
+    const getSubscriberDueDate = () => {
+        if (!selectedUc || !formData.mes_referencia) return null;
+        const dueDay = selectedUc.subscribers?.consolidated_due_day || selectedUc.dia_vencimento;
+        if (!dueDay) return null;
+        
+        const [year, month] = formData.mes_referencia.split('-').map(Number);
+        let nextMonth = month + 1;
+        let nextYear = year;
+        if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+        }
+        
+        return `${String(dueDay).padStart(2, '0')}/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
     };
 
     // Filtros e badge de status da pesquisa de UCs
@@ -915,10 +931,26 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             finalEnergyBillStatus = 'inconsistente';
         }
 
+        let faturaVencimento = formData.vencimento || null;
+        if (selectedUc && formData.mes_referencia) {
+            const dueDay = selectedUc.subscribers?.consolidated_due_day || selectedUc.dia_vencimento;
+            if (dueDay) {
+                const [year, month] = formData.mes_referencia.split('-').map(Number);
+                let nextMonth = month + 1;
+                let nextYear = year;
+                if (nextMonth > 12) {
+                    nextMonth = 1;
+                    nextYear++;
+                }
+                const dateObj = new Date(nextYear, nextMonth - 1, dueDay);
+                faturaVencimento = dateObj.toISOString().split('T')[0];
+            }
+        }
+
         const payload = {
             uc_id: selectedUcId,
             mes_referencia: `${formData.mes_referencia}-01`,
-            vencimento: formData.vencimento || null,
+            vencimento: faturaVencimento,
             vencimento_concessionaria: formData.vencimento || null,
             data_leitura_anterior: formData.data_leitura_anterior || null,
             data_leitura: formData.data_leitura || null,
@@ -2382,6 +2414,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                                     </div>
                                                 </div>
 
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.75rem 1rem', borderRadius: '12px' }}>
+                                                    <div>
+                                                        <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#2563eb' }}>Data de Vencimento</span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 500 }}>Herdado do Assinante</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <span style={{ fontWeight: 800, color: '#1d4ed8', fontSize: '1rem' }}>
+                                                            {getSubscriberDueDate() || 'N/A'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecfdf5', border: '1px solid #d1fae5', padding: '0.75rem 1rem', borderRadius: '12px' }}>
                                                     <div>
                                                         <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>Economia Gerada</span>
@@ -2529,15 +2573,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                             disabled={isSubmitting}
                                             className="sandbox-btn sandbox-btn-secondary"
                                         >
-                                            <Ban size={16} /> Registrar Operacional (Sem Faturamento)
+                                            <Save size={16} /> Salvar Conta de Energia
                                         </button>
-                                        <button 
-                                            onClick={() => handleSaveClick('a_vencer')}
-                                            disabled={isSubmitting}
-                                            className="sandbox-btn sandbox-btn-accent"
-                                        >
-                                            <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
-                                        </button>
+                                        
+                                        {!selectedUc?.subscribers?.consolidated_due_day && (
+                                            <button 
+                                                onClick={() => handleSaveClick('a_vencer')}
+                                                disabled={isSubmitting}
+                                                className="sandbox-btn sandbox-btn-accent"
+                                            >
+                                                <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
