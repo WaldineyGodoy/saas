@@ -49,6 +49,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                     .select(`
                         id, numero_uc, concessionaria, titular_conta, status,
                         tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                        plano_assinatura_id,
+                        planos_assinatura_energia(desconto_assinante),
                         subscribers!consumer_units_subscriber_id_fkey(name),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     `)
@@ -78,7 +80,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 setSearchTerm(`UC: ${uc.numero_uc} - ${uc.titular_conta}`);
                 setFormData(prev => ({
                     ...prev,
-                    desconto_aplicado: uc.desconto_assinante || 0,
+                    desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0,
                     mes_referencia: initialMesReferencia ? initialMesReferencia.substring(0, 7) : prev.mes_referencia
                 }));
             }
@@ -195,7 +197,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         setIsDropdownOpen(false);
         setFormData(prev => ({
             ...prev,
-            desconto_aplicado: uc.desconto_assinante || 0
+            desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0
         }));
     };
 
@@ -211,6 +213,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         .from('consumer_units')
                         .select(`
                             *,
+                            planos_assinatura_energia(desconto_assinante),
                             subscribers!consumer_units_subscriber_id_fkey(name),
                             titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                         `)
@@ -227,7 +230,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 if (uc) {
                     setFormData(prev => ({
                         ...prev,
-                        desconto_aplicado: uc.desconto_assinante || 0
+                        desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0
                     }));
                     
                     // Fetch global tariffs for this concessionaria
@@ -306,7 +309,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
             const desconto = formData.desconto_aplicado !== '' 
                 ? Number(formData.desconto_aplicado) 
-                : Number(selectedUc.desconto_assinante || 0);
+                : Number(selectedUc.planos_assinatura_energia?.desconto_assinante ?? selectedUc.desconto_assinante ?? 0);
 
             const multiplier = desconto > 1 ? desconto / 100 : desconto;
 
@@ -582,6 +585,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                 .select(`
                                     id, numero_uc, concessionaria, titular_conta, status,
                                     tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                                    plano_assinatura_id,
+                                    planos_assinatura_energia(desconto_assinante),
                                     subscribers!consumer_units_subscriber_id_fkey(name),
                                     titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                                 `)
@@ -601,6 +606,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                     .select(`
                                         id, numero_uc, concessionaria, titular_conta, status,
                                         tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                                        plano_assinatura_id,
+                                        planos_assinatura_energia(desconto_assinante),
                                         subscribers!consumer_units_subscriber_id_fkey(name),
                                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                                     `)
@@ -950,7 +957,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             economia_reais: simulation.economiaGerada,
             linha_digitavel: formData.linha_digitavel || null,
             pix_string: formData.pix_string || null,
-            desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.desconto_assinante || 0),
+            desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.planos_assinatura_energia?.desconto_assinante ?? selectedUc?.desconto_assinante ?? 0),
             energy_bill_status: finalEnergyBillStatus,
             status: saveStatus,
             concessionaria_pdf_url: publicUrl,
@@ -1099,6 +1106,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                     .select(`
                         id, numero_uc, concessionaria, titular_conta, status,
                         tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                        plano_assinatura_id,
+                        planos_assinatura_energia(desconto_assinante),
                         subscribers!consumer_units_subscriber_id_fkey(name),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     `)
@@ -1295,7 +1304,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const rawConsumo = Number(inv.consumo_kwh) || 0;
         const rawCompensado = Number(inv.consumo_compensado) || 0;
         const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.planos_assinatura_energia?.desconto_assinante ?? uc?.desconto_assinante) || 0);
         const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
         
         // Calculations
