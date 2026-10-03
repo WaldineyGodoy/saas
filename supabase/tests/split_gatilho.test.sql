@@ -9,11 +9,10 @@
 --   3. PPP com licenca vencida   -> parceiro 0 e a B2W absorve (10% + 4% = 14%);
 --   4. UC sem plano              -> nenhum lancamento de recompensa, fornecedor
 --                                   fica com o residual inteiro, motivo gravado;
---   5. piso furado (piso 88%)    -> corte na ordem assinante_conect -> parceiro
---                                   -> lider; desde a I1 de 30/09/2026 (piso
---                                   sobre a TARIFA BRUTA) o teto zera e os
---                                   tres sao drenados por inteiro;
---   5b. piso 95%                 -> corta tudo que da e a B2W NUNCA e cortada
+--   5. corte PARCIAL (piso 73%)  -> teto 124; corte na ordem assinante_conect
+--                                   -> parceiro -> lider: Conect drenado, PPE
+--                                   cortado de 20 para 14, Lider intacto;
+--   5b. teto ZERO (piso 95%)     -> corta tudo que da e a B2W NUNCA e cortada
 --                                   (teto_estourado = true);
 --   6. UC geradora               -> nada (como hoje), nem recompensas_aplicadas;
 --   7. banco / taxa Asaas / concessionaria continuam IDENTICOS aos de hoje;
@@ -100,8 +99,8 @@ DECLARE
 
     -- planos de teste
     v_plano           uuid;   -- piso 50 (padrao)
-    v_plano_p88       uuid;   -- piso 88 -> teto 0 (I1: piso sobre a tarifa bruta)
-    v_plano_p95       uuid;   -- piso 95 -> teto 0 (idem)
+    v_plano_p73       uuid;   -- piso 73 -> teto 124: CORTE PARCIAL (caso 5)
+    v_plano_p95       uuid;   -- piso 95 -> teto 0:   CORTE TOTAL   (caso 5b)
     v_plano_start     uuid;   -- piso 50 + start_config na 1a fatura
 
     -- atores
@@ -111,7 +110,7 @@ DECLARE
     v_ppp             uuid;
 
     v_usina           uuid;
-    v_usina_p88       uuid;
+    v_usina_p73       uuid;
     v_usina_p95       uuid;
     v_usina_start     uuid;
     v_usina_sem_plano uuid;
@@ -256,8 +255,8 @@ BEGIN
     RETURNING id INTO v_plano;
 
     INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
-    VALUES ('SANDBOX Task6 piso88', 'recorrente', 10, 88, jsonb_build_object('regras_multinivel', c_matriz))
-    RETURNING id INTO v_plano_p88;
+    VALUES ('SANDBOX Task6 piso73', 'recorrente', 10, 73, jsonb_build_object('regras_multinivel', c_matriz))
+    RETURNING id INTO v_plano_p73;
 
     INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
     VALUES ('SANDBOX Task6 piso95', 'recorrente', 10, 95, jsonb_build_object('regras_multinivel', c_matriz))
@@ -287,7 +286,7 @@ BEGIN
     VALUES ('SANDBOX Task6 PPP vencido', 'ppp', true, CURRENT_DATE - 1) RETURNING id INTO v_ppp;
 
     INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano)       RETURNING id INTO v_usina;
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_p88)   RETURNING id INTO v_usina_p88;
+    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_p73)   RETURNING id INTO v_usina_p73;
     INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_p95)   RETURNING id INTO v_usina_p95;
     INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_start) RETURNING id INTO v_usina_start;
     -- gestao_percentual 15 de proposito: se o gatilho voltar a ler a usina em
@@ -538,22 +537,37 @@ BEGIN
     END IF;
 
     -- ==================================================================
-    -- CASO 5 -- piso furado (piso 88%).
-    --   I1 (30/09/2026) -- o piso incide sobre a TARIFA BRUTA:
-    --     piso em R$ = round(1000 kWh x 1,20 x 88/100, 2) = 1.056,00
-    --     teto       = GREATEST(round(1000,2) - 1.056,00, 0) = 0,00
-    --   Um piso de 88% da tarifa BRUTA nao cabe numa base que e so 83,33% da
-    --   tarifa bruta (1,00 de 1,20), entao o teto zera: acima de 83,33% de
-    --   piso NADA pode ser deduzido. Com a formula antiga o teto era 120 e
-    --   sobrava espaco -- era exatamente essa a calibracao errada da trava.
-    --   Ha indicacao, entao o parceiro esta no NIVEL 2 (PPE L2 = 2%) e o
-    --   lider tambem (L2 = 1%); o Conect e sempre nivel 1 (2%).
-    --   bruto: B2W 100 + PPE 20 + Lider 10 + Conect 20 = 150
-    --   excesso 150 -> a ordem Conect -> Parceiro Power -> Lider drena os tres
-    --   por inteiro: Conect 20, parceiro 20, lider 10 = corte_aplicado 50.
-    --   Sobram 100 de excesso que o motor nao pode cortar, porque a B2W nunca
-    --   e alvo -> total_deduzido 100 e teto_estourado = true.
-    --   3.1.1 = -100 | 2.1.2 = 0 | 2.1.6 = 0 | 2.1.1 = -(1000 - 100) = -900
+    -- CASO 5 -- CORTE PARCIAL: a trava morde, drena na ordem e PARA no meio,
+    --   deixando sobrevivente. E o degrau que prova a ORDEM do corte; o degrau
+    --   do teto ZERO (todo mundo drenado) e o caso 5b, logo abaixo.
+    --
+    --   Piso 73% escolhido pela conta, nao por gosto. Com base 1000 (1000 kWh
+    --   x tarifa liquida 1,00) e tarifa BRUTA 1,20:
+    --     piso em R$ = round(1000 x 1,20 x p/100, 2) = 12p
+    --     teto       = 1000 - 12p
+    --     excesso    = bruto 150 - teto = 12p - 850
+    --   Ha indicacao, entao o parceiro esta no NIVEL 2 (PPE L2 = 2%) e o lider
+    --   tambem (L2 = 1%); o Conect e sempre nivel 1 (2%).
+    --     bruto: B2W 100 + Conect 20 + PPE 20 + Lider 10 = 150
+    --     cortavel (tudo menos a B2W)                    =  50
+    --   Para o corte ser PARCIAL: 0 < 12p - 850 < 50  ->  70,83% < p < 75%.
+    --   Para o excesso atravessar DUAS categorias e morrer no lider:
+    --   20 < 12p - 850 < 40  ->  72,5% < p < 74,17%.  Logo p = 73.
+    --
+    --     piso em R$ = round(1000 x 1,20 x 73/100, 2) = 876,00
+    --     teto       = GREATEST(round(1000,2) - 876,00, 0) = 124,00
+    --     excesso    = 150 - 124 = 26,00
+    --
+    --   ORDEM Conect -> Parceiro Power -> Lider, drenando sequencialmente:
+    --     Conect: 20 -> cortado 20 INTEIRO, valor 0   (sobra excesso 6)
+    --     PPE:    20 -> cortado  6 PARCIAL, valor 14  (excesso zera aqui)
+    --     Lider:  10 -> cortado  0, valor 10  <- SOBREVIVENTE INTACTO
+    --   corte_aplicado = 26 e total_deduzido = 150 - 26 = 124, que encosta
+    --   EXATAMENTE no teto -> teto_estourado = false (o corte deu conta).
+    --   fornecedor = 1000 - 124 = 876 = 1000 x 1,20 x 73/100, ou seja o piso
+    --   contratual ao centavo: e assim que se sabe que a trava calibrou certo.
+    --
+    --   3.1.1 = -100 | 2.1.2 = -(14 + 10) = -24 | 2.1.6 = 0 | 2.1.1 = -876
     -- ==================================================================
     INSERT INTO public.subscribers (status, short_url)
     VALUES ('ativo', 'sandbox://task6/c5-ref') RETURNING id INTO v_sub_ref;
@@ -562,7 +576,7 @@ BEGIN
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c5', v_sub_ref) RETURNING id INTO v_sub;
 
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_p88, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    VALUES (v_sub, v_usina_p73, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -580,70 +594,64 @@ BEGIN
       INTO v_gestao, v_com, v_conect, v_forn, v_total
       FROM public.ledger_entries WHERE transaction_id = v_txn;
 
-    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-100::numeric, 0::numeric, 0::numeric, -900::numeric) THEN
-        RAISE EXCEPTION 'FALHA caso 5 (piso 88%%): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -100 / 0 / 0 / -900 -- teto 0, os tres beneficiarios sao drenados por inteiro e so a B2W sobrevive)',
+    IF (v_gestao, v_com, v_conect, v_forn) IS DISTINCT FROM (-100::numeric, -24::numeric, 0::numeric, -876::numeric) THEN
+        RAISE EXCEPTION 'FALHA caso 5 (piso 73%%): 3.1.1=% 2.1.2=% 2.1.6=% 2.1.1=% (esperado -100 / -24 / 0 / -876 -- teto 124, Conect drenado, PPE cortado para 14, Lider intacto em 10)',
             v_gestao, v_com, v_conect, v_forn;
     END IF;
     IF v_total <> 0 THEN
         RAISE EXCEPTION 'FALHA caso 5: a transacao nao fecha em zero, soma = %', v_total;
     END IF;
 
-    -- o teto novo e ZERO: nada pode ser deduzido alem do que a B2W leva
     SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
-    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 0::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 5: teto_deducao = %, esperado 0 (base 1000 - piso 1056, com o piso de 88%% sobre a tarifa bruta de 1,20)',
+    IF (v_rec->>'teto_deducao')::numeric IS DISTINCT FROM 124::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 5: teto_deducao = %, esperado 124 (base 1000 - piso 876, com o piso de 73%% sobre a tarifa bruta de 1,20)',
             v_rec->>'teto_deducao';
     END IF;
 
-    -- quanto foi cortado, no total: os 150 de bruto menos os 100 da B2W, que
-    -- nunca e alvo do corte.
-    IF (v_rec->'resultado'->>'corte_aplicado')::numeric IS DISTINCT FROM 50::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 5: corte_aplicado = %, esperado 50 (Conect 20 + parceiro 20 + lider 10)',
+    IF (v_rec->'resultado'->>'corte_aplicado')::numeric IS DISTINCT FROM 26::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 5: corte_aplicado = %, esperado 26 (excesso 150 - 124: Conect 20 + parceiro 6)',
             v_rec->'resultado'->>'corte_aplicado';
     END IF;
-    IF (v_rec->'resultado'->>'total_deduzido')::numeric IS DISTINCT FROM 100::numeric THEN
-        RAISE EXCEPTION 'FALHA caso 5: total_deduzido = %, esperado 100 (so a fatia da B2W sobrevive ao corte)',
+    IF (v_rec->'resultado'->>'total_deduzido')::numeric IS DISTINCT FROM 124::numeric THEN
+        RAISE EXCEPTION 'FALHA caso 5: total_deduzido = %, esperado 124 (encosta exatamente no teto)',
             v_rec->'resultado'->>'total_deduzido';
     END IF;
 
-    -- ordem do corte, no congelamento: Conect primeiro, depois o Parceiro
-    -- Power, depois o Lider -- e com teto 0 os tres perdem TUDO.
+    -- ORDEM do corte, no congelamento: Conect inteiro, Parceiro Power em parte,
+    -- Lider intacto. E este caso -- e nao o 5b -- que prova a ordem: com teto
+    -- zero todo mundo perde tudo e qualquer ordem daria o mesmo resultado.
     SELECT b INTO v_ben FROM jsonb_array_elements(v_rec->'resultado'->'beneficiarios') b
      WHERE b->>'papel' = 'assinante_conect';
     IF (v_ben->>'cortado')::numeric <> 20 OR (v_ben->>'valor')::numeric <> 0 THEN
-        RAISE EXCEPTION 'FALHA caso 5: Conect e o 1o da ordem e devia ser cortado inteiro (20), veio %', v_ben;
+        RAISE EXCEPTION 'FALHA caso 5: Conect e o 1o da ordem e devia ser cortado inteiro (cortado 20, valor 0), veio %', v_ben;
     END IF;
 
     SELECT b INTO v_ben FROM jsonb_array_elements(v_rec->'resultado'->'beneficiarios') b
      WHERE b->>'papel' = 'ppe';
-    IF (v_ben->>'cortado')::numeric <> 20 OR (v_ben->>'valor')::numeric <> 0 THEN
-        RAISE EXCEPTION 'FALHA caso 5: o Parceiro Power e o 2o da ordem e devia ser cortado inteiro (20), veio %', v_ben;
+    IF (v_ben->>'cortado')::numeric <> 6 OR (v_ben->>'valor')::numeric <> 14 THEN
+        RAISE EXCEPTION 'FALHA caso 5: o Parceiro Power e o 2o da ordem e devia absorver so o resto do excesso (cortado 6, valor 14), veio %', v_ben;
     END IF;
 
     SELECT b INTO v_ben FROM jsonb_array_elements(v_rec->'resultado'->'beneficiarios') b
      WHERE b->>'papel' = 'lider';
-    IF (v_ben->>'cortado')::numeric <> 10 OR (v_ben->>'valor')::numeric <> 0 THEN
-        RAISE EXCEPTION 'FALHA caso 5: o Lider e o 3o e ULTIMO da ordem e, com teto 0, tambem perde tudo (10), veio %', v_ben;
+    IF COALESCE((v_ben->>'cortado')::numeric, 0) <> 0 OR (v_ben->>'valor')::numeric <> 10 THEN
+        RAISE EXCEPTION 'FALHA caso 5: o Lider e o ULTIMO da ordem e o excesso morre antes dele -- devia sobreviver intacto (cortado 0, valor 10), veio %', v_ben;
     END IF;
 
-    IF (v_rec->'resultado'->>'teto_estourado')::boolean IS DISTINCT FROM true THEN
-        RAISE EXCEPTION 'FALHA caso 5: teto_estourado = %, esperado true (com teto 0 a B2W sozinha ja passa, e ela nunca e cortada)',
+    IF (v_rec->'resultado'->>'teto_estourado')::boolean IS DISTINCT FROM false THEN
+        RAISE EXCEPTION 'FALHA caso 5: teto_estourado = %, esperado false (o corte deu conta do excesso)',
             v_rec->'resultado'->>'teto_estourado';
     END IF;
 
     -- ==================================================================
-    -- CASO 5b -- piso 95%: bruto 150 (mesma montagem do caso 5), excesso 150:
-    --            corta Conect 20, parceiro 20 e lider 10 -- e ainda estoura,
-    --            porque a B2W (100) nunca e alvo do corte.
-    --   I1 (30/09/2026): piso em R$ = round(1000 x 1,20 x 95/100, 2) = 1.140,00
-    --   e teto = GREATEST(1000 - 1.140, 0) = 0,00 (antes o teto era 50).
-    --   ATENCAO: com o piso sobre a TARIFA BRUTA qualquer piso acima de
-    --   83,33% zera o teto, entao 88% (caso 5) e 95% (caso 5b) produzem hoje
-    --   exatamente o mesmo resultado -- este caso deixou de ser um degrau
-    --   diferente do anterior. Mantido como esta porque o piso da fixture e
-    --   dado; quem quiser um corte PARCIAL de novo precisa de um piso abaixo
-    --   de 83,33% (o caso novo da Cosern, em
-    --   supabase/tests/split_piso_tarifa_bruta.test.sql, cobre isso).
+    -- CASO 5b -- TETO ZERO (piso 95%): o degrau seguinte ao corte parcial.
+    --   piso em R$ = round(1000 x 1,20 x 95/100, 2) = 1.140,00
+    --   teto       = GREATEST(round(1000,2) - 1.140,00, 0) = 0,00
+    --   Com o piso sobre a TARIFA BRUTA, qualquer piso acima de 83,33% (base
+    --   1,00 de tarifa bruta 1,20) zera o teto. Bruto 150 (mesma montagem do
+    --   caso 5), excesso 150: Conect 20, parceiro 20 e lider 10 sao drenados
+    --   por inteiro -- corte_aplicado 50 -- e ainda estoura, porque a B2W
+    --   (100) nunca e alvo: total_deduzido 100, teto_estourado = true.
     --   3.1.1 = -100 | 2.1.2 = 0 | 2.1.6 = 0 | 2.1.1 = -900
     -- ==================================================================
     INSERT INTO public.subscribers (status, short_url)
