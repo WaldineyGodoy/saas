@@ -653,6 +653,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                             
                             if (currentUcId && !extractedDesconto) {
                                 // Fallback just in case
+                            } else if (!currentUcId) {
+                                showAlert(`A UC ${cleanUcNum} extraída do PDF não foi encontrada no banco. Selecione a UC manualmente.`, 'warning');
                             }
                         } else {
                             throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
@@ -2392,7 +2394,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#faf5ff', border: '1px solid #f3e8ff', padding: '0.75rem 1rem', borderRadius: '12px' }}>
                                                     <div>
                                                         <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#7c3aed' }}>Desconto Contratual</span>
-                                                        <span style={{ fontSize: '0.85rem', color: '#6b21a8', fontWeight: 500 }}>Cadastrado na UC selecionada</span>
+                                                        <span style={{ fontSize: '0.85rem', color: selectedUcId ? '#6b21a8' : '#ef4444', fontWeight: 500 }}>
+                                                            {selectedUcId ? 'Herdado do plano da UC selecionada' : 'Selecione a UC para carregar'}
+                                                        </span>
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                         <input 
