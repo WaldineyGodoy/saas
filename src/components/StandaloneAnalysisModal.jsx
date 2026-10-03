@@ -563,6 +563,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                     // Auto-vinculação da UC se não selecionada anteriormente no dropdown
                     let currentUcId = selectedUcId;
+                    let extractedDesconto = undefined;
+
                     if (!currentUcId) {
                         setLoaderMessage('Buscando correspondência de UC via OCR...');
                         let extractedUcNumber = parsedData.numero_uc || parsedData.codigo_cliente || parsedData.conta_contrato;
@@ -579,50 +581,6 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         if (extractedUcNumber) {
                             const cleanUcNum = String(extractedUcNumber).trim();
                             console.log('Tentando vincular UC automaticamente com o número:', cleanUcNum);
-                            
-                            const { data: matchedUc, error: ucFindError } = await supabase
-                                .from('consumer_units')
-                                .select(`
-                                    id, numero_uc, concessionaria, titular_conta, status,
-                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                    plano_assinatura_id,
-                                    planos_assinatura_energia(desconto_assinante),
-                                    subscribers!consumer_units_subscriber_id_fkey(name),
-                                    titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                `)
-                                .eq('numero_uc', cleanUcNum)
-                                .maybeSingle();
-
-                            if (matchedUc) {
-                                currentUcId = matchedUc.id;
-                                setSelectedUcId(matchedUc.id);
-                                setSelectedUc(matchedUc);
-                                setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
-                                showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
-                            } else {
-                                // Tentar busca parcial caso haja zeros à esquerda ou outros formatos
-                                const { data: matchedUcPartial } = await supabase
-                                    .from('consumer_units')
-                                    .select(`
-                                        id, numero_uc, concessionaria, titular_conta, status,
-                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                        plano_assinatura_id,
-                                        planos_assinatura_energia(desconto_assinante),
-                                        subscribers!consumer_units_subscriber_id_fkey(name),
-                                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                    `)
-                                    .ilike('numero_uc', `%${cleanUcNum}%`)
-                                    .limit(1);
-
-                                if (matchedUcPartial && matchedUcPartial.length > 0) {
-                                    const matched = matchedUcPartial[0];
-                                    currentUcId = matched.id;
-                                    setSelectedUcId(matched.id);
-                                    setSelectedUc(matched);
-                                    setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
-                                    showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
-                                }
-                            }
                             
                             // Tenta consertar o tipo de ligação no banco de dados se a UC não tiver
                             const checkAndPatchUcTipoLigacao = async (ucObj) => {
@@ -644,13 +602,58 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                     }
                                 }
                             };
-                            
-                            if (currentUcId === matchedUc?.id) {
-                                await checkAndPatchUcTipoLigacao(matchedUc);
-                            } else if (currentUcId && typeof matchedUcPartial !== 'undefined' && matchedUcPartial && matchedUcPartial.length > 0) {
-                                await checkAndPatchUcTipoLigacao(matchedUcPartial[0]);
-                            }
 
+                            const { data: matchedUc, error: ucFindError } = await supabase
+                                .from('consumer_units')
+                                .select(`
+                                    id, numero_uc, concessionaria, titular_conta, status,
+                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                                    plano_assinatura_id,
+                                    planos_assinatura_energia(desconto_assinante),
+                                    subscribers!consumer_units_subscriber_id_fkey(name),
+                                    titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                                `)
+                                .eq('numero_uc', cleanUcNum)
+                                .maybeSingle();
+
+                            if (matchedUc) {
+                                currentUcId = matchedUc.id;
+                                extractedDesconto = matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0;
+                                setSelectedUcId(matchedUc.id);
+                                setSelectedUc(matchedUc);
+                                setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
+                                showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
+                                await checkAndPatchUcTipoLigacao(matchedUc);
+                            } else {
+                                // Tentar busca parcial caso haja zeros à esquerda ou outros formatos
+                                const { data: matchedUcPartial } = await supabase
+                                    .from('consumer_units')
+                                    .select(`
+                                        id, numero_uc, concessionaria, titular_conta, status,
+                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                                        plano_assinatura_id,
+                                        planos_assinatura_energia(desconto_assinante),
+                                        subscribers!consumer_units_subscriber_id_fkey(name),
+                                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
+                                    `)
+                                    .ilike('numero_uc', `%${cleanUcNum}%`)
+                                    .limit(1);
+
+                                if (matchedUcPartial && matchedUcPartial.length > 0) {
+                                    const matched = matchedUcPartial[0];
+                                    currentUcId = matched.id;
+                                    extractedDesconto = matched.planos_assinatura_energia?.desconto_assinante ?? matched.desconto_assinante ?? 0;
+                                    setSelectedUcId(matched.id);
+                                    setSelectedUc(matched);
+                                    setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
+                                    showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
+                                    await checkAndPatchUcTipoLigacao(matched);
+                                }
+                            }
+                            
+                            if (currentUcId && !extractedDesconto) {
+                                // Fallback just in case
+                            }
                         } else {
                             throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
                         }
@@ -676,8 +679,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         pix_string: parsedData.pix_string || '',
                         fio_b_vr_unit: parsedData.fio_b_vr_unit !== undefined ? formatCurrency(parsedData.fio_b_vr_unit) : '',
                         fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : '',
-                        desconto_aplicado: (currentUcId === matchedUc?.id) ? (matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0) : (
-                                            (currentUcId && typeof matchedUcPartial !== 'undefined' && matchedUcPartial && matchedUcPartial.length > 0) ? (matchedUcPartial[0].planos_assinatura_energia?.desconto_assinante ?? matchedUcPartial[0].desconto_assinante ?? 0) : prev.desconto_aplicado)
+                        desconto_aplicado: extractedDesconto !== undefined ? extractedDesconto : prev.desconto_aplicado
                     }));
 
                     const classMatch = cleanText.match(/(?:CLASSIFICA(?:Ç|C)(?:Ã|A)O|Classe)[\s:]*(B[123]|Grupo A)/i);
