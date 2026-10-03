@@ -675,7 +675,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         linha_digitavel: parsedData.linha_digitavel || '',
                         pix_string: parsedData.pix_string || '',
                         fio_b_vr_unit: parsedData.fio_b_vr_unit !== undefined ? formatCurrency(parsedData.fio_b_vr_unit) : '',
-                        fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : ''
+                        fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : '',
+                        desconto_aplicado: (currentUcId === matchedUc?.id) ? (matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0) : (
+                                            (currentUcId && typeof matchedUcPartial !== 'undefined' && matchedUcPartial && matchedUcPartial.length > 0) ? (matchedUcPartial[0].planos_assinatura_energia?.desconto_assinante ?? matchedUcPartial[0].desconto_assinante ?? 0) : prev.desconto_aplicado)
                     }));
 
                     const classMatch = cleanText.match(/(?:CLASSIFICA(?:Ç|C)(?:Ã|A)O|Classe)[\s:]*(B[123]|Grupo A)/i);
