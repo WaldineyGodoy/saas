@@ -20,6 +20,7 @@ import { supabase } from '../../lib/supabase';
 import { useUI } from '../../contexts/UIContext';
 import PlanModal from './components/PlanModal';
 import EletropostoPlanModal, { extractSubscriptionPlanLastro } from './components/EletropostoPlanModal';
+import UsinasPlanosTab from './components/UsinasPlanosTab';
 
 export default function PlansServicesSettings() {
     const { showAlert } = useUI();
@@ -114,6 +115,21 @@ export default function PlansServicesSettings() {
 
     // Excluir plano
     const handleDelete = async (plano) => {
+        // A FK de usinas.plano_assinatura_id e ON DELETE SET NULL: apagar o
+        // plano desligaria em silencio o split das usinas dele.
+        const { count, error: errCount } = await supabase
+            .from('usinas')
+            .select('id', { count: 'exact', head: true })
+            .eq('plano_assinatura_id', plano.id);
+        if (errCount) {
+            showAlert('Erro ao conferir usinas do plano: ' + errCount.message, 'error');
+            return;
+        }
+        if (count > 0) {
+            showAlert(`O plano "${plano.nome}" está vinculado a ${count} usina(s). Mova-as para outro plano na aba Usinas antes de excluir — ou desative o plano.`, 'warning');
+            return;
+        }
+
         if (!window.confirm(`Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita.`)) {
             return;
         }
@@ -665,26 +681,9 @@ export default function PlansServicesSettings() {
                 </div>
             )}
 
-            {/* CONTEÚDO DA ABA 3: USINAS (PLACEHOLDER) */}
+            {/* CONTEÚDO DA ABA 3: USINAS — qual plano de recompensas cada usina usa */}
             {activeTab === 'usinas' && (
-                <div style={{
-                    background: 'white', borderRadius: '16px', border: '1px dashed #cbd5e1',
-                    padding: '4rem 2rem', textAlign: 'center'
-                }}>
-                    <div style={{
-                        width: '64px', height: '64px', borderRadius: '50%', background: '#fffbeb',
-                        color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1.25rem auto'
-                    }}>
-                        <SunMedium size={32} />
-                    </div>
-                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#1e293b', fontWeight: 700 }}>
-                        Módulo de Usinas
-                    </h4>
-                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', maxWidth: '460px', marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
-                        As políticas de remuneração de geração, faixas de rateio e tarifas de usinas parceiras serão configuradas nesta seção em breve.
-                    </p>
-                </div>
+                <UsinasPlanosTab planosAssinatura={planosAssinatura} showAlert={showAlert} />
             )}
 
             {/* Modal de Criação / Edição — Planos de Assinatura (Lastro Concessionária) */}
