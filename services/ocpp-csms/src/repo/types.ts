@@ -1,0 +1,199 @@
+// Contrato de persistencia do CSMS. Duas implementacoes: memory.ts (testes L1/L3a)
+// e a do Supabase (service role). Ambas seguem o schema de
+// supabase/migrations/20261004b_ocpp_estrutura.sql. Datas sempre ISO 8601 (UTC).
+
+export type RecargaStatus =
+  | 'pending_payment' | 'paid' | 'starting' | 'charging' | 'completed' | 'failed' | 'canceled';
+
+export interface Carregador {
+  id: string;
+  eletroposto_id: string;
+  ocpp_id: string;
+  senha_hash: string | null;
+  vendor: string | null;
+  modelo: string | null;
+  serial: string | null;
+  firmware: string | null;
+  heartbeat_intervalo_s: number;
+  online: boolean;
+  ultimo_boot_em: string | null;
+  ultimo_contato_em: string | null;
+  estado_registro: 'pendente' | 'aceito' | 'rejeitado';
+}
+
+export interface DadosBoot {
+  vendor: string;
+  modelo: string;
+  serial?: string | null;
+  firmware?: string | null;
+}
+
+export interface Conector {
+  id: string;
+  carregador_id: string;
+  connector_id: number;
+  status: string;
+  error_code: string;
+  info: string | null;
+  vendor_error_code: string | null;
+  status_em: string | null;
+  bloqueado_ate_reset: boolean;
+}
+
+export type ConectorPatch = Partial<Omit<Conector, 'id' | 'carregador_id' | 'connector_id'>>;
+
+export interface IdTag {
+  id_tag: string;
+  recarga_id: string | null;
+  status: 'Accepted' | 'Blocked' | 'Expired' | 'Invalid' | 'ConcurrentTx';
+  expira_em: string | null;
+  usado_em: string | null;
+}
+
+export interface Recarga {
+  id: string;
+  status: RecargaStatus;
+  valor: number;
+  // foto da tarifa no checkout (spec §4.9)
+  tarifa_kwh_aplicada: number;
+  ocpp_id_tag: string | null;
+  ocpp_transacao_id: number | null;
+  kwh_limite: number | null;
+  kwh_consumido: number | null;
+  valor_final: number | null;
+  valor_estornado: number | null;
+  stripe_refund_id: string | null;
+  iniciada_em: string | null;
+  finalizada_em: string | null;
+  motivo_fim: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export type RecargaPatch = Partial<Omit<Recarga, 'id'>>;
+
+export interface Transacao {
+  id: number;
+  carregador_id: string;
+  connector_id: number;
+  recarga_id: string | null;
+  id_tag: string;
+  meter_start_wh: number;
+  meter_stop_wh: number | null;
+  inicio_em: string;
+  fim_em: string | null;
+  motivo_parada: string | null;
+  chave_idempotencia: string;
+}
+
+export type NovaTransacao = Pick<
+  Transacao,
+  'carregador_id' | 'connector_id' | 'recarga_id' | 'id_tag' | 'meter_start_wh' | 'inicio_em'
+>;
+
+export interface FimTransacao {
+  meter_stop_wh: number;
+  fim_em: string;
+  motivo_parada?: string | null;
+}
+
+export interface Medicao {
+  transacao_id: number;
+  connector_id: number;
+  medido_em: string;
+  measurand: string;
+  phase: string; // '' = sem fase
+  valor: number;
+  unidade: string;
+  contexto: string | null;
+}
+
+// measurand e phase opcionais na entrada; o repo aplica os defaults do banco.
+export type NovaMedicao = Omit<Medicao, 'measurand' | 'phase' | 'contexto'> &
+  Partial<Pick<Medicao, 'measurand' | 'phase' | 'contexto'>>;
+
+export type AcaoComando =
+  | 'RemoteStartTransaction' | 'RemoteStopTransaction' | 'Reset' | 'ChangeAvailability'
+  | 'GetConfiguration' | 'ChangeConfiguration' | 'UnlockConnector' | 'TriggerMessage';
+
+export type StatusComando = 'pendente' | 'enviado' | 'aceito' | 'rejeitado' | 'erro' | 'expirado';
+
+export interface Comando {
+  id: string;
+  carregador_id: string;
+  acao: AcaoComando;
+  payload: Record<string, unknown>;
+  status: StatusComando;
+  tentativas: number;
+  proxima_tentativa_em: string;
+  expira_em: string;
+  resposta: unknown | null;
+  erro: string | null;
+  recarga_id: string | null;
+  chave_idempotencia: string | null;
+}
+
+export interface NovoComando {
+  carregador_id: string;
+  acao: AcaoComando;
+  payload?: Record<string, unknown>;
+  recarga_id?: string | null;
+  chave_idempotencia?: string | null;
+  proxima_tentativa_em?: string;
+  expira_em?: string;
+}
+
+export type ComandoPatch = Partial<
+  Pick<Comando, 'status' | 'tentativas' | 'proxima_tentativa_em' | 'resposta' | 'erro'>
+>;
+
+export interface Mensagem {
+  carregador_id: string | null;
+  ocpp_id: string;
+  direcao: 'entrada' | 'saida';
+  tipo: 2 | 3 | 4 | null;
+  unique_id: string | null;
+  acao: string | null;
+  payload: unknown | null;
+}
+
+export interface Repo {
+  // carregador
+  buscarCarregador(ocppId: string): Promise<Carregador | null>;
+  registrarBoot(carregadorId: string, dados: DadosBoot): Promise<void>;
+  registrarContato(carregadorId: string): Promise<void>;
+  marcarOffline(carregadorId: string): Promise<void>;
+
+  // conector
+  buscarConector(carregadorId: string, connectorId: number): Promise<Conector | null>;
+  upsertConector(carregadorId: string, connectorId: number, patch: ConectorPatch): Promise<Conector>;
+
+  // idTag
+  buscarIdTag(idTag: string): Promise<IdTag | null>;
+  atualizarIdTag(idTag: string, patch: Partial<Omit<IdTag, 'id_tag'>>): Promise<void>;
+
+  // recarga
+  buscarRecarga(id: string): Promise<Recarga | null>;
+  // `deStatus` torna o update condicional: se o status atual for outro, nao aplica e devolve null.
+  // Transicao proibida pela maquina de status lanca erro (como o gatilho SQL).
+  atualizarRecarga(id: string, patch: RecargaPatch, deStatus?: RecargaStatus): Promise<Recarga | null>;
+
+  // transacao
+  buscarTransacao(id: number): Promise<Transacao | null>;
+  // retransmissao do StartTransaction (mesma chave) devolve a mesma transacao
+  criarOuObterTransacao(chave: string, dados: NovaTransacao): Promise<{ transacao: Transacao; criada: boolean }>;
+  fecharTransacao(id: number, fim: FimTransacao): Promise<Transacao>;
+
+  // medicao: devolve quantas linhas entraram (duplicadas sao ignoradas)
+  gravarMedicoes(medicoes: NovaMedicao[]): Promise<number>;
+  listarMedicoes(transacaoId: number): Promise<Medicao[]>;
+
+  // fila de comandos
+  // pendentes, vencidos (proxima_tentativa_em <= agora), nao expirados, dos carregadores indicados
+  proximosComandos(ocppIds: string[]): Promise<Comando[]>;
+  atualizarComando(id: string, patch: ComandoPatch): Promise<Comando>;
+  // mesma chave_idempotencia nao duplica; chave nula sempre cria
+  enfileirarComando(dados: NovoComando): Promise<{ comando: Comando; criado: boolean }>;
+
+  // trilha de frames
+  logMensagem(m: Mensagem): Promise<void>;
+}

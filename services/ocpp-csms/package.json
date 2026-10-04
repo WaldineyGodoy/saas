@@ -1,0 +1,23 @@
+{
+  "name": "ocpp-csms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CSMS OCPP 1.6-J do B2W Charge",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "dev": "tsx watch src/main.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "ocpp-rpc": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^2"
+  }
+}
