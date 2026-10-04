@@ -18,7 +18,7 @@ export const fetchEletroposto = async (id) => {
   if (!id) return null;
   const { data, error } = await supabase
     .from('eletropostos')
-    .select('id, nome, endereco, tarifa_investidor_kwh, potencia_kw, tipo_recarga, qtd_carregadores')
+    .select('id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, tipo_recarga, qtd_carregadores')
     .eq('id', id)
     .maybeSingle();
 
@@ -32,7 +32,7 @@ export const fetchEletroposto = async (id) => {
 export const listEletropostos = async () => {
   const { data, error } = await supabase
     .from('eletropostos')
-    .select('id, nome, endereco, tarifa_investidor_kwh, potencia_kw, status')
+    .select('id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, status')
     .limit(20);
 
   if (error) {
@@ -46,22 +46,22 @@ export const createChargingCheckoutSession = async ({
   eletroposto_id,
   conector_numero = 1,
   valor,
-  motorista = {},
-  tipo_usuario = 'avulso',
-  user_id = null
+  motorista = {}
 }) => {
   const { data, error } = await supabase.functions.invoke('create-charging-checkout', {
     body: {
       eletroposto_id,
       conector_numero,
       valor,
-      motorista,
-      tipo_usuario,
-      user_id
+      motorista
     }
   });
 
-  if (error) throw error;
+  if (error) {
+    // Recusas do servidor (conector em uso, sem tarifa...) vêm com motivo legível no corpo.
+    const corpo = await error.context?.json?.().catch(() => null);
+    throw new Error(corpo?.error || error.message);
+  }
   if (!data?.success) throw new Error(data?.error || 'Falha ao iniciar pagamento de recarga.');
 
   return data;

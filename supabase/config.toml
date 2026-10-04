@@ -84,3 +84,14 @@ verify_jwt = true
 # 3 envios por lead por dia. Internos usam send-whatsapp.
 [functions.lead-mensagem]
 verify_jwt = true
+
+# Estorno de recarga (B2W Charge). So o CSMS chama, com a service role.
+# `verify_jwt` sozinho nao protege (a chave anon e JWT valido e publico): a
+# funcao exige que o Bearer seja IGUAL a SUPABASE_SERVICE_ROLE_KEY.
+[functions.refund-charging]
+verify_jwt = true
+
+# Parar recarga pelo app. Motorista avulso nao tem login; a prova de posse
+# (usuario dono ou client_secret do PaymentIntent) e checada dentro da funcao.
+[functions.stop-charging]
+verify_jwt = true

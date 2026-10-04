@@ -117,6 +117,7 @@ export default function EletropostoPlanModal({
 
     // Estado Principal do Plano de Eletroposto
     const [nome, setNome] = useState('');
+    const [tarifaMotorista, setTarifaMotorista] = useState('');
     const [descontoEletroposto, setDescontoEletroposto] = useState('10');
     const [ativo, setAtivo] = useState(true);
     const [recompensasAtivo, setRecompensasAtivo] = useState(true);
@@ -142,6 +143,7 @@ export default function EletropostoPlanModal({
 
         if (planToEdit) {
             setNome(planToEdit.nome || '');
+            setTarifaMotorista(planToEdit.tarifa_motorista_kwh != null ? String(planToEdit.tarifa_motorista_kwh) : '');
             setDescontoEletroposto(String(planToEdit.desconto_assinante ?? '10'));
             setAtivo(planToEdit.ativo ?? true);
             setRecompensasAtivo(planToEdit.recompensas_ativo ?? true);
@@ -186,6 +188,7 @@ export default function EletropostoPlanModal({
             const info = extractSubscriptionPlanLastro(defaultSubPlan);
 
             setNome('');
+            setTarifaMotorista('');
             setDescontoEletroposto('10');
             setAtivo(true);
             setRecompensasAtivo(true);
@@ -451,6 +454,12 @@ export default function EletropostoPlanModal({
             return;
         }
 
+        const tarifaMotoristaNum = tarifaMotorista.trim() === '' ? null : Number(tarifaMotorista.replace(',', '.'));
+        if (tarifaMotoristaNum !== null && !(tarifaMotoristaNum > 0)) {
+            showAlert('A Tarifa ao motorista (R$/kWh) deve ser maior que zero.', 'error');
+            return;
+        }
+
         if (bloqueadoPorDeficit) {
             showAlert(`Operação bloqueada: O plano apresenta resultado deficitário no ${calc.worstDeficitLevel}. Ajuste os percentuais.`, 'error');
             return;
@@ -487,6 +496,7 @@ export default function EletropostoPlanModal({
 
         const payload = {
             nome: nome.trim(),
+            tarifa_motorista_kwh: tarifaMotoristaNum,
             desconto_assinante: parseFloat(descontoEletroposto) || 0,
             ativo,
             recompensas_ativo: recompensasAtivo,
@@ -824,6 +834,29 @@ export default function EletropostoPlanModal({
                                         value={nome}
                                         onChange={e => setNome(e.target.value)}
                                         required
+                                        style={{
+                                            width: '100%', height: '44px', padding: '0 0.95rem', borderRadius: '12px',
+                                            border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#1e293b',
+                                            boxSizing: 'border-box', fontWeight: 600
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{
+                                        display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569',
+                                        marginBottom: '0.42rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                    }}>
+                                        Tarifa ao motorista (R$/kWh)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        min="0"
+                                        className="crm-input"
+                                        placeholder="Ex: 2.1500"
+                                        value={tarifaMotorista}
+                                        onChange={e => setTarifaMotorista(e.target.value)}
                                         style={{
                                             width: '100%', height: '44px', padding: '0 0.95rem', borderRadius: '12px',
                                             border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#1e293b',

@@ -57,7 +57,7 @@ describe('stripeChargingService', () => {
         id: 'posto-123',
         nome: 'Posto B2W Matriz',
         endereco: 'Av. Paulista, 1000',
-        tarifa_investidor_kwh: 2.15,
+        plano: { tarifa_motorista_kwh: 2.15 },
         potencia_kw: 60,
         tipo_recarga: 'DC Rápida',
         qtd_carregadores: 4,
@@ -72,7 +72,7 @@ describe('stripeChargingService', () => {
 
       expect(supabase.from).toHaveBeenCalledWith('eletropostos');
       expect(select).toHaveBeenCalledWith(
-        'id, nome, endereco, tarifa_investidor_kwh, potencia_kw, tipo_recarga, qtd_carregadores'
+        'id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, tipo_recarga, qtd_carregadores'
       );
       expect(eq).toHaveBeenCalledWith('id', 'posto-123');
       expect(result).toEqual(mockPosto);
@@ -111,7 +111,7 @@ describe('stripeChargingService', () => {
 
       expect(supabase.from).toHaveBeenCalledWith('eletropostos');
       expect(select).toHaveBeenCalledWith(
-        'id, nome, endereco, tarifa_investidor_kwh, potencia_kw, status'
+        'id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, status'
       );
       expect(limit).toHaveBeenCalledWith(20);
       expect(result).toEqual(mockLista);
@@ -156,8 +156,6 @@ describe('stripeChargingService', () => {
         conector_numero: 2,
         valor: 50,
         motorista: { nome: 'Carlos Silva', email: 'carlos@exemplo.com' },
-        tipo_usuario: 'avulso',
-        user_id: null,
       };
 
       const result = await createChargingCheckoutSession(params);
@@ -168,14 +166,12 @@ describe('stripeChargingService', () => {
           conector_numero: 2,
           valor: 50,
           motorista: { nome: 'Carlos Silva', email: 'carlos@exemplo.com' },
-          tipo_usuario: 'avulso',
-          user_id: null,
         },
       });
       expect(result).toEqual(mockSuccessResponse);
     });
 
-    it('usa valores padrão caso conector_numero, motorista e tipo_usuario não sejam passados', async () => {
+    it('usa valores padrão caso conector_numero e motorista não sejam passados', async () => {
       supabase.functions.invoke.mockResolvedValue({
         data: { success: true },
         error: null,
@@ -192,8 +188,6 @@ describe('stripeChargingService', () => {
           conector_numero: 1,
           valor: 30,
           motorista: {},
-          tipo_usuario: 'avulso',
-          user_id: null,
         },
       });
     });

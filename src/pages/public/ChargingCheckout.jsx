@@ -212,7 +212,7 @@ export default function ChargingCheckout() {
   }, [sessionData?.recargaId, paymentStatus]);
 
   // Cálculos dinâmicos de energia e autonomia
-  const tarifaKwh = Number(selectedPosto?.tarifa_investidor_kwh) || 2.15;
+  const tarifaKwh = Number(selectedPosto?.plano?.tarifa_motorista_kwh) || 2.15;
   const estimativaKwh = tarifaKwh > 0 ? (valor / tarifaKwh).toFixed(1) : '0.0';
   const estimativaKm = Math.round(Number(estimativaKwh) * 6); // Base padrão B2W Charge: ~6 km por kWh
 
@@ -263,9 +263,7 @@ export default function ChargingCheckout() {
           nome: user ? (profile?.nome || user?.email) : motoristaNome.trim(),
           email: user ? user?.email : motoristaEmail.trim(),
           telefone: user ? (profile?.telefone || '') : motoristaTelefone.trim()
-        },
-        tipo_usuario: user ? 'cadastrado' : 'avulso',
-        user_id: user?.id || null
+        }
       };
 
       const res = await createChargingCheckoutSession(payload);
@@ -453,7 +451,7 @@ export default function ChargingCheckout() {
                               <div className="text-[11px] text-slate-500">{p.endereco || 'Endereço padrão'}</div>
                             </div>
                             <span className="text-xs font-bold text-slate-800">
-                              R$ {Number(p.tarifa_investidor_kwh || 2.15).toFixed(2).replace('.', ',')}/kWh
+                              R$ {Number(p.plano?.tarifa_motorista_kwh || 2.15).toFixed(2).replace('.', ',')}/kWh
                             </span>
                           </button>
                         ))}
