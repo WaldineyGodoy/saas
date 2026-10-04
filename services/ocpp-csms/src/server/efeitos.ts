@@ -2,6 +2,7 @@
 // (so agem se a recarga ainda esta no status esperado) e restart-safe: a transicao para
 // failed/canceled grava a marca META_ESTORNO_PENDENTE na MESMA escrita, e `reconciliarEstornos`
 // (varredura) conclui idTag Expired + estorno total + valor_estornado, que sao idempotentes.
+import type { OnErro } from './auth.js';
 import { META_ESTORNO_PENDENTE, type Comando, type Recarga, type Repo } from '../repo/types.js';
 
 // Conclui o que falta numa recarga failed/canceled marcada: idTag Expired, pedido de estorno
@@ -17,10 +18,14 @@ export async function reconciliarRecarga(repo: Repo, r: Recarga): Promise<void> 
   }, r.status);
 }
 
-export async function reconciliarEstornos(repo: Repo): Promise<number> {
+export async function reconciliarEstornos(repo: Repo, onErro: OnErro = () => undefined): Promise<number> {
   const pendentes = await repo.listarRecargasComEstornoPendente();
-  for (const r of pendentes) await reconciliarRecarga(repo, r);
-  return pendentes.length;
+  let n = 0;
+  for (const r of pendentes) {
+    // um item que sempre falha nao pode travar os demais
+    try { await reconciliarRecarga(repo, r); n++; } catch (e) { onErro(`reconciliarEstornos recarga ${r.id}`, e); }
+  }
+  return n;
 }
 
 // RemoteStart rejeitado/expirado/com erro: paid|starting -> failed (+ marca de estorno total pendente).

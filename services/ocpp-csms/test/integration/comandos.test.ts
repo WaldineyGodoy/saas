@@ -360,3 +360,23 @@ describe('FIX - recuperacao de falhas parciais', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('FIX - isolamento por item nas varreduras', () => {
+  it('FIX-6 estorno do 1o item sempre falha: o 2o ainda e reconciliado no mesmo ciclo e onErro nomeia varredura e item', async () => {
+    const erros: { ctx: string; err: unknown }[] = [];
+    await preparar({ onErro: (ctx, err) => { erros.push({ ctx, err }); } });
+    const marca = { estorno_total_pendente: true };
+    const a = c.repo.semearRecarga({ status: 'failed', valor: 10, metadata: marca, motivo_fim: 'x' });
+    const b = c.repo.semearRecarga({ status: 'failed', valor: 20, metadata: marca, motivo_fim: 'x' });
+    const original = c.repo.solicitarEstorno.bind(c.repo);
+    vi.spyOn(c.repo, 'solicitarEstorno').mockImplementation(async (id, e) => {
+      if (id === a.id) throw new Error('stripe fora');
+      return original(id, e);
+    });
+    await fila.processar();
+    expect(c.repo.estornos.map((e) => e.recarga_id)).toEqual([b.id]);
+    expect(rec(b.id).valor_estornado).toBe(20);
+    expect(rec(a.id).valor_estornado).toBeNull();
+    expect(erros.some((e) => e.ctx.includes('reconciliarEstornos') && e.ctx.includes(a.id))).toBe(true);
+  });
+});

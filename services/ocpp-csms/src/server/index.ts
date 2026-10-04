@@ -128,7 +128,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   const porta = typeof addr === 'object' && addr ? addr.port : o.porta;
 
   const timer = setInterval(() => {
-    void verificarOffline(repo, agora()).catch((e) => onErro('verificarOffline', e));
+    void verificarOffline(repo, agora(), onErro).catch((e) => onErro('verificarOffline', e));
   }, o.verificarOfflineMs ?? 30000);
   timer.unref();
 

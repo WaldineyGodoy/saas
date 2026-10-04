@@ -91,7 +91,9 @@ export function criarFila(o: OpcoesFila): Fila {
   async function recuperarEnviados(): Promise<void> {
     const limite = new Date(agora().getTime() - callTimeoutMs - margemEnviadoMs).toISOString();
     for (const cmd of await repo.listarComandosEnviadosAntigos(limite)) {
-      await reagendarOuExpirar(cmd, 'tentativa perdida (sem resultado gravado)', cmd.atualizado_em);
+      try {
+        await reagendarOuExpirar(cmd, 'tentativa perdida (sem resultado gravado)', cmd.atualizado_em);
+      } catch (e) { onErro(`recuperarEnviados comando ${cmd.id}`, e); }
     }
   }
 
@@ -133,10 +135,10 @@ export function criarFila(o: OpcoesFila): Fila {
   async function ciclo(): Promise<void> {
     if (parado) return;
     const t = agora();
-    try { await expirarComandos(repo, t); } catch (e) { onErro('expirarComandos', e); }
+    try { await expirarComandos(repo, t, onErro); } catch (e) { onErro('expirarComandos', e); }
     try { await recuperarEnviados(); } catch (e) { onErro('recuperarEnviados', e); }
-    try { await reconciliarEstornos(repo); } catch (e) { onErro('reconciliarEstornos', e); }
-    try { await cancelarStartingSemPlug(repo, t, connectionTimeoutS); } catch (e) { onErro('cancelarStartingSemPlug', e); }
+    try { await reconciliarEstornos(repo, onErro); } catch (e) { onErro('reconciliarEstornos', e); }
+    try { await cancelarStartingSemPlug(repo, t, connectionTimeoutS, onErro); } catch (e) { onErro('cancelarStartingSemPlug', e); }
 
     const conectados = [...servidor.clientes.keys()];
     if (conectados.length === 0) return;
