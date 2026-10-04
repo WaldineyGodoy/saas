@@ -22,6 +22,7 @@ export const MIGRACOES_OCPP = [
   'supabase/migrations/20261004a_recarga_seguranca.sql',
   'supabase/migrations/20261004b_ocpp_estrutura.sql',
   'supabase/migrations/20261004c_conector_numero.sql',
+  'supabase/migrations/20261004d_recarga_publica_tarifa.sql',
 ];
 
 export const TESTES_SQL_OCPP = [

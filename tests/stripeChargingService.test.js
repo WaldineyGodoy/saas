@@ -8,6 +8,7 @@ import {
   buscarRecargaPublica,
   acompanharRecarga,
   statusPagamentoDaRecarga,
+  pararRecarga,
 } from '../src/services/stripeChargingService';
 import { supabase } from '../src/lib/supabase';
 import { loadStripe } from '@stripe/stripe-js';
@@ -322,6 +323,63 @@ describe('stripeChargingService', () => {
       expect(onDados).toHaveBeenCalledWith({ status: 'paid' });
       parar();
       console.error.mockRestore();
+    });
+  });
+  describe('createChargingCheckoutSession recusa do conector (UI-01)', () => {
+    it('propaga o motivo da recusa 409 no erro para a tela desabilitar o pagamento', async () => {
+      supabase.functions.invoke.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          context: { json: async () => ({ success: false, motivo: 'offline', error: 'O carregador esta offline no momento.' }) },
+        },
+      });
+
+      const erro = await createChargingCheckoutSession({ eletroposto_id: 'p', valor: 30 }).catch((e) => e);
+      expect(erro.message).toBe('O carregador esta offline no momento.');
+      expect(erro.motivo).toBe('offline');
+    });
+  });
+
+  describe('pararRecarga (stop-charging, UI-03)', () => {
+    it('envia recarga_id e client_secret (prova de posse do motorista avulso)', async () => {
+      supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null });
+
+      await expect(pararRecarga('rec-1', { clientSecret: 'pi_1_secret_x' })).resolves.toEqual({ success: true });
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('stop-charging', {
+        body: { recarga_id: 'rec-1', client_secret: 'pi_1_secret_x' },
+      });
+    });
+
+    it('sem client_secret (usuario logado) manda so o recarga_id', async () => {
+      supabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null });
+
+      await pararRecarga('rec-1');
+      expect(supabase.functions.invoke).toHaveBeenCalledWith('stop-charging', { body: { recarga_id: 'rec-1' } });
+    });
+
+    it.each([
+      [403, 'Sem permissao para parar esta recarga.'],
+      [409, 'Esta recarga nao esta em andamento.'],
+    ])('recusa %s do servidor vira erro com a mensagem do corpo', async (status, mensagem) => {
+      supabase.functions.invoke.mockResolvedValue({
+        data: null,
+        error: { message: 'non-2xx', context: { status, json: async () => ({ success: false, error: mensagem }) } },
+      });
+
+      const erro = await pararRecarga('rec-1', { clientSecret: 's' }).catch((e) => e);
+      expect(erro.message).toBe(mensagem);
+      expect(erro.status).toBe(status);
+    });
+
+    it('lança com a mensagem do invoke quando o corpo não é legível', async () => {
+      supabase.functions.invoke.mockResolvedValue({ data: null, error: { message: 'Failed to fetch' } });
+      await expect(pararRecarga('rec-1')).rejects.toThrow('Failed to fetch');
+    });
+
+    it('sem recargaId não chama o servidor', async () => {
+      await expect(pararRecarga(null)).rejects.toThrow();
+      expect(supabase.functions.invoke).not.toHaveBeenCalled();
     });
   });
 });

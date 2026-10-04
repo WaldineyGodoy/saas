@@ -62,9 +62,33 @@ export const createChargingCheckoutSession = async ({
   if (error) {
     // Recusas do servidor (conector em uso, sem tarifa...) vêm com motivo legível no corpo.
     const corpo = await error.context?.json?.().catch(() => null);
-    throw new Error(corpo?.error || error.message);
+    const erro = new Error(corpo?.error || error.message);
+    // motivo (offline|ocupado|bloqueado|reservado): a tela desabilita o pagamento (UI-01)
+    erro.motivo = corpo?.motivo ?? null;
+    throw erro;
   }
   if (!data?.success) throw new Error(data?.error || 'Falha ao iniciar pagamento de recarga.');
+
+  return data;
+};
+
+// Parar pelo app (UI-03). Prova de posse no servidor: JWT do usuario logado (vai
+// no header sozinho) OU o client_secret do PaymentIntent, para o motorista avulso.
+export const pararRecarga = async (recargaId, { clientSecret } = {}) => {
+  if (!recargaId) throw new Error('Recarga não identificada.');
+
+  const body = { recarga_id: recargaId };
+  if (clientSecret) body.client_secret = clientSecret;
+
+  const { data, error } = await supabase.functions.invoke('stop-charging', { body });
+
+  if (error) {
+    const corpo = await error.context?.json?.().catch(() => null);
+    const erro = new Error(corpo?.error || error.message);
+    erro.status = error.context?.status ?? null;
+    throw erro;
+  }
+  if (!data?.success) throw new Error(data?.error || 'Falha ao parar a recarga.');
 
   return data;
 };

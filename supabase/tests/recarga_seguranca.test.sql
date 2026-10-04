@@ -77,11 +77,11 @@ BEGIN
   IF v_json IS NULL THEN RAISE EXCEPTION 'FALHOU SG-02: fn_recarga_publica nao achou a recarga'; END IF;
   SELECT array_agg(k ORDER BY k) INTO v_chaves FROM jsonb_object_keys(v_json) k;
   IF v_chaves IS DISTINCT FROM ARRAY['conector_numero','kwh_consumido','kwh_estimado','nome_posto',
-                                     'status','valor','valor_estornado','valor_final'] THEN
+                                     'status','tarifa_kwh_aplicada','valor','valor_estornado','valor_final'] THEN
     RAISE EXCEPTION 'FALHOU SG-02: fn_recarga_publica devolve as colunas %', v_chaves;
   END IF;
   IF v_json->>'status' <> 'pending_payment' OR (v_json->>'valor')::numeric <> 50
-     OR (v_json->>'conector_numero')::int <> 2 OR v_json->>'nome_posto' <> 'Posto recarga seguranca teste' THEN
+     OR (v_json->>'conector_numero')::int <> 2 OR (v_json->>'tarifa_kwh_aplicada')::numeric <> 2.15 OR v_json->>'nome_posto' <> 'Posto recarga seguranca teste' THEN
     RAISE EXCEPTION 'FALHOU SG-02: fn_recarga_publica devolveu %', v_json;
   END IF;
 

@@ -13,8 +13,6 @@ import {
   Phone, 
   ShieldCheck, 
   ArrowRight, 
-  RotateCcw, 
-  Info, 
   Gauge, 
   Plug,
   ArrowLeft
@@ -27,8 +25,10 @@ import {
   createChargingCheckoutSession,
   tarifaDoPosto,
   acompanharRecarga,
-  statusPagamentoDaRecarga
+  statusPagamentoDaRecarga,
+  pararRecarga
 } from '../../services/stripeChargingService';
+import AcompanhamentoRecarga from './AcompanhamentoRecarga';
 
 /**
  * Subcomponente interno para formulário Stripe Elements.
@@ -124,6 +124,8 @@ export default function ChargingCheckout() {
 
   const urlPostoId = searchParams.get('posto');
   const urlConector = searchParams.get('conector');
+  // /recarga?recarga=<id> retoma o acompanhamento (só andamento, via RPC pública)
+  const urlRecarga = searchParams.get('recarga');
 
   // Estados da Estação
   const [loadingPosto, setLoadingPosto] = useState(true);
@@ -143,7 +145,11 @@ export default function ChargingCheckout() {
 
   // Sessão Stripe e Status
   const [creatingSession, setCreatingSession] = useState(false);
-  const [sessionData, setSessionData] = useState(null);
+  const [sessionData, setSessionData] = useState(urlRecarga ? { recargaId: urlRecarga } : null);
+  const [recarga, setRecarga] = useState(null);
+  const [parando, setParando] = useState(false);
+  const [erroParada, setErroParada] = useState(null);
+  const [recusaMotivo, setRecusaMotivo] = useState(null); // 409 do checkout: conector indisponível (UI-01)
   const [sessionError, setSessionError] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('idle'); // 'idle' | 'processing' | 'paid' | 'failed'
 
@@ -202,16 +208,25 @@ export default function ChargingCheckout() {
     }
   }, [user, profile]);
 
-  // Acompanha a confirmação do webhook por polling de fn_recarga_publica
-  // (anon não lê recargas_eletroposto; ver acompanharRecarga). Para quando
-  // o pagamento é confirmado.
+  // Acompanha a recarga por polling de fn_recarga_publica (anon não lê
+  // recargas_eletroposto; ver acompanharRecarga). Segue por paid → starting →
+  // charging e para sozinho em status terminal.
   useEffect(() => {
-    if (!sessionData?.recargaId || paymentStatus === 'paid') return;
+    if (!sessionData?.recargaId) return;
 
-    return acompanharRecarga(sessionData.recargaId, (recarga) => {
-      if (statusPagamentoDaRecarga(recarga.status)) setPaymentStatus('paid');
+    return acompanharRecarga(sessionData.recargaId, (dados) => {
+      setRecarga(dados);
+      // retomada por URL: qualquer status além de pending_payment mostra o andamento
+      if (statusPagamentoDaRecarga(dados.status) || (urlRecarga && dados.status !== 'pending_payment')) {
+        setPaymentStatus('paid');
+      }
     });
-  }, [sessionData?.recargaId, paymentStatus]);
+  }, [sessionData?.recargaId, urlRecarga]);
+
+  // Trocar de conector ou de posto libera de novo o botão de pagar
+  useEffect(() => {
+    setRecusaMotivo(null);
+  }, [selectedConector, selectedPosto?.id]);
 
   // Cálculos dinâmicos de energia e autonomia
   // Preço = tarifa do plano do posto, sem valor de reserva (null = indisponível).
@@ -279,15 +294,32 @@ export default function ChargingCheckout() {
       setSessionData(res);
     } catch (err) {
       console.error('Erro ao criar sessão de recarga:', err);
+      setRecusaMotivo(err?.motivo || null);
       setSessionError(err?.message || 'Falha ao iniciar pagamento. Verifique os dados e tente novamente.');
     } finally {
       setCreatingSession(false);
     }
   };
 
+  // Parar pelo app: dono = usuário logado (JWT) ou quem tem o client_secret do pagamento
+  const handleParar = async () => {
+    setParando(true);
+    setErroParada(null);
+    try {
+      await pararRecarga(sessionData.recargaId, { clientSecret: sessionData.clientSecret });
+    } catch (err) {
+      setErroParada(err?.message || 'Não foi possível parar a recarga.');
+      setParando(false);
+    }
+  };
+
   // Resetar para nova recarga
   const handleNovaRecarga = () => {
     setSessionData(null);
+    setRecarga(null);
+    setParando(false);
+    setErroParada(null);
+    if (urlRecarga) navigate('/recarga', { replace: true });
     setPaymentStatus('idle');
     setSessionError(null);
   };
@@ -315,83 +347,16 @@ export default function ChargingCheckout() {
 
       {/* Main Content Container */}
       <main className="flex-1 max-w-xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {/* TELA DE SUCESSO */}
+        {/* ACOMPANHAMENTO DA RECARGA (pago → conectar → carregando → resumo) */}
         {paymentStatus === 'paid' ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-emerald-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200" data-testid="success-screen">
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <CheckCircle2 className="w-10 h-10 text-white stroke-[2.5]" />
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight">Recarga Autorizada!</h1>
-              <p className="text-emerald-100 text-sm mt-1">
-                Seu pagamento foi confirmado com sucesso. O conector está liberado!
-              </p>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Resumo da Recarga */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
-                <div className="flex justify-between items-center text-sm pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Estação</span>
-                  <span className="font-semibold text-slate-800">{selectedPosto?.nome || sessionData?.nome_posto || 'Eletroposto B2W'}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Conector Liberado</span>
-                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    <Plug className="w-3.5 h-3.5" />
-                    Conector {selectedConector}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Valor Pago</span>
-                  <span className="font-bold text-slate-900 text-base">R$ {valor.toFixed(2).replace('.', ',')}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm pb-2 border-b border-slate-200">
-                  <span className="text-slate-500">Energia Estimada</span>
-                  <span className="font-semibold text-emerald-600">~{estimativaKwh} kWh</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Autonomia Prevista</span>
-                  <span className="font-semibold text-slate-800">~{estimativaKm} km</span>
-                </div>
-                {sessionData?.recargaId && (
-                  <div className="pt-2 text-[11px] text-slate-400 font-mono text-center">
-                    ID da Recarga: {sessionData.recargaId}
-                  </div>
-                )}
-              </div>
-
-              {/* Instruções de Conexão Passo a Passo */}
-              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
-                <h3 className="font-semibold text-blue-900 text-sm flex items-center gap-1.5 mb-3">
-                  <Info className="w-4 h-4 text-blue-700" />
-                  Próximos Passos para Iniciar
-                </h3>
-                <ol className="space-y-2.5 text-xs text-blue-800 font-medium">
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-[11px] font-bold">1</span>
-                    <span>Retire o plugue do <strong>Conector {selectedConector}</strong> e conecte firmemente no bocal do seu veículo elétrico.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-[11px] font-bold">2</span>
-                    <span>A trava do conector será acionada e o fluxo de energia iniciará automaticamente em alguns instantes.</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-[11px] font-bold">3</span>
-                    <span>Acompanhe o nível de carga e potência pelo display do totem ou painel do carro.</span>
-                  </li>
-                </ol>
-              </div>
-
-              <button
-                onClick={handleNovaRecarga}
-                className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Realizar Nova Recarga</span>
-              </button>
-            </div>
-          </div>
+          <AcompanhamentoRecarga
+            recarga={recarga}
+            // sem posse (retomada sem login nem client_secret) não há como parar daqui
+            onParar={user || sessionData?.clientSecret ? handleParar : undefined}
+            parando={parando}
+            erro={erroParada}
+            onNova={handleNovaRecarga}
+          />
         ) : (
           /* FORMULÁRIO DE SELEÇÃO E CHECKOUT */
           <div className="space-y-6">
@@ -696,7 +661,7 @@ export default function ChargingCheckout() {
               <button
                 type="button"
                 onClick={handleStartCheckout}
-                disabled={creatingSession || loadingPosto || postoIndisponivel}
+                disabled={creatingSession || loadingPosto || postoIndisponivel || !!recusaMotivo}
                 data-testid="start-checkout-button"
                 className="w-full py-4 px-6 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-base cursor-pointer"
               >
