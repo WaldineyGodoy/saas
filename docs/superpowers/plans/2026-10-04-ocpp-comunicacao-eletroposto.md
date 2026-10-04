@@ -56,13 +56,13 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
 **Arquivos:** criar `supabase/migrations/20261004a_recarga_seguranca.sql`, `supabase/tests/recarga_seguranca.test.sql`, `supabase/functions/_shared/recarga.ts`, `tests/charging-recarga.test.ts`; modificar `supabase/functions/stripe-charging-webhook/index.ts`, `src/pages/public/ChargingCheckout.jsx`, `src/services/stripeChargingService.js`.
 **Cenários:** SG-01, SG-02, SG-03, RC-10 (parte do banco).
 
-- [ ] **1.1 Teste SQL primeiro.** Em `supabase/tests/recarga_seguranca.test.sql` (padrão `SANDBOX_OK`), com `set local role anon`:
+- [x] **1.1 Teste SQL primeiro.** Em `supabase/tests/recarga_seguranca.test.sql` (padrão `SANDBOX_OK`), com `set local role anon`:
   - `update recargas_eletroposto set status='paid'` afeta 0 linhas (SG-01);
   - `select count(*) from recargas_eletroposto` = 0 para `anon` (SG-02);
   - `fn_recarga_publica(id)` devolve só `status, kwh_estimado, kwh_consumido, valor, valor_final, valor_estornado, conector_numero, nome_posto` — sem `motorista_*` (SG-02);
   - `fn_marcar_recarga_paga(pi_id)` chamada duas vezes → primeira devolve `true`, segunda `false` (RC-10).
   Rodar pelo MCP `execute_sql`. **Esperado agora:** falha (políticas antigas e funções inexistentes).
-- [ ] **1.2 Migração.** `20261004a_recarga_seguranca.sql`:
+- [x] **1.2 Migração.** `20261004a_recarga_seguranca.sql`:
   ```sql
   drop policy if exists "Permitir leitura da recarga" on public.recargas_eletroposto;
   drop policy if exists "Permitir criacao de solicitacao de recarga" on public.recargas_eletroposto;
@@ -85,11 +85,11 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
   returns uuid ... -- update ... set status='paid' where stripe_payment_intent_id = p and status = 'pending_payment' returning id
   ```
   O Realtime de `postgres_changes` deixa de entregar para `anon` (RLS); a tela passa a usar **broadcast** no canal `recarga:<id>` emitido pelas Edge Functions/CSMS **ou** polling de `fn_recarga_publica` a cada 3 s. Decisão do plano: polling de 3 s (simples, sem vazar linhas) — registrar no código.
-- [ ] **1.3 Regra pura + teste.** `supabase/functions/_shared/recarga.ts` exporta `exigirAssinatura(secret, sig)` (lança se algum faltar) e `RECARGA_TRANSICOES` (mapa de status → próximos válidos, conforme spec §4.8). `tests/charging-recarga.test.ts` (vitest raiz) cobre: sem secret → lança; sem assinatura → lança; transições válidas e inválidas. Rodar `npm test -- charging-recarga` → **falha**, implementar → **passa**.
-- [ ] **1.4 Webhook.** Remover o ramo `else { event = JSON.parse(rawBody) }`; sem assinatura válida → 400 (SG-03). `succeeded` chama `rpc('fn_marcar_recarga_paga')`; se devolver nulo (já pago), responde 200 sem efeito.
-- [ ] **1.5 Front.** `stripeChargingService.js` ganha `buscarRecargaPublica(id)` (RPC). `ChargingCheckout.jsx` troca o canal `postgres_changes` por polling de `fn_recarga_publica` (3 s, para em status terminal). Atualizar `tests/ChargingCheckout.test.jsx` e `tests/stripeChargingService.test.js` para o novo contrato.
-- [ ] **1.6 Verificar.** `npm test` verde; `npm run lint` sem erros novos; teste SQL devolve `SANDBOX_OK`.
-- [ ] **1.7 Commit.** `fix(b2w-charge): recarga so vira paga por webhook assinado e anon nao le nem altera recargas`
+- [x] **1.3 Regra pura + teste.** `supabase/functions/_shared/recarga.ts` exporta `exigirAssinatura(secret, sig)` (lança se algum faltar) e `RECARGA_TRANSICOES` (mapa de status → próximos válidos, conforme spec §4.8). `tests/charging-recarga.test.ts` (vitest raiz) cobre: sem secret → lança; sem assinatura → lança; transições válidas e inválidas. Rodar `npm test -- charging-recarga` → **falha**, implementar → **passa**.
+- [x] **1.4 Webhook.** Remover o ramo `else { event = JSON.parse(rawBody) }`; sem assinatura válida → 400 (SG-03). `succeeded` chama `rpc('fn_marcar_recarga_paga')`; se devolver nulo (já pago), responde 200 sem efeito.
+- [x] **1.5 Front.** `stripeChargingService.js` ganha `buscarRecargaPublica(id)` (RPC). `ChargingCheckout.jsx` troca o canal `postgres_changes` por polling de `fn_recarga_publica` (3 s, para em status terminal). Atualizar `tests/ChargingCheckout.test.jsx` e `tests/stripeChargingService.test.js` para o novo contrato.
+- [x] **1.6 Verificar.** `npm test` verde; `npm run lint` sem erros novos; teste SQL devolve `SANDBOX_OK`.
+- [x] **1.7 Commit.** `fix(b2w-charge): recarga so vira paga por webhook assinado e anon nao le nem altera recargas`
 
 ---
 
@@ -98,7 +98,7 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
 **Arquivos:** criar `supabase/migrations/20261004b_ocpp_estrutura.sql`, `supabase/tests/ocpp_estrutura.test.sql`.
 **Cenários:** base de todos; testes L2 de dedupe (RS-01, RS-03), idempotência de comando (RC-10), transições (spec §4.8).
 
-- [ ] **2.1 Teste SQL primeiro** (`SANDBOX_OK`), cobrindo:
+- [x] **2.1 Teste SQL primeiro** (`SANDBOX_OK`), cobrindo:
   - `ocpp_id` fora de `^[A-Za-z0-9_-]{1,48}$` → erro 23514;
   - `(carregador_id, connector_id)` duplicado → 23505;
   - `ocpp_id_tags.id_tag` com 21 caracteres → 23514;
@@ -109,9 +109,11 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
   - `anon` lê zero linhas de todas as tabelas `ocpp_*` e `eletroposto_carregadores/_conectores`;
   - fornecedor do eletroposto lê o carregador do seu eletroposto e não lê de outro.
   **Esperado agora:** falha (tabelas inexistentes).
-- [ ] **2.2 Migração** com as tabelas do §4.1–4.7 da spec, alterações do §4.8 em `recargas_eletroposto` (incluir `starting` no CHECK, novas colunas), gatilho de transição, `updated_at`, índices (`ocpp_comandos (status, proxima_tentativa_em)`, `ocpp_medicoes (transacao_id, medido_em)`, `ocpp_mensagens (carregador_id, criado_em)`), RLS no padrão de `20260929a` (`fn_papel_interno()` escreve/lê; fornecedor lê via `fn_eletroposto_do_fornecedor`), `revoke all ... from anon`. Publicar `ocpp_comandos` no Realtime: `alter publication supabase_realtime add table public.ocpp_comandos;`. Cron de limpeza de `ocpp_mensagens` > 30 dias (padrão `20260904e_cron_faturista.sql`).
-- [ ] **2.3 Verificar:** teste SQL → `SANDBOX_OK`.
-- [ ] **2.4 Commit.** `feat(ocpp): tabelas de carregador, conector, transacao, medicao, comandos e trilha`
+  - `planos_assinatura_energia.tarifa_motorista_kwh` ≤ 0 → 23514 (spec §4.9);
+  - `authenticated` (inclusive interno) não lê `eletroposto_carregadores.senha_hash` → 42501 (só o CSMS, por service role).
+- [x] **2.2 Migração** com as tabelas do §4.1–4.7 da spec, `tarifa_motorista_kwh` do §4.9, alterações do §4.8 em `recargas_eletroposto` (incluir `starting` no CHECK, novas colunas), gatilho de transição, `updated_at`, índices (`ocpp_comandos (status, proxima_tentativa_em)`, `ocpp_medicoes (transacao_id, medido_em)`, `ocpp_mensagens (carregador_id, criado_em)`), RLS no padrão de `20260929a` (`fn_papel_interno()` escreve/lê; fornecedor lê via `fn_eletroposto_do_fornecedor`), `revoke all ... from anon`. Publicar `ocpp_comandos` no Realtime: `alter publication supabase_realtime add table public.ocpp_comandos;`. Cron de limpeza de `ocpp_mensagens` > 30 dias (padrão `20260904e_cron_faturista.sql`).
+- [x] **2.3 Verificar:** teste SQL → `SANDBOX_OK`.
+- [x] **2.4 Commit.** `feat(ocpp): tabelas de carregador, conector, transacao, medicao, comandos e trilha`
 
 ---
 
@@ -236,7 +238,8 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
   - `valorEstornoCentavos(recarga)` coerente com `calcularFechamento` do CSMS (mesma tabela de casos — copiar os casos de `services/ocpp-csms/test/unit/estorno.test.ts`).
   **Esperado:** falha.
 - [ ] **9.2 Implementar:**
-  - `create-charging-checkout`: busca carregador/conector por `eletroposto_id` + `conector_numero`; recusa com 409 e motivo legível se `conectorDisponivel` falhar (antes de criar o PaymentIntent).
+  - `create-charging-checkout`: busca carregador/conector por `eletroposto_id` + `conector_numero`; recusa com 409 e motivo legível se `conectorDisponivel` falhar (antes de criar o PaymentIntent). Tarifa = `plano.tarifa_motorista_kwh` (spec §4.9), gravada em `tarifa_kwh_aplicada`; sem plano/tarifa → recusa. `user_id` vem do JWT, não do corpo.
+  - `EletropostoPlanModal`: campo "Tarifa ao motorista (R$/kWh)".
   - `stripe-charging-webhook`: após `fn_marcar_recarga_paga` devolver id, gera idTag, insere `ocpp_id_tags` e `ocpp_comandos` (`on conflict (chave_idempotencia) do nothing`). `payment_failed` não cria comando (RC-09).
   - `stop-charging`: valida posse (`podeParar`), insere `RemoteStopTransaction` (`chave stop:<recarga>`).
   - `refund-charging`: chamada só com service role (CSMS); `stripe.refunds.create({payment_intent, amount}, {idempotencyKey: 'refund:<recarga>'})`; grava `stripe_refund_id`, `valor_estornado`. Stripe com a mesma `apiVersion` das outras funções de recarga.

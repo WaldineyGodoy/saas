@@ -123,6 +123,12 @@ Todas as tabelas `ocpp_*` e de carregador: RLS ligada, **sem acesso `anon`**, es
   Máquina: `pending_payment → paid → starting → charging → completed`; saídas de erro: `paid/starting → failed` (comando rejeitado/expirado) e `starting → canceled` (motorista não plugou). Transições validadas por gatilho (`fn_recarga_transicao_valida`).
 - Colunas: `ocpp_id_tag`, `ocpp_transacao_id`, `kwh_limite`, `kwh_consumido`, `valor_final`, `valor_estornado`, `stripe_refund_id`, `iniciada_em`, `finalizada_em`, `motivo_fim`.
 
+### 4.9 Tarifa ao motorista (decisão do dono, 04/10/2026)
+
+- `planos_assinatura_energia.tarifa_motorista_kwh numeric(10,4)` (> 0): preço por kWh cobrado do motorista, definido no **plano de eletroposto** e editado no `EletropostoPlanModal`. Todo eletroposto com o plano cobra o mesmo preço.
+- O checkout lê `eletropostos.plano_id → tarifa_motorista_kwh` e grava a foto em `recargas_eletroposto.tarifa_kwh_aplicada`. Posto sem plano ou plano sem tarifa → checkout recusa. `kwh_limite`, `valor_final` e estorno usam **a foto**, nunca a tarifa atual do plano.
+- `tarifa_investidor_kwh` volta a ser só o piso do investidor (projeto 2), fora do preço ao motorista.
+
 ## 5. Comportamento do CSMS (OCPP 1.6-J)
 
 ### 5.1 Conexão
@@ -274,10 +280,10 @@ Cada cenário vira um teste automatizado (L3b, com o ID no nome do teste: `test_
 
 ## 10. Decisões a confirmar com o dono
 
-1. **CSMS próprio (D1)** em vez de contratar/usar o broker da Joult ou um CSMS SaaS. Se a Joult já fornecer um backend com API, a ponte (§5.4) muda de destino, mas o emulador e o catálogo (§6–8) valem igual.
-2. **Hospedagem do CSMS** (precisa de processo persistente com WSS): Fly.io, Railway ou VM. Não bloqueia os testes locais.
-3. **Tarifa ao motorista**: hoje o checkout usa `tarifa_investidor_kwh` (que a spec dos eletropostos define como **piso do investidor**) como preço ao consumidor. O estorno (D5) usa a mesma tarifa; se o preço ao motorista for outro, precisa de coluna própria.
-4. **Estorno mínimo**: diferença menor que R$ 0,50 não é estornada (custo/ruído). Confirmar valor.
+1. **CSMS próprio (D1)** em vez de contratar/usar o broker da Joult ou um CSMS SaaS. Se a Joult já fornecer um backend com API, a ponte (§5.4) muda de destino, mas o emulador e o catálogo (§6–8) valem igual. *Dono (04/10): decidir depois.*
+2. **Hospedagem do CSMS** (precisa de processo persistente com WSS): Fly.io, Railway ou VM. Não bloqueia os testes locais. *Dono (04/10): decidir depois.*
+3. ~~**Tarifa ao motorista**~~ — **decidido:** coluna própria no plano de eletroposto (§4.9).
+4. ~~**Estorno mínimo**~~ — **decidido:** R$ 0,50.
 
 ## 11. Fora de escopo
 
