@@ -1,11 +1,12 @@
 // Repo em memoria com as mesmas regras de unicidade e transicao do banco
 // (supabase/migrations/20261004b_ocpp_estrutura.sql). Usado pelos testes L1/L3a.
 import { randomUUID } from 'node:crypto';
+import { META_ESTORNO_PENDENTE } from './types.js';
 import { transicaoValida } from '../domain/recarga.js';
 import type {
   Alerta, Carregador, Comando, ComandoPatch, Conector, ConectorPatch, DadosBoot, FimTransacao, IdTag,
   Medicao, Mensagem, NovaMedicao, NovaTransacao, NovoComando, Recarga, RecargaPatch,
-  RecargaStatus, Repo, Transacao,
+  RecargaStatus, Repo, StatusComando, Transacao,
 } from './types.js';
 
 const EXPIRA_COMANDO_MS = 2 * 60 * 1000;
@@ -257,9 +258,27 @@ export class MemoryRepo implements Repo {
     return this.comandos.filter((c) => c.status === 'pendente' && new Date(c.expira_em).getTime() <= agora);
   }
 
-  async listarRecargasStarting() {
+  async atualizarComandoSe(id: string, cond: { status: StatusComando; atualizado_em?: string }, patch: ComandoPatch) {
+    const c = this.comandos.find((x) => x.id === id);
+    if (!c || c.status !== cond.status) return null;
+    if (cond.atualizado_em !== undefined && c.atualizado_em !== cond.atualizado_em) return null;
+    Object.assign(c, patch, { atualizado_em: this.iso() });
+    return c;
+  }
+
+  async listarComandosEnviadosAntigos(antesDe: string) {
+    const limite = new Date(antesDe).getTime();
+    return this.comandos.filter((c) => c.status === 'enviado' && new Date(c.atualizado_em).getTime() < limite);
+  }
+
+  async listarRecargasComEstornoPendente() {
+    return this.recargas.filter((r) =>
+      (r.status === 'failed' || r.status === 'canceled') && r.metadata[META_ESTORNO_PENDENTE] === true);
+  }
+
+  async listarRecargasComPartidaAceita() {
     const saida: { recarga: Recarga; aceito_em: string }[] = [];
-    for (const r of this.recargas.filter((x) => x.status === 'starting')) {
+    for (const r of this.recargas.filter((x) => x.status === 'starting' || x.status === 'paid')) {
       const aceitos = this.comandos
         .filter((c) => c.recarga_id === r.id && c.acao === 'RemoteStartTransaction' && c.status === 'aceito')
         .map((c) => c.atualizado_em).sort();

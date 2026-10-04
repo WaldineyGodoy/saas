@@ -91,13 +91,13 @@ describe('RC - comandos de partida', () => {
   });
 
   it('RC-03 StartTransaction dentro do prazo: a varredura nao cancela', async () => {
-    const { recarga } = await preparar({ connectionTimeoutS: 0.3 });
+    const { recarga } = await preparar({ connectionTimeoutS: 1.5 });
     cli.handle('RemoteStartTransaction', async () => ({ status: 'Accepted' }));
     await conectar();
     await startCmd(recarga.id);
     await fila.processar();
     await cli.call('StartTransaction', { connectorId: 1, idTag: TAG, meterStart: 0, timestamp: new Date().toISOString() });
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 2000));
     expect(rec(recarga.id).status).toBe('charging');
     expect(c.repo.estornos).toEqual([]);
   });
@@ -272,5 +272,91 @@ describe('ST - pre-condicoes do RemoteStart', () => {
     expect(cmd(comando.id).erro).toMatch(/Charging/);
     expect(recebidos).toEqual([]);
     expect(rec(recarga.id).status).toBe('failed');
+  });
+});
+
+const semRuido = { onErro: () => undefined };
+
+describe('FIX - recuperacao de falhas parciais', () => {
+  it('FIX-1 estorno que falhou apos a recarga virar failed e refeito pela varredura (valor_estornado so apos o pedido)', async () => {
+    const { recarga } = await preparar(semRuido);
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Rejected' }));
+    await conectar();
+    vi.spyOn(c.repo, 'solicitarEstorno').mockRejectedValueOnce(new Error('stripe fora'));
+    await startCmd(recarga.id);
+    await fila.processar();
+    expect(rec(recarga.id).status).toBe('failed');
+    expect(rec(recarga.id).valor_estornado).toBeNull();
+    await vi.waitFor(() => expect(c.repo.estornos).toHaveLength(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(rec(recarga.id).valor_estornado).toBe(50), { timeout: 3000 });
+    expect(tag(TAG).status).toBe('Expired');
+  });
+
+  it('FIX-2 comando preso em enviado (queda entre a trava e a resposta) e reenviado pela varredura', async () => {
+    const { recarga } = await preparar({ ...semRuido, callTimeoutMs: 20, margemEnviadoMs: 30 });
+    let n = 0;
+    cli.handle('RemoteStartTransaction', async () => { n++; return { status: 'Accepted' }; });
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await c.repo.reivindicarComando(comando.id); // simula crash apos a trava
+    expect(cmd(comando.id).status).toBe('enviado');
+    await vi.waitFor(() => expect(cmd(comando.id).status).toBe('aceito'), { timeout: 3000 });
+    expect(n).toBe(1);
+    expect(rec(recarga.id).status).toBe('starting');
+  });
+
+  it('FIX-2 enviado preso sem mais tentativas -> expirado e RemoteStart falha a recarga com estorno', async () => {
+    const { recarga } = await preparar({ ...semRuido, callTimeoutMs: 20, margemEnviadoMs: 30, backoff: () => null });
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Accepted' }));
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await c.repo.reivindicarComando(comando.id);
+    await vi.waitFor(() => expect(cmd(comando.id).status).toBe('expirado'), { timeout: 3000 });
+    expect(rec(recarga.id).status).toBe('failed');
+    await vi.waitFor(() => expect(c.repo.estornos).toHaveLength(1), { timeout: 3000 });
+  });
+
+  it('FIX-3 falha do repo ao gravar o resultado nao reenvia nem reseta o comando', async () => {
+    const { recarga } = await preparar(semRuido);
+    let n = 0;
+    cli.handle('RemoteStartTransaction', async () => { n++; return { status: 'Accepted' }; });
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    vi.spyOn(c.repo, 'atualizarComando').mockRejectedValueOnce(new Error('banco fora'));
+    await fila.processar();
+    await new Promise((r) => setTimeout(r, 150)); // varreduras de 15 ms
+    expect(n).toBe(1);
+    expect(cmd(comando.id).status).toBe('enviado');
+  });
+
+  it('FIX-4 paid->starting que falhou apos o aceito: a varredura promove e o RC-03 cancela com estorno', async () => {
+    const { recarga } = await preparar({ ...semRuido, connectionTimeoutS: 0.2 });
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Accepted' }));
+    await conectar();
+    vi.spyOn(c.repo, 'atualizarRecarga').mockRejectedValueOnce(new Error('banco fora'));
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('aceito');
+    await vi.waitFor(() => expect(rec(recarga.id).status).toBe('canceled'), { timeout: 3000 });
+    await vi.waitFor(() => expect(c.repo.estornos).toHaveLength(1), { timeout: 3000 });
+  });
+
+  it('FIX-5 conector sem StatusNotification nesta conexao: RemoteStart espera pendente (nao rejeita por status velho) e segue quando o status chega', async () => {
+    const { recarga } = await preparar(semRuido);
+    let n = 0;
+    cli.handle('RemoteStartTransaction', async () => { n++; return { status: 'Accepted' }; });
+    // status velho de uma conexao anterior
+    await c.repo.upsertConector(c.repo.carregadores[0]!.id, 1, { status: 'Charging' });
+    await cli.connect();
+    await cli.call('BootNotification', BOOT);
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cmd(comando.id).status).toBe('pendente');
+    expect(n).toBe(0);
+    expect(rec(recarga.id).status).toBe('paid');
+    await cli.call('StatusNotification', { connectorId: 1, status: 'Available', errorCode: 'NoError' });
+    await vi.waitFor(() => expect(cmd(comando.id).status).toBe('aceito'), { timeout: 3000 });
+    expect(n).toBe(1);
   });
 });

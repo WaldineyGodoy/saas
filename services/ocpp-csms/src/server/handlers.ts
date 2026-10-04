@@ -21,6 +21,8 @@ export interface ContextoHandlers {
   // ocpp_id cujo Reset foi aceito e ainda nao foi seguido de um Boot (a Tarefa 6 marca)
   resetAceito: Set<string>;
   agora: () => Date;
+  // avisa que o conector recebeu StatusNotification nesta conexao (status fresco)
+  aoStatus?: (connectorId: number) => void;
 }
 
 // Cliente minimo que os handlers precisam (evita acoplar ao tipo interno da lib).
@@ -76,6 +78,7 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
       // nunca limpa aqui: so um Boot apos Reset aceito libera
       ...(bloqueia ? { bloqueado_ate_reset: true } : {}),
     });
+    ctx.aoStatus?.(params.connectorId);
     if (params.status === 'Faulted') {
       await repo.alertar({
         carregador_id: carregadorId, connector_id: params.connectorId,

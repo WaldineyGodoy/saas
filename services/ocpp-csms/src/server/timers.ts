@@ -25,12 +25,16 @@ export async function expirarComandos(repo: Repo, agora: Date): Promise<number> 
   return vencidos.length;
 }
 
-// RC-03: recarga em starting cujo RemoteStart foi aceito ha mais de CONNECTION_TIMEOUT_S sem StartTransaction.
+// RC-03: recarga com RemoteStart aceito ha mais de CONNECTION_TIMEOUT_S sem StartTransaction.
+// Recargas ainda em paid com RemoteStart aceito (paid->starting falhou apos o aceito) sao promovidas antes.
 export async function cancelarStartingSemPlug(repo: Repo, agora: Date, connectionTimeoutS: number): Promise<number> {
   let n = 0;
-  for (const { recarga, aceito_em } of await repo.listarRecargasStarting()) {
+  for (const { recarga, aceito_em } of await repo.listarRecargasComPartidaAceita()) {
+    let atual: typeof recarga | null = recarga;
+    if (recarga.status === 'paid') atual = await repo.atualizarRecarga(recarga.id, { status: 'starting' }, 'paid');
+    if (!atual) continue; // outro processo ja moveu a recarga
     if (agora.getTime() - new Date(aceito_em).getTime() < connectionTimeoutS * 1000) continue;
-    if (await cancelarPorFaltaDePlug(repo, recarga, agora)) n++;
+    if (await cancelarPorFaltaDePlug(repo, atual, agora)) n++;
   }
   return n;
 }

@@ -70,6 +70,10 @@ export interface Recarga {
   metadata: Record<string, unknown>;
 }
 
+// Marca em recargas.metadata: a recarga virou failed/canceled e o estorno total ainda nao foi confirmado.
+// Gravada na MESMA escrita da transicao, entao uma falha posterior e refeita pela varredura (restart-safe).
+export const META_ESTORNO_PENDENTE = 'estorno_total_pendente';
+
 export type RecargaPatch = Partial<Omit<Recarga, 'id'>>;
 
 export interface Transacao {
@@ -217,8 +221,15 @@ export interface Repo {
   reivindicarComando(id: string): Promise<Comando | null>;
   // pendentes cujo expira_em ja passou (a varredura os marca como expirado)
   listarComandosExpirados(): Promise<Comando[]>;
-  // recargas em `starting` com o instante em que o RemoteStart foi aceito (base do RC-03, sobrevive a restart)
-  listarRecargasStarting(): Promise<{ recarga: Recarga; aceito_em: string }[]>;
+  // update condicional: so aplica se o comando ainda esta em `status` (e, se informado, com o mesmo atualizado_em);
+  // senao devolve null (outra instancia ja agiu)
+  atualizarComandoSe(id: string, cond: { status: StatusComando; atualizado_em?: string }, patch: ComandoPatch): Promise<Comando | null>;
+  // comandos `enviado` cujo atualizado_em e anterior a `antesDe` (ISO): tentativa perdida (queda entre a trava e a resposta)
+  listarComandosEnviadosAntigos(antesDe: string): Promise<Comando[]>;
+  // recargas em paid|starting com RemoteStart aceito, com o instante da aceitacao (base do RC-03, sobrevive a restart)
+  listarRecargasComPartidaAceita(): Promise<{ recarga: Recarga; aceito_em: string }[]>;
+  // recargas failed/canceled com metadata[META_ESTORNO_PENDENTE] = true
+  listarRecargasComEstornoPendente(): Promise<Recarga[]>;
   // opcional: avisa quando um comando e inserido (Realtime no Supabase / callback na memoria). Devolve o cancelamento.
   assinarComandos?(cb: () => void): () => void;
   // mesma chave_idempotencia nao duplica; chave nula sempre cria

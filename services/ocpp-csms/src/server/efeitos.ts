@@ -1,40 +1,49 @@
 // Efeitos de um comando ou temporizador sobre a recarga (spec 5.3). Todos sao guardados
-// (so agem se a recarga ainda esta no status esperado) e idempotentes: o estorno e idempotente por recarga.
-import type { Comando, Recarga, Repo } from '../repo/types.js';
+// (so agem se a recarga ainda esta no status esperado) e restart-safe: a transicao para
+// failed/canceled grava a marca META_ESTORNO_PENDENTE na MESMA escrita, e `reconciliarEstornos`
+// (varredura) conclui idTag Expired + estorno total + valor_estornado, que sao idempotentes.
+import { META_ESTORNO_PENDENTE, type Comando, type Recarga, type Repo } from '../repo/types.js';
 
-async function expirarIdTag(repo: Repo, r: Recarga): Promise<void> {
+// Conclui o que falta numa recarga failed/canceled marcada: idTag Expired, pedido de estorno
+// (idempotente por recarga) e so entao valor_estornado + limpa a marca. Se algo lanca, a marca fica
+// e a varredura repete.
+export async function reconciliarRecarga(repo: Repo, r: Recarga): Promise<void> {
   if (r.ocpp_id_tag && (await repo.buscarIdTag(r.ocpp_id_tag))) {
     await repo.atualizarIdTag(r.ocpp_id_tag, { status: 'Expired' });
   }
+  await repo.solicitarEstorno(r.id, { valor: r.valor, motivo: r.motivo_fim ?? 'recarga nao iniciada' });
+  await repo.atualizarRecarga(r.id, {
+    valor_estornado: r.valor, metadata: { ...r.metadata, [META_ESTORNO_PENDENTE]: false },
+  }, r.status);
 }
 
-async function estornoTotal(repo: Repo, r: Recarga, motivo: string): Promise<void> {
-  await repo.solicitarEstorno(r.id, { valor: r.valor, motivo });
+export async function reconciliarEstornos(repo: Repo): Promise<number> {
+  const pendentes = await repo.listarRecargasComEstornoPendente();
+  for (const r of pendentes) await reconciliarRecarga(repo, r);
+  return pendentes.length;
 }
 
-// RemoteStart rejeitado/expirado/com erro: paid|starting -> failed + idTag Expired + estorno total.
+// RemoteStart rejeitado/expirado/com erro: paid|starting -> failed (+ marca de estorno total pendente).
 export async function falharRecargaDoComando(repo: Repo, cmd: Comando, motivo: string, agora: Date): Promise<void> {
   if (cmd.acao !== 'RemoteStartTransaction' || !cmd.recarga_id) return;
-  const fim = {
-    status: 'failed' as const, valor_final: 0, finalizada_em: agora.toISOString(), motivo_fim: motivo,
-  };
   const r0 = await repo.buscarRecarga(cmd.recarga_id);
   if (!r0) return;
-  const r = (await repo.atualizarRecarga(r0.id, { ...fim, valor_estornado: r0.valor }, 'paid'))
-    ?? (await repo.atualizarRecarga(r0.id, { ...fim, valor_estornado: r0.valor }, 'starting'));
+  const patch = {
+    status: 'failed' as const, valor_final: 0, finalizada_em: agora.toISOString(), motivo_fim: motivo,
+    metadata: { ...r0.metadata, [META_ESTORNO_PENDENTE]: true },
+  };
+  const r = (await repo.atualizarRecarga(r0.id, patch, 'paid')) ?? (await repo.atualizarRecarga(r0.id, patch, 'starting'));
   if (!r) return; // ja avancou (charging/canceled/...): nao mexe
-  await expirarIdTag(repo, r);
-  await estornoTotal(repo, r, motivo);
+  await reconciliarRecarga(repo, r);
 }
 
-// RC-03: starting sem StartTransaction no prazo -> canceled + idTag Expired + estorno total.
+// RC-03: starting sem StartTransaction no prazo -> canceled (+ marca) e conclusao do estorno total.
 export async function cancelarPorFaltaDePlug(repo: Repo, recarga: Recarga, agora: Date): Promise<boolean> {
   const r = await repo.atualizarRecarga(recarga.id, {
-    status: 'canceled', valor_final: 0, valor_estornado: recarga.valor,
-    finalizada_em: agora.toISOString(), motivo_fim: 'ConnectionTimeout',
+    status: 'canceled', valor_final: 0, finalizada_em: agora.toISOString(), motivo_fim: 'ConnectionTimeout',
+    metadata: { ...recarga.metadata, [META_ESTORNO_PENDENTE]: true },
   }, 'starting');
   if (!r) return false;
-  await expirarIdTag(repo, r);
-  await estornoTotal(repo, r, 'ConnectionTimeout: cabo nao conectado');
+  await reconciliarRecarga(repo, r);
   return true;
 }

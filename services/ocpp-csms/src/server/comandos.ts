@@ -4,7 +4,7 @@
 import { RPCError, TimeoutError } from 'ocpp-rpc';
 import { proximoAtrasoMs } from '../domain/backoff.js';
 import type { Comando, Repo } from '../repo/types.js';
-import { falharRecargaDoComando } from './efeitos.js';
+import { falharRecargaDoComando, reconciliarEstornos } from './efeitos.js';
 import type { Servidor } from './index.js';
 import { cancelarStartingSemPlug, expirarComandos } from './timers.js';
 
@@ -20,6 +20,8 @@ export interface OpcoesFila {
   varreduraMs?: number;
   // RC-03 (padrao 120 s)
   connectionTimeoutS?: number;
+  // um comando `enviado` ha mais que callTimeoutMs + esta margem (padrao 30 s) e tratado como tentativa perdida
+  margemEnviadoMs?: number;
   onErro?: (contexto: string, err: unknown) => void;
 }
 
@@ -41,6 +43,7 @@ export function criarFila(o: OpcoesFila): Fila {
   const backoff = o.backoff ?? proximoAtrasoMs;
   const connectionTimeoutS = o.connectionTimeoutS ?? 120;
   const onErro = o.onErro ?? ((ctx, err) => console.error(`[ocpp-csms] ${ctx}:`, err));
+  const margemEnviadoMs = o.margemEnviadoMs ?? 30000;
   let parado = false;
 
   async function motivoDeRecusa(cmd: Comando): Promise<string | null> {
@@ -66,49 +69,73 @@ export function criarFila(o: OpcoesFila): Fila {
     await falharRecargaDoComando(repo, c, `RemoteStart ${status}`, agora());
   }
 
-  // timeout ou queda da conexao: reagenda com backoff ou expira
-  async function reagendarOuExpirar(cmd: Comando, motivo: string) {
+  // tentativa perdida (timeout, conexao caida, ou `enviado` esquecido): reagenda com backoff ou expira.
+  // Com `guarda` (atualizado_em lido), so age se o comando continua `enviado` e inalterado: duas instancias nao agem juntas.
+  async function reagendarOuExpirar(cmd: Comando, motivo: string, guarda?: string) {
     const tentativas = cmd.tentativas + 1;
     const atraso = backoff(tentativas);
     const agoraMs = agora().getTime();
-    if (atraso === null || new Date(cmd.expira_em).getTime() <= agoraMs + atraso) {
-      const c = await repo.atualizarComando(cmd.id, { status: 'expirado', tentativas, erro: `${motivo}; sem mais tentativas` });
-      await falharRecargaDoComando(repo, c, 'RemoteStart expirado', agora());
-      return;
+    const expira = atraso === null || new Date(cmd.expira_em).getTime() <= agoraMs + atraso;
+    const patch = expira
+      ? { status: 'expirado' as const, tentativas, erro: `${motivo}; sem mais tentativas` }
+      : {
+        status: 'pendente' as const, tentativas, erro: motivo,
+        proxima_tentativa_em: new Date(agoraMs + (atraso as number)).toISOString(),
+      };
+    const c = guarda === undefined
+      ? await repo.atualizarComando(cmd.id, patch)
+      : await repo.atualizarComandoSe(cmd.id, { status: 'enviado', atualizado_em: guarda }, patch);
+    if (c && expira) await falharRecargaDoComando(repo, c, 'RemoteStart expirado', agora());
+  }
+
+  async function recuperarEnviados(): Promise<void> {
+    const limite = new Date(agora().getTime() - callTimeoutMs - margemEnviadoMs).toISOString();
+    for (const cmd of await repo.listarComandosEnviadosAntigos(limite)) {
+      await reagendarOuExpirar(cmd, 'tentativa perdida (sem resultado gravado)', cmd.atualizado_em);
     }
-    await repo.atualizarComando(cmd.id, {
-      status: 'pendente', tentativas, erro: motivo,
-      proxima_tentativa_em: new Date(agoraMs + atraso).toISOString(),
-    });
+  }
+
+  // O status do conector so vale se chegou numa StatusNotification desta conexao; antes disso
+  // (reconexao, ainda sem Boot/Status) o RemoteStart espera pendente em vez de ser julgado por dado velho.
+  function statusFresco(ocppId: string, cmd: Comando): boolean {
+    if (cmd.acao !== 'RemoteStartTransaction' || typeof cmd.payload.connectorId !== 'number') return true;
+    return servidor.statusFresco.get(ocppId)?.has(cmd.payload.connectorId) ?? false;
   }
 
   async function enviar(cmd: Comando, ocppId: string): Promise<void> {
     const cliente = servidor.clientes.get(ocppId);
     if (!cliente || cliente.state !== OPEN) return;
+    if (!statusFresco(ocppId, cmd)) return; // segue pendente ate o status chegar (ou expirar)
     const travado = await repo.reivindicarComando(cmd.id);
     if (!travado) return; // outra rodada/instancia pegou
     const recusa = await motivoDeRecusa(travado);
     if (recusa) return concluir(travado, 'rejeitado', { erro: recusa });
+
+    // So a chamada esta no try: falha do repo ao gravar o resultado NAO e "chamada perdida"
+    // (nao reenvia nem reseta um status terminal); o comando fica `enviado` e a varredura o recupera.
+    let resposta: { status?: unknown } | null;
     try {
-      const resposta = await cliente.call(travado.acao, travado.payload, { callTimeoutMs }) as { status?: unknown } | null;
-      const status = resposta && typeof resposta === 'object' ? resposta.status : undefined;
-      if (typeof status === 'string' && REJEICOES.has(status)) {
-        return await concluir(travado, 'rejeitado', { resposta, erro: `carregador respondeu ${status}` });
-      }
-      if (travado.acao === 'Reset' && status === 'Accepted') servidor.resetAceito.add(ocppId);
-      return await concluir(travado, 'aceito', { resposta });
+      resposta = await cliente.call(travado.acao, travado.payload, { callTimeoutMs }) as { status?: unknown } | null;
     } catch (e) {
       if (e instanceof TimeoutError) return reagendarOuExpirar(travado, `sem resposta em ${callTimeoutMs} ms`);
       if (e instanceof RPCError) return concluir(travado, 'erro', { erro: `${e.rpcErrorCode ?? e.name}: ${e.message}` });
       // conexao caiu no meio da chamada (ou falha local): trata como tentativa perdida
       return reagendarOuExpirar(travado, (e as Error).message ?? String(e));
     }
+    const status = resposta && typeof resposta === 'object' ? resposta.status : undefined;
+    if (typeof status === 'string' && REJEICOES.has(status)) {
+      return concluir(travado, 'rejeitado', { resposta, erro: `carregador respondeu ${status}` });
+    }
+    if (travado.acao === 'Reset' && status === 'Accepted') servidor.resetAceito.add(ocppId);
+    return concluir(travado, 'aceito', { resposta });
   }
 
   async function ciclo(): Promise<void> {
     if (parado) return;
     const t = agora();
     try { await expirarComandos(repo, t); } catch (e) { onErro('expirarComandos', e); }
+    try { await recuperarEnviados(); } catch (e) { onErro('recuperarEnviados', e); }
+    try { await reconciliarEstornos(repo); } catch (e) { onErro('reconciliarEstornos', e); }
     try { await cancelarStartingSemPlug(repo, t, connectionTimeoutS); } catch (e) { onErro('cancelarStartingSemPlug', e); }
 
     const conectados = [...servidor.clientes.keys()];

@@ -245,15 +245,14 @@ describe('fila - trava, expirados e starting (Tarefa 6)', () => {
     expect(ids).not.toContain(vivo.id);
   });
 
-  it('listarRecargasStarting traz o instante da aceitacao do RemoteStart', async () => {
-    await repo.atualizarRecarga(recargaId, { status: 'starting' });
-    expect(await repo.listarRecargasStarting()).toEqual([]); // sem comando aceito
+  it('listarRecargasComPartidaAceita traz o instante da aceitacao do RemoteStart (paid ou starting)', async () => {
+    expect(await repo.listarRecargasComPartidaAceita()).toEqual([]); // sem comando aceito
     const { comando } = await repo.enfileirarComando({
       carregador_id: cpId, acao: 'RemoteStartTransaction', recarga_id: recargaId, payload: {},
     });
     avancar(5000);
     await repo.atualizarComando(comando.id, { status: 'aceito' });
-    const l = await repo.listarRecargasStarting();
+    const l = await repo.listarRecargasComPartidaAceita();
     expect(l).toHaveLength(1);
     expect(l[0]!.aceito_em).toBe(new Date(new Date(T0).getTime() + 5000).toISOString());
   });
@@ -265,5 +264,32 @@ describe('fila - trava, expirados e starting (Tarefa 6)', () => {
     cancelar();
     await novo();
     expect(n).toBe(1);
+  });
+
+  it('atualizarComandoSe e condicional ao status e ao atualizado_em', async () => {
+    const { comando } = await novo();
+    expect(await repo.atualizarComandoSe(comando.id, { status: 'enviado' }, { status: 'aceito' })).toBeNull();
+    await repo.reivindicarComando(comando.id);
+    const antigo = comando.atualizado_em;
+    avancar(1000);
+    expect(await repo.atualizarComandoSe(comando.id, { status: 'enviado', atualizado_em: 'outro' }, { status: 'pendente' })).toBeNull();
+    const ok = await repo.atualizarComandoSe(comando.id, { status: 'enviado', atualizado_em: comando.atualizado_em }, { status: 'pendente' });
+    expect(ok?.status).toBe('pendente');
+    expect(antigo).toBeTruthy();
+  });
+
+  it('listarComandosEnviadosAntigos so traz enviado anterior ao limite', async () => {
+    const { comando } = await novo();
+    await repo.reivindicarComando(comando.id);
+    const t = new Date(new Date(T0).getTime());
+    expect(await repo.listarComandosEnviadosAntigos(t.toISOString())).toEqual([]);
+    expect((await repo.listarComandosEnviadosAntigos(new Date(t.getTime() + 1).toISOString())).map((c) => c.id)).toEqual([comando.id]);
+  });
+
+  it('listarRecargasComEstornoPendente traz failed/canceled marcadas', async () => {
+    await repo.atualizarRecarga(recargaId, { status: 'failed', metadata: { estorno_total_pendente: true } });
+    expect((await repo.listarRecargasComEstornoPendente()).map((r) => r.id)).toEqual([recargaId]);
+    await repo.atualizarRecarga(recargaId, { metadata: { estorno_total_pendente: false } });
+    expect(await repo.listarRecargasComEstornoPendente()).toEqual([]);
   });
 });

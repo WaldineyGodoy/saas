@@ -30,6 +30,8 @@ export interface Servidor {
   // ocpp_id com Reset aceito aguardando o proximo Boot (a Tarefa 6 adiciona; o Boot consome)
   resetAceito: Set<string>;
   // avisa quando um carregador (re)conecta nesta instancia; devolve o cancelamento
+  // ocpp_id -> conectores que ja mandaram StatusNotification na conexao vigente (status fresco)
+  statusFresco: Map<string, Set<number>>;
   aoConectar(cb: (ocppId: string) => void): () => void;
   fechar(): Promise<void>;
 }
@@ -42,6 +44,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   const onErro: OnErro = o.onErro ?? ((ctx, err) => console.error(`[ocpp-csms] ${ctx}:`, err));
   const clientes = new Map<string, ClienteConectado>();
   const resetAceito = new Set<string>();
+  const statusFresco = new Map<string, Set<number>>();
   const ouvintesConexao = new Set<(ocppId: string) => void>();
 
   const server = new RPCServer({
@@ -57,6 +60,8 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
     // evento 'close' da antiga reconhecer que ja nao e a vigente.
     const antiga = clientes.get(ocppId);
     clientes.set(ocppId, client);
+    const frescos = new Set<number>();
+    statusFresco.set(ocppId, frescos);
     if (antiga) antiga.close({ code: 4000, reason: 'substituida por nova conexao' }).catch(() => undefined);
 
     // trilha de frames; correlaciona respostas (3/4) com a acao da chamada (2) pelo unique_id
@@ -104,7 +109,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
       if (!outbound) void repo.registrarContato(carregadorId).catch((e) => onErro('registrarContato', e));
     });
 
-    registrarHandlers(client as unknown as ClienteHandlers, { repo, carregadorId, ocppId, resetAceito, agora });
+    registrarHandlers(client as unknown as ClienteHandlers, { repo, carregadorId, ocppId, resetAceito, agora, aoStatus: (n) => { frescos.add(n); } });
     for (const cb of ouvintesConexao) {
       try { cb(ocppId); } catch (e) { onErro('aoConectar', e); }
     }
@@ -113,6 +118,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
       acoes.clear();
       if (clientes.get(ocppId) !== client) return; // ja foi substituida (CP-08)
       clientes.delete(ocppId);
+      statusFresco.delete(ocppId);
       void repo.marcarOffline(carregadorId).catch((e) => onErro('marcarOffline', e));
     });
   });
@@ -127,7 +133,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   timer.unref();
 
   return {
-    porta, clientes, resetAceito,
+    porta, clientes, resetAceito, statusFresco,
     aoConectar(cb) {
       ouvintesConexao.add(cb);
       return () => { ouvintesConexao.delete(cb); };
