@@ -20,6 +20,7 @@ export interface OpcoesCenario {
   auth?: 'basic' | 'off';
   heartbeatS?: number;
   verificarOfflineMs?: number;
+  onErro?: (contexto: string, err: unknown) => void;
   // carregadores semeados: ocppId -> senha em claro (undefined = sem senha_hash)
   carregadores?: Record<string, string | undefined>;
 }
@@ -36,6 +37,7 @@ export async function subirCenario(o: OpcoesCenario = {}): Promise<Cenario> {
   }
   const srv = await criarServidor({
     repo, porta: 0, auth: o.auth ?? 'basic', verificarOfflineMs: o.verificarOfflineMs,
+    onErro: o.onErro ?? (() => undefined),
   });
   const url = `ws://127.0.0.1:${srv.porta}/ocpp`;
   const abertos = new Set<RPCClient>();

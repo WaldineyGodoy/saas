@@ -213,6 +213,30 @@ describe('ST - status e falhas de hardware', () => {
   });
 });
 
+describe('falhas de trilha/offline sao reportadas, sem derrubar a conexao', () => {
+  it('logMensagem e marcarOffline que falham chegam ao onErro e a conexao segue', async () => {
+    const erros: string[] = [];
+    c = await subirCenario({ onErro: (ctx) => erros.push(ctx) });
+    const cli = c.carregadorFake('CP-1', 'segredo-cp1');
+    await cli.connect();
+    c.repo.logMensagem = async () => { throw new Error('supabase fora'); };
+    c.repo.marcarOffline = async () => { throw new Error('supabase fora'); };
+    const hb = (await cli.call('Heartbeat', {})) as { currentTime: string };
+    expect(hb.currentTime).toBeTruthy(); // conexao e resposta intactas
+    await esperar(() => expect(erros).toContain('logMensagem'));
+    await cli.close();
+    await esperar(() => expect(erros).toContain('marcarOffline'));
+  });
+
+  it('falha ao gravar a recusa de handshake tambem e reportada e o handshake e recusado', async () => {
+    const erros: string[] = [];
+    c = await subirCenario({ onErro: (ctx) => erros.push(ctx) });
+    c.repo.logMensagem = async () => { throw new Error('supabase fora'); };
+    await expect(c.carregadorFake('FANTASMA', 'x').connect()).rejects.toMatchObject({ code: 404 });
+    expect(erros).toContain('auth.logMensagem');
+  });
+});
+
 describe('DataTransfer / Diagnostics / Firmware', () => {
   it('respostas minimas validas', async () => {
     c = await subirCenario();
@@ -230,8 +254,13 @@ describe('auth: hash de senha', () => {
     expect(h).toMatch(/^scrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+$/);
     expect(h).not.toContain('abc');
     expect(gerarSenhaHash('abc')).not.toBe(h); // salt aleatorio
-    expect(verificarSenha(Buffer.from('abc'), h)).toBe(true);
-    expect(verificarSenha(Buffer.from('abd'), h)).toBe(false);
-    expect(verificarSenha(Buffer.from('abc'), 'lixo')).toBe(false);
+  });
+  it('verificarSenha e assincrona e continua recusando senha errada e hash invalido', async () => {
+    const h = gerarSenhaHash('abc');
+    const p = verificarSenha(Buffer.from('abc'), h);
+    expect(p).toBeInstanceOf(Promise);
+    expect(await p).toBe(true);
+    expect(await verificarSenha(Buffer.from('abd'), h)).toBe(false);
+    expect(await verificarSenha(Buffer.from('abc'), 'lixo')).toBe(false);
   });
 });

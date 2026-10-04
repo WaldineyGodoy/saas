@@ -3,8 +3,13 @@
 // Formato de senha_hash em eletroposto_carregadores (autodescritivo, scrypt do node:crypto):
 //   scrypt$<N>$<r>$<p>$<saltBase64>$<hashBase64>
 // Gere com gerarSenhaHash(senha) (runbook e seed usam isto). A senha e o hash NUNCA sao logados.
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { Repo } from '../repo/types.js';
+
+const scryptAsync = promisify(scrypt) as (
+  senha: Buffer, salt: Buffer, tam: number, opts: { N: number; r: number; p: number; maxmem: number },
+) => Promise<Buffer>;
 
 const N = 16384;
 const R = 8;
@@ -18,8 +23,9 @@ export function gerarSenhaHash(senha: string): string {
   return `scrypt$${N}$${R}$${P}$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
 
+// Assincrona (scrypt no threadpool) para nao bloquear o event loop em handshakes nao autenticados.
 // Falha fechado: qualquer formato invalido devolve false.
-export function verificarSenha(senha: Buffer, hashArmazenado: string): boolean {
+export async function verificarSenha(senha: Buffer, hashArmazenado: string): Promise<boolean> {
   try {
     const [alg, n, r, p, salt64, hash64] = hashArmazenado.split('$');
     if (alg !== 'scrypt' || !n || !r || !p || !salt64 || !hash64) return false;
@@ -30,7 +36,7 @@ export function verificarSenha(senha: Buffer, hashArmazenado: string): boolean {
     if (Rr < 1 || Rr > 32 || Pp < 1 || Pp > 16) return false;
     const esperado = Buffer.from(hash64, 'base64');
     if (esperado.length === 0) return false;
-    const calculado = scryptSync(senha, Buffer.from(salt64, 'base64'), esperado.length, {
+    const calculado = await scryptAsync(senha, Buffer.from(salt64, 'base64'), esperado.length, {
       N: Nn, r: Rr, p: Pp, maxmem: 256 * Nn * Rr,
     });
     return timingSafeEqual(calculado, esperado);
@@ -50,14 +56,16 @@ export interface HandshakeLike {
 type Aceitar = (session?: Record<string, unknown>, protocol?: string | false) => void;
 type Recusar = (code: number, message: string) => void;
 
-export function criarAuth(repo: Repo, modo: ModoAuth) {
+export type OnErro = (contexto: string, err: unknown) => void;
+
+export function criarAuth(repo: Repo, modo: ModoAuth, onErro: OnErro = () => undefined) {
   const recusar = async (reject: Recusar, h: HandshakeLike, code: number, motivo: string, carregadorId: string | null) => {
     try {
       await repo.logMensagem({
         carregador_id: carregadorId, ocpp_id: h.identity, direcao: 'entrada', tipo: null,
         unique_id: null, acao: 'handshake_recusado', payload: { codigo: code, motivo },
       });
-    } catch { /* a trilha nunca derruba o handshake */ }
+    } catch (err) { onErro('auth.logMensagem', err); /* a trilha nunca derruba o handshake */ }
     reject(code, motivo);
   };
 
@@ -66,7 +74,7 @@ export function criarAuth(repo: Repo, modo: ModoAuth) {
     const cp = await repo.buscarCarregador(h.identity);
     if (!cp) return recusar(reject, h, 404, 'carregador nao cadastrado', null);
     if (modo === 'basic') {
-      if (!cp.senha_hash || !h.password || !verificarSenha(h.password, cp.senha_hash)) {
+      if (!cp.senha_hash || !h.password || !(await verificarSenha(h.password, cp.senha_hash))) {
         return recusar(reject, h, 401, 'credenciais invalidas', cp.id);
       }
     }

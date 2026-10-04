@@ -4,7 +4,7 @@
 import { RPCServer } from 'ocpp-rpc';
 import type { RPCClient } from 'ocpp-rpc';
 import type { Repo } from '../repo/types.js';
-import { criarAuth, type ModoAuth } from './auth.js';
+import { criarAuth, type ModoAuth, type OnErro } from './auth.js';
 import { registrarHandlers, type ClienteHandlers } from './handlers.js';
 import { verificarOffline } from './timers.js';
 
@@ -19,6 +19,8 @@ export interface OpcoesServidor {
   verificarOfflineMs?: number;
   agora?: () => Date;
   callTimeoutMs?: number;
+  // falhas de trilha/offline nunca derrubam a conexao, mas sao reportadas aqui (padrao: console.error)
+  onErro?: OnErro;
 }
 
 export interface Servidor {
@@ -35,13 +37,14 @@ type TipoFrame = 2 | 3 | 4;
 export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   const { repo } = o;
   const agora = o.agora ?? (() => new Date());
+  const onErro: OnErro = o.onErro ?? ((ctx, err) => console.error(`[ocpp-csms] ${ctx}:`, err));
   const clientes = new Map<string, ClienteConectado>();
   const resetAceito = new Set<string>();
 
   const server = new RPCServer({
     protocols: ['ocpp1.6'], strictMode: true, callTimeoutMs: o.callTimeoutMs ?? 30000,
   });
-  server.auth(criarAuth(repo, o.auth) as Parameters<typeof server.auth>[0]);
+  server.auth(criarAuth(repo, o.auth, onErro) as Parameters<typeof server.auth>[0]);
 
   server.on('client', (client: ClienteConectado) => {
     const ocppId = client.identity as string;
@@ -85,8 +88,8 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
       }
       void repo.logMensagem({
         carregador_id: carregadorId, ocpp_id: ocppId, direcao, tipo, unique_id: uniqueId, acao, payload,
-      }).catch(() => undefined);
-      if (!outbound) void repo.registrarContato(carregadorId).catch(() => undefined);
+      }).catch((e) => onErro('logMensagem', e));
+      if (!outbound) void repo.registrarContato(carregadorId).catch((e) => onErro('registrarContato', e));
     });
 
     registrarHandlers(client as unknown as ClienteHandlers, { repo, carregadorId, ocppId, resetAceito, agora });
@@ -94,7 +97,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
     client.once('close', () => {
       if (clientes.get(ocppId) !== client) return; // ja foi substituida (CP-08)
       clientes.delete(ocppId);
-      void repo.marcarOffline(carregadorId).catch(() => undefined);
+      void repo.marcarOffline(carregadorId).catch((e) => onErro('marcarOffline', e));
     });
   });
 
@@ -103,7 +106,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   const porta = typeof addr === 'object' && addr ? addr.port : o.porta;
 
   const timer = setInterval(() => {
-    void verificarOffline(repo, agora()).catch(() => undefined);
+    void verificarOffline(repo, agora()).catch((e) => onErro('verificarOffline', e));
   }, o.verificarOfflineMs ?? 30000);
   timer.unref();
 
