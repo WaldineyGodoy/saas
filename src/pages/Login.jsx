@@ -11,6 +11,14 @@ export default function Login() {
     const [confirmNewPassword, setConfirmNewPassword] = useState('');
     const navigate = useNavigate();
 
+    // Convite do app (edge function convidar-app): o link traz o token_hash e
+    // o token so e consumido no submit. Assim a pre-visualizacao de links do
+    // WhatsApp, que abre a URL sozinha, nao queima o convite.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get('token_hash');
+    const conviteApp = params.get('app') === '1';
+    const [senhaCriadaApp, setSenhaCriadaApp] = useState(false);
+
     useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'PASSWORD_RECOVERY') {
@@ -34,10 +42,21 @@ export default function Login() {
 
         setLoading(true);
         try {
+            if (tokenHash) {
+                const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+                if (otpError) throw new Error('o link expirou ou já foi usado. Peça um novo convite.');
+            }
             const { error } = await supabase.auth.updateUser({
                 password: newPassword
             });
             if (error) throw error;
+            if (conviteApp) {
+                // Quem vem do convite usa o app, nao o CRM: encerra a sessao
+                // aberta pelo verifyOtp e mostra o proximo passo.
+                await supabase.auth.signOut();
+                setSenhaCriadaApp(true);
+                return;
+            }
             alert('Senha atualizada com sucesso! Agora você pode fazer login.');
             setShowResetForm(false);
             setNewPassword('');
@@ -74,7 +93,19 @@ export default function Login() {
 
     return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--color-blue)' }}>
-            {showResetForm ? (
+            {senhaCriadaApp ? (
+                <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem', textAlign: 'center' }}>
+                    <img
+                        src="https://b2wenergia.com.br/wp-content/uploads/2025/12/Logo-B2W-Escuro.png"
+                        alt="B2W Energia"
+                        style={{ height: '60px', objectFit: 'contain', marginBottom: '1rem' }}
+                    />
+                    <h2 style={{ color: 'var(--color-blue)', margin: '0 0 0.75rem' }}>Senha criada!</h2>
+                    <p style={{ color: 'var(--color-text-medium)', margin: 0 }}>
+                        Agora abra o app da B2W Energia e entre com o seu e-mail e a senha que você acabou de criar.
+                    </p>
+                </div>
+            ) : showResetForm ? (
                 <form onSubmit={handleUpdatePassword} className="card" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
                     <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                         <img
@@ -82,7 +113,7 @@ export default function Login() {
                             alt="B2W Energia"
                             style={{ height: '60px', objectFit: 'contain', marginBottom: '1rem' }}
                         />
-                        <p style={{ color: 'var(--color-text-medium)' }}>Defina sua nova senha</p>
+                        <p style={{ color: 'var(--color-text-medium)' }}>{conviteApp ? 'Crie sua senha de acesso ao app' : 'Defina sua nova senha'}</p>
                     </div>
 
                     <div className="form-group">

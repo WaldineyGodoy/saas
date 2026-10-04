@@ -52,12 +52,12 @@ export function RedeIndicados({ indicados }: { indicados: Indicado[] }) {
             ) : i.grupo === 'atrasado' ? (
               <>
                 <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Fatura pendente{i.fatura_vencimento ? ` (venc. ${fmtData(i.fatura_vencimento).slice(0, 5)})` : ''}</Text>
-                <Text style={[type.bodySm, { color: colors.statusProvisional }]}>{fmtBRL(i.cashback)} retido</Text>
+                <Text style={[type.bodySm, { color: colors.statusProvisional }]}>Acumulado: {fmtBRL(i.cashback)}</Text>
               </>
             ) : (
               <>
                 <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Consumo mês: {fmtKwh(i.consumo_kwh)} kWh</Text>
-                <Text style={[type.bodySm, { color: colors.statusVerified }]}>Cashback: {fmtBRL(i.cashback)}</Text>
+                <Text style={[type.bodySm, { color: colors.statusVerified }]}>Acumulado: {fmtBRL(i.cashback)}</Text>
               </>
             )}
           </Row>

@@ -84,3 +84,8 @@ verify_jwt = true
 # 3 envios por lead por dia. Internos usam send-whatsapp.
 [functions.lead-mensagem]
 verify_jwt = true
+
+# Convite para o app (WhatsApp com link de senha). So admin: o portao
+# requireAdmin fica dentro da funcao, verify_jwt sozinho nao basta.
+[functions.convidar-app]
+verify_jwt = true

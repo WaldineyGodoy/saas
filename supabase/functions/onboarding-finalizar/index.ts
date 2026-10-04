@@ -254,8 +254,11 @@ serve(async (req) => {
             return json({ error: 'pdf_base64 \u00e9 obrigat\u00f3rio.' }, 400);
         }
 
-        // 4. Conta de acesso - profile_id / user_id
-        let userId: string | null = sub.user_id || sub.profile_id || null;
+        // 4. Conta de acesso - user_id
+        // profile_id NAO serve de fonte: ha assinante com profile_id apontando
+        // para o perfil de outra pessoa (ex.: o admin que fez o cadastro), e
+        // copiar isso para user_id daria a ela os dados deste assinante no app.
+        let userId: string | null = sub.user_id || null;
 
         if (!userId && sub.email) {
             try {
