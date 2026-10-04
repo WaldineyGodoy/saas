@@ -154,7 +154,9 @@ export class MemoryRepo implements Repo {
     if (patch.status !== undefined && patch.status !== r.status && !transicaoValida(r.status, patch.status)) {
       throw new Error(`Transicao de status da recarga invalida: ${r.status} -> ${patch.status}.`);
     }
-    Object.assign(r, patch);
+    const { metadata, ...resto } = patch;
+    Object.assign(r, resto);
+    if (metadata !== undefined) r.metadata = { ...r.metadata, ...metadata }; // mescla por chave (como o Supabase)
     return r;
   }
 

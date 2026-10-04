@@ -8,7 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js",
     "test": "vitest run",
     "dev": "tsx watch src/main.ts"
   },

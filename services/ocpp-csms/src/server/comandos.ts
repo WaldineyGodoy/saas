@@ -1,7 +1,8 @@
 // Fila de comandos CSMS -> carregador (L3a, spec 5.3). `criarFila(...).processar()` e idempotente e
 // pode ser disparado de qualquer lugar: evento do repo (Realtime), (re)conexao do carregador e
 // varredura periodica. A trava `pendente -> enviado` no repo impede dois envios do mesmo comando.
-import { RPCError, TimeoutError } from 'ocpp-rpc';
+// ocpp-rpc e CommonJS: no Node ESM nativo (producao) so o default existe; `import { RPCError }` falharia no `node dist/main.js`.
+import ocppRpc from 'ocpp-rpc';
 import { proximoAtrasoMs } from '../domain/backoff.js';
 import type { Comando, Repo } from '../repo/types.js';
 import { falharRecargaDoComando, reconciliarEstornos } from './efeitos.js';
@@ -32,6 +33,7 @@ export interface Fila {
   parar(): void;
 }
 
+const { RPCError, TimeoutError } = ocppRpc;
 const OPEN = 1; // WebSocket.OPEN
 const REJEICOES = new Set(['Rejected', 'NotSupported', 'UnlockFailed']);
 const CONECTOR_LIVRE = new Set(['Available', 'Preparing']);

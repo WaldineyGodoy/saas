@@ -280,7 +280,7 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
       const atualizada = await repo.atualizarRecarga(r.id, {
         status: 'completed', kwh_consumido: f.revisar ? (r.kwh_consumido ?? 0) : f.kwh,
         valor_final: f.valor_final, valor_estornado: f.estorno, finalizada_em: fimEm, motivo_fim: motivo,
-        ...(f.revisar ? { metadata: { ...r.metadata, revisar: true } } : {}),
+        ...(f.revisar ? { metadata: { revisar: true } } : {}),
       }, 'charging');
       if (atualizada && f.revisar) {
         await alertar(t.connector_id, 'medicao_revisar',

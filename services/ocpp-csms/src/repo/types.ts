@@ -74,6 +74,8 @@ export interface Recarga {
 // Gravada na MESMA escrita da transicao, entao uma falha posterior e refeita pela varredura (restart-safe).
 export const META_ESTORNO_PENDENTE = 'estorno_total_pendente';
 
+// `metadata` no patch e MESCLADO por chave com o que ja esta gravado (nunca substitui o objeto): quem
+// escreve manda so as chaves que quer mudar, e chaves gravadas por outros (Edge Functions) sobrevivem.
 export type RecargaPatch = Partial<Omit<Recarga, 'id'>>;
 
 export interface Transacao {

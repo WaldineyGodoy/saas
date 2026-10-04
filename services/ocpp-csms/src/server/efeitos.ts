@@ -14,7 +14,7 @@ export async function reconciliarRecarga(repo: Repo, r: Recarga): Promise<void> 
   }
   await repo.solicitarEstorno(r.id, { valor: r.valor, motivo: r.motivo_fim ?? 'recarga nao iniciada' });
   await repo.atualizarRecarga(r.id, {
-    valor_estornado: r.valor, metadata: { ...r.metadata, [META_ESTORNO_PENDENTE]: false },
+    valor_estornado: r.valor, metadata: { [META_ESTORNO_PENDENTE]: false },
   }, r.status);
 }
 
@@ -35,7 +35,7 @@ export async function falharRecargaDoComando(repo: Repo, cmd: Comando, motivo: s
   if (!r0) return;
   const patch = {
     status: 'failed' as const, valor_final: 0, finalizada_em: agora.toISOString(), motivo_fim: motivo,
-    metadata: { ...r0.metadata, [META_ESTORNO_PENDENTE]: true },
+    metadata: { [META_ESTORNO_PENDENTE]: true },
   };
   const r = (await repo.atualizarRecarga(r0.id, patch, 'paid')) ?? (await repo.atualizarRecarga(r0.id, patch, 'starting'));
   if (!r) return; // ja avancou (charging/canceled/...): nao mexe
@@ -46,7 +46,7 @@ export async function falharRecargaDoComando(repo: Repo, cmd: Comando, motivo: s
 export async function cancelarPorFaltaDePlug(repo: Repo, recarga: Recarga, agora: Date): Promise<boolean> {
   const r = await repo.atualizarRecarga(recarga.id, {
     status: 'canceled', valor_final: 0, finalizada_em: agora.toISOString(), motivo_fim: 'ConnectionTimeout',
-    metadata: { ...recarga.metadata, [META_ESTORNO_PENDENTE]: true },
+    metadata: { [META_ESTORNO_PENDENTE]: true },
   }, 'starting');
   if (!r) return false;
   await reconciliarRecarga(repo, r);

@@ -124,6 +124,19 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   });
 
   const http = await server.listen(o.porta, o.host);
+  // O ocpp-rpc responde 404 a tudo que nao e upgrade; aqui entra so o GET /health (sonda do orquestrador).
+  http.removeAllListeners('request');
+  http.on('request', (req, res) => {
+    const caminho = (req.url ?? '').split('?')[0];
+    if (req.method === 'GET' && caminho === '/health') {
+      const corpo = JSON.stringify({ status: 'ok', carregadores_conectados: clientes.size });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(corpo) });
+      res.end(corpo);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
   const addr = http.address();
   const porta = typeof addr === 'object' && addr ? addr.port : o.porta;
 
