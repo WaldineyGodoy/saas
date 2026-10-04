@@ -78,6 +78,14 @@ describe('medicoes', () => {
     expect(repo.medicoes).toHaveLength(3);
     expect(repo.medicoes[0]).toMatchObject({ measurand: 'Energy.Active.Import.Register', phase: '', valor: 100 });
   });
+  it('dedupe compara o instante (timestamptz), nao o texto', async () => {
+    const t = await nova();
+    const m = { transacao_id: t.id, connector_id: 1, valor: 100, unidade: 'Wh' };
+    expect(await repo.gravarMedicoes([{ ...m, medido_em: '2026-10-04T12:00:00Z' }])).toBe(1);
+    expect(await repo.gravarMedicoes([{ ...m, medido_em: '2026-10-04T12:00:00.000Z' }])).toBe(0);
+    expect(await repo.gravarMedicoes([{ ...m, medido_em: '2026-10-04T09:00:00-03:00' }])).toBe(0);
+    expect(repo.medicoes).toHaveLength(1);
+  });
   it('transacao inexistente e recusada (FK)', async () => {
     await expect(repo.gravarMedicoes([{ transacao_id: 99, connector_id: 1, medido_em: T0, valor: 1, unidade: 'Wh' }]))
       .rejects.toThrow();

@@ -186,7 +186,7 @@ export class MemoryRepo implements Repo {
         measurand: 'Energy.Active.Import.Register', phase: '', contexto: null, ...n,
       };
       const dup = this.medicoes.some((x) =>
-        x.transacao_id === m.transacao_id && x.medido_em === m.medido_em &&
+        x.transacao_id === m.transacao_id && new Date(x.medido_em).getTime() === new Date(m.medido_em).getTime() &&
         x.measurand === m.measurand && x.phase === m.phase);
       if (dup) continue; // on conflict do nothing
       this.medicoes.push(m);
@@ -209,7 +209,7 @@ export class MemoryRepo implements Repo {
         ids.has(c.carregador_id) && c.status === 'pendente' &&
         new Date(c.proxima_tentativa_em).getTime() <= agora &&
         new Date(c.expira_em).getTime() > agora)
-      .sort((a, b) => a.proxima_tentativa_em.localeCompare(b.proxima_tentativa_em));
+      .sort((a, b) => new Date(a.proxima_tentativa_em).getTime() - new Date(b.proxima_tentativa_em).getTime());
   }
 
   async atualizarComando(id: string, patch: ComandoPatch) {
