@@ -9,6 +9,7 @@ async function main(): Promise<void> {
   const repo = criarSupabaseRepo(cfg.supabaseUrl, cfg.serviceRoleKey);
   const app = await iniciarApp({
     repo, porta: cfg.porta, host: '0.0.0.0', auth: cfg.auth, connectionTimeoutS: cfg.connectionTimeoutS,
+    callTimeoutMs: cfg.callTimeoutS * 1000, verificarOfflineMs: cfg.offlineCheckS * 1000,
   });
   console.log(`[ocpp-csms] ouvindo na porta ${app.porta} (auth=${cfg.auth})`);
 

@@ -6,13 +6,19 @@ const base = { SUPABASE_URL: 'http://127.0.0.1:54321', SUPABASE_SERVICE_ROLE_KEY
 describe('lerConfig', () => {
   it('aplica os padroes', () => {
     expect(lerConfig(base)).toEqual({
-      porta: 9220, auth: 'basic', connectionTimeoutS: 120,
+      porta: 9220, auth: 'basic', connectionTimeoutS: 120, callTimeoutS: 30, offlineCheckS: 30,
       supabaseUrl: 'http://127.0.0.1:54321', serviceRoleKey: 'chave-de-teste',
     });
   });
   it('le PORT, OCPP_AUTH e CONNECTION_TIMEOUT_S', () => {
     expect(lerConfig({ ...base, PORT: '9300', OCPP_AUTH: 'off', CONNECTION_TIMEOUT_S: '45' }))
       .toMatchObject({ porta: 9300, auth: 'off', connectionTimeoutS: 45 });
+  });
+  it('le CALL_TIMEOUT_S e OFFLINE_CHECK_S (ambiente de testes encurta os prazos)', () => {
+    expect(lerConfig({ ...base, CALL_TIMEOUT_S: '12', OFFLINE_CHECK_S: '1' }))
+      .toMatchObject({ callTimeoutS: 12, offlineCheckS: 1 });
+    expect(() => lerConfig({ ...base, CALL_TIMEOUT_S: '0' })).toThrow(/CALL_TIMEOUT_S/);
+    expect(() => lerConfig({ ...base, OFFLINE_CHECK_S: 'x' })).toThrow(/OFFLINE_CHECK_S/);
   });
   it('variaveis vazias contam como ausentes (padrao)', () => {
     expect(lerConfig({ ...base, PORT: '', OCPP_AUTH: '', CONNECTION_TIMEOUT_S: '' }))

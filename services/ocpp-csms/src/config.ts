@@ -5,6 +5,10 @@ export interface Config {
   porta: number;
   auth: ModoAuth;
   connectionTimeoutS: number;
+  // espera pela resposta de um comando enviado ao carregador (spec 5.3: 30 s)
+  callTimeoutS: number;
+  // periodo do verificador de offline por heartbeat (padrao 30 s)
+  offlineCheckS: number;
   supabaseUrl: string;
   serviceRoleKey: string;
 }
@@ -28,6 +32,8 @@ export function lerConfig(env: Env): Config {
     porta: inteiro(env, 'PORT', 9220, 1, 65535),
     auth,
     connectionTimeoutS: inteiro(env, 'CONNECTION_TIMEOUT_S', 120, 1, 86400),
+    callTimeoutS: inteiro(env, 'CALL_TIMEOUT_S', 30, 1, 3600),
+    offlineCheckS: inteiro(env, 'OFFLINE_CHECK_S', 30, 1, 3600),
     supabaseUrl: env.SUPABASE_URL as string,
     serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY as string,
   };

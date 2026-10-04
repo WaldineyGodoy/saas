@@ -11,6 +11,8 @@ export interface OpcoesApp {
   host?: string;
   auth: ModoAuth;
   connectionTimeoutS?: number;
+  // espera pela resposta do carregador nos comandos (padrao 30 s)
+  callTimeoutMs?: number;
   verificarOfflineMs?: number;
   varreduraMs?: number;
   onErro?: OnErro;
@@ -27,10 +29,10 @@ export interface App {
 export async function iniciarApp(o: OpcoesApp): Promise<App> {
   const servidor = await criarServidor({
     repo: o.repo, porta: o.porta, host: o.host, auth: o.auth,
-    verificarOfflineMs: o.verificarOfflineMs, onErro: o.onErro,
+    verificarOfflineMs: o.verificarOfflineMs, callTimeoutMs: o.callTimeoutMs, onErro: o.onErro,
   });
   const fila = criarFila({
-    repo: o.repo, servidor, connectionTimeoutS: o.connectionTimeoutS,
+    repo: o.repo, servidor, connectionTimeoutS: o.connectionTimeoutS, callTimeoutMs: o.callTimeoutMs,
     varreduraMs: o.varreduraMs, onErro: o.onErro,
   });
   // varredura imediata: recupera o que ficou pendente enquanto o processo estava fora

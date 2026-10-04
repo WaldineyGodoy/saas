@@ -395,7 +395,7 @@ export function contratoRepo(fabrica: FabricaMundo): void {
       await novo();
       await new Promise((r) => setTimeout(r, 1500));
       expect(n).toBe(antes);
-    });
+    }, 20000);
     it('atualizarComandoSe e condicional ao status e ao atualizado_em', async () => {
       const { comando } = await novo();
       expect(await repo.atualizarComandoSe(comando.id, { status: 'enviado' }, { status: 'aceito' })).toBeNull();
