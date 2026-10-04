@@ -84,6 +84,8 @@ describe('transacao', () => {
   it('solicitarEstorno registra o pedido; valor <= 0 ou recarga inexistente e recusado', async () => {
     await repo.solicitarEstorno(recargaId, { valor: 30, motivo: 'StopTransaction EVDisconnected' });
     expect(repo.estornos).toEqual([{ recarga_id: recargaId, valor: 30, motivo: 'StopTransaction EVDisconnected' }]);
+    await repo.solicitarEstorno(recargaId, { valor: 30, motivo: 'repetido' });
+    expect(repo.estornos).toHaveLength(1); // idempotente por recarga
     await expect(repo.solicitarEstorno(recargaId, { valor: 0, motivo: 'x' })).rejects.toThrow();
     await expect(repo.solicitarEstorno('nao-existe', { valor: 1, motivo: 'x' })).rejects.toThrow();
   });

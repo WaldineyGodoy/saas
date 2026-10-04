@@ -57,7 +57,7 @@ export class MemoryRepo implements Repo {
 
   semearRecarga(p: Partial<Recarga> = {}): Recarga {
     const r: Recarga = {
-      id: randomUUID(), status: 'pending_payment', valor: 0, tarifa_kwh_aplicada: 0,
+      id: randomUUID(), eletroposto_id: randomUUID(), status: 'pending_payment', valor: 0, tarifa_kwh_aplicada: 0,
       ocpp_id_tag: null, ocpp_transacao_id: null, kwh_limite: null, kwh_consumido: null,
       valor_final: null, valor_estornado: null, stripe_refund_id: null, iniciada_em: null,
       finalizada_em: null, motivo_fim: null, metadata: {}, ...p,
@@ -267,6 +267,7 @@ export class MemoryRepo implements Repo {
   async solicitarEstorno(recargaId: string, e: { valor: number; motivo: string }) {
     if (!this.recargas.some((r) => r.id === recargaId)) throw new Error(`recarga inexistente: ${recargaId}`);
     if (!(e.valor > 0)) throw new Error('valor do estorno deve ser maior que zero');
+    if (this.estornos.some((x) => x.recarga_id === recargaId)) return;
     this.estornos.push({ recarga_id: recargaId, ...e });
   }
 

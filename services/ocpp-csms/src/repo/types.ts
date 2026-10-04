@@ -52,6 +52,7 @@ export interface IdTag {
 
 export interface Recarga {
   id: string;
+  eletroposto_id: string;
   status: RecargaStatus;
   valor: number;
   // foto da tarifa no checkout (spec §4.9)
@@ -213,6 +214,7 @@ export interface Repo {
   enfileirarComando(dados: NovoComando): Promise<{ comando: Comando; criado: boolean }>;
 
   // pede o estorno parcial/total da recarga (no Supabase: Edge Function refund-charging). `valor` em reais.
+  // Idempotente por recarga: um segundo pedido para a mesma recarga nao duplica.
   solicitarEstorno(recargaId: string, e: { valor: number; motivo: string }): Promise<void>;
 
   // alerta interno

@@ -15,7 +15,8 @@ const TAG = 'RCTAG0000000000001';
 // recarga R$ 50 a R$ 2,00/kWh => limite 25 kWh
 async function preparar(status: 'starting' | 'paid' = 'starting') {
   c = await subirCenario();
-  const r = c.repo.semearRecarga({ status, valor: 50, tarifa_kwh_aplicada: 2, ocpp_id_tag: TAG });
+  const cp = c.repo.carregadores[0]!;
+  const r = c.repo.semearRecarga({ status, valor: 50, tarifa_kwh_aplicada: 2, ocpp_id_tag: TAG, eletroposto_id: cp.eletroposto_id });
   c.repo.semearIdTag({ id_tag: TAG, recarga_id: r.id });
   cli = c.carregadorFake('CP-1', 'segredo-cp1');
   await cli.connect();
@@ -235,5 +236,70 @@ describe('Fechamento', () => {
     expect(JSON.stringify(recarga(r.id))).toBe(antes);
     expect(c.repo.transacoes[0]).toMatchObject({ meter_stop_wh: 11000, fim_em: T3, motivo_parada: 'EVDisconnected' });
     expect(c.repo.estornos).toHaveLength(1);
+  });
+});
+
+describe('Fix round 1', () => {
+  it('SG ownership: carregador nao fecha nem mede transacao de outro carregador', async () => {
+    const r = await preparar();
+    const s = await iniciar();
+    c.repo.semearCarregador({ ocppId: 'CP-2', senha_hash: c.repo.carregadores[0]!.senha_hash });
+    const outro = c.carregadorFake('CP-2', 'segredo-cp1');
+    await outro.connect();
+    await outro.call('MeterValues', { connectorId: 1, transactionId: s.transactionId, meterValue: [{ timestamp: T1, sampledValue: [{ value: '9000' }] }] });
+    await outro.call('StopTransaction', { transactionId: s.transactionId, meterStop: 11000, timestamp: T3 });
+    expect(c.repo.transacoes[0]!.fim_em).toBeNull();
+    expect(await c.repo.listarMedicoes(s.transactionId)).toHaveLength(0);
+    expect(recarga(r.id).status).toBe('charging');
+    expect(c.repo.estornos).toHaveLength(0);
+    expect(c.repo.alertas.filter((a) => a.tipo === 'transacao_desconhecida')).toHaveLength(2);
+  });
+
+  it('RS-02 falha no estorno: Stop retransmitido conclui e pede exatamente um estorno', async () => {
+    const r = await preparar();
+    const s = await iniciar();
+    const orig = c.repo.solicitarEstorno.bind(c.repo);
+    let falhou = false;
+    c.repo.solicitarEstorno = async (id, e) => {
+      if (!falhou) { falhou = true; throw new Error('boom'); }
+      return orig(id, e);
+    };
+    const dados = { transactionData: [{ timestamp: T1, sampledValue: [{ value: '4000' }] }] };
+    await expect(parar(s.transactionId, 11000, { reason: 'EVDisconnected', ...dados })).rejects.toBeTruthy();
+    expect(c.repo.estornos).toHaveLength(0);
+    await parar(s.transactionId, 11000, { reason: 'EVDisconnected', ...dados });
+    expect(recarga(r.id)).toMatchObject({ status: 'completed', valor_estornado: 30 });
+    expect(c.repo.estornos).toHaveLength(1);
+    await parar(s.transactionId, 11000, { reason: 'EVDisconnected', ...dados });
+    expect(c.repo.estornos).toHaveLength(1);
+    expect(await c.repo.listarMedicoes(s.transactionId)).toHaveLength(1);
+  });
+
+  it('RS-02 falha ao atualizar a recarga: Stop retransmitido a completa e usa os dados ja gravados', async () => {
+    const r = await preparar();
+    const s = await iniciar();
+    const orig = c.repo.atualizarRecarga.bind(c.repo);
+    let falhou = false;
+    c.repo.atualizarRecarga = async (id, patch, de) => {
+      if (!falhou && patch.status === 'completed') { falhou = true; throw new Error('boom'); }
+      return orig(id, patch, de);
+    };
+    await expect(parar(s.transactionId, 11000, { reason: 'EVDisconnected' })).rejects.toBeTruthy();
+    expect(recarga(r.id).status).toBe('charging');
+    expect(c.repo.idTags[0]!.status).toBe('Expired');
+    await parar(s.transactionId, 99999, { reason: 'Local', timestamp: '2026-10-04T14:00:00.000Z' });
+    expect(recarga(r.id)).toMatchObject({ status: 'completed', valor_final: 20, finalizada_em: T3, motivo_fim: 'EVDisconnected' });
+    expect(c.repo.estornos).toHaveLength(1);
+  });
+
+  it('SG idTag de recarga de outro eletroposto: Invalid no Authorize e no Start; recarga intocada', async () => {
+    const r = await preparar();
+    c.repo.recargas[0]!.eletroposto_id = 'outro-eletroposto';
+    expect((await autorizar()).idTagInfo.status).toBe('Invalid');
+    const s = await iniciar();
+    expect(s.idTagInfo.status).toBe('Invalid');
+    expect(Number.isInteger(s.transactionId)).toBe(true);
+    expect(c.repo.transacoes[0]!.recarga_id).toBeNull();
+    expect(recarga(r.id)).toMatchObject({ status: 'starting', ocpp_transacao_id: null, kwh_limite: null });
   });
 });
