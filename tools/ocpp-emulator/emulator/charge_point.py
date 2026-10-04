@@ -20,6 +20,7 @@ from enum import StrEnum
 from typing import Any, Awaitable, Callable
 from urllib.parse import quote
 
+from ocpp.exceptions import OCPPError, ValidationError
 from ocpp.routing import after, on
 from ocpp.v16 import ChargePoint, call, call_result
 from websockets.exceptions import ConnectionClosed
@@ -163,6 +164,8 @@ class VirtualChargePoint(ChargePoint):
         self._flows: set[asyncio.Task] = set()  # sobrevivem a queda (offline)
         self._heartbeat_task: asyncio.Task | None = None
         self._drop_task: asyncio.Task | None = None
+        self._drop_armed = self.faults.drop_connection_after_s is not None  # uma queda so
+        self.erros: list[str] = []  # erros de protocolo/validacao observaveis pelos testes
 
     # ----------------------------------------------------------- utilidades
 
@@ -260,7 +263,8 @@ class VirtualChargePoint(ChargePoint):
     async def on_connected(self) -> None:
         await self._announce()
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
-        if self.faults.drop_connection_after_s is not None:
+        if self._drop_armed:
+            self._drop_armed = False
             self._drop_task = asyncio.ensure_future(self._drop_later())
         await self._flush()
 
@@ -377,6 +381,11 @@ class VirtualChargePoint(ChargePoint):
             self._queue(payload, on_result)
         return result
 
+    def _record_error(self, where: str, exc: BaseException) -> None:
+        msg = f"{where}: {type(exc).__name__}: {exc}"
+        self.erros.append(msg)
+        LOGGER.error("erro de protocolo em %s", msg)
+
     async def _try_send(self, payload, on_result, follow):
         """(entregue_ou_recusado, resposta). (False, None) = tentar de novo depois."""
         call_task = asyncio.ensure_future(self.call(payload))
@@ -394,6 +403,12 @@ class VirtualChargePoint(ChargePoint):
             except asyncio.TimeoutError:
                 LOGGER.warning("sem resposta para %s", type(payload).__name__)
                 return False, None
+            except (OCPPError, ValidationError) as exc:  # schema invalido (envio ou resposta)
+                self._record_error(type(payload).__name__, exc)
+                return True, None
+            except Exception as exc:  # nunca derruba a tarefa chamadora nem o runner
+                self._record_error(type(payload).__name__, exc)
+                return True, None
         finally:
             for task in (call_task, closed_task):
                 if not task.done():
@@ -481,6 +496,9 @@ class VirtualChargePoint(ChargePoint):
         def on_result(res):
             return self._on_start_result(c, id_tag, res)
 
+        if c.state != State.PREPARING:  # ex.: ChangeAvailability(Inoperative) durante o atraso
+            LOGGER.warning("inicio abortado: conector %s em %s", c.id, c.state)
+            return
         if not self.connected:  # offline: carrega localmente, avisa depois
             await self._enter_charging(c)
         payload = call.StartTransaction(
@@ -492,9 +510,13 @@ class VirtualChargePoint(ChargePoint):
         await self.request(payload, transactional=True, on_result=on_result)
 
     async def _enter_charging(self, c: Connector) -> None:
+        try:
+            await self._set_state(c, State.CHARGING)  # transiciona antes de marcar/spawnar
+        except InvalidTransition as exc:
+            self._record_error("enter_charging", exc)
+            return
         c.in_transaction = True
         c.meter_task = self._spawn(self._meter_loop(c), self._flows)
-        await self._set_state(c, State.CHARGING)
 
     def _on_start_result(self, c: Connector, id_tag: str, res):
         """Contabilidade sincrona da resposta do Start; devolve (se precisar)

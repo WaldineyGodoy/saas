@@ -494,3 +494,65 @@ async def test_invalid_tag_does_not_start_charging(make_rig):
     assert rig.cp.connectors[1].transaction_id is None
     stops = rig.conn.calls("StopTransaction")
     assert stops and stops[0][3]["reason"] == "DeAuthorized" and stops[0][3]["transactionId"] == 7
+
+
+# ------------------------------------------------ rodada de correcao 1
+
+
+async def test_validation_error_is_recorded_and_does_not_raise(make_rig):
+    rig = make_rig(plug_delay_s=0)
+    await rig.connect()
+    status = await rig.cp.start_local(1, "X" * 30)  # idTag > 20 chars: schema invalido
+    assert status is None
+    assert rig.cp.erros, "erro de protocolo deve ficar observavel"
+    assert rig.cp.connectors[1].state == State.AVAILABLE
+
+
+async def test_meter_loop_survives_malformed_csms_response(make_rig):
+    rig = make_rig(meter_interval_s=5, meter_start_wh=0)
+    await rig.connect()
+    await rig.start_charging()
+    orig = rig.conn._reply
+    rig.conn._reply = lambda a, p: {"bogus": 1} if a == "MeterValues" else orig(a, p)
+    n = len(rig.conn.calls("MeterValues"))
+    rig.sleep.release(2)
+    assert await settle(lambda: len(rig.conn.calls("MeterValues")) >= n + 2)
+    assert rig.cp.erros
+    assert rig.cp.connectors[1].meter_task is not None and not rig.cp.connectors[1].meter_task.done()
+
+
+async def test_drop_after_is_one_shot(make_rig):
+    rig = make_rig(faults=Faults(drop_connection_after_s=0.05))
+    await rig.connect()
+    first = rig.conn
+    assert await settle(lambda: first.closed)
+    await asyncio.gather(rig.session)
+    second = FakeConnection()
+    await rig.connect(second)
+    await asyncio.sleep(0.4)
+    assert not second.closed
+
+
+async def test_inoperative_during_pending_flow_aborts_start(make_rig):
+    rig = make_rig()
+    await rig.connect()
+    await rig.remote_start()
+    assert rig.cp.connectors[1].state == State.PREPARING
+    rig.conn.inject([2, "ca9", "ChangeAvailability", {"connectorId": 1, "type": "Inoperative"}])
+    assert await settle(lambda: rig.cp.connectors[1].state == State.UNAVAILABLE)
+    rig.sleep.release()  # termina o atraso de plugar
+    await asyncio.sleep(0.3)
+    c = rig.cp.connectors[1]
+    assert not rig.conn.calls("StartTransaction")
+    assert c.meter_task is None and not c.in_transaction
+    assert c.state == State.UNAVAILABLE
+
+
+async def test_enter_charging_invalid_transition_leaves_no_meter_task(make_rig):
+    rig = make_rig()
+    await rig.connect()
+    c = rig.cp.connectors[1]
+    await rig.cp._set_state(c, State.UNAVAILABLE)
+    await rig.cp._enter_charging(c)
+    assert c.meter_task is None and not c.in_transaction
+    assert rig.cp.erros
