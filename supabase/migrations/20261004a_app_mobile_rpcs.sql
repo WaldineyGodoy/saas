@@ -7,7 +7,7 @@
 -- nele. O app mobile abre o login para o cliente final, entao ele NAO le as
 -- tabelas direto: so chama as funcoes abaixo, que filtram por auth.uid().
 --
--- NAO APLICADO AUTOMATICAMENTE. Revisar e aplicar manualmente.
+-- Aplicada em producao (abbysvxnnhwvvzhftoms) em 04/10/2026.
 -- Tudo aqui e aditivo (so CREATE FUNCTION + GRANT); nao altera tabela nem policy.
 --
 -- PENDENCIA SEPARADA (fora do escopo desta migration): as policies "true"
@@ -19,14 +19,19 @@
 -- Auxiliares
 -- ---------------------------------------------------------------------------
 
+-- Vinculo login -> cadastro SO por user_id (preenchido por handle_new_user pelo
+-- e-mail). profile_id NAO serve: em subscribers ele ja apareceu apontando para
+-- perfil que nao e o do assinante (equipe/embaixador), o que exporia as UCs e
+-- faturas do cliente para essa pessoa.
+
 create or replace function public.fn_app_subscriber_id()
 returns uuid
 language sql stable security definer
 set search_path to 'public', 'pg_temp'
 as $$
     select s.id from subscribers s
-     where s.user_id = auth.uid() or s.profile_id = auth.uid()
-     order by (s.user_id = auth.uid()) desc
+     where s.user_id = auth.uid()
+     order by s.created_at
      limit 1;
 $$;
 
@@ -36,8 +41,8 @@ language sql stable security definer
 set search_path to 'public', 'pg_temp'
 as $$
     select s.id from suppliers s
-     where s.user_id = auth.uid() or s.profile_id = auth.uid()
-     order by (s.user_id = auth.uid()) desc
+     where s.user_id = auth.uid()
+     order by s.created_at
      limit 1;
 $$;
 

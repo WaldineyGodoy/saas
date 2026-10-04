@@ -15,17 +15,17 @@ design system *Helios Sovereign*). As telas originais exportadas estão em `../m
 | Tela Drive Connect | `src/app/connect/drive.tsx` |
 | Tela do Eletroposto | `src/app/(tabs)/eletroposto.tsx` + `src/app/scan.tsx` |
 
-## Antes do primeiro uso: publicar as funções do banco
+## Acesso aos dados: só pelas funções `app_*`
 
 O app **não lê tabelas direto**. As policies atuais de `subscribers`, `consumer_units`, `usinas`,
 `invoices` e `generation_production` liberam a base inteira para qualquer usuário autenticado —
 aceitável no CRM (só equipe interna), inaceitável num app aberto ao cliente. Toda leitura passa
-pelas funções `app_*` de `supabase/migrations/20261004a_app_mobile_rpcs.sql`, que filtram por
-`auth.uid()`. Aplique essa migration antes de distribuir o app. Sem ela as telas mostram
-"Servidor ainda não preparado".
+pelas funções `app_*` de `supabase/migrations/20261004a_app_mobile_rpcs.sql` (já aplicada em produção), que filtram por
+`auth.uid()`. Se ela faltar num banco novo, as telas mostram "Servidor ainda não preparado".
 
-Vínculo login → dados: `subscribers.user_id` (assinante), `suppliers.user_id` (investidor/usinas e
-cotas de eletroposto). O gatilho `handle_new_user` já preenche isso pelo e-mail no cadastro.
+Vínculo login → dados: **só** `subscribers.user_id` (assinante) e `suppliers.user_id` (investidor/usinas e
+cotas de eletroposto). O gatilho `handle_new_user` preenche isso pelo e-mail no cadastro. `profile_id` não
+é usado: já apareceu apontando para perfil da equipe, o que exporia dados do cliente.
 
 ## Rodando
 
