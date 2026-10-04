@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
-import { comandoInicio, exigirAssinatura, gerarIdTag } from "../_shared/recarga.ts"
+import { comandoInicio, exigirAssinatura, expiraIdTag, gerarIdTag } from "../_shared/recarga.ts"
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || ""
 
@@ -30,19 +30,28 @@ async function garantirComandoInicio(supabase: any, recargaId: string) {
   if (rErr) throw rErr
   if (!recarga.carregador_id) throw new Error(`Recarga ${recargaId} sem carregador resolvido no checkout.`)
 
-  let idTag: string | null = recarga.ocpp_id_tag
-  if (!idTag) {
-    const { data: tags, error: tErr } = await supabase
+  // Duas entregas simultaneas podem chegar aqui juntas. A verdade e o tag que
+  // esta em ocpp_id_tags (unique parcial por recarga_id): quem perde o insert
+  // (23505) le o vencedor, e todos usam o mesmo tag no comando e na recarga.
+  const lerTag = async (): Promise<string | null> => {
+    const { data, error } = await supabase
       .from("ocpp_id_tags").select("id_tag").eq("recarga_id", recargaId).limit(1)
-    if (tErr) throw tErr
-    idTag = tags?.[0]?.id_tag ?? null
-  }
-  if (!idTag) {
-    idTag = gerarIdTag()
-    const { error } = await supabase.from("ocpp_id_tags").insert({ id_tag: idTag, recarga_id: recargaId })
     if (error) throw error
+    return data?.[0]?.id_tag ?? null
   }
-  if (!recarga.ocpp_id_tag) {
+  let idTag = await lerTag()
+  if (!idTag) {
+    const candidato = gerarIdTag()
+    const { error } = await supabase.from("ocpp_id_tags").insert({
+      id_tag: candidato,
+      recarga_id: recargaId,
+      expira_em: expiraIdTag(),
+    })
+    if (error && error.code !== "23505") throw error
+    idTag = error ? await lerTag() : candidato
+    if (!idTag) throw new Error(`Recarga ${recargaId}: idTag nao encontrado apos conflito.`)
+  }
+  if (recarga.ocpp_id_tag !== idTag) {
     const { error } = await supabase.from("recargas_eletroposto").update({ ocpp_id_tag: idTag }).eq("id", recargaId)
     if (error) throw error
   }

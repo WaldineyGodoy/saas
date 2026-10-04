@@ -5,6 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts"
 import {
   conectorDisponivel,
   mensagemConectorIndisponivel,
+  RESERVA_PAGAMENTO_MIN,
   tarifaDoMotorista,
 } from "../_shared/recarga.ts"
 
@@ -94,49 +95,42 @@ serve(async (req) => {
       return resposta(409, { success: false, motivo: disp.motivo, error: mensagemConectorIndisponivel(disp.motivo) })
     }
 
-    // Pago e ainda nao iniciado deixa o conector 'Available': conta como em uso.
-    const { count, error: emUsoError } = await supabase
-      .from("recargas_eletroposto")
-      .select("id", { count: "exact", head: true })
-      .eq("carregador_id", carregador.id)
-      .eq("ocpp_connector_id", conector.connector_id)
-      .in("status", ["paid", "starting", "charging"])
-    if (emUsoError) throw emUsoError
-    if ((count ?? 0) > 0) {
-      return resposta(409, { success: false, motivo: "ocupado", error: mensagemConectorIndisponivel("ocupado") })
-    }
-
     const kwhEstimado = Number((numValor / tarifaKwh).toFixed(2))
 
-    // 1. Inserir registro inicial da recarga no banco de dados
-    const { data: recarga, error: recargaErr } = await supabase
-      .from("recargas_eletroposto")
-      .insert({
-        eletroposto_id: postoId,
-        conector_numero: numero,
-        carregador_id: carregador.id,
-        ocpp_connector_id: conector.connector_id,
-        tipo_usuario: userId ? "cadastrado" : "avulso",
-        user_id: userId,
-        motorista_nome: motorista?.nome || "Motorista Avulso",
-        motorista_email: motorista?.email || null,
-        motorista_telefone: motorista?.telefone || null,
-        valor: numValor,
-        kwh_estimado: kwhEstimado,
-        tarifa_kwh_aplicada: tarifaKwh,
-        status: "pending_payment",
-        metadata: {
-          nome_posto: nomePosto
-        }
-      })
-      .select()
-      .single()
-
+    // 1. Reservar o conector e criar a recarga numa transacao so (advisory lock
+    // no banco): paid/starting/charging e pending_payment com menos de
+    // RESERVA_PAGAMENTO_MIN minutos ocupam o conector. Nulo = reservado/em uso.
+    const { data: recargaId, error: recargaErr } = await supabase.rpc("fn_reservar_recarga", {
+      p_carregador_id: carregador.id,
+      p_connector_id: conector.connector_id,
+      p_reserva_min: RESERVA_PAGAMENTO_MIN,
+      p_eletroposto_id: postoId,
+      p_conector_numero: numero,
+      p_user_id: userId,
+      p_motorista_nome: motorista?.nome || "Motorista Avulso",
+      p_motorista_email: motorista?.email || null,
+      p_motorista_telefone: motorista?.telefone || null,
+      p_valor: numValor,
+      p_kwh_estimado: kwhEstimado,
+      p_tarifa_kwh_aplicada: tarifaKwh,
+      p_metadata: { nome_posto: nomePosto },
+    })
     if (recargaErr) throw recargaErr
+    if (!recargaId) {
+      return resposta(409, { success: false, motivo: "reservado", error: mensagemConectorIndisponivel("reservado") })
+    }
+    const recarga = { id: recargaId as string }
+
+    // Falhou depois de reservar: cancela para nao segurar o conector por 10 min.
+    const liberar = () =>
+      supabase.from("recargas_eletroposto").update({ status: "canceled" })
+        .eq("id", recarga.id).eq("status", "pending_payment").then(() => {}, () => {})
 
     // 2. Criar PaymentIntent na Stripe
     const amountInCents = Math.round(numValor * 100)
-    const paymentIntent = await stripe.paymentIntents.create({
+    let paymentIntent: Stripe.PaymentIntent
+    try {
+    paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
       currency: "brl",
       description: `Recarga VE - ${nomePosto} (Conector ${numero}) - ~${kwhEstimado} kWh`,
@@ -149,6 +143,10 @@ serve(async (req) => {
         motorista_email: motorista?.email || ""
       }
     })
+    } catch (e) {
+      await liberar()
+      throw e
+    }
 
     // 3. Atualizar recarga com o ID do PaymentIntent (o webhook localiza a
     // recarga por ele; sem isso o pagamento nunca vira 'paid')
@@ -161,6 +159,7 @@ serve(async (req) => {
 
     if (piErr) {
       await stripe.paymentIntents.cancel(paymentIntent.id).catch(() => {})
+      await liberar()
       throw piErr
     }
 

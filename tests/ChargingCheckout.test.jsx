@@ -29,6 +29,7 @@ vi.mock('../src/services/stripeChargingService', () => ({
   fetchEletroposto: vi.fn(),
   listEletropostos: vi.fn(),
   createChargingCheckoutSession: vi.fn(),
+  tarifaDoPosto: vi.fn((p) => (Number(p?.tarifa_motorista_kwh) > 0 ? Number(p.tarifa_motorista_kwh) : null)),
   acompanharRecarga: vi.fn(() => () => {}),
   statusPagamentoDaRecarga: vi.fn(() => null),
 }));
@@ -48,7 +49,7 @@ describe('ChargingCheckout Component', () => {
         id: 'posto-teste-1',
         nome: 'Posto B2W Shopping Sul',
         endereco: 'Av. das Américas, 5000',
-        tarifa_investidor_kwh: 2.15,
+        tarifa_motorista_kwh: 2.15,
         potencia_kw: 60,
         tipo_recarga: 'DC Rápida',
         qtd_carregadores: 2,
@@ -59,7 +60,7 @@ describe('ChargingCheckout Component', () => {
       id: 'posto-teste-1',
       nome: 'Posto B2W Shopping Sul',
       endereco: 'Av. das Américas, 5000',
-      tarifa_investidor_kwh: 2.15,
+      tarifa_motorista_kwh: 2.15,
       potencia_kw: 60,
       tipo_recarga: 'DC Rápida',
       qtd_carregadores: 2,
@@ -127,6 +128,18 @@ describe('ChargingCheckout Component', () => {
     expect(html).toContain('Conector 2');
     expect(html).toContain('equivalem a');
     expect(html).toContain('autonomia para o seu veículo');
+  });
+
+  it('sem tarifa carregada não mostra preço padrão (sem R$ 2,15 de reserva)', () => {
+    authContext.useAuth.mockReturnValue({ user: null, profile: null, loading: false });
+
+    const html = render(
+      <MemoryRouter initialEntries={['/recarga']}>
+        <ChargingCheckout />
+      </MemoryRouter>
+    );
+
+    expect(html).not.toContain('2,15');
   });
 
   it('renderiza o subcomponente StripePaymentForm com o botão de pagamento seguro', () => {

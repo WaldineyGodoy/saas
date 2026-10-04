@@ -32,7 +32,12 @@ export const transicaoValida = (de: string, para: string): boolean =>
 // Ponte app <-> CSMS (Tarefa 9). Spec §4.3, §4.8, §4.9, §5.4.
 // ---------------------------------------------------------------------------
 
-export type MotivoIndisponivel = 'offline' | 'ocupado' | 'bloqueado';
+export type MotivoIndisponivel = 'offline' | 'ocupado' | 'bloqueado' | 'reservado';
+
+// Recarga em pending_payment criada ha menos disso ocupa o conector (reserva
+// enquanto o motorista paga). Unica definicao: a Edge Function passa este valor
+// a fn_reservar_recarga; o SQL nao tem constante propria.
+export const RESERVA_PAGAMENTO_MIN = 10;
 
 // Antes de criar o PaymentIntent (ST-04, UI-01). Preparing entra: o motorista
 // pode pagar com o cabo ja plugado. Faulted/Unavailable contam como bloqueado
@@ -55,6 +60,7 @@ export const mensagemConectorIndisponivel = (motivo: MotivoIndisponivel): string
   ({
     offline: 'O carregador esta offline no momento. Tente novamente em instantes.',
     ocupado: 'Este conector esta em uso por outra recarga.',
+    reservado: 'Este conector esta reservado por outro motorista ou em uso. Tente novamente em alguns minutos.',
     bloqueado: 'Este conector esta indisponivel (bloqueado ou com falha). Procure outro conector.',
   })[motivo];
 
@@ -84,6 +90,12 @@ export function gerarIdTag(
 }
 
 const EXPIRA_COMANDO_INICIO_MS = 2 * 60 * 1000;
+
+// Validade do idTag: 2 min do comando + 120 s de ConnectionTimeOut do carregador
+// + 60 s de margem. Tag que nao foi usada nao fica Accepted para sempre.
+export const EXPIRA_ID_TAG_MS = EXPIRA_COMANDO_INICIO_MS + 120 * 1000 + 60 * 1000;
+export const expiraIdTag = (agora: Date = new Date()): string =>
+  new Date(agora.getTime() + EXPIRA_ID_TAG_MS).toISOString();
 
 export function comandoInicio(
   recarga: { id: string; ocpp_connector_id: number | null | undefined },

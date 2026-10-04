@@ -82,7 +82,7 @@ $$;
 
 drop trigger if exists trg_conector_preenche_posto_numero on public.eletroposto_conectores;
 create trigger trg_conector_preenche_posto_numero
-    before insert or update of carregador_id on public.eletroposto_conectores
+    before insert or update of carregador_id, eletroposto_id on public.eletroposto_conectores
     for each row execute function public.fn_conector_preenche_posto_numero();
 
 create or replace function public.fn_carregador_move_conectores()
@@ -121,3 +121,143 @@ comment on column public.recargas_eletroposto.ocpp_connector_id is
     'connectorId OCPP resolvido no checkout (o conector_numero e o numero publico, outro conceito).';
 
 create index if not exists recargas_eletroposto_carregador_id_idx on public.recargas_eletroposto (carregador_id);
+
+-- ---------------------------------------------------------------------------
+-- 4. Um idTag por recarga (webhooks simultaneos)
+-- ---------------------------------------------------------------------------
+-- Duas entregas do webhook ao mesmo tempo geravam dois idTags Accepted para a
+-- mesma recarga. Com o unique parcial, o segundo insert falha (23505) e quem
+-- perdeu le o tag vencedor. idTag sem recarga (totem, RC-06) continua livre.
+create unique index if not exists ocpp_id_tags_recarga_unica
+    on public.ocpp_id_tags (recarga_id) where recarga_id is not null;
+
+-- ---------------------------------------------------------------------------
+-- 5. Reserva atomica do conector durante o pagamento
+-- ---------------------------------------------------------------------------
+-- Recarga paid/starting/charging ocupa o conector; pending_payment ocupa por
+-- p_reserva_min minutos (o valor vem de RESERVA_PAGAMENTO_MIN em
+-- _shared/recarga.ts, unica definicao). Checar e inserir sob o mesmo
+-- advisory lock do conector: dois checkouts simultaneos nao passam juntos.
+-- Devolve o id da recarga criada, ou nulo se o conector esta reservado/em uso.
+-- Só service_role (a Edge Function create-charging-checkout).
+create or replace function public.fn_reservar_recarga(
+    p_carregador_id        uuid,
+    p_connector_id         integer,
+    p_reserva_min          integer,
+    p_eletroposto_id       uuid,
+    p_conector_numero      integer,
+    p_user_id              uuid,
+    p_motorista_nome       text,
+    p_motorista_email      text,
+    p_motorista_telefone   text,
+    p_valor                numeric,
+    p_kwh_estimado         numeric,
+    p_tarifa_kwh_aplicada  numeric,
+    p_metadata             jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_id uuid;
+begin
+    if p_reserva_min is null or p_reserva_min < 0 then
+        raise exception 'p_reserva_min invalido' using errcode = '22023';
+    end if;
+
+    perform pg_advisory_xact_lock(hashtext('conector_reserva:' || p_carregador_id::text || ':' || p_connector_id::text));
+
+    if exists (
+        select 1 from recargas_eletroposto r
+         where r.carregador_id = p_carregador_id
+           and r.ocpp_connector_id = p_connector_id
+           and (
+                r.status in ('paid', 'starting', 'charging')
+                or (r.status = 'pending_payment'
+                    and r.created_at > now() - make_interval(mins => p_reserva_min))
+           )
+    ) then
+        return null;
+    end if;
+
+    insert into recargas_eletroposto (
+        eletroposto_id, conector_numero, carregador_id, ocpp_connector_id,
+        tipo_usuario, user_id, motorista_nome, motorista_email, motorista_telefone,
+        valor, kwh_estimado, tarifa_kwh_aplicada, status, metadata
+    ) values (
+        p_eletroposto_id, p_conector_numero, p_carregador_id, p_connector_id,
+        case when p_user_id is null then 'avulso' else 'cadastrado' end,
+        p_user_id, p_motorista_nome, p_motorista_email, p_motorista_telefone,
+        p_valor, p_kwh_estimado, p_tarifa_kwh_aplicada, 'pending_payment',
+        coalesce(p_metadata, '{}'::jsonb)
+    ) returning id into v_id;
+
+    return v_id;
+end;
+$$;
+
+revoke all on function public.fn_reservar_recarga(uuid, integer, integer, uuid, integer, uuid, text, text, text, numeric, numeric, numeric, jsonb)
+    from public, anon, authenticated;
+grant execute on function public.fn_reservar_recarga(uuid, integer, integer, uuid, integer, uuid, text, text, text, numeric, numeric, numeric, jsonb)
+    to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 6. Dados publicos do posto para a tela /recarga (anon)
+-- ---------------------------------------------------------------------------
+-- anon nao le eletropostos nem planos. Estas funcoes devolvem so campos nao
+-- pessoais, e SO de postos 'operando' (pre-operacao, instalacao, manutencao,
+-- inativo e cancelado nao vendem recarga). A tarifa vem do plano; posto sem
+-- plano/tarifa volta com tarifa nula e a tela mostra "Recarga indisponivel".
+create or replace function public.fn_eletroposto_publico(p_id uuid)
+returns table (
+    id                   uuid,
+    nome                 text,
+    endereco             text,
+    potencia_kw          numeric,
+    tipo_recarga         text,
+    qtd_carregadores     integer,
+    tarifa_motorista_kwh numeric
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+    select e.id, e.nome, e.endereco, e.potencia_kw, e.tipo_recarga, e.qtd_carregadores,
+           p.tarifa_motorista_kwh
+      from eletropostos e
+      left join planos_assinatura_energia p on p.id = e.plano_id
+     where e.id = p_id
+       and e.status = 'operando';
+$$;
+
+create or replace function public.fn_eletropostos_publicos()
+returns table (
+    id                   uuid,
+    nome                 text,
+    endereco             text,
+    potencia_kw          numeric,
+    tipo_recarga         text,
+    qtd_carregadores     integer,
+    tarifa_motorista_kwh numeric
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+    select e.id, e.nome, e.endereco, e.potencia_kw, e.tipo_recarga, e.qtd_carregadores,
+           p.tarifa_motorista_kwh
+      from eletropostos e
+      left join planos_assinatura_energia p on p.id = e.plano_id
+     where e.status = 'operando'
+     order by e.nome
+     limit 50;
+$$;
+
+revoke all on function public.fn_eletroposto_publico(uuid) from public;
+revoke all on function public.fn_eletropostos_publicos() from public;
+grant execute on function public.fn_eletroposto_publico(uuid) to anon, authenticated, service_role;
+grant execute on function public.fn_eletropostos_publicos() to anon, authenticated, service_role;

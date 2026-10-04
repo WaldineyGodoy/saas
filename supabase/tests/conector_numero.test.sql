@@ -14,6 +14,12 @@ DECLARE
   v_c2    uuid;   -- carregador do eletroposto 2
   v_cx    uuid;   -- carregador descartavel (teste de FK)
   v_r     uuid;
+  v_r1    uuid;
+  v_r2    uuid;
+  v_r3    uuid;
+  v_plano uuid;
+  v_n     integer;
+  v_tab   text;
   v_txt   text;
   v_erro  text;
   v_state text;
@@ -127,6 +133,136 @@ BEGIN
   DELETE FROM public.eletroposto_carregadores WHERE id = v_cx;
   SELECT coalesce(carregador_id::text, 'nulo') INTO v_txt FROM public.recargas_eletroposto WHERE id = v_r;
   IF v_txt <> 'nulo' THEN RAISE EXCEPTION 'FALHOU: apagar o carregador deveria zerar recargas.carregador_id (%)', v_txt; END IF;
+
+  -- =====================================================================
+  -- 8) Gatilho tambem dispara em UPDATE OF eletroposto_id (staff nao burla a copia)
+  -- =====================================================================
+  UPDATE public.eletroposto_conectores SET eletroposto_id = v_e1 WHERE carregador_id = v_c2 AND connector_id = 1;
+  SELECT (eletroposto_id = v_e2)::text INTO v_txt FROM public.eletroposto_conectores WHERE carregador_id = v_c2 AND connector_id = 1;
+  IF v_txt <> 'true' THEN RAISE EXCEPTION 'FALHOU: UPDATE de eletroposto_id no conector nao foi corrigido pelo gatilho'; END IF;
+
+  -- =====================================================================
+  -- 9) Reserva atomica do conector (fn_reservar_recarga), janela de 10 min
+  -- =====================================================================
+  -- so service_role chama
+  IF has_function_privilege('anon', 'public.fn_reservar_recarga(uuid,integer,integer,uuid,integer,uuid,text,text,text,numeric,numeric,numeric,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.fn_reservar_recarga(uuid,integer,integer,uuid,integer,uuid,text,text,text,numeric,numeric,numeric,jsonb)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.fn_reservar_recarga(uuid,integer,integer,uuid,integer,uuid,text,text,text,numeric,numeric,numeric,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FALHOU: fn_reservar_recarga deve ser executavel so por service_role';
+  END IF;
+
+  v_r1 := public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'Motorista A', 'a@teste.invalid', NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  IF v_r1 IS NULL THEN RAISE EXCEPTION 'FALHOU: primeira reserva deveria passar'; END IF;
+  SELECT tipo_usuario || '|' || status || '|' || carregador_id::text || '|' || ocpp_connector_id::text || '|' || conector_numero::text INTO v_txt
+    FROM public.recargas_eletroposto WHERE id = v_r1;
+  IF v_txt <> 'avulso|pending_payment|' || v_c1a::text || '|1|1' THEN RAISE EXCEPTION 'FALHOU: recarga reservada gravada errada (%)', v_txt; END IF;
+
+  -- segunda reserva dentro de 10 min: recusada
+  v_r2 := public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'Motorista B', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  IF v_r2 IS NOT NULL THEN RAISE EXCEPTION 'FALHOU: segunda reserva dentro de 10 min deveria ser recusada'; END IF;
+
+  -- outro conector nao e afetado
+  v_r3 := public.fn_reservar_recarga(v_c2, 1, 10, v_e2, 1, NULL, 'Motorista C', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  IF v_r3 IS NULL THEN RAISE EXCEPTION 'FALHOU: reserva em outro conector deveria passar'; END IF;
+
+  -- depois de 10 min a reserva vence
+  UPDATE public.recargas_eletroposto SET created_at = now() - interval '11 minutes' WHERE id = v_r1;
+  v_r2 := public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'Motorista B', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  IF v_r2 IS NULL THEN RAISE EXCEPTION 'FALHOU: reserva vencida (11 min) deveria liberar o conector'; END IF;
+
+  -- 9 min ainda segura
+  UPDATE public.recargas_eletroposto SET created_at = now() - interval '9 minutes' WHERE id = v_r2;
+  IF public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'X', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb) IS NOT NULL THEN
+    RAISE EXCEPTION 'FALHOU: reserva de 9 min deveria bloquear';
+  END IF;
+
+  -- paid / starting / charging bloqueiam mesmo com a recarga antiga (> 10 min)
+  UPDATE public.recargas_eletroposto SET created_at = now() - interval '2 hours' WHERE id = v_r2;
+  FOREACH v_txt IN ARRAY ARRAY['paid', 'starting', 'charging'] LOOP
+    UPDATE public.recargas_eletroposto SET status = v_txt WHERE id = v_r2;
+    IF public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'X', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb) IS NOT NULL THEN
+      RAISE EXCEPTION 'FALHOU: recarga % deveria bloquear o conector', v_txt;
+    END IF;
+  END LOOP;
+
+  -- concluida libera
+  UPDATE public.recargas_eletroposto SET status = 'completed' WHERE id = v_r2;
+  IF public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'X', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb) IS NULL THEN
+    RAISE EXCEPTION 'FALHOU: recarga concluida deveria liberar o conector';
+  END IF;
+
+  -- pending_payment cancelada/falha libera (pending -> canceled)
+  UPDATE public.recargas_eletroposto SET status = 'canceled'
+   WHERE carregador_id = v_c1a AND ocpp_connector_id = 1 AND status = 'pending_payment';
+  IF public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'Y', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb) IS NULL THEN
+    RAISE EXCEPTION 'FALHOU: reserva cancelada deveria liberar o conector';
+  END IF;
+
+  -- =====================================================================
+  -- 10) idTag: no maximo um por recarga (webhooks simultaneos)
+  -- =====================================================================
+  INSERT INTO public.ocpp_id_tags (id_tag, recarga_id, expira_em) VALUES ('RCAAAAAAAAAAAAAAAAAA', v_r1, now() + interval '5 minutes');
+  v_state := NULL;
+  BEGIN
+    INSERT INTO public.ocpp_id_tags (id_tag, recarga_id) VALUES ('RCBBBBBBBBBBBBBBBBBB', v_r1);
+  EXCEPTION WHEN others THEN v_state := SQLSTATE; v_erro := SQLERRM;
+  END;
+  IF v_state IS DISTINCT FROM '23505' THEN RAISE EXCEPTION 'FALHOU: 2o idTag da mesma recarga deu % (esperado 23505): %', v_state, v_erro; END IF;
+  -- idTag sem recarga (totem, RC-06) pode repetir a ausencia
+  INSERT INTO public.ocpp_id_tags (id_tag) VALUES ('TAG_TOTEM_1');
+  INSERT INTO public.ocpp_id_tags (id_tag) VALUES ('TAG_TOTEM_2');
+
+  -- =====================================================================
+  -- 11) Dados publicos do posto (tarifa do plano) para anon, sem abrir as tabelas
+  -- =====================================================================
+  INSERT INTO public.planos_assinatura_energia (nome, recorrente_config, tarifa_motorista_kwh)
+  VALUES ('Plano publico teste', '{"categoria_plano":"eletroposto"}'::jsonb, 1.9900) RETURNING id INTO v_plano;
+  UPDATE public.eletropostos SET plano_id = v_plano, status = 'operando', potencia_kw = 60, tipo_recarga = 'DC', qtd_carregadores = 2 WHERE id = v_e1;
+  UPDATE public.eletropostos SET status = 'operando' WHERE id = v_e2;   -- sem plano
+
+  PERFORM set_config('role', 'anon', true);
+  PERFORM set_config('request.jwt.claims', '', true);
+
+  SELECT tarifa_motorista_kwh::text || '|' || nome || '|' || qtd_carregadores::text INTO v_txt FROM public.fn_eletroposto_publico(v_e1);
+  IF v_txt IS DISTINCT FROM '1.9900|Eletroposto numero teste 1|2' THEN RAISE EXCEPTION 'FALHOU: anon deveria ler a tarifa pela RPC (%)', v_txt; END IF;
+
+  SELECT coalesce(tarifa_motorista_kwh::text, 'nula') INTO v_txt FROM public.fn_eletroposto_publico(v_e2);
+  IF v_txt <> 'nula' THEN RAISE EXCEPTION 'FALHOU: posto sem plano deveria vir sem tarifa (%)', v_txt; END IF;
+
+  SELECT count(*) INTO v_n FROM public.fn_eletropostos_publicos() WHERE id IN (v_e1, v_e2);
+  IF v_n <> 2 THEN RAISE EXCEPTION 'FALHOU: lista publica deveria trazer os 2 postos em operacao (%)', v_n; END IF;
+
+  -- so colunas nao pessoais
+  v_txt := pg_get_function_result('public.fn_eletroposto_publico(uuid)'::regprocedure);
+  IF v_txt <> 'TABLE(id uuid, nome text, endereco text, potencia_kw numeric, tipo_recarga text, qtd_carregadores integer, tarifa_motorista_kwh numeric)' THEN
+    RAISE EXCEPTION 'FALHOU: colunas da RPC publica mudaram (%)', v_txt;
+  END IF;
+
+  -- tabelas continuam fechadas para anon
+  FOREACH v_tab IN ARRAY ARRAY['eletropostos', 'planos_assinatura_energia', 'eletroposto_conectores', 'recargas_eletroposto'] LOOP
+    v_state := NULL; v_n := 0;
+    BEGIN
+      EXECUTE format('SELECT count(*) FROM public.%I', v_tab) INTO v_n;
+    EXCEPTION WHEN others THEN v_state := SQLSTATE;
+    END;
+    IF v_n <> 0 OR (v_state IS NOT NULL AND v_state <> '42501') THEN
+      RAISE EXCEPTION 'FALHOU: anon le % (% linhas, SQLSTATE %)', v_tab, v_n, v_state;
+    END IF;
+  END LOOP;
+  v_state := NULL;
+  BEGIN
+    PERFORM public.fn_reservar_recarga(v_c1a, 1, 10, v_e1, 1, NULL, 'Z', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  EXCEPTION WHEN others THEN v_state := SQLSTATE;
+  END;
+  IF v_state IS DISTINCT FROM '42501' THEN RAISE EXCEPTION 'FALHOU: anon executou fn_reservar_recarga (SQLSTATE %)', v_state; END IF;
+
+  PERFORM set_config('role', v_dono, true);
+  PERFORM set_config('request.jwt.claims', '', true);
+
+  -- posto fora de operacao some da RPC publica
+  UPDATE public.eletropostos SET status = 'manutencao' WHERE id = v_e2;
+  SELECT count(*) INTO v_n FROM public.fn_eletroposto_publico(v_e2);
+  IF v_n <> 0 THEN RAISE EXCEPTION 'FALHOU: posto em manutencao nao deveria aparecer na RPC publica'; END IF;
 
   RAISE EXCEPTION 'SANDBOX_OK';
 END $$;

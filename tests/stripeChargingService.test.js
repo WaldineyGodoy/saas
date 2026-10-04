@@ -3,6 +3,7 @@ import {
   getStripe,
   fetchEletroposto,
   listEletropostos,
+  tarifaDoPosto,
   createChargingCheckoutSession,
   buscarRecargaPublica,
   acompanharRecarga,
@@ -44,94 +45,82 @@ describe('stripeChargingService', () => {
     });
   });
 
-  describe('fetchEletroposto', () => {
+  describe('fetchEletroposto (RPC publica fn_eletroposto_publico)', () => {
     it('retorna null se o id não for fornecido', async () => {
       expect(await fetchEletroposto(null)).toBeNull();
       expect(await fetchEletroposto(undefined)).toBeNull();
       expect(await fetchEletroposto('')).toBeNull();
-      expect(supabase.from).not.toHaveBeenCalled();
+      expect(supabase.rpc).not.toHaveBeenCalled();
     });
 
-    it('busca dados do eletroposto com sucesso', async () => {
+    it('busca dados do eletroposto pela RPC (anon não lê a tabela)', async () => {
       const mockPosto = {
         id: 'posto-123',
         nome: 'Posto B2W Matriz',
         endereco: 'Av. Paulista, 1000',
-        plano: { tarifa_motorista_kwh: 2.15 },
         potencia_kw: 60,
-        tipo_recarga: 'DC Rápida',
+        tipo_recarga: 'DC',
         qtd_carregadores: 4,
+        tarifa_motorista_kwh: 2.15,
       };
-
-      const maybeSingle = vi.fn().mockResolvedValue({ data: mockPosto, error: null });
-      const eq = vi.fn().mockReturnValue({ maybeSingle });
-      const select = vi.fn().mockReturnValue({ eq });
-      supabase.from.mockReturnValue({ select });
+      supabase.rpc.mockResolvedValue({ data: [mockPosto], error: null });
 
       const result = await fetchEletroposto('posto-123');
 
-      expect(supabase.from).toHaveBeenCalledWith('eletropostos');
-      expect(select).toHaveBeenCalledWith(
-        'id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, tipo_recarga, qtd_carregadores'
-      );
-      expect(eq).toHaveBeenCalledWith('id', 'posto-123');
+      expect(supabase.rpc).toHaveBeenCalledWith('fn_eletroposto_publico', { p_id: 'posto-123' });
+      expect(supabase.from).not.toHaveBeenCalled();
       expect(result).toEqual(mockPosto);
+    });
+
+    it('posto inexistente ou fora de operação: null', async () => {
+      supabase.rpc.mockResolvedValue({ data: [], error: null });
+      expect(await fetchEletroposto('x')).toBeNull();
     });
 
     it('trata erro de banco e retorna null', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const maybeSingle = vi.fn().mockResolvedValue({
-        data: null,
-        error: new Error('Falha no banco'),
-      });
-      const eq = vi.fn().mockReturnValue({ maybeSingle });
-      const select = vi.fn().mockReturnValue({ eq });
-      supabase.from.mockReturnValue({ select });
+      supabase.rpc.mockResolvedValue({ data: null, error: new Error('Falha no banco') });
 
-      const result = await fetchEletroposto('posto-invalido');
-
-      expect(result).toBeNull();
+      expect(await fetchEletroposto('posto-invalido')).toBeNull();
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
   });
 
-  describe('listEletropostos', () => {
+  describe('listEletropostos (RPC publica fn_eletropostos_publicos)', () => {
     it('retorna a lista de eletropostos com sucesso', async () => {
       const mockLista = [
-        { id: '1', nome: 'Posto Alpha', potencia_kw: 30, status: 'disponivel' },
-        { id: '2', nome: 'Posto Beta', potencia_kw: 60, status: 'disponivel' },
+        { id: '1', nome: 'Posto Alpha', potencia_kw: 30, tarifa_motorista_kwh: 2 },
+        { id: '2', nome: 'Posto Beta', potencia_kw: 60, tarifa_motorista_kwh: null },
       ];
-
-      const limit = vi.fn().mockResolvedValue({ data: mockLista, error: null });
-      const select = vi.fn().mockReturnValue({ limit });
-      supabase.from.mockReturnValue({ select });
+      supabase.rpc.mockResolvedValue({ data: mockLista, error: null });
 
       const result = await listEletropostos();
 
-      expect(supabase.from).toHaveBeenCalledWith('eletropostos');
-      expect(select).toHaveBeenCalledWith(
-        'id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, status'
-      );
-      expect(limit).toHaveBeenCalledWith(20);
+      expect(supabase.rpc).toHaveBeenCalledWith('fn_eletropostos_publicos');
+      expect(supabase.from).not.toHaveBeenCalled();
       expect(result).toEqual(mockLista);
     });
 
     it('trata erro e retorna array vazio se falhar', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const limit = vi.fn().mockResolvedValue({
-        data: null,
-        error: new Error('Erro de conexão'),
-      });
-      const select = vi.fn().mockReturnValue({ limit });
-      supabase.from.mockReturnValue({ select });
+      supabase.rpc.mockResolvedValue({ data: null, error: new Error('Erro de conexão') });
 
-      const result = await listEletropostos();
-
-      expect(result).toEqual([]);
+      expect(await listEletropostos()).toEqual([]);
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
+  });
+
+  describe('tarifaDoPosto (sem valor de reserva)', () => {
+    it('devolve a tarifa do plano', () => {
+      expect(tarifaDoPosto({ tarifa_motorista_kwh: '2.1500' })).toBe(2.15);
+      expect(tarifaDoPosto({ tarifa_motorista_kwh: 1.99 })).toBe(1.99);
+    });
+    it.each([null, undefined, {}, { tarifa_motorista_kwh: null }, { tarifa_motorista_kwh: 0 }, { tarifa_motorista_kwh: 'x' }])(
+      'sem tarifa (%j) devolve null, nunca um número padrão',
+      (posto) => expect(tarifaDoPosto(posto)).toBeNull(),
+    );
   });
 
   describe('createChargingCheckoutSession', () => {

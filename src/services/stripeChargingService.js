@@ -14,32 +14,34 @@ export const getStripe = () => {
   return stripePromise;
 };
 
+// anon não lê eletropostos nem planos (RLS). Estas RPCs (SECURITY DEFINER)
+// devolvem só dados não pessoais de postos em operação, com a tarifa do plano.
 export const fetchEletroposto = async (id) => {
   if (!id) return null;
-  const { data, error } = await supabase
-    .from('eletropostos')
-    .select('id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, tipo_recarga, qtd_carregadores')
-    .eq('id', id)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('fn_eletroposto_publico', { p_id: id });
 
   if (error) {
     console.error('Erro ao buscar eletroposto:', error);
     return null;
   }
-  return data;
+  return data?.[0] ?? null;
 };
 
 export const listEletropostos = async () => {
-  const { data, error } = await supabase
-    .from('eletropostos')
-    .select('id, nome, endereco, plano:planos_assinatura_energia(tarifa_motorista_kwh), potencia_kw, status')
-    .limit(20);
+  const { data, error } = await supabase.rpc('fn_eletropostos_publicos');
 
   if (error) {
     console.error('Erro ao listar eletropostos:', error);
     return [];
   }
   return data || [];
+};
+
+// Preço ao motorista = tarifa do plano do posto. Sem tarifa: null (a tela mostra
+// "Recarga indisponível"); nunca um valor padrão, preço divergente afasta motorista.
+export const tarifaDoPosto = (posto) => {
+  const t = Number(posto?.tarifa_motorista_kwh);
+  return t > 0 ? t : null;
 };
 
 export const createChargingCheckoutSession = async ({

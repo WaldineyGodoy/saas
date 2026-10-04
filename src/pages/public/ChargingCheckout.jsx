@@ -25,6 +25,7 @@ import {
   fetchEletroposto,
   listEletropostos,
   createChargingCheckoutSession,
+  tarifaDoPosto,
   acompanharRecarga,
   statusPagamentoDaRecarga
 } from '../../services/stripeChargingService';
@@ -166,7 +167,8 @@ export default function ChargingCheckout() {
         const lista = await listEletropostos();
         if (isMounted) {
           setPostosDisponiveis(lista);
-          if (lista.length > 0 && !selectedPosto) {
+          // posto da URL (QR do totem) indisponível: não troca por outro em silêncio
+          if (lista.length > 0 && !selectedPosto && !urlPostoId) {
             setSelectedPosto(lista[0]);
           }
         }
@@ -212,9 +214,11 @@ export default function ChargingCheckout() {
   }, [sessionData?.recargaId, paymentStatus]);
 
   // Cálculos dinâmicos de energia e autonomia
-  const tarifaKwh = Number(selectedPosto?.plano?.tarifa_motorista_kwh) || 2.15;
-  const estimativaKwh = tarifaKwh > 0 ? (valor / tarifaKwh).toFixed(1) : '0.0';
-  const estimativaKm = Math.round(Number(estimativaKwh) * 6); // Base padrão B2W Charge: ~6 km por kWh
+  // Preço = tarifa do plano do posto, sem valor de reserva (null = indisponível).
+  const tarifaKwh = tarifaDoPosto(selectedPosto);
+  const postoIndisponivel = !loadingPosto && !tarifaKwh;
+  const estimativaKwh = tarifaKwh ? (valor / tarifaKwh).toFixed(1) : '--';
+  const estimativaKm = tarifaKwh ? Math.round(Number(estimativaKwh) * 6) : '--'; // Base padrão B2W Charge: ~6 km por kWh
 
   // Manipulação de valores rápidos
   const handleSelectPreset = (presetValue) => {
@@ -235,6 +239,11 @@ export default function ChargingCheckout() {
   const handleStartCheckout = async (e) => {
     e.preventDefault();
     setSessionError(null);
+
+    if (!tarifaKwh) {
+      setSessionError('Recarga indisponível neste posto.');
+      return;
+    }
 
     if (valor < 5) {
       setSessionError('O valor mínimo de recarga é de R$ 5,00.');
@@ -411,7 +420,7 @@ export default function ChargingCheckout() {
                 <div className="text-right flex-shrink-0">
                   <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-bold">Tarifa</span>
                   <span className="text-base font-extrabold text-slate-900">
-                    R$ {tarifaKwh.toFixed(2).replace('.', ',')}
+                    {tarifaKwh ? `R$ ${tarifaKwh.toFixed(2).replace('.', ',')}` : '--'}
                   </span>
                   <span className="text-[10px] text-slate-500 block">por kWh</span>
                 </div>
@@ -451,7 +460,7 @@ export default function ChargingCheckout() {
                               <div className="text-[11px] text-slate-500">{p.endereco || 'Endereço padrão'}</div>
                             </div>
                             <span className="text-xs font-bold text-slate-800">
-                              R$ {Number(p.plano?.tarifa_motorista_kwh || 2.15).toFixed(2).replace('.', ',')}/kWh
+                              {tarifaDoPosto(p) ? `R$ ${tarifaDoPosto(p).toFixed(2).replace('.', ',')}/kWh` : 'Indisponível'}
                             </span>
                           </button>
                         ))}
@@ -678,10 +687,16 @@ export default function ChargingCheckout() {
               </div>
             ) : (
               /* BOTÃO PARA AVANÇAR AO PAGAMENTO */
+              <>
+              {postoIndisponivel && (
+                <p className="text-sm font-semibold text-red-600 text-center" data-testid="posto-indisponivel">
+                  Recarga indisponível neste posto
+                </p>
+              )}
               <button
                 type="button"
                 onClick={handleStartCheckout}
-                disabled={creatingSession || loadingPosto}
+                disabled={creatingSession || loadingPosto || postoIndisponivel}
                 data-testid="start-checkout-button"
                 className="w-full py-4 px-6 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-base cursor-pointer"
               >
@@ -697,6 +712,7 @@ export default function ChargingCheckout() {
                   </>
                 )}
               </button>
+              </>
             )}
           </div>
         )}

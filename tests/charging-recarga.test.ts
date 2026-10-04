@@ -3,7 +3,7 @@ import {
   exigirAssinatura, RECARGA_TRANSICOES, transicaoValida,
   conectorDisponivel, mensagemConectorIndisponivel, comandoInicio, comandoParada, gerarIdTag,
   igualConstante, podeParar, valorEstornoCentavos, validarPedidoEstorno, tarifaDoMotorista,
-  ESTORNO_MINIMO_CENTAVOS,
+  ESTORNO_MINIMO_CENTAVOS, RESERVA_PAGAMENTO_MIN, EXPIRA_ID_TAG_MS, expiraIdTag,
 } from '../supabase/functions/_shared/recarga';
 
 describe('exigirAssinatura (SG-03)', () => {
@@ -233,5 +233,20 @@ describe('validarPedidoEstorno', () => {
   });
   test('recarga que nunca foi paga recusa', () => {
     expect(validarPedidoEstorno({ ...recarga, status: 'pending_payment' }, 100)).toMatch(/paga/i);
+  });
+});
+
+describe('reserva do conector durante o pagamento', () => {
+  test('RESERVA_PAGAMENTO_MIN e 10 minutos', () => expect(RESERVA_PAGAMENTO_MIN).toBe(10));
+  test('motivo reservado tem mensagem legivel', () => {
+    expect(mensagemConectorIndisponivel('reservado')).toMatch(/reservado/i);
+    expect(mensagemConectorIndisponivel('reservado')).toMatch(/em uso/i);
+  });
+});
+
+describe('expiraIdTag', () => {
+  test('cobre comando (2 min) + ConnectionTimeOut (120 s) + margem: 5 min', () => {
+    expect(EXPIRA_ID_TAG_MS).toBe(5 * 60 * 1000);
+    expect(expiraIdTag(new Date('2026-10-04T12:00:00.000Z'))).toBe('2026-10-04T12:05:00.000Z');
   });
 });
