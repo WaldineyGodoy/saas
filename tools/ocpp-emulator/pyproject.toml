@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocpp-emulator"
+version = "0.1.0"
+description = "Emulador de carregador OCPP 1.6-J (B2W Charge)"
+requires-python = ">=3.11"
+dependencies = ["ocpp==2.1.0", "websockets>=13"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools]
+packages = ["emulator"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
