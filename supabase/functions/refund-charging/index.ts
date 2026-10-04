@@ -4,10 +4,14 @@ import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
 import { igualConstante, validarPedidoEstorno } from "../_shared/recarga.ts"
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-  apiVersion: "2024-12-18.acacia" as any,
-  httpClient: Stripe.createFetchHttpClient(),
-})
+// Criado na primeira chamada: sem STRIPE_SECRET_KEY o SDK lanca no construtor e derrubava a
+// funcao inteira no boot (500), ate nos caminhos que nao usam a Stripe.
+let stripeCliente: Stripe | null = null
+const stripe = (): Stripe =>
+  (stripeCliente ??= new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    apiVersion: "2024-12-18.acacia" as any,
+    httpClient: Stripe.createFetchHttpClient(),
+  }))
 
 const resposta = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -54,7 +58,7 @@ serve(async (req) => {
 
     // A chave de idempotencia da Stripe cobre a corrida entre duas chamadas
     // simultaneas: ambas recebem o mesmo refund.
-    const refund = await stripe.refunds.create(
+    const refund = await stripe().refunds.create(
       {
         payment_intent: recarga.stripe_payment_intent_id,
         amount: valor_centavos,

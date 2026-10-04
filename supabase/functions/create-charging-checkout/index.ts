@@ -12,10 +12,14 @@ import {
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || ""
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: "2024-12-18.acacia" as any,
-  httpClient: Stripe.createFetchHttpClient(),
-})
+// Criado na primeira chamada: sem STRIPE_SECRET_KEY o SDK lanca no construtor e derrubava a
+// funcao inteira no boot (500), ate nos caminhos que nao usam a Stripe.
+let stripeCliente: Stripe | null = null
+const stripe = (): Stripe =>
+  (stripeCliente ??= new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: "2024-12-18.acacia" as any,
+    httpClient: Stripe.createFetchHttpClient(),
+  }))
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -136,7 +140,7 @@ serve(async (req) => {
     const amountInCents = Math.round(numValor * 100)
     let paymentIntent: Stripe.PaymentIntent
     try {
-    paymentIntent = await stripe.paymentIntents.create({
+    paymentIntent = await stripe().paymentIntents.create({
       amount: amountInCents,
       currency: "brl",
       description: `Recarga VE - ${nomePosto} (Conector ${numero}) - ~${kwhEstimado} kWh`,
@@ -164,7 +168,7 @@ serve(async (req) => {
       .eq("id", recarga.id)
 
     if (piErr) {
-      await stripe.paymentIntents.cancel(paymentIntent.id).catch(() => {})
+      await stripe().paymentIntents.cancel(paymentIntent.id).catch(() => {})
       await liberar()
       throw piErr
     }

@@ -8,10 +8,14 @@ import {
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || ""
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: "2024-12-18.acacia" as any,
-  httpClient: Stripe.createFetchHttpClient(),
-})
+// Criado na primeira chamada: sem STRIPE_SECRET_KEY o SDK lanca no construtor e derrubava a
+// funcao inteira no boot (500), ate nos caminhos que nao usam a Stripe.
+let stripeCliente: Stripe | null = null
+const stripe = (): Stripe =>
+  (stripeCliente ??= new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: "2024-12-18.acacia" as any,
+    httpClient: Stripe.createFetchHttpClient(),
+  }))
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -121,7 +125,7 @@ serve(async (req) => {
       Deno.env.get("STRIPE_WEBHOOK_SECRET"),
       req.headers.get("stripe-signature"),
     )
-    event = await stripe.webhooks.constructEventAsync(rawBody, assinatura, secret)
+    event = await stripe().webhooks.constructEventAsync(rawBody, assinatura, secret)
   } catch (err: any) {
     console.error("[stripe-charging-webhook] Evento recusado:", err.message)
     return json({ error: "Assinatura do webhook invalida." }, 400)

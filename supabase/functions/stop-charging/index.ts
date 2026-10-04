@@ -4,10 +4,14 @@ import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
 import { comandoParada, podeParar } from "../_shared/recarga.ts"
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-  apiVersion: "2024-12-18.acacia" as any,
-  httpClient: Stripe.createFetchHttpClient(),
-})
+// Criado na primeira chamada: sem STRIPE_SECRET_KEY o SDK lanca no construtor e derrubava a
+// funcao inteira no boot (500), ate nos caminhos que nao usam a Stripe.
+let stripeCliente: Stripe | null = null
+const stripe = (): Stripe =>
+  (stripeCliente ??= new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+    apiVersion: "2024-12-18.acacia" as any,
+    httpClient: Stripe.createFetchHttpClient(),
+  }))
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -55,7 +59,7 @@ serve(async (req) => {
 
     let segredoDoPi: string | null = null
     if (typeof client_secret === "string" && client_secret && recarga.stripe_payment_intent_id) {
-      const pi = await stripe.paymentIntents.retrieve(recarga.stripe_payment_intent_id)
+      const pi = await stripe().paymentIntents.retrieve(recarga.stripe_payment_intent_id)
       segredoDoPi = pi.client_secret ?? null
     }
     if (!podeParar({ user_id: recarga.user_id, client_secret: segredoDoPi }, { userId, clientSecret: client_secret })) {
