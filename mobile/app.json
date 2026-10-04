@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "B2W Energia",
+    "slug": "b2w-energia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.b2wenergia.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "A c\u00e2mera \u00e9 usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
+        "NSPhotoLibraryUsageDescription": "Usamos suas fotos para enviar a conta de energia.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#070A1E",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "br.com.b2wenergia.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#070A1E",
+          "image": "./assets/icon.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "A c\u00e2mera \u00e9 usada para escanear o QR Code do carregador e fotografar sua conta de energia."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Usamos suas fotos para enviar a conta de energia."
+        }
+      ]
+    ],
+    "scheme": "b2wenergia",
+    "backgroundColor": "#070A1E",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
