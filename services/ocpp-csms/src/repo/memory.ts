@@ -20,6 +20,7 @@ export class MemoryRepo implements Repo {
   comandos: Comando[] = [];
   mensagens: Mensagem[] = [];
   alertas: Alerta[] = [];
+  estornos: { recarga_id: string; valor: number; motivo: string }[] = [];
   private proximaTransacao = 1;
   private agora: () => Date;
 
@@ -177,10 +178,24 @@ export class MemoryRepo implements Repo {
   async fecharTransacao(id: number, fim: FimTransacao) {
     const t = await this.buscarTransacao(id);
     if (!t) throw new Error(`transacao inexistente: ${id}`);
+    if (t.fim_em !== null) return { transacao: t, fechada: false };
     t.meter_stop_wh = fim.meter_stop_wh;
     t.fim_em = fim.fim_em;
     t.motivo_parada = fim.motivo_parada ?? null;
-    return t;
+    return { transacao: t, fechada: true };
+  }
+
+  async buscarTransacaoPorChave(chave: string) {
+    return this.transacoes.find((t) => t.chave_idempotencia === chave) ?? null;
+  }
+
+  async buscarTransacaoAberta(carregadorId: string, connectorId: number) {
+    return this.transacoes.find((t) =>
+      t.carregador_id === carregadorId && t.connector_id === connectorId && t.fim_em === null) ?? null;
+  }
+
+  async buscarTransacaoAbertaPorTag(idTag: string) {
+    return this.transacoes.find((t) => t.id_tag === idTag && t.fim_em === null) ?? null;
   }
 
   // --- medicao ---
@@ -245,6 +260,14 @@ export class MemoryRepo implements Repo {
     };
     this.comandos.push(c);
     return { comando: c, criado: true };
+  }
+
+  // --- estorno ---
+
+  async solicitarEstorno(recargaId: string, e: { valor: number; motivo: string }) {
+    if (!this.recargas.some((r) => r.id === recargaId)) throw new Error(`recarga inexistente: ${recargaId}`);
+    if (!(e.valor > 0)) throw new Error('valor do estorno deve ser maior que zero');
+    this.estornos.push({ recarga_id: recargaId, ...e });
   }
 
   // --- alerta ---

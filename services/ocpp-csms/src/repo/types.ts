@@ -193,7 +193,13 @@ export interface Repo {
   buscarTransacao(id: number): Promise<Transacao | null>;
   // retransmissao do StartTransaction (mesma chave) devolve a mesma transacao
   criarOuObterTransacao(chave: string, dados: NovaTransacao): Promise<{ transacao: Transacao; criada: boolean }>;
-  fecharTransacao(id: number, fim: FimTransacao): Promise<Transacao>;
+  // StopTransaction retransmitido e idempotente: se ja estava fechada, NAO sobrescreve e devolve fechada = false.
+  fecharTransacao(id: number, fim: FimTransacao): Promise<{ transacao: Transacao; fechada: boolean }>;
+  buscarTransacaoPorChave(chave: string): Promise<Transacao | null>;
+  // transacao sem fim_em do conector (MeterValues sem transactionId)
+  buscarTransacaoAberta(carregadorId: string, connectorId: number): Promise<Transacao | null>;
+  // transacao sem fim_em que usa o idTag (ConcurrentTx)
+  buscarTransacaoAbertaPorTag(idTag: string): Promise<Transacao | null>;
 
   // medicao: devolve quantas linhas entraram (duplicadas sao ignoradas)
   gravarMedicoes(medicoes: NovaMedicao[]): Promise<number>;
@@ -205,6 +211,9 @@ export interface Repo {
   atualizarComando(id: string, patch: ComandoPatch): Promise<Comando>;
   // mesma chave_idempotencia nao duplica; chave nula sempre cria
   enfileirarComando(dados: NovoComando): Promise<{ comando: Comando; criado: boolean }>;
+
+  // pede o estorno parcial/total da recarga (no Supabase: Edge Function refund-charging). `valor` em reais.
+  solicitarEstorno(recargaId: string, e: { valor: number; motivo: string }): Promise<void>;
 
   // alerta interno
   alertar(a: Alerta): Promise<void>;

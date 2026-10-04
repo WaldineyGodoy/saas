@@ -1,6 +1,18 @@
 // Mensagens iniciadas pelo carregador (spec 5.2). A Tarefa 5 acrescenta
 // Authorize/StartTransaction/MeterValues/StopTransaction em registrarHandlers.
-import type { Repo } from '../repo/types.js';
+import { calcularFechamento } from '../domain/estorno.js';
+import { normalizar } from '../domain/medicao.js';
+import { kwhLimite } from '../domain/recarga.js';
+import type { NovaMedicao, Recarga, Repo, Transacao } from '../repo/types.js';
+
+const ENERGIA = 'Energy.Active.Import.Register';
+
+interface SampledValueOcpp {
+  value: string; unit?: string; measurand?: string; phase?: string; context?: string;
+}
+interface MeterValueOcpp { timestamp: string; sampledValue: SampledValueOcpp[] }
+
+type StatusIdTag = 'Accepted' | 'Blocked' | 'Expired' | 'Invalid' | 'ConcurrentTx';
 
 export interface ContextoHandlers {
   repo: Repo;
@@ -71,6 +83,190 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
         mensagem: `Conector ${params.connectorId} de ${ocppId} em Faulted (${params.errorCode})${bloqueia ? ': bloqueado ate Reset' : ''}`,
         dados: { errorCode: params.errorCode, info: params.info ?? null, vendorErrorCode: params.vendorErrorCode ?? null },
       });
+    }
+    return {};
+  });
+
+  const alertar = (connectorId: number | null, tipo: string, mensagem: string, dados?: Record<string, unknown>) =>
+    repo.alertar({ carregador_id: carregadorId, connector_id: connectorId, tipo, mensagem, dados });
+
+  // Avalia o idTag e a recarga vinculada. `recarga` so vem preenchida quando o status e Accepted.
+  async function avaliarTag(idTag: string): Promise<{ status: StatusIdTag; recarga: Recarga | null }> {
+    const tag = await repo.buscarIdTag(idTag);
+    if (!tag) return { status: 'Invalid', recarga: null };
+    if (tag.status !== 'Accepted') return { status: tag.status, recarga: null };
+    if (tag.expira_em && new Date(tag.expira_em).getTime() <= ctx.agora().getTime()) {
+      return { status: 'Expired', recarga: null };
+    }
+    // em uso por transacao aberta: ConcurrentTx; ja usado e encerrado: Expired
+    if (await repo.buscarTransacaoAbertaPorTag(idTag)) return { status: 'ConcurrentTx', recarga: null };
+    if (tag.usado_em) return { status: 'Expired', recarga: null };
+    const recarga = tag.recarga_id ? await repo.buscarRecarga(tag.recarga_id) : null;
+    // starting: RemoteStart enviado; paid: partida local no totem (RC-06)
+    if (!recarga || (recarga.status !== 'starting' && recarga.status !== 'paid')) {
+      return { status: 'Invalid', recarga: null };
+    }
+    return { status: 'Accepted', recarga };
+  }
+
+  cliente.handle('Authorize', async ({ params }) => {
+    const { status } = await avaliarTag(params.idTag);
+    return { idTagInfo: { status } };
+  });
+
+  cliente.handle('StartTransaction', async ({ params }) => {
+    const idTag: string = params.idTag;
+    const inicioEm = new Date(params.timestamp).toISOString();
+    // chave de idempotencia (spec 4.4); o instante e normalizado para o mesmo momento em 2 formatos nao divergir
+    const chave = `${carregadorId}|${params.connectorId}|${idTag}|${inicioEm}`;
+
+    const existente = await repo.buscarTransacaoPorChave(chave);
+    if (existente) {
+      // retransmissao (RS-03): mesma transacao, sem refazer efeitos
+      return { transactionId: existente.id, idTagInfo: { status: existente.recarga_id ? 'Accepted' : 'Invalid' } };
+    }
+
+    const { status, recarga } = await avaliarTag(idTag);
+    const novo = await repo.criarOuObterTransacao(chave, {
+      carregador_id: carregadorId, connector_id: params.connectorId, id_tag: idTag,
+      meter_start_wh: params.meterStart, inicio_em: inicioEm, recarga_id: recarga?.id ?? null,
+    });
+    if (!novo.criada) {
+      return { transactionId: novo.transacao.id, idTagInfo: { status: novo.transacao.recarga_id ? 'Accepted' : 'Invalid' } };
+    }
+    if (status !== 'Accepted' || !recarga) {
+      // RC-07: o 1.6 exige transactionId mesmo recusando; a transacao fica sem recarga
+      return { transactionId: novo.transacao.id, idTagInfo: { status } };
+    }
+
+    let kwhLim: number | null = null;
+    if (recarga.tarifa_kwh_aplicada > 0) {
+      kwhLim = kwhLimite(recarga.valor, recarga.tarifa_kwh_aplicada);
+    } else {
+      await alertar(params.connectorId, 'recarga_sem_tarifa',
+        `Recarga ${recarga.id} sem foto de tarifa: kwh_limite nao calculado`, { recargaId: recarga.id });
+    }
+    // paid -> starting -> charging (o mapa de status proibe paid -> charging)
+    let atual: Recarga | null = recarga;
+    if (recarga.status === 'paid') atual = await repo.atualizarRecarga(recarga.id, { status: 'starting' }, 'paid');
+    if (atual) {
+      atual = await repo.atualizarRecarga(recarga.id, {
+        status: 'charging', ocpp_transacao_id: novo.transacao.id, iniciada_em: inicioEm, kwh_limite: kwhLim,
+      }, 'starting');
+    }
+    if (!atual) {
+      await alertar(params.connectorId, 'recarga_inicio_conflito',
+        `Recarga ${recarga.id} mudou de status durante o StartTransaction ${novo.transacao.id}`, { recargaId: recarga.id });
+      return { transactionId: novo.transacao.id, idTagInfo: { status: 'Invalid' } };
+    }
+    await repo.atualizarIdTag(idTag, { usado_em: ctx.agora().toISOString() });
+    return { transactionId: novo.transacao.id, idTagInfo: { status: 'Accepted' } };
+  });
+
+  // Grava as amostras (dedupe no repo). Energia que fica abaixo do maior registro anterior
+  // (ou do meterStart) e ignorada com alerta (MV-02).
+  async function persistirAmostras(t: Transacao, medicoes: MeterValueOcpp[]): Promise<void> {
+    const ordenadas = [...medicoes].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    for (const mvOcpp of ordenadas) {
+      const medidoEm = new Date(mvOcpp.timestamp).toISOString();
+      for (const sv of mvOcpp.sampledValue) {
+        let norm: { valor: number; unidade: string };
+        try {
+          norm = normalizar(sv);
+        } catch (e) {
+          await alertar(t.connector_id, 'medicao_invalida', (e as Error).message, { transacaoId: t.id });
+          continue;
+        }
+        const measurand = sv.measurand ?? ENERGIA;
+        if (measurand === ENERGIA) {
+          const instante = new Date(medidoEm).getTime();
+          const anteriores = (await repo.listarMedicoes(t.id))
+            .filter((m) => m.measurand === ENERGIA && m.unidade === 'Wh' && new Date(m.medido_em).getTime() <= instante)
+            .map((m) => m.valor);
+          const piso = Math.max(t.meter_start_wh, ...anteriores);
+          if (norm.valor < piso) {
+            await alertar(t.connector_id, 'medicao_regrediu',
+              `Registro de energia regrediu na transacao ${t.id}: ${norm.valor} Wh < ${piso} Wh; amostra ignorada`,
+              { transacaoId: t.id, valor: norm.valor, piso, medidoEm });
+            continue;
+          }
+        }
+        const nova: NovaMedicao = {
+          transacao_id: t.id, connector_id: t.connector_id, medido_em: medidoEm, measurand,
+          phase: sv.phase ?? '', valor: norm.valor, unidade: norm.unidade, contexto: sv.context ?? null,
+        };
+        await repo.gravarMedicoes([nova]);
+      }
+    }
+  }
+
+  // kwh_consumido = (maior registro - meterStart) / 1000; monotonico e so enquanto charging
+  async function atualizarConsumo(t: Transacao): Promise<void> {
+    if (!t.recarga_id) return;
+    const regs = (await repo.listarMedicoes(t.id))
+      .filter((m) => m.measurand === ENERGIA && m.unidade === 'Wh').map((m) => m.valor);
+    if (regs.length === 0) return;
+    const kwh = Math.max(0, (Math.max(...regs) - t.meter_start_wh) / 1000);
+    const r = await repo.buscarRecarga(t.recarga_id);
+    if (!r || r.status !== 'charging' || kwh <= (r.kwh_consumido ?? 0)) return;
+    await repo.atualizarRecarga(r.id, { kwh_consumido: kwh }, 'charging');
+  }
+
+  cliente.handle('MeterValues', async ({ params }) => {
+    // sem transactionId no payload: usa a transacao aberta do conector
+    const t = params.transactionId !== undefined
+      ? await repo.buscarTransacao(params.transactionId)
+      : await repo.buscarTransacaoAberta(carregadorId, params.connectorId);
+    if (!t) return {}; // amostras fora de transacao (ex.: conector 0) nao sao persistidas
+    await persistirAmostras(t, params.meterValue);
+    await atualizarConsumo(t);
+    return {};
+  });
+
+  cliente.handle('StopTransaction', async ({ params }) => {
+    const t = await repo.buscarTransacao(params.transactionId);
+    if (!t) {
+      await alertar(null, 'transacao_desconhecida', `StopTransaction para transacao inexistente ${params.transactionId}`);
+      return {};
+    }
+    const fimEm = new Date(params.timestamp).toISOString();
+    const motivo: string = params.reason ?? 'Local'; // default do 1.6
+    const { fechada } = await repo.fecharTransacao(t.id, { meter_stop_wh: params.meterStop, fim_em: fimEm, motivo_parada: motivo });
+    if (!fechada) return {}; // retransmissao (RS-02/RS-03): nada se repete
+    if (params.transactionData) await persistirAmostras(t, params.transactionData);
+
+    if (await repo.buscarIdTag(t.id_tag)) await repo.atualizarIdTag(t.id_tag, { status: 'Expired' }); // uso unico (RC-08)
+    if (!t.recarga_id) return {}; // transacao orfa (idTag invalido)
+
+    const r = await repo.buscarRecarga(t.recarga_id);
+    if (!r || r.status !== 'charging') {
+      await alertar(t.connector_id, 'recarga_fechamento_ignorado',
+        `StopTransaction ${t.id}: recarga ${t.recarga_id} esta em ${r?.status ?? 'inexistente'}, nao charging`, { recargaId: t.recarga_id });
+      return {};
+    }
+    let f = calcularFechamento({ valor: r.valor, tarifa: r.tarifa_kwh_aplicada, whStart: t.meter_start_wh, whStop: params.meterStop });
+    if (!(r.tarifa_kwh_aplicada > 0)) {
+      // sem tarifa nao ha proporcional: cobra o pago e manda revisar
+      f = { kwh: r.kwh_consumido ?? 0, valor_final: r.valor, estorno: 0, revisar: true };
+    }
+    const atualizada = await repo.atualizarRecarga(r.id, {
+      status: 'completed', kwh_consumido: f.revisar ? (r.kwh_consumido ?? 0) : f.kwh,
+      valor_final: f.valor_final, valor_estornado: f.estorno, finalizada_em: fimEm, motivo_fim: motivo,
+      ...(f.revisar ? { metadata: { ...r.metadata, revisar: true } } : {}),
+    }, 'charging');
+    if (!atualizada) return {};
+    if (f.revisar) {
+      await alertar(t.connector_id, 'medicao_revisar',
+        `Recarga ${r.id} encerrada para revisao (meterStop ${params.meterStop} < meterStart ${t.meter_start_wh}, ou sem tarifa)`,
+        { recargaId: r.id });
+    }
+    if (f.estorno > 0) {
+      try {
+        await repo.solicitarEstorno(r.id, { valor: f.estorno, motivo: `StopTransaction ${motivo}` });
+      } catch (e) {
+        await alertar(t.connector_id, 'estorno_falhou',
+          `Estorno de ${f.estorno} da recarga ${r.id} nao foi solicitado: ${(e as Error).message}`, { recargaId: r.id });
+      }
     }
     return {};
   });

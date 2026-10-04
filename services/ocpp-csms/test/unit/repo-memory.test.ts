@@ -60,8 +60,32 @@ describe('transacao', () => {
   it('fecharTransacao grava stop; connector_id 0 e recusado', async () => {
     const { transacao } = await repo.criarOuObterTransacao('k1', dados());
     const f = await repo.fecharTransacao(transacao.id, { meter_stop_wh: 5000, fim_em: T0, motivo_parada: 'Local' });
-    expect(f).toMatchObject({ meter_stop_wh: 5000, motivo_parada: 'Local' });
+    expect(f.fechada).toBe(true);
+    expect(f.transacao).toMatchObject({ meter_stop_wh: 5000, motivo_parada: 'Local' });
     await expect(repo.criarOuObterTransacao('k0', dados({ connector_id: 0 }))).rejects.toThrow();
+  });
+  it('fecharTransacao e idempotente: o 2o fechamento nao sobrescreve', async () => {
+    const { transacao } = await repo.criarOuObterTransacao('k1', dados());
+    await repo.fecharTransacao(transacao.id, { meter_stop_wh: 5000, fim_em: T0, motivo_parada: 'Local' });
+    const f2 = await repo.fecharTransacao(transacao.id, { meter_stop_wh: 9000, fim_em: '2026-10-04T13:00:00.000Z', motivo_parada: 'Other' });
+    expect(f2.fechada).toBe(false);
+    expect(f2.transacao).toMatchObject({ meter_stop_wh: 5000, fim_em: T0, motivo_parada: 'Local' });
+  });
+  it('buscas de transacao: por chave, aberta do conector e aberta por idTag (fechada some)', async () => {
+    const { transacao } = await repo.criarOuObterTransacao('k1', dados({ id_tag: 'TAGX' }));
+    expect((await repo.buscarTransacaoPorChave('k1'))?.id).toBe(transacao.id);
+    expect(await repo.buscarTransacaoPorChave('nada')).toBeNull();
+    expect((await repo.buscarTransacaoAberta(cpId, 1))?.id).toBe(transacao.id);
+    expect((await repo.buscarTransacaoAbertaPorTag('TAGX'))?.id).toBe(transacao.id);
+    await repo.fecharTransacao(transacao.id, { meter_stop_wh: 1, fim_em: T0 });
+    expect(await repo.buscarTransacaoAberta(cpId, 1)).toBeNull();
+    expect(await repo.buscarTransacaoAbertaPorTag('TAGX')).toBeNull();
+  });
+  it('solicitarEstorno registra o pedido; valor <= 0 ou recarga inexistente e recusado', async () => {
+    await repo.solicitarEstorno(recargaId, { valor: 30, motivo: 'StopTransaction EVDisconnected' });
+    expect(repo.estornos).toEqual([{ recarga_id: recargaId, valor: 30, motivo: 'StopTransaction EVDisconnected' }]);
+    await expect(repo.solicitarEstorno(recargaId, { valor: 0, motivo: 'x' })).rejects.toThrow();
+    await expect(repo.solicitarEstorno('nao-existe', { valor: 1, motivo: 'x' })).rejects.toThrow();
   });
 });
 
