@@ -2,7 +2,7 @@
 // Authorize/StartTransaction/MeterValues/StopTransaction em registrarHandlers.
 import { calcularFechamento } from '../domain/estorno.js';
 import { normalizar } from '../domain/medicao.js';
-import { kwhLimite } from '../domain/recarga.js';
+import { deveCortar, kwhLimite } from '../domain/recarga.js';
 import type { NovaMedicao, Recarga, Repo, Transacao } from '../repo/types.js';
 
 const ENERGIA = 'Energy.Active.Import.Register';
@@ -223,8 +223,22 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
     if (!t) return {}; // amostras fora de transacao (ex.: conector 0) nao sao persistidas
     await persistirAmostras(t, params.meterValue);
     await atualizarConsumo(t);
+    await cortarSeNoLimite(t);
     return {};
   });
+
+  // RC-04: energia >= kwh_limite -> um RemoteStopTransaction. A chave `stop:<recarga>` faz as amostras
+  // seguintes (ou um MeterValues retransmitido) colidirem no mesmo comando: so um e enfileirado.
+  async function cortarSeNoLimite(t: Transacao): Promise<void> {
+    if (!t.recarga_id) return;
+    const r = await repo.buscarRecarga(t.recarga_id);
+    if (!r || r.status !== 'charging' || r.kwh_limite === null || r.kwh_consumido === null) return;
+    if (!deveCortar(r.kwh_consumido, r.kwh_limite)) return;
+    await repo.enfileirarComando({
+      carregador_id: carregadorId, acao: 'RemoteStopTransaction', payload: { transactionId: t.id },
+      recarga_id: r.id, chave_idempotencia: `stop:${r.id}`,
+    });
+  }
 
   // Transacao de outro carregador (ou inexistente) e tratada como desconhecida: nada e lido nem gravado.
   async function transacaoDoCarregador(id: number, acao: string): Promise<Transacao | null> {

@@ -29,6 +29,8 @@ export interface Servidor {
   clientes: Map<string, ClienteConectado>;
   // ocpp_id com Reset aceito aguardando o proximo Boot (a Tarefa 6 adiciona; o Boot consome)
   resetAceito: Set<string>;
+  // avisa quando um carregador (re)conecta nesta instancia; devolve o cancelamento
+  aoConectar(cb: (ocppId: string) => void): () => void;
   fechar(): Promise<void>;
 }
 
@@ -40,6 +42,7 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
   const onErro: OnErro = o.onErro ?? ((ctx, err) => console.error(`[ocpp-csms] ${ctx}:`, err));
   const clientes = new Map<string, ClienteConectado>();
   const resetAceito = new Set<string>();
+  const ouvintesConexao = new Set<(ocppId: string) => void>();
 
   const server = new RPCServer({
     protocols: ['ocpp1.6'], strictMode: true, callTimeoutMs: o.callTimeoutMs ?? 30000,
@@ -57,7 +60,13 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
     if (antiga) antiga.close({ code: 4000, reason: 'substituida por nova conexao' }).catch(() => undefined);
 
     // trilha de frames; correlaciona respostas (3/4) com a acao da chamada (2) pelo unique_id
-    const acoes = new Map<string, string>(); // `${direcao da chamada}:${id}` -> acao
+    // Chamadas sem resposta (timeout) deixariam entradas para sempre: cada insercao descarta as vencidas.
+    const acoes = new Map<string, { acao: string; em: number }>(); // `${direcao da chamada}:${id}` -> acao
+    const validadeAcaoMs = (o.callTimeoutMs ?? 30000) + 60000;
+    const purgarAcoes = () => {
+      const limite = agora().getTime() - validadeAcaoMs;
+      for (const [k, v] of acoes) if (v.em < limite) acoes.delete(k);
+    };
     client.on('message', ({ message, outbound }: { message: string | Buffer; outbound: boolean }) => {
       const direcao = outbound ? 'saida' : 'entrada';
       let tipo: TipoFrame | null = null;
@@ -72,11 +81,14 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
           if (tipo === 2) {
             acao = typeof f[2] === 'string' ? f[2] : null;
             payload = f[3] ?? null;
-            if (uniqueId && acao) acoes.set(`${direcao}:${uniqueId}`, acao);
+            if (uniqueId && acao) {
+              purgarAcoes();
+              acoes.set(`${direcao}:${uniqueId}`, { acao, em: agora().getTime() });
+            }
           } else {
             const chamadaVeio = outbound ? 'entrada' : 'saida';
             const chave = `${chamadaVeio}:${uniqueId}`;
-            acao = acoes.get(chave) ?? null;
+            acao = acoes.get(chave)?.acao ?? null;
             acoes.delete(chave);
             payload = tipo === 3 ? (f[2] ?? null) : { codigo: f[2], descricao: f[3], detalhes: f[4] };
           }
@@ -93,8 +105,12 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
     });
 
     registrarHandlers(client as unknown as ClienteHandlers, { repo, carregadorId, ocppId, resetAceito, agora });
+    for (const cb of ouvintesConexao) {
+      try { cb(ocppId); } catch (e) { onErro('aoConectar', e); }
+    }
 
     client.once('close', () => {
+      acoes.clear();
       if (clientes.get(ocppId) !== client) return; // ja foi substituida (CP-08)
       clientes.delete(ocppId);
       void repo.marcarOffline(carregadorId).catch((e) => onErro('marcarOffline', e));
@@ -112,6 +128,10 @@ export async function criarServidor(o: OpcoesServidor): Promise<Servidor> {
 
   return {
     porta, clientes, resetAceito,
+    aoConectar(cb) {
+      ouvintesConexao.add(cb);
+      return () => { ouvintesConexao.delete(cb); };
+    },
     async fechar() {
       clearInterval(timer);
       await server.close({ code: 1001, reason: 'CSMS encerrando' });

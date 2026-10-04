@@ -131,6 +131,8 @@ export interface Comando {
   erro: string | null;
   recarga_id: string | null;
   chave_idempotencia: string | null;
+  // ultima alteracao (updated_at); para RemoteStart aceito marca o instante da aceitacao (RC-03)
+  atualizado_em: string;
 }
 
 export interface NovoComando {
@@ -210,6 +212,15 @@ export interface Repo {
   // pendentes, vencidos (proxima_tentativa_em <= agora), nao expirados, dos carregadores indicados
   proximosComandos(ocppIds: string[]): Promise<Comando[]>;
   atualizarComando(id: string, patch: ComandoPatch): Promise<Comando>;
+  // trava por comando: `pendente -> enviado` somente se ainda estiver pendente (update ... where status='pendente').
+  // Devolve o comando travado, ou null se outra instancia/rodada ja o pegou.
+  reivindicarComando(id: string): Promise<Comando | null>;
+  // pendentes cujo expira_em ja passou (a varredura os marca como expirado)
+  listarComandosExpirados(): Promise<Comando[]>;
+  // recargas em `starting` com o instante em que o RemoteStart foi aceito (base do RC-03, sobrevive a restart)
+  listarRecargasStarting(): Promise<{ recarga: Recarga; aceito_em: string }[]>;
+  // opcional: avisa quando um comando e inserido (Realtime no Supabase / callback na memoria). Devolve o cancelamento.
+  assinarComandos?(cb: () => void): () => void;
   // mesma chave_idempotencia nao duplica; chave nula sempre cria
   enfileirarComando(dados: NovoComando): Promise<{ comando: Comando; criado: boolean }>;
 

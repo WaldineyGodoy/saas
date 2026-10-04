@@ -22,6 +22,7 @@ export class MemoryRepo implements Repo {
   alertas: Alerta[] = [];
   estornos: { recarga_id: string; valor: number; motivo: string }[] = [];
   private proximaTransacao = 1;
+  private ouvintesComandos = new Set<() => void>();
   private agora: () => Date;
 
   constructor(opts: { agora?: () => Date } = {}) {
@@ -239,8 +240,38 @@ export class MemoryRepo implements Repo {
   async atualizarComando(id: string, patch: ComandoPatch) {
     const c = this.comandos.find((x) => x.id === id);
     if (!c) throw new Error(`comando inexistente: ${id}`);
-    Object.assign(c, patch);
+    Object.assign(c, patch, { atualizado_em: this.iso() });
     return c;
+  }
+
+  async reivindicarComando(id: string) {
+    const c = this.comandos.find((x) => x.id === id);
+    if (!c || c.status !== 'pendente') return null;
+    c.status = 'enviado';
+    c.atualizado_em = this.iso();
+    return c;
+  }
+
+  async listarComandosExpirados() {
+    const agora = this.agora().getTime();
+    return this.comandos.filter((c) => c.status === 'pendente' && new Date(c.expira_em).getTime() <= agora);
+  }
+
+  async listarRecargasStarting() {
+    const saida: { recarga: Recarga; aceito_em: string }[] = [];
+    for (const r of this.recargas.filter((x) => x.status === 'starting')) {
+      const aceitos = this.comandos
+        .filter((c) => c.recarga_id === r.id && c.acao === 'RemoteStartTransaction' && c.status === 'aceito')
+        .map((c) => c.atualizado_em).sort();
+      const aceito = aceitos[aceitos.length - 1];
+      if (aceito) saida.push({ recarga: r, aceito_em: aceito });
+    }
+    return saida;
+  }
+
+  assinarComandos(cb: () => void) {
+    this.ouvintesComandos.add(cb);
+    return () => { this.ouvintesComandos.delete(cb); };
   }
 
   async enfileirarComando(d: NovoComando) {
@@ -256,9 +287,10 @@ export class MemoryRepo implements Repo {
       proxima_tentativa_em: d.proxima_tentativa_em ?? agora.toISOString(),
       expira_em: d.expira_em ?? new Date(agora.getTime() + EXPIRA_COMANDO_MS).toISOString(),
       resposta: null, erro: null, recarga_id: d.recarga_id ?? null,
-      chave_idempotencia: d.chave_idempotencia ?? null,
+      chave_idempotencia: d.chave_idempotencia ?? null, atualizado_em: agora.toISOString(),
     };
     this.comandos.push(c);
+    for (const cb of this.ouvintesComandos) cb();
     return { comando: c, criado: true };
   }
 

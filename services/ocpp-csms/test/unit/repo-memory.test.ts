@@ -220,3 +220,50 @@ describe('listagens e alertas (Tarefa 4)', () => {
     await expect(repo.alertar({ carregador_id: 'nao-existe', connector_id: null, tipo: 't', mensagem: 'm' })).rejects.toThrow(/inexistente/);
   });
 });
+
+describe('fila - trava, expirados e starting (Tarefa 6)', () => {
+  const novo = () => repo.enfileirarComando({ carregador_id: cpId, acao: 'GetConfiguration', payload: {} });
+
+  it('reivindicarComando trava pendente -> enviado so uma vez', async () => {
+    const { comando } = await novo();
+    expect((await repo.reivindicarComando(comando.id))?.status).toBe('enviado');
+    expect(await repo.reivindicarComando(comando.id)).toBeNull();
+    expect(await repo.reivindicarComando('inexistente')).toBeNull();
+  });
+
+  it('listarComandosExpirados devolve so pendentes vencidos', async () => {
+    const vivo = (await novo()).comando;
+    const vencido = (await repo.enfileirarComando({
+      carregador_id: cpId, acao: 'GetConfiguration', expira_em: new Date(new Date(T0).getTime() - 1).toISOString(),
+    })).comando;
+    const enviado = (await repo.enfileirarComando({
+      carregador_id: cpId, acao: 'GetConfiguration', expira_em: new Date(new Date(T0).getTime() - 1).toISOString(),
+    })).comando;
+    await repo.reivindicarComando(enviado.id);
+    const ids = (await repo.listarComandosExpirados()).map((c) => c.id);
+    expect(ids).toEqual([vencido.id]);
+    expect(ids).not.toContain(vivo.id);
+  });
+
+  it('listarRecargasStarting traz o instante da aceitacao do RemoteStart', async () => {
+    await repo.atualizarRecarga(recargaId, { status: 'starting' });
+    expect(await repo.listarRecargasStarting()).toEqual([]); // sem comando aceito
+    const { comando } = await repo.enfileirarComando({
+      carregador_id: cpId, acao: 'RemoteStartTransaction', recarga_id: recargaId, payload: {},
+    });
+    avancar(5000);
+    await repo.atualizarComando(comando.id, { status: 'aceito' });
+    const l = await repo.listarRecargasStarting();
+    expect(l).toHaveLength(1);
+    expect(l[0]!.aceito_em).toBe(new Date(new Date(T0).getTime() + 5000).toISOString());
+  });
+
+  it('assinarComandos avisa a cada insercao e o cancelamento funciona', async () => {
+    let n = 0;
+    const cancelar = repo.assinarComandos(() => { n++; });
+    await novo();
+    cancelar();
+    await novo();
+    expect(n).toBe(1);
+  });
+});

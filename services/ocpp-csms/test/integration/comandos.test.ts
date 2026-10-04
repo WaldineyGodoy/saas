@@ -1,0 +1,276 @@
+// Esperas: o timeout de chamada do ocpp-rpc usa timers/promises (que o fake timer do vitest nao
+// cobre), entao estes testes usam timers reais com valores injetados bem pequenos
+// (callTimeoutMs, backoff, connectionTimeoutS) e vi.waitFor em vez de vi.useFakeTimers().
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { RPCClient } from 'ocpp-rpc';
+import { subirCenario, BOOT, type Cenario } from './helpers.js';
+import { criarFila, type Fila, type OpcoesFila } from '../../src/server/comandos.js';
+
+let c: Cenario;
+let cli: RPCClient;
+let fila: Fila;
+afterEach(async () => { fila?.parar(); await c?.encerrar(); });
+
+const TAG = 'CMDTAG000000000001';
+const ABERTO = 1; // WebSocket.OPEN
+
+type OpcExtra = Partial<Omit<OpcoesFila, 'repo' | 'servidor'>>;
+
+async function preparar(opc: OpcExtra = {}) {
+  c = await subirCenario();
+  const cp = c.repo.carregadores[0]!;
+  const recarga = c.repo.semearRecarga({
+    status: 'paid', valor: 50, tarifa_kwh_aplicada: 2, ocpp_id_tag: TAG, eletroposto_id: cp.eletroposto_id,
+  });
+  c.repo.semearIdTag({ id_tag: TAG, recarga_id: recarga.id });
+  cli = c.carregadorFake('CP-1', 'segredo-cp1');
+  fila = criarFila({ repo: c.repo, servidor: c.srv, varreduraMs: 15, ...opc });
+  return { cp, recarga };
+}
+const conectar = async (status = 'Available', errorCode = 'NoError') => {
+  await cli.connect();
+  await cli.call('BootNotification', BOOT);
+  await cli.call('StatusNotification', { connectorId: 1, status, errorCode });
+};
+const startCmd = (recargaId: string, idTag = TAG, chave = `start:${recargaId}`) =>
+  c.repo.enfileirarComando({
+    carregador_id: c.repo.carregadores[0]!.id, acao: 'RemoteStartTransaction',
+    payload: { connectorId: 1, idTag }, recarga_id: recargaId, chave_idempotencia: chave,
+  });
+const cmd = (id: string) => c.repo.comandos.find((x) => x.id === id)!;
+const rec = (id: string) => c.repo.recargas.find((r) => r.id === id)!;
+const tag = (t: string) => c.repo.idTags.find((x) => x.id_tag === t)!;
+
+describe('RC - comandos de partida', () => {
+  it('RC-01 RemoteStart pendente chega ao carregador; Accepted -> comando aceito, recarga starting', async () => {
+    const { recarga } = await preparar();
+    const recebidos: unknown[] = [];
+    cli.handle('RemoteStartTransaction', async ({ params }) => { recebidos.push(params); return { status: 'Accepted' }; });
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(recebidos).toEqual([{ connectorId: 1, idTag: TAG }]);
+    expect(cmd(comando.id)).toMatchObject({ status: 'aceito', resposta: { status: 'Accepted' } });
+    expect(rec(recarga.id).status).toBe('starting');
+  });
+
+  it('RC-01 comando duplicado (mesma chave) e processamento concorrente nao geram 2o envio', async () => {
+    const { recarga } = await preparar();
+    let n = 0;
+    cli.handle('RemoteStartTransaction', async () => { n++; return { status: 'Accepted' }; });
+    await conectar();
+    await startCmd(recarga.id);
+    const dup = await startCmd(recarga.id);
+    expect(dup.criado).toBe(false);
+    await Promise.all([fila.processar(), fila.processar()]);
+    expect(n).toBe(1);
+  });
+
+  it('RC-02 Rejected -> comando rejeitado, recarga failed, estorno total, idTag Expired', async () => {
+    const { recarga } = await preparar();
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Rejected' }));
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('rejeitado');
+    expect(rec(recarga.id).status).toBe('failed');
+    expect(c.repo.estornos).toEqual([expect.objectContaining({ recarga_id: recarga.id, valor: 50 })]);
+    expect(tag(TAG).status).toBe('Expired');
+  });
+
+  it('RC-03 aceito e sem StartTransaction em CONNECTION_TIMEOUT_S -> canceled, idTag Expired, estorno total', async () => {
+    const { recarga } = await preparar({ connectionTimeoutS: 0.2 });
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Accepted' }));
+    await conectar();
+    await startCmd(recarga.id);
+    await fila.processar();
+    expect(rec(recarga.id).status).toBe('starting');
+    await vi.waitFor(() => expect(rec(recarga.id).status).toBe('canceled'), { timeout: 3000 });
+    expect(tag(TAG).status).toBe('Expired');
+    expect(c.repo.estornos).toEqual([expect.objectContaining({ recarga_id: recarga.id, valor: 50 })]);
+  });
+
+  it('RC-03 StartTransaction dentro do prazo: a varredura nao cancela', async () => {
+    const { recarga } = await preparar({ connectionTimeoutS: 0.3 });
+    cli.handle('RemoteStartTransaction', async () => ({ status: 'Accepted' }));
+    await conectar();
+    await startCmd(recarga.id);
+    await fila.processar();
+    await cli.call('StartTransaction', { connectorId: 1, idTag: TAG, meterStart: 0, timestamp: new Date().toISOString() });
+    await new Promise((r) => setTimeout(r, 600));
+    expect(rec(recarga.id).status).toBe('charging');
+    expect(c.repo.estornos).toEqual([]);
+  });
+});
+
+describe('RC - corte pre-pago', () => {
+  it('RC-04 MeterValues atinge kwh_limite -> exatamente um RemoteStopTransaction mesmo com mais amostras', async () => {
+    const { recarga } = await preparar();
+    await conectar('Preparing');
+    const s = await cli.call('StartTransaction', {
+      connectorId: 1, idTag: TAG, meterStart: 1000, timestamp: '2026-10-04T12:00:00.000Z',
+    }) as { transactionId: number };
+    const mv = (ts: string, wh: number) => cli.call('MeterValues', {
+      connectorId: 1, transactionId: s.transactionId,
+      meterValue: [{ timestamp: ts, sampledValue: [{ value: String(wh) }] }],
+    });
+    await mv('2026-10-04T12:05:00.000Z', 10000);
+    expect(c.repo.comandos.filter((x) => x.acao === 'RemoteStopTransaction')).toHaveLength(0);
+    await mv('2026-10-04T12:10:00.000Z', 26000); // 25 kWh = limite
+    await mv('2026-10-04T12:11:00.000Z', 27000);
+    await mv('2026-10-04T12:12:00.000Z', 28000);
+    await mv('2026-10-04T12:13:00.000Z', 29000);
+    const stops = c.repo.comandos.filter((x) => x.acao === 'RemoteStopTransaction');
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toMatchObject({
+      payload: { transactionId: s.transactionId }, recarga_id: recarga.id, chave_idempotencia: `stop:${recarga.id}`,
+    });
+  });
+});
+
+describe('RS - resiliencia dos comandos', () => {
+  it('RS-04 carregador demora a responder GetConfiguration (menos que o timeout) -> aceito; socket aberto', async () => {
+    await preparar({ callTimeoutMs: 1000 });
+    cli.handle('GetConfiguration', async () => {
+      await new Promise((r) => setTimeout(r, 300));
+      return { configurationKey: [{ key: 'HeartbeatInterval', readonly: false, value: '60' }] };
+    });
+    await conectar();
+    const { comando } = await c.repo.enfileirarComando({ carregador_id: c.repo.carregadores[0]!.id, acao: 'GetConfiguration', payload: {} });
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('aceito');
+    expect(cli.state).toBe(ABERTO);
+  });
+
+  it('RS-05 carregador nunca responde -> 1 envio + 3 reenvios com backoff, depois expirado; socket aberto; recarga failed + estorno', async () => {
+    const { recarga } = await preparar({ callTimeoutMs: 40, backoff: (n) => (n <= 3 ? 10 * 2 ** n : null) });
+    let chamadas = 0;
+    cli.handle('RemoteStartTransaction', async () => { chamadas++; return new Promise(() => undefined); });
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    await vi.waitFor(() => expect(cmd(comando.id).status).toBe('expirado'), { timeout: 5000 });
+    expect(chamadas).toBe(4);
+    expect(cmd(comando.id).tentativas).toBe(4);
+    expect(cli.state).toBe(ABERTO);
+    expect(rec(recarga.id).status).toBe('failed');
+    expect(c.repo.estornos).toEqual([expect.objectContaining({ recarga_id: recarga.id, valor: 50 })]);
+  });
+
+  it('RS-05 timeout reagenda (pendente, tentativas+1, proxima_tentativa_em no futuro) sem fechar o socket nem falhar a recarga', async () => {
+    const { recarga } = await preparar({ callTimeoutMs: 40, backoff: () => 60000 });
+    cli.handle('RemoteStartTransaction', async () => new Promise(() => undefined));
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(comando.id)).toMatchObject({ status: 'pendente', tentativas: 1 });
+    expect(new Date(cmd(comando.id).proxima_tentativa_em).getTime()).toBeGreaterThan(Date.now() + 50000);
+    expect(cli.state).toBe(ABERTO);
+    expect(rec(recarga.id).status).toBe('paid');
+  });
+
+  it('RS-06 comando criado com carregador desconectado fica pendente e e enviado quando ele conecta antes de expira_em', async () => {
+    await preparar();
+    const recebidos: unknown[] = [];
+    cli.handle('ChangeAvailability', async ({ params }) => { recebidos.push(params); return { status: 'Accepted' }; });
+    const { comando } = await c.repo.enfileirarComando({
+      carregador_id: c.repo.carregadores[0]!.id, acao: 'ChangeAvailability', payload: { connectorId: 1, type: 'Operative' },
+    });
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('pendente');
+    await conectar();
+    await vi.waitFor(() => expect(cmd(comando.id).status).toBe('aceito'), { timeout: 3000 });
+    expect(recebidos).toHaveLength(1);
+  });
+
+  it('RS-06 comando cujo expira_em passou sem o carregador conectar -> expirado (RemoteStart: recarga failed + estorno)', async () => {
+    const { recarga } = await preparar();
+    const { comando } = await c.repo.enfileirarComando({
+      carregador_id: c.repo.carregadores[0]!.id, acao: 'RemoteStartTransaction',
+      payload: { connectorId: 1, idTag: TAG }, recarga_id: recarga.id, chave_idempotencia: `start:${recarga.id}`,
+      expira_em: new Date(Date.now() - 1000).toISOString(),
+    });
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('expirado');
+    expect(rec(recarga.id).status).toBe('failed');
+    expect(c.repo.estornos).toEqual([expect.objectContaining({ recarga_id: recarga.id, valor: 50 })]);
+    expect(tag(TAG).status).toBe('Expired');
+  });
+
+  it('RS-05 CALLERROR do carregador vira comando erro (RemoteStart falha a recarga); socket aberto', async () => {
+    const { recarga } = await preparar();
+    cli.handle('RemoteStartTransaction', async () => { throw new Error('falha interna'); });
+    await conectar();
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('erro');
+    expect(cmd(comando.id).erro).toBeTruthy();
+    expect(rec(recarga.id).status).toBe('failed');
+    expect(cli.state).toBe(ABERTO);
+  });
+
+  it('RS-05 payload invalido no strict mode -> erro sem chegar ao carregador', async () => {
+    await preparar();
+    let n = 0;
+    cli.handle('ChangeAvailability', async () => { n++; return { status: 'Accepted' }; });
+    await conectar();
+    const { comando } = await c.repo.enfileirarComando({
+      carregador_id: c.repo.carregadores[0]!.id, acao: 'ChangeAvailability', payload: { connectorId: 'x' },
+    });
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('erro');
+    expect(n).toBe(0);
+  });
+});
+
+describe('ST - pre-condicoes do RemoteStart', () => {
+  it('ST-03 conector bloqueado_ate_reset: RemoteStart rejeitado sem envio; Reset Hard aceito + novo Boot + Available libera o proximo', async () => {
+    const { recarga } = await preparar();
+    const recebidos: unknown[] = [];
+    cli.handle('RemoteStartTransaction', async ({ params }) => { recebidos.push(params); return { status: 'Accepted' }; });
+    cli.handle('Reset', async () => ({ status: 'Accepted' }));
+    await conectar('Faulted', 'GroundFailure');
+    expect(c.repo.conectores[0]!.bloqueado_ate_reset).toBe(true);
+
+    const a = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(a.comando.id).status).toBe('rejeitado');
+    expect(cmd(a.comando.id).erro).toMatch(/bloquead/i);
+    expect(recebidos).toEqual([]);
+    expect(rec(recarga.id).status).toBe('failed');
+
+    const reset = await c.repo.enfileirarComando({
+      carregador_id: c.repo.carregadores[0]!.id, acao: 'Reset', payload: { type: 'Hard' },
+    });
+    await fila.processar();
+    expect(cmd(reset.comando.id).status).toBe('aceito');
+    expect(c.srv.resetAceito.has('CP-1')).toBe(true);
+
+    await cli.call('BootNotification', BOOT);
+    await cli.call('StatusNotification', { connectorId: 1, status: 'Available', errorCode: 'NoError' });
+    expect(c.repo.conectores[0]!.bloqueado_ate_reset).toBe(false);
+
+    const tag2 = 'CMDTAG000000000002';
+    const r2 = c.repo.semearRecarga({
+      status: 'paid', valor: 20, tarifa_kwh_aplicada: 2, ocpp_id_tag: tag2, eletroposto_id: c.repo.carregadores[0]!.eletroposto_id,
+    });
+    c.repo.semearIdTag({ id_tag: tag2, recarga_id: r2.id });
+    const b = await startCmd(r2.id, tag2);
+    await fila.processar();
+    expect(cmd(b.comando.id).status).toBe('aceito');
+    expect(recebidos).toEqual([{ connectorId: 1, idTag: tag2 }]);
+  });
+
+  it('ST-04 conector em Charging: RemoteStart rejeitado sem envio', async () => {
+    const { recarga } = await preparar();
+    const recebidos: unknown[] = [];
+    cli.handle('RemoteStartTransaction', async ({ params }) => { recebidos.push(params); return { status: 'Accepted' }; });
+    await conectar('Charging');
+    const { comando } = await startCmd(recarga.id);
+    await fila.processar();
+    expect(cmd(comando.id).status).toBe('rejeitado');
+    expect(cmd(comando.id).erro).toMatch(/Charging/);
+    expect(recebidos).toEqual([]);
+    expect(rec(recarga.id).status).toBe('failed');
+  });
+});
