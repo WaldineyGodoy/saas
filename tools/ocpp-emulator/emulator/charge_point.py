@@ -301,6 +301,12 @@ class VirtualChargePoint(ChargePoint):
             await asyncio.sleep(self.heartbeat_interval_s)
             await self.heartbeat()
 
+    def stop_heartbeat(self) -> None:
+        """Para o Heartbeat periodico desta conexao, sem fechar o socket (CP-05:
+        carregador mudo). A proxima conexao volta a ter Heartbeat."""
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+
     async def _drop_later(self) -> None:
         await asyncio.sleep(self.faults.drop_connection_after_s)
         await self.drop_connection(self.faults.offline_for_s)

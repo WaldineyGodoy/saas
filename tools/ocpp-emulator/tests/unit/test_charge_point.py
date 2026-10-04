@@ -556,3 +556,15 @@ async def test_enter_charging_invalid_transition_leaves_no_meter_task(make_rig):
     await rig.cp._enter_charging(c)
     assert c.meter_task is None and not c.in_transaction
     assert rig.cp.erros
+
+
+async def test_stop_heartbeat_silences_periodic_heartbeat_keeping_socket(make_rig):
+    # CP-05: carregador mudo (sem Heartbeat) com a conexao aberta
+    rig = make_rig()
+    await rig.connect()
+    task = rig.cp._heartbeat_task
+    assert task is not None and not task.done()
+    rig.cp.stop_heartbeat()
+    assert await settle(task.done)
+    assert rig.cp.connected
+    assert rig.conn.calls("Heartbeat") == []
