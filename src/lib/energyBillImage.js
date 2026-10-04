@@ -1,3 +1,4 @@
+import { PDFDocument } from 'pdf-lib';
 import { supabase } from './supabase';
 import { completarLeitura } from './energyBillParser';
 
@@ -38,4 +39,18 @@ export const parseEnergyBillImage = async (arquivo, ucsDoCadastro = null) => {
     }
 
     return completarLeitura(data.dados, ucsDoCadastro);
+};
+
+const LARGURA_A4 = 595; // pt
+
+// A conta da concessionária é guardada e reaproveitada como PDF (carimbo,
+// PDF combinado com o boleto). A foto vira um PDF de uma página na largura A4.
+export const fotoParaPdf = async (arquivo) => {
+    const dataUrl = await reduzirFoto(arquivo);
+    const pdf = await PDFDocument.create();
+    const jpg = await pdf.embedJpg(dataUrl);
+    const { width, height } = jpg.scale(LARGURA_A4 / jpg.width);
+    pdf.addPage([width, height]).drawImage(jpg, { x: 0, y: 0, width, height });
+    const nome = arquivo.name.replace(/\.[^.]+$/, '') + '.pdf';
+    return new File([await pdf.save()], nome, { type: 'application/pdf' });
 };

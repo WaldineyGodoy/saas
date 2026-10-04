@@ -7,6 +7,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Explicitly load the worker for pdfjs
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { parseEnergyBill } from '../lib/energyBillParser';
+import { parseEnergyBillImage, fotoParaPdf } from '../lib/energyBillImage';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initialFile = null }) {
@@ -42,13 +44,46 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
         const selectedFile = e.target.files[0];
         if (!selectedFile) return;
 
+        if (selectedFile.type.startsWith('image/')) {
+            await processarFoto(selectedFile);
+            return;
+        }
+
         if (selectedFile.type !== 'application/pdf') {
-            showAlert('Por favor, selecione um arquivo PDF.', 'error');
+            showAlert('Selecione o PDF ou uma foto da conta.', 'error');
             return;
         }
 
         setFile(selectedFile);
         await processPDF(selectedFile);
+    };
+
+    const ucsDoCadastro = [uc?.numero_uc, uc?.numero_uc_anterior];
+
+    const aplicarLeitura = (data) => {
+        setExtractedData(data);
+        if (!data.numeroUc) {
+            setExtractionStatus('error');
+        } else if (!data.isUcMatch) {
+            setExtractionStatus('mismatch');
+        } else {
+            setExtractionStatus('success');
+        }
+    };
+
+    // Conta física fotografada: lida pela Edge Function e guardada como PDF de uma página
+    const processarFoto = async (foto) => {
+        setFile(null);
+        setExtractionStatus('extracting');
+        try {
+            const [data, pdf] = await Promise.all([parseEnergyBillImage(foto, ucsDoCadastro), fotoParaPdf(foto)]);
+            setFile(pdf);
+            aplicarLeitura(data);
+        } catch (error) {
+            console.error('Erro ao ler foto:', error);
+            setExtractionStatus('idle');
+            showAlert(error.message || 'Falha ao ler a foto da conta.', 'error');
+        }
     };
 
     React.useEffect(() => {
@@ -60,16 +95,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
     const processPDF = async (pdfFile) => {
         setExtractionStatus('extracting');
         try {
-            const data = await parseEnergyBill(pdfFile, [uc?.numero_uc, uc?.numero_uc_anterior]);
-            setExtractedData(data);
-
-            if (!data.numeroUc) {
-                setExtractionStatus('error');
-            } else if (!data.isUcMatch) {
-                setExtractionStatus('mismatch');
-            } else {
-                setExtractionStatus('success');
-            }
+            aplicarLeitura(await parseEnergyBill(pdfFile, ucsDoCadastro));
         } catch (error) {
             console.error('Erro ao ler PDF:', error);
             setExtractionStatus('error');
@@ -277,7 +303,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
                     >
                         <input 
                             type="file" 
-                            accept="application/pdf" 
+                            accept="application/pdf,image/*" 
                             ref={fileInputRef} 
                             style={{ display: 'none' }} 
                             onChange={handleFileChange}
@@ -291,8 +317,8 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                                 <Upload size={32} color="#94a3b8" />
-                                <span style={{ fontWeight: 600, color: '#475569' }}>Selecionar PDF da Conta Concessionária</span>
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Extração automática de consumo e valores</span>
+                                <span style={{ fontWeight: 600, color: '#475569' }}>Selecionar PDF ou foto da conta</span>
+                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Extração automática de consumo e valores (foto: leitura por IA)</span>
                             </div>
                         )}
                     </div>
@@ -310,16 +336,16 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
                                     <><CheckCircle size={16} color="#22c55e" /><span style={{ color: '#166534', fontWeight: 600, fontSize: '0.9rem' }}>Dados extraídos com sucesso</span></>
                                 )}
                                 {extractionStatus === 'mismatch' && (
-                                    <><AlertTriangle size={16} color="#eab308" /><span style={{ color: '#854d0e', fontWeight: 600, fontSize: '0.9rem' }}>Aviso: A UC do PDF difere desta UC</span></>
+                                    <><AlertTriangle size={16} color="#eab308" /><span style={{ color: '#854d0e', fontWeight: 600, fontSize: '0.9rem' }}>Aviso: a UC da conta difere desta UC</span></>
                                 )}
                                 {extractionStatus === 'error' && (
-                                    <><AlertCircle size={16} color="#ef4444" /><span style={{ color: '#991b1b', fontWeight: 600, fontSize: '0.9rem' }}>Falha ao extrair do PDF. Verifique abaixo.</span></>
+                                    <><AlertCircle size={16} color="#ef4444" /><span style={{ color: '#991b1b', fontWeight: 600, fontSize: '0.9rem' }}>Falha ao extrair da conta. Verifique abaixo.</span></>
                                 )}
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div style={{ gridColumn: '1 / -1', background: extractionStatus === 'mismatch' ? '#fefce8' : 'transparent', padding: extractionStatus === 'mismatch' ? '0.5rem' : 0, borderRadius: '6px' }}>
-                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>UC no PDF</label>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>UC na conta</label>
                                     <div style={{ fontWeight: 600, color: extractionStatus === 'mismatch' ? '#a16207' : '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         {extractedData.numeroUc || '-'}
                                         {extractionStatus === 'mismatch' && <span style={{ fontSize: '0.7rem', background: '#fef08a', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>Confi: {uc.numero_uc}</span>}
