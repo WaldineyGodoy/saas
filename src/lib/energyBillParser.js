@@ -94,12 +94,35 @@ export const completarLeitura = (lido, ucsDoCadastro = null) => {
     };
 };
 
+// Só o que serve para cadastrar a UC (vai para leads.conta_lida). Fica de fora
+// o que é da fatura do mês: linha digitável, PIX, carimbo, conferência de UC.
+const CAMPOS_PEDIDO = [
+    'numeroUc', 'numeroUcNovo', 'codigoCliente', 'codigoInstalacao', 'titular', 'documentoTipo', 'documento',
+    'endereco', 'classificacao', 'tipoFornecimento', 'ligacao', 'mediaKwh', 'historico', 'mesReferencia',
+    'consumoKwh', 'valorTotal', 'concessionaria',
+];
+export const contaParaPedido = (leitura) => ({
+    concessionaria: 'Neoenergia Cosern', // os dois leitores só conhecem a Cosern
+    ...Object.fromEntries(CAMPOS_PEDIDO
+        .filter(c => leitura?.[c] !== undefined && leitura[c] !== null && leitura[c] !== '')
+        .map(c => [c, leitura[c]])),
+});
+
+// A conta traz o número colado no logradouro ("AV JOSE PEREIRA DE ARAUJO 209").
+// Sem número no fim (ex.: "RO BR 101 4224 CD- BOMBA"), devolve tudo como rua.
+export const separarNumero = (logradouro) => {
+    const m = String(logradouro || '').trim().match(/^(.*\D)[\s,]+(\d+[A-Z]?)$/);
+    return m ? { rua: m[1].trim(), numero: m[2] } : { rua: String(logradouro || '').trim(), numero: '' };
+};
+
 // Parser central de faturas da Neoenergia Cosern (usando pdfjs).
 // ucsDoCadastro: numero_uc e/ou numero_uc_anterior da UC esperada (string ou array).
 export const parseEnergyBill = async (pdfFile, ucsDoCadastro = null) => {
-    const pdfjsLib = window.pdfjsLib;
-    if (!pdfjsLib) {
-        throw new Error("pdfjsLib não está disponível no window.");
+    // Ninguém definia window.pdfjsLib: a leitura de PDF caía sempre aqui.
+    // Import dinâmico para os testes (Node) não carregarem o pdfjs do navegador.
+    const pdfjsLib = await import('pdfjs-dist');
+    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.mjs?url')).default;
     }
 
     const arrayBuffer = await pdfFile.arrayBuffer();

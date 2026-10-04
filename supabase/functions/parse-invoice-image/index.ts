@@ -3,16 +3,19 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { requireUser } from '../_shared/auth.ts'
 
 /**
- * Leitura de FOTO de conta de luz (conta física fotografada pelo celular).
+ * Leitura de conta de luz: FOTO (conta física fotografada) ou PDF.
  *
  * POST { imageBase64, mediaType? }   (exige sessão de usuário)
- *   200 { ok: true, dados, modelo }   mesmos nomes de campo de src/lib/energyBillParser.js
- *   400 entrada | 401/403 portão | 422 foto ilegível | 500 configuração | 502 falha na leitura
+ *   mediaType: image/jpeg | image/png | image/webp | application/pdf
+ *   200 { ok: true, dados, modelo }   mesmo formato de completarLeitura (src/lib/energyBillParser.js)
+ *   400 entrada | 401/403 portão | 422 conta ilegível | 500 configuração | 502 falha na leitura
  *
- * PDF continua no parser por texto (pdfjs), que é exato e não custa nada.
- * Foto não tem camada de texto, e as fotos reais vêm tortas, dobradas e com
- * pouca luz; por isso a leitura é feita por um modelo com visão, via
- * OpenRouter, com saída presa a um JSON Schema.
+ * No CRM web o PDF é lido no navegador (pdfjs), exato e sem custo. O app
+ * mobile não roda pdfjs, então manda o PDF para cá: o OpenRouter extrai o
+ * texto com o conversor gratuito (file-parser cloudflare-ai) e o modelo
+ * transcreve. Foto não tem camada de texto, e as fotos reais vêm tortas,
+ * dobradas e com pouca luz; por isso a leitura é feita por um modelo com
+ * visão. Nos dois casos a saída é presa a um JSON Schema.
  *
  * Segredos:
  *   OPENROUTER_API_KEY  chave do OpenRouter
@@ -22,7 +25,8 @@ import { requireUser } from '../_shared/auth.ts'
  */
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-const TIPOS_ACEITOS = ['image/jpeg', 'image/png', 'image/webp']
+const TIPOS_IMAGEM = ['image/jpeg', 'image/png', 'image/webp']
+const TIPO_PDF = 'application/pdf'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -60,7 +64,7 @@ const ESQUEMA = objeto({
     historico: { type: 'array', items: objeto({ mes: texto, kwh: numero, dias: numero }) },
 })
 
-const INSTRUCOES = `Você lê fotos de contas de energia da Neoenergia Cosern (Rio Grande do Norte) e transcreve os campos para o JSON pedido.
+const INSTRUCOES = `Você lê contas de energia (foto ou PDF) da Neoenergia Cosern (Rio Grande do Norte) e transcreve os campos para o JSON pedido.
 
 Regras:
 - Transcreva só o que está impresso. Campo que não aparece ou que você não consegue ler com segurança fica como "" (texto) ou 0 (número). Não deduza dígitos borrados, cortados ou cobertos: um número de UC errado associa a conta ao cliente errado.
@@ -71,7 +75,31 @@ Regras:
 - mesReferencia no formato MM/AAAA. vencimento e dataLeitura (leitura atual) no formato AAAA-MM-DD.
 - Valores em reais e kWh como número (2.541,09 vira 2541.09). consumoKwh é a quantidade da linha Consumo-TE. consumoCompensado é a soma das linhas de compensação (G1Comp/G2Comp ... -TE); 0 se não houver. cipValor é "Ilum. Púb. Municipal".
 - historico: cada linha do quadro "CONSUMO FATURADO" com mes no formato AAAA-MM, kwh e dias. Inclua meses com 0 se o 0 estiver impresso; omita meses em branco.
-- legivel: false se a imagem não for uma conta de energia ou estiver ilegível demais para identificar a UC. Use observacoes para avisar, em uma frase, sobre partes que não deu para ler.`
+- legivel: false se o arquivo não for uma conta de energia ou estiver ilegível demais para identificar a UC. Use observacoes para avisar, em uma frase, sobre partes que não deu para ler.`
+
+// Campos derivados, iguais a completarLeitura (src/lib/energyBillParser.js),
+// para o app mobile receber a leitura pronta. O CRM web reaplica a função dele
+// sobre este resultado; como os derivados saem dos mesmos campos, dá o mesmo.
+const ligacaoDoFornecimento = (tipo: string) =>
+    /mono/i.test(tipo) ? 'monofasico' : /bif/i.test(tipo) ? 'bifasico' : /trif/i.test(tipo) ? 'trifasico' : ''
+
+// deno-lint-ignore no-explicit-any
+const completarLeitura = (lido: any) => {
+    const historico: { kwh: number }[] = lido.historico || []
+    const comConsumo = historico.filter((h) => h.kwh > 0)
+    const end = lido.endereco
+    return {
+        ...lido,
+        concessionaria: 'Neoenergia Cosern',
+        numeroUc: lido.numeroUcNovo || lido.codigoCliente || lido.codigoInstalacao || '',
+        endereco: end ? {
+            ...end,
+            completo: [end.logradouro, end.complemento, end.bairro, [end.cep, end.cidade, end.uf].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+        } : null,
+        ligacao: ligacaoDoFornecimento(lido.tipoFornecimento || ''),
+        mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
+    }
+}
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -91,15 +119,16 @@ Deno.serve(async (req) => {
 
     if (imageBase64.includes(',')) imageBase64 = imageBase64.split(',')[1]
     if (!imageBase64) return json({ ok: false, error: 'imageBase64 é obrigatório.' }, 400)
-    if (!TIPOS_ACEITOS.includes(mediaType)) return json({ ok: false, error: `Tipo de imagem não suportado: ${mediaType}.` }, 400)
-    // ~5 MB de imagem; o front já reduz a foto antes de enviar
-    if (imageBase64.length > 7_000_000) return json({ ok: false, error: 'Imagem grande demais. Envie uma foto menor.' }, 400)
+    const ehPdf = mediaType === TIPO_PDF
+    if (!ehPdf && !TIPOS_IMAGEM.includes(mediaType)) return json({ ok: false, error: `Tipo de arquivo não suportado: ${mediaType}.` }, 400)
+    // ~5 MB; o front já reduz a foto antes de enviar, e a conta em PDF tem ~70 KB
+    if (imageBase64.length > 7_000_000) return json({ ok: false, error: 'Arquivo grande demais. Envie uma foto menor.' }, 400)
 
     const apiKey = Deno.env.get('OPENROUTER_API_KEY')
     const modelo = Deno.env.get('OPENROUTER_MODEL')
     if (!apiKey || !modelo) {
         console.error('parse-invoice-image: OPENROUTER_API_KEY ou OPENROUTER_MODEL ausente')
-        return json({ ok: false, error: 'Leitura de foto não configurada.' }, 500)
+        return json({ ok: false, error: 'Leitura de conta não configurada.' }, 500)
     }
 
     let resposta: Response
@@ -125,12 +154,17 @@ Deno.serve(async (req) => {
                 // Só roteia para provedores que respeitam o response_format;
                 // sem isso um provedor pode ignorar o schema e devolver texto livre.
                 provider: { require_parameters: true },
+                // PDF: o conversor gratuito do OpenRouter tira o texto da conta
+                // (as da Cosern têm camada de texto) antes de chegar ao modelo.
+                ...(ehPdf ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] } : {}),
                 messages: [
                     { role: 'system', content: INSTRUCOES },
                     {
                         role: 'user',
                         content: [
-                            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+                            ehPdf
+                                ? { type: 'file', file: { filename: 'conta.pdf', file_data: `data:${TIPO_PDF};base64,${imageBase64}` } }
+                                : { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
                             { type: 'text', text: 'Transcreva esta conta de energia.' },
                         ],
                     },
@@ -165,9 +199,9 @@ Deno.serve(async (req) => {
     }
 
     if (!dados.legivel) {
-        return json({ ok: false, error: dados.observacoes || 'Foto ilegível. Tire outra com boa luz, a conta inteira e sem dobras.' }, 422)
+        return json({ ok: false, error: dados.observacoes || (ehPdf ? 'Não foi possível ler este PDF de conta de energia.' : 'Foto ilegível. Tire outra com boa luz, a conta inteira e sem dobras.') }, 422)
     }
 
     // corpo.model é o modelo que de fato respondeu (útil quando OPENROUTER_MODEL é um preset)
-    return json({ ok: true, dados, modelo: corpo.model })
+    return json({ ok: true, dados: completarLeitura(dados), modelo: corpo.model })
 })

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { textoDosItens, parseEnergyBillText, normalizarUc, ucConfere, completarLeitura } from '../src/lib/energyBillParser.js';
+import { textoDosItens, parseEnergyBillText, normalizarUc, ucConfere, completarLeitura, contaParaPedido, separarNumero } from '../src/lib/energyBillParser.js';
 
 // As contas reais (PDF) não vão para o git: têm nome, endereço e UC de clientes.
 // Os testes usam o texto que o pdfjs extrai delas (textoDosItens), com os dados
@@ -161,5 +161,25 @@ describe.skipIf(!pdfs.every((nome) => fs.existsSync(fixture(`${nome}.pdf`))))('P
     for (const campo of ['mesReferencia', 'vencimento', 'valorTotal', 'consumoKwh', 'consumoCompensado', 'cipValor', 'historico', 'ligacao', 'documentoTipo']) {
       expect(doPdf[campo], campo).toEqual(daFixture[campo]);
     }
+  });
+});
+
+describe('pedido de nova UC (leads.conta_lida)', () => {
+  test('guarda só os campos de cadastro, sem dados de pagamento', () => {
+    const r = contaParaPedido(parseEnergyBillText(lerFixture('cosern-layout-antigo-2026-05.txt')));
+    expect(r.numeroUc).toBe('7000000001');
+    expect(r.ligacao).toBe('monofasico');
+    expect(r.mediaKwh).toBeGreaterThan(0);
+    expect(r.concessionaria).toBe('Neoenergia Cosern');
+    expect(r).not.toHaveProperty('linhaDigitavel');
+    expect(r).not.toHaveProperty('pixString');
+    expect(r).not.toHaveProperty('isUcMatch');
+  });
+
+  test('separa o número do logradouro só quando ele está no fim', () => {
+    expect(separarNumero('AV JOSE PEREIRA DE ARAUJO 209')).toEqual({ rua: 'AV JOSE PEREIRA DE ARAUJO', numero: '209' });
+    expect(separarNumero('RUA DAS FLORES 100')).toEqual({ rua: 'RUA DAS FLORES', numero: '100' });
+    expect(separarNumero('RODOVIA EXEMPLO 1000 CD- A')).toEqual({ rua: 'RODOVIA EXEMPLO 1000 CD- A', numero: '' });
+    expect(separarNumero('')).toEqual({ rua: '', numero: '' });
   });
 });
