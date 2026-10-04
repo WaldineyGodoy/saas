@@ -8,7 +8,8 @@
     "build": "vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\"",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:ocpp": "node scripts/ocpp-local/test-ocpp.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,0 +1,44 @@
+# Ambiente LOCAL de testes do OCPP (Tarefa 10, L3b). Nao e o deploy de producao.
+#
+# Pre-requisito: Supabase local de pe (npm run test:ocpp sobe tudo). Variaveis vindas do ambiente
+# (o script le de `npx supabase status -o env`; nunca gravar em arquivo):
+#   SUPABASE_SERVICE_ROLE_KEY  chave service role do Supabase LOCAL (sem ela CSMS e stub recusam subir)
+#
+#   docker compose -f docker-compose.ocpp.yml up -d --build csms
+#
+# O CSMS roda a imagem de producao (services/ocpp-csms/Dockerfile) sem alteracao. So o SUPABASE_URL
+# dele aponta para o `estorno-stub`, que repassa tudo ao Supabase local e substitui apenas a Edge
+# Function refund-charging (a real chama a Stripe, que nao existe aqui). Ver scripts/ocpp-local/estorno-stub.mjs.
+name: b2w-ocpp-local
+
+services:
+  csms:
+    build: ./services/ocpp-csms
+    image: b2w-ocpp-csms:local
+    depends_on:
+      - estorno-stub
+    environment:
+      PORT: "9220"
+      OCPP_AUTH: basic
+      CONNECTION_TIMEOUT_S: "5"
+      CALL_TIMEOUT_S: "12"
+      OFFLINE_CHECK_S: "1"
+      SUPABASE_URL: http://estorno-stub:8080
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    ports:
+      - "127.0.0.1:9220:9220"
+
+  # SOMENTE TESTE: substituto da refund-charging + repasse ao Supabase local
+  estorno-stub:
+    image: node:22-slim
+    command: ["node", "/stub/estorno-stub.mjs"]
+    volumes:
+      - ./scripts/ocpp-local/estorno-stub.mjs:/stub/estorno-stub.mjs:ro
+    environment:
+      PORT: "8080"
+      UPSTREAM_URL: ${OCPP_SUPABASE_UPSTREAM:-http://host.docker.internal:54321}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:54398:8080"
