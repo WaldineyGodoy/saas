@@ -25,7 +25,7 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
         energiaInjetada: '',
         cipValor: '',
         outrosLancamentos: '',
-        codigoCliente: '',
+        numeroUc: '',
         stampCoords: null // x, y for "Informações Importantes"
     });
 
@@ -60,10 +60,10 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
     const processPDF = async (pdfFile) => {
         setExtractionStatus('extracting');
         try {
-            const data = await parseEnergyBill(pdfFile, uc?.numero_uc);
+            const data = await parseEnergyBill(pdfFile, [uc?.numero_uc, uc?.numero_uc_anterior]);
             setExtractedData(data);
 
-            if (!data.codigoCliente) {
+            if (!data.numeroUc) {
                 setExtractionStatus('error');
             } else if (!data.isUcMatch) {
                 setExtractionStatus('mismatch');
@@ -319,9 +319,9 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div style={{ gridColumn: '1 / -1', background: extractionStatus === 'mismatch' ? '#fefce8' : 'transparent', padding: extractionStatus === 'mismatch' ? '0.5rem' : 0, borderRadius: '6px' }}>
-                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>Código do Cliente (UC no PDF)</label>
+                                    <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.2rem' }}>UC no PDF</label>
                                     <div style={{ fontWeight: 600, color: extractionStatus === 'mismatch' ? '#a16207' : '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        {extractedData.codigoCliente || '-'}
+                                        {extractedData.numeroUc || '-'}
                                         {extractionStatus === 'mismatch' && <span style={{ fontSize: '0.7rem', background: '#fef08a', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>Confi: {uc.numero_uc}</span>}
                                     </div>
                                 </div>

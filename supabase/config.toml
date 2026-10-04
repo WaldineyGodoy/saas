@@ -89,3 +89,8 @@ verify_jwt = true
 # requireAdmin fica dentro da funcao, verify_jwt sozinho nao basta.
 [functions.convidar-app]
 verify_jwt = true
+
+# Leitura de foto de conta de luz via OpenRouter (modelo com visao). Exige sessao real
+# (requireUser dentro da funcao): cada chamada custa uma requisicao na API.
+[functions.parse-invoice-image]
+verify_jwt = true

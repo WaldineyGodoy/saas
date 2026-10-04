@@ -6,8 +6,97 @@ const parseValue = (raw) => {
     return parseFloat(raw);
 };
 
-// Parser central de faturas da Neoenergia Cosern (usando pdfjs)
-export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
+const MESES = { 'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN': '06', 'JUL': '07', 'AGO': '08', 'SET': '09', 'OUT': '10', 'NOV': '11', 'DEZ': '12' };
+
+// Monta o texto de uma página do pdfjs preservando as quebras de linha.
+// As quebras importam para separar nome, documento e as linhas do endereço.
+export const textoDosItens = (items) => items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('');
+
+// Compara identificadores de UC ignorando pontuação e zeros à esquerda:
+// "1.979.118.032-02" vira "197911803202" e "007030839166" vira "7030839166".
+export const normalizarUc = (valor) => String(valor ?? '').replace(/\D/g, '').replace(/^0+/, '');
+
+// A Cosern migrou para o número de UC padrão Aneel. Uma conta pode trazer o
+// número novo, o código do cliente antigo ou os dois, e o cadastro pode ter
+// qualquer um deles em numero_uc ou numero_uc_anterior.
+export const ucConfere = (identificadoresDaConta, identificadoresDoCadastro) => {
+    const daConta = identificadoresDaConta.map(normalizarUc).filter(Boolean);
+    const doCadastro = identificadoresDoCadastro.map(normalizarUc).filter(Boolean);
+    return daConta.some(id => doCadastro.includes(id));
+};
+
+const extrairEndereco = (linhasEndereco) => {
+    const linhas = linhasEndereco.map(l => l.trim()).filter(Boolean);
+    if (linhas.length === 0) return null;
+
+    const endereco = { completo: linhas.join(', '), logradouro: '', complemento: '', bairro: '', cep: '', cidade: '', uf: '' };
+
+    const ultima = linhas[linhas.length - 1].match(/^(\d{5}-\d{3})\s+(.+?)\s+([A-Z]{2})$/);
+    let resto = linhas;
+    if (ultima) {
+        endereco.cep = ultima[1];
+        endereco.cidade = ultima[2];
+        endereco.uf = ultima[3];
+        resto = linhas.slice(0, -1);
+    }
+
+    const idxBairro = resto.findIndex(l => /\/\s*AREA\s+(?:URBANA|RURAL)/i.test(l));
+    if (idxBairro >= 0) {
+        endereco.bairro = resto[idxBairro].split('/')[0].trim();
+        resto = resto.filter((_, i) => i !== idxBairro);
+    }
+
+    endereco.logradouro = resto[0] || '';
+    endereco.complemento = resto.slice(1).join(', ');
+    return endereco;
+};
+
+// Histórico "CONSUMO FATURADO": linhas "MAI26 166 29". No layout novo os meses
+// anteriores à troca de titularidade vêm sem valores e ficam de fora.
+const extrairHistorico = (texto) => {
+    const inicio = texto.search(/CONSUMO FATURADO/i);
+    if (inicio < 0) return [];
+    const fim = texto.slice(inicio).search(/MEDIDOR/i);
+    const bloco = texto.slice(inicio, fim > 0 ? inicio + fim : inicio + 800);
+
+    const historico = [];
+    for (const m of bloco.matchAll(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s?(\d{2})[ \t]+(\d+)[ \t]+(\d+)/gi)) {
+        historico.push({ mes: `20${m[2]}-${MESES[m[1].toUpperCase()]}`, kwh: parseInt(m[3], 10), dias: parseInt(m[4], 10) });
+    }
+    return historico;
+};
+
+const ligacaoDoFornecimento = (tipo) => {
+    if (/mono/i.test(tipo)) return 'monofasico';
+    if (/bif/i.test(tipo)) return 'bifasico';
+    if (/trif/i.test(tipo)) return 'trifasico';
+    return '';
+};
+
+// Deriva os campos calculados a partir dos campos lidos, para a leitura de foto
+// (parse-invoice-image) devolver o mesmo formato que a leitura de PDF.
+export const completarLeitura = (lido, ucsDoCadastro = null) => {
+    const historico = lido.historico || [];
+    const comConsumo = historico.filter(h => h.kwh > 0);
+    const end = lido.endereco;
+    const alvos = (Array.isArray(ucsDoCadastro) ? ucsDoCadastro : [ucsDoCadastro]).filter(Boolean);
+    const ids = [lido.numeroUcNovo, lido.codigoCliente, lido.codigoInstalacao];
+    return {
+        ...lido,
+        numeroUc: lido.numeroUcNovo || lido.codigoCliente || lido.codigoInstalacao || '',
+        endereco: end ? {
+            ...end,
+            completo: [end.logradouro, end.complemento, end.bairro, [end.cep, end.cidade, end.uf].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+        } : null,
+        ligacao: ligacaoDoFornecimento(lido.tipoFornecimento || ''),
+        mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
+        isUcMatch: alvos.length > 0 ? ucConfere(ids, alvos) : true,
+    };
+};
+
+// Parser central de faturas da Neoenergia Cosern (usando pdfjs).
+// ucsDoCadastro: numero_uc e/ou numero_uc_anterior da UC esperada (string ou array).
+export const parseEnergyBill = async (pdfFile, ucsDoCadastro = null) => {
     const pdfjsLib = window.pdfjsLib;
     if (!pdfjsLib) {
         throw new Error("pdfjsLib não está disponível no window.");
@@ -34,17 +123,36 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
             }
         }
 
-        const pageText = textContent.items.map(item => item.str).join(' ');
-        fullText += pageText + ' ';
+        fullText += textoDosItens(textContent.items) + '\n';
     }
 
+    return { ...parseEnergyBillText(fullText, ucsDoCadastro), stampCoords };
+};
+
+// Extração a partir do texto já lido do PDF. Separada do pdfjs para ser testável.
+export const parseEnergyBillText = (fullText, ucsDoCadastro = null) => {
     // Neoenergia Patterns
     const cleanText = fullText.replace(/\s+/g, ' '); // normalize spaces
-    console.log("PDF TEXT (DEBUG):", cleanText);
+    const linhasText = fullText.replace(/[ \t]+/g, ' '); // mantém as quebras de linha
 
-    const ucMatch = cleanText.match(/(?:Conta Contrato|C[óo]digo do Cliente|Instala[çc][ãa]o)[:\s]*(\d{9,11})/i) ||
-                    cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
-                    cleanText.match(/(\d{10})/); // Fallback to any 10 digit number
+    // Identificação da UC. Layout novo (padrão Aneel, 2026): "NÚMERO DA UNIDADE
+    // CONSUMIDORA 1.979.118.032-02", e o código antigo vira "CÓDIGO DÉBITO EM CONTA".
+    // Layout antigo: "CÓDIGO DA INSTALAÇÃO" + "CÓDIGO DO CLIENTE".
+    // Sem fallback para "qualquer número": ele pegava o protocolo de autorização.
+    const numeroUcNovoMatch = cleanText.match(/N[ÚU]MERO DA UNIDADE CONSUMIDORA[:\s]*(\d{1,3}(?:\.\d{3})+-\d{2}|\d{11,15})/i);
+    const codigoClienteMatch = cleanText.match(/(?:C[ÓO]DIGO DO CLIENTE|C[ÓO]DIGO D[ÉE]BITO EM CONTA|Conta Contrato)[:\s]*(\d{8,12})/i);
+    const codigoInstalacaoMatch = cleanText.match(/C[ÓO]DIGO DA INSTALA[ÇC][ÃA]O[:\s]*(\d{5,12})/i);
+
+    const numeroUcNovo = numeroUcNovoMatch ? numeroUcNovoMatch[1] : '';
+    const codigoCliente = codigoClienteMatch ? codigoClienteMatch[1] : '';
+    const codigoInstalacao = codigoInstalacaoMatch ? codigoInstalacaoMatch[1] : '';
+
+    // Titular, documento e endereço (mesmos rótulos nos dois layouts)
+    const titularMatch = linhasText.match(/NOME DO CLIENTE:\s*([^\n]+?)\s*\n/i);
+    const documentoMatch = linhasText.match(/NOME DO CLIENTE:[\s\S]*?\b(CPF|CNPJ):\s*([\d.*\/-]+)/i);
+    const enderecoMatch = linhasText.match(/ENDERE[ÇC]O:\s*\n([\s\S]*?)\n\s*(?:N[ÚU]MERO DA UNIDADE|C[ÓO]DIGO DA INSTALA|C[ÓO]DIGO DO CLIENTE)/i);
+    const classificacaoMatch = cleanText.match(/CLASSIFICA[ÇC][ÃA]O:\s*(.+?)\s+TIPO DE FORNECIMENTO/i);
+    const fornecimentoMatch = cleanText.match(/TIPO DE FORNECIMENTO:\s*(.+?)\s+NOME DO CLIENTE/i);
 
     // Month Format: REF:MÊS/ANO 03/2026 or Mês de Referência 03/2026
     const explicitRefMatch = cleanText.match(/(?:REF[:\s]*M[EÊ]S.*?ANO|M[eê]s(?:\s*de)?\s*Refer[eê]ncia)[^\d]*(0[1-9]|1[0-2])\/(20\d{2})/i) ||
@@ -60,8 +168,8 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
                              cleanText.match(/(?:Energia Ativa.*?TE|TE\s*-\s*Energia|Consumo.*?TE|Energia Ativa).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
     
     // Consumo Compensado -> Format 'G2Comp.oUC-nM-TE kWh 3.230,00-'
-    const compensadoMatch = cleanText.match(/Comp.*?oUC.*?(?:TE|TUSD).*?kWh\s*([\d.]+(?:,\d+)?)/i) ||
-                            cleanText.match(/(?:Energia.*?Compensada|Compensada).*?(?:kWh|\s)\s*([\d.]+(?:,\d+)?)/i);
+    const compensadoMatch = cleanText.match(/G\dComp\.[mo]UC-\w+-(?:TE|TUSD)\s+kWh\s+([\d.]+(?:,\d+)?)/) ||
+                            cleanText.match(/Energia compensada total\s*=\s*([\d.]+(?:,\d+)?)/i);
 
     // CIP -> Format 'Ilum. Púb. Municipal 360,58'
     const cipMatch = cleanText.match(/(?:Ilum\.?\s*P[uú]b\.?\s*Municipal|CONTR\.? ILUM\.? PUB\.?|COSIP|CIP-MUNICIP\.)[^\d]*([\d.]+(?:,\d{2}))/i);
@@ -79,8 +187,9 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
         });
     }
 
-    const parsedUc = ucMatch ? ucMatch[1] : '';
-    const isUcMatch = targetUcNumber ? parsedUc === targetUcNumber : true;
+    const numeroUc = numeroUcNovo || codigoCliente || codigoInstalacao;
+    const alvos = (Array.isArray(ucsDoCadastro) ? ucsDoCadastro : [ucsDoCadastro]).filter(Boolean);
+    const isUcMatch = alvos.length > 0 ? ucConfere([numeroUcNovo, codigoCliente, codigoInstalacao], alvos) : true;
 
     let extractedMesRef = '';
     if (explicitRefMatch) {
@@ -92,9 +201,8 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
     if (extractedMesRef && extractedMesRef.includes('/')) {
         // normalize e.g. 03/2026 or MAR/2026
         const parts = extractedMesRef.split('/');
-        const months = { 'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN': '06', 'JUL': '07', 'AGO': '08', 'SET': '09', 'OUT': '10', 'NOV': '11', 'DEZ': '12' };
         let mm = parts[0].toUpperCase();
-        mm = months[mm] || mm.padStart(2, '0');
+        mm = MESES[mm] || mm.padStart(2, '0');
         const yyyy = parts[1].length === 2 ? `20${parts[1]}` : parts[1];
         extractedMesRef = `${mm}/${yyyy}`;
     }
@@ -180,8 +288,24 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
     const parsedConsumo = parseValue(consumptionMatch ? consumptionMatch[1] : 0);
     const parsedCompensado = totalCompensado;
 
+    const historico = extrairHistorico(linhasText);
+    const comConsumo = historico.filter(h => h.kwh > 0);
+    const tipoFornecimento = fornecimentoMatch ? fornecimentoMatch[1].trim() : '';
+
     return {
-        codigoCliente: parsedUc,
+        numeroUc,
+        numeroUcNovo,
+        codigoCliente,
+        codigoInstalacao,
+        titular: titularMatch ? titularMatch[1].trim() : '',
+        documentoTipo: documentoMatch ? documentoMatch[1].toUpperCase() : '',
+        documento: documentoMatch ? documentoMatch[2] : '',
+        endereco: enderecoMatch ? extrairEndereco(enderecoMatch[1].split('\n')) : null,
+        classificacao: classificacaoMatch ? classificacaoMatch[1].trim() : '',
+        tipoFornecimento,
+        ligacao: ligacaoDoFornecimento(tipoFornecimento),
+        historico,
+        mediaKwh: comConsumo.length ? Math.round(comConsumo.reduce((s, h) => s + h.kwh, 0) / comConsumo.length) : 0,
         mesReferencia: extractedMesRef,
         vencimento: extractedDueDate,
         dataLeitura: extractedReadDate,
@@ -193,7 +317,6 @@ export const parseEnergyBill = async (pdfFile, targetUcNumber = null) => {
         outrosLancamentos: somaOutros,
         linhaDigitavel: linhaDigitavelText,
         pixString: pixStringText,
-        stampCoords: stampCoords,
         isUcMatch: isUcMatch
     };
 };
