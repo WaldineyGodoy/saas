@@ -303,3 +303,25 @@ describe('Fix round 1', () => {
     expect(recarga(r.id)).toMatchObject({ status: 'starting', ocpp_transacao_id: null, kwh_limite: null });
   });
 });
+
+describe('expira_em do idTag e avaliada no instante do evento', () => {
+  it('StartTransaction enfileirado offline: timestamp anterior a expira_em e Accepted mesmo entregue depois', async () => {
+    const r = await preparar();
+    const agora = Date.now();
+    c.repo.idTags[0]!.expira_em = new Date(agora - 60_000).toISOString();
+    // Authorize e on-line: usa o relogio atual, o tag ja venceu
+    expect((await autorizar()).idTagInfo.status).toBe('Expired');
+    const s = await iniciar(TAG, { timestamp: new Date(agora - 5 * 60_000).toISOString() });
+    expect(s.idTagInfo.status).toBe('Accepted');
+    expect(recarga(r.id)).toMatchObject({ status: 'charging' });
+  });
+
+  it('StartTransaction com timestamp depois de expira_em: Expired e recarga intocada', async () => {
+    const r = await preparar();
+    const agora = Date.now();
+    c.repo.idTags[0]!.expira_em = new Date(agora - 60_000).toISOString();
+    const s = await iniciar(TAG, { timestamp: new Date(agora - 30_000).toISOString() });
+    expect(s.idTagInfo.status).toBe('Expired');
+    expect(recarga(r.id)).toMatchObject({ status: 'starting', ocpp_transacao_id: null });
+  });
+});

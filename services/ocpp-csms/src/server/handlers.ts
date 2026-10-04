@@ -94,11 +94,13 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
     repo.alertar({ carregador_id: carregadorId, connector_id: connectorId, tipo, mensagem, dados });
 
   // Avalia o idTag e a recarga vinculada. `recarga` so vem preenchida quando o status e Accepted.
-  async function avaliarTag(idTag: string): Promise<{ status: StatusIdTag; recarga: Recarga | null }> {
+  // `em`: instante em que a validade (expira_em) e avaliada. Authorize usa agora; StartTransaction usa o
+  // `timestamp` do evento, para que um Start enfileirado offline e entregue depois da expiracao nao volte Expired.
+  async function avaliarTag(idTag: string, em: Date = ctx.agora()): Promise<{ status: StatusIdTag; recarga: Recarga | null }> {
     const tag = await repo.buscarIdTag(idTag);
     if (!tag) return { status: 'Invalid', recarga: null };
     if (tag.status !== 'Accepted') return { status: tag.status, recarga: null };
-    if (tag.expira_em && new Date(tag.expira_em).getTime() <= ctx.agora().getTime()) {
+    if (tag.expira_em && new Date(tag.expira_em).getTime() <= em.getTime()) {
       return { status: 'Expired', recarga: null };
     }
     // em uso por transacao aberta: ConcurrentTx; ja usado e encerrado: Expired
@@ -132,7 +134,7 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
       return { transactionId: existente.id, idTagInfo: { status: existente.recarga_id ? 'Accepted' : 'Invalid' } };
     }
 
-    const { status, recarga } = await avaliarTag(idTag);
+    const { status, recarga } = await avaliarTag(idTag, new Date(params.timestamp));
     const novo = await repo.criarOuObterTransacao(chave, {
       carregador_id: carregadorId, connector_id: params.connectorId, id_tag: idTag,
       meter_start_wh: params.meterStart, inicio_em: inicioEm, recarga_id: recarga?.id ?? null,

@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
-import { comandoInicio, exigirAssinatura, expiraIdTag, gerarIdTag } from "../_shared/recarga.ts"
+import {
+  comandoInicio, exigirAssinatura, expiraIdTag, gerarIdTag, novaExpiracaoDeTagReutilizado, RESERVA_PAGAMENTO_MIN,
+} from "../_shared/recarga.ts"
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || ""
 
@@ -40,6 +42,7 @@ async function garantirComandoInicio(supabase: any, recargaId: string) {
     return data?.[0]?.id_tag ?? null
   }
   let idTag = await lerTag()
+  let tagNovo = false
   if (!idTag) {
     const candidato = gerarIdTag()
     const { error } = await supabase.from("ocpp_id_tags").insert({
@@ -49,11 +52,25 @@ async function garantirComandoInicio(supabase: any, recargaId: string) {
     })
     if (error && error.code !== "23505") throw error
     idTag = error ? await lerTag() : candidato
+    tagNovo = !error
     if (!idTag) throw new Error(`Recarga ${recargaId}: idTag nao encontrado apos conflito.`)
   }
   if (recarga.ocpp_id_tag !== idTag) {
     const { error } = await supabase.from("recargas_eletroposto").update({ ocpp_id_tag: idTag }).eq("id", recargaId)
     if (error) throw error
+  }
+
+  // Tag reutilizado (entrega anterior morreu antes do comando): sem comando start
+  // a validade e renovada, senao o CSMS poderia responder Expired a quem pagou.
+  if (!tagNovo) {
+    const { data: existente, error: eErr } = await supabase
+      .from("ocpp_comandos").select("id").eq("chave_idempotencia", `start:${recargaId}`).maybeSingle()
+    if (eErr) throw eErr
+    const nova = novaExpiracaoDeTagReutilizado(!!existente)
+    if (nova) {
+      const { error } = await supabase.from("ocpp_id_tags").update({ expira_em: nova }).eq("id_tag", idTag)
+      if (error) throw error
+    }
   }
 
   const cmd = comandoInicio(recarga, idTag)
@@ -69,6 +86,25 @@ async function garantirComandoInicio(supabase: any, recargaId: string) {
     { onConflict: "chave_idempotencia", ignoreDuplicates: true },
   )
   if (cErr) throw cErr
+}
+
+// Depois de pago: so inicia se o conector ainda e desta recarga. A reserva de
+// 10 min pode ter vencido e outro motorista reservado/pago o mesmo conector;
+// nesse caso fn_confirmar_inicio marca esta recarga failed com
+// metadata.estorno_total_pendente (o CSMS faz o estorno total) e NENHUM
+// comando start e criado.
+async function iniciarRecarga(supabase: any, recargaId: string) {
+  const { data: veredito, error } = await supabase.rpc("fn_confirmar_inicio", {
+    p_recarga_id: recargaId,
+    p_reserva_min: RESERVA_PAGAMENTO_MIN,
+  })
+  if (error) throw error
+  if (veredito === "conflito") {
+    console.warn(`[stripe-charging-webhook] Recarga ${recargaId}: conector ja reservado por outro; falhou com estorno total pendente.`)
+    return
+  }
+  if (veredito !== "ok") return
+  await garantirComandoInicio(supabase, recargaId)
 }
 
 serve(async (req) => {
@@ -110,7 +146,7 @@ serve(async (req) => {
 
       if (recargaId) {
         console.log(`[stripe-charging-webhook] Recarga ${recargaId} marcada como 'paid'.`)
-        await garantirComandoInicio(supabase, recargaId)
+        await iniciarRecarga(supabase, recargaId)
       } else {
         // Reenvio. Se a 1a entrega morreu depois de marcar 'paid' e antes de
         // criar o comando, a recarga ainda esta 'paid' sem start: completa agora.
@@ -124,7 +160,7 @@ serve(async (req) => {
         if (pErr) throw pErr
         if (paga) {
           console.log(`[stripe-charging-webhook] Recarga ${paga.id} 'paid' sem comando: recuperando.`)
-          await garantirComandoInicio(supabase, paga.id)
+          await iniciarRecarga(supabase, paga.id)
         } else {
           console.log(`[stripe-charging-webhook] PI ${pi.id}: recarga ja processada ou inexistente; nada a fazer.`)
         }

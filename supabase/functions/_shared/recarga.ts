@@ -97,6 +97,15 @@ export const EXPIRA_ID_TAG_MS = EXPIRA_COMANDO_INICIO_MS + 120 * 1000 + 60 * 100
 export const expiraIdTag = (agora: Date = new Date()): string =>
   new Date(agora.getTime() + EXPIRA_ID_TAG_MS).toISOString();
 
+// Recuperacao do webhook: o tag pode ter sido criado por uma entrega que morreu
+// antes do comando. Se ainda nao ha comando start, a validade e renovada, senao
+// o CSMS (que compara com o relogio) responderia Expired ao motorista que pagou.
+export const novaExpiracaoDeTagReutilizado = (comandoStartExiste: boolean, agora: Date = new Date()): string | null =>
+  comandoStartExiste ? null : expiraIdTag(agora);
+
+// Mesma regra das RPCs publicas: so posto 'operando' vende recarga.
+export const postoAceitaRecarga = (status: string | null | undefined): boolean => status === 'operando';
+
 export function comandoInicio(
   recarga: { id: string; ocpp_connector_id: number | null | undefined },
   idTag: string,

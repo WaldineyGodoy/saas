@@ -5,6 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts"
 import {
   conectorDisponivel,
   mensagemConectorIndisponivel,
+  postoAceitaRecarga,
   RESERVA_PAGAMENTO_MIN,
   tarifaDoMotorista,
 } from "../_shared/recarga.ts"
@@ -61,11 +62,16 @@ serve(async (req) => {
     // Tarifa ao motorista = a do plano do eletroposto (spec §4.9).
     const { data: posto, error: postoError } = await supabase
       .from("eletropostos")
-      .select("nome, plano:planos_assinatura_energia(tarifa_motorista_kwh)")
+      .select("nome, status, plano:planos_assinatura_energia(tarifa_motorista_kwh)")
       .eq("id", postoId)
       .maybeSingle()
     if (postoError) throw postoError
     if (!posto) return resposta(404, { success: false, error: "Eletroposto não encontrado." })
+
+    // Mesma regra das RPCs publicas: so posto operando vende recarga.
+    if (!postoAceitaRecarga((posto as any).status)) {
+      return resposta(409, { success: false, error: "Este eletroposto não está em operação. Recarga indisponível." })
+    }
 
     const tarifa = tarifaDoMotorista((posto as any).plano)
     if (!tarifa.ok) return resposta(422, { success: false, error: tarifa.erro })

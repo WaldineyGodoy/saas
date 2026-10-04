@@ -3,7 +3,7 @@ import {
   exigirAssinatura, RECARGA_TRANSICOES, transicaoValida,
   conectorDisponivel, mensagemConectorIndisponivel, comandoInicio, comandoParada, gerarIdTag,
   igualConstante, podeParar, valorEstornoCentavos, validarPedidoEstorno, tarifaDoMotorista,
-  ESTORNO_MINIMO_CENTAVOS, RESERVA_PAGAMENTO_MIN, EXPIRA_ID_TAG_MS, expiraIdTag,
+  ESTORNO_MINIMO_CENTAVOS, RESERVA_PAGAMENTO_MIN, EXPIRA_ID_TAG_MS, expiraIdTag, novaExpiracaoDeTagReutilizado, postoAceitaRecarga,
 } from '../supabase/functions/_shared/recarga';
 
 describe('exigirAssinatura (SG-03)', () => {
@@ -249,4 +249,20 @@ describe('expiraIdTag', () => {
     expect(EXPIRA_ID_TAG_MS).toBe(5 * 60 * 1000);
     expect(expiraIdTag(new Date('2026-10-04T12:00:00.000Z'))).toBe('2026-10-04T12:05:00.000Z');
   });
+});
+
+describe('novaExpiracaoDeTagReutilizado (recuperacao do webhook)', () => {
+  const agora = new Date('2026-10-04T12:00:00.000Z');
+  test('tag reutilizado sem comando start: renova a validade', () => {
+    expect(novaExpiracaoDeTagReutilizado(false, agora)).toBe('2026-10-04T12:05:00.000Z');
+  });
+  test('comando start ja existe: nao mexe na validade', () => {
+    expect(novaExpiracaoDeTagReutilizado(true, agora)).toBeNull();
+  });
+});
+
+describe('postoAceitaRecarga (checkout so em posto operando)', () => {
+  test('operando aceita', () => expect(postoAceitaRecarga('operando')).toBe(true));
+  test.each(['pre_operacao', 'em_instalacao', 'manutencao', 'inativo', 'cancelado', null, undefined, ''])(
+    '%s recusa', (st) => expect(postoAceitaRecarga(st as never)).toBe(false));
 });

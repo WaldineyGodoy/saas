@@ -261,3 +261,71 @@ revoke all on function public.fn_eletroposto_publico(uuid) from public;
 revoke all on function public.fn_eletropostos_publicos() from public;
 grant execute on function public.fn_eletroposto_publico(uuid) to anon, authenticated, service_role;
 grant execute on function public.fn_eletropostos_publicos() to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 7. Pagamento tardio: confirmar o inicio so se o conector ainda e da recarga
+-- ---------------------------------------------------------------------------
+-- A reserva de 10 min pode vencer antes do pagamento: B reserva o mesmo conector
+-- e A paga depois. Sem esta checagem os dois start: disputariam o conector e o
+-- idTag de A poderia iniciar energia no carro de B. O webhook chama esta funcao
+-- depois de fn_marcar_recarga_paga e SO cria o RemoteStart se devolver 'ok'.
+--   'ok'        nenhuma outra recarga segura o conector: pode iniciar;
+--   'conflito'  outra recarga segura o conector (paid/starting/charging ou
+--               pending_payment dentro da janela): esta recarga vira failed com a
+--               marca metadata.estorno_total_pendente = true, o mesmo contrato
+--               do CSMS (varredura reconciliarEstornos: estorno total + valor_estornado);
+--   'ignorada'  a recarga nao esta mais paid (reentrega do webhook): nada a fazer.
+-- Mesmo advisory lock do fn_reservar_recarga: checar-e-falhar nao corre contra
+-- uma reserva nova. So service_role.
+create or replace function public.fn_confirmar_inicio(p_recarga_id uuid, p_reserva_min integer)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v recargas_eletroposto%rowtype;
+begin
+    select * into v from recargas_eletroposto where id = p_recarga_id;
+    if not found then
+        return 'ignorada';
+    end if;
+    -- sem destino resolvido nao ha o que disputar; o webhook acusa a falta
+    if v.carregador_id is null or v.ocpp_connector_id is null then
+        return case when v.status = 'paid' then 'ok' else 'ignorada' end;
+    end if;
+
+    perform pg_advisory_xact_lock(hashtext('conector_reserva:' || v.carregador_id::text || ':' || v.ocpp_connector_id::text));
+
+    select * into v from recargas_eletroposto where id = p_recarga_id;
+    if v.status <> 'paid' then
+        return 'ignorada';
+    end if;
+
+    if exists (
+        select 1 from recargas_eletroposto r
+         where r.id <> v.id
+           and r.carregador_id = v.carregador_id
+           and r.ocpp_connector_id = v.ocpp_connector_id
+           and (
+                r.status in ('paid', 'starting', 'charging')
+                or (r.status = 'pending_payment'
+                    and r.created_at > now() - make_interval(mins => p_reserva_min))
+           )
+    ) then
+        update recargas_eletroposto
+           set status = 'failed',
+               valor_final = 0,
+               finalizada_em = now(),
+               motivo_fim = 'conector_reservado_por_outro',
+               metadata = coalesce(metadata, '{}'::jsonb) || '{"estorno_total_pendente": true}'::jsonb
+         where id = v.id;
+        return 'conflito';
+    end if;
+
+    return 'ok';
+end;
+$$;
+
+revoke all on function public.fn_confirmar_inicio(uuid, integer) from public, anon, authenticated;
+grant execute on function public.fn_confirmar_inicio(uuid, integer) to service_role;

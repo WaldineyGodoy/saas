@@ -20,6 +20,9 @@ DECLARE
   v_plano uuid;
   v_n     integer;
   v_tab   text;
+  v_dono  text := current_user;
+  v_ra    uuid;
+  v_rb    uuid;
   v_txt   text;
   v_erro  text;
   v_state text;
@@ -263,6 +266,53 @@ BEGIN
   UPDATE public.eletropostos SET status = 'manutencao' WHERE id = v_e2;
   SELECT count(*) INTO v_n FROM public.fn_eletroposto_publico(v_e2);
   IF v_n <> 0 THEN RAISE EXCEPTION 'FALHOU: posto em manutencao nao deveria aparecer na RPC publica'; END IF;
+
+  -- =====================================================================
+  -- 12) Pagamento tardio de reserva vencida (fn_confirmar_inicio)
+  -- =====================================================================
+  IF has_function_privilege('anon', 'public.fn_confirmar_inicio(uuid,integer)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.fn_confirmar_inicio(uuid,integer)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'public.fn_confirmar_inicio(uuid,integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FALHOU: fn_confirmar_inicio deve ser executavel so por service_role';
+  END IF;
+
+  -- A reserva e vence; B reserva o mesmo conector; A paga depois
+  v_ra := public.fn_reservar_recarga(v_c1b, 7, 10, v_e2, 2, NULL, 'A', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  UPDATE public.recargas_eletroposto SET created_at = now() - interval '11 minutes' WHERE id = v_ra;
+  v_rb := public.fn_reservar_recarga(v_c1b, 7, 10, v_e2, 2, NULL, 'B', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  IF v_ra IS NULL OR v_rb IS NULL THEN RAISE EXCEPTION 'FALHOU: preparo do cenario de pagamento tardio'; END IF;
+  UPDATE public.recargas_eletroposto SET status = 'paid' WHERE id = v_ra;   -- o que fn_marcar_recarga_paga faz
+
+  IF public.fn_confirmar_inicio(v_ra, 10) <> 'conflito' THEN RAISE EXCEPTION 'FALHOU: A (pago tarde, B reservando) deveria dar conflito'; END IF;
+  SELECT status || '|' || coalesce(valor_final::text, 'nulo') || '|' || coalesce(motivo_fim, 'nulo') || '|' || (metadata->>'estorno_total_pendente') INTO v_txt
+    FROM public.recargas_eletroposto WHERE id = v_ra;
+  IF v_txt <> 'failed|0.00|conector_reservado_por_outro|true' THEN RAISE EXCEPTION 'FALHOU: A deveria estar failed com estorno total pendente (%)', v_txt; END IF;
+  IF (SELECT status FROM public.recargas_eletroposto WHERE id = v_rb) <> 'pending_payment' THEN RAISE EXCEPTION 'FALHOU: B nao deveria ser tocada'; END IF;
+
+  -- idempotente: A ja nao esta paid
+  IF public.fn_confirmar_inicio(v_ra, 10) <> 'ignorada' THEN RAISE EXCEPTION 'FALHOU: segunda chamada deveria ser ignorada'; END IF;
+
+  -- B paga: A (failed) nao segura o conector
+  UPDATE public.recargas_eletroposto SET status = 'paid' WHERE id = v_rb;
+  IF public.fn_confirmar_inicio(v_rb, 10) <> 'ok' THEN RAISE EXCEPTION 'FALHOU: B deveria poder iniciar'; END IF;
+  IF (SELECT status FROM public.recargas_eletroposto WHERE id = v_rb) <> 'paid' THEN RAISE EXCEPTION 'FALHOU: B deveria seguir paid'; END IF;
+
+  -- sem concorrente: ok (v_r3 e a unica recarga do conector 1 do carregador 2)
+  UPDATE public.recargas_eletroposto SET status = 'paid' WHERE id = v_r3;
+  IF public.fn_confirmar_inicio(v_r3, 10) <> 'ok' THEN RAISE EXCEPTION 'FALHOU: recarga sem concorrente deveria dar ok'; END IF;
+
+  -- concorrente ja paid (E2 pagou dentro da janela; E1 vencida paga depois)
+  v_ra := public.fn_reservar_recarga(v_c1a, 2, 10, v_e1, 3, NULL, 'E1', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  UPDATE public.recargas_eletroposto SET created_at = now() - interval '11 minutes' WHERE id = v_ra;
+  v_rb := public.fn_reservar_recarga(v_c1a, 2, 10, v_e1, 3, NULL, 'E2', NULL, NULL, 50, 23.1, 2.1500, '{}'::jsonb);
+  UPDATE public.recargas_eletroposto SET status = 'paid' WHERE id = v_rb;
+  IF public.fn_confirmar_inicio(v_rb, 10) <> 'ok' THEN RAISE EXCEPTION 'FALHOU: E2 deveria iniciar (E1 vencida)'; END IF;
+  UPDATE public.recargas_eletroposto SET status = 'paid' WHERE id = v_ra;
+  IF public.fn_confirmar_inicio(v_ra, 10) <> 'conflito' THEN RAISE EXCEPTION 'FALHOU: E1 tardia deveria dar conflito com E2 paid'; END IF;
+  -- com E2 em andamento (starting / charging) o conector continua ocupado
+  UPDATE public.recargas_eletroposto SET status = 'starting' WHERE id = v_rb;
+  UPDATE public.recargas_eletroposto SET status = 'charging' WHERE id = v_rb;
+  IF public.fn_confirmar_inicio(v_rb, 10) <> 'ignorada' THEN RAISE EXCEPTION 'FALHOU: recarga em andamento nao e paid, deveria ser ignorada'; END IF;
 
   RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
