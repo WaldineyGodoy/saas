@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { transicaoValida } from '../domain/recarga.js';
 import type {
-  Carregador, Comando, ComandoPatch, Conector, ConectorPatch, DadosBoot, FimTransacao, IdTag,
+  Alerta, Carregador, Comando, ComandoPatch, Conector, ConectorPatch, DadosBoot, FimTransacao, IdTag,
   Medicao, Mensagem, NovaMedicao, NovaTransacao, NovoComando, Recarga, RecargaPatch,
   RecargaStatus, Repo, Transacao,
 } from './types.js';
@@ -19,6 +19,7 @@ export class MemoryRepo implements Repo {
   medicoes: Medicao[] = [];
   comandos: Comando[] = [];
   mensagens: Mensagem[] = [];
+  alertas: Alerta[] = [];
   private proximaTransacao = 1;
   private agora: () => Date;
 
@@ -76,6 +77,10 @@ export class MemoryRepo implements Repo {
     return c;
   }
 
+  async listarOnline() {
+    return this.carregadores.filter((c) => c.online);
+  }
+
   async registrarBoot(carregadorId: string, d: DadosBoot) {
     const c = this.carregador(carregadorId);
     const t = this.iso();
@@ -99,6 +104,10 @@ export class MemoryRepo implements Repo {
 
   async buscarConector(carregadorId: string, connectorId: number) {
     return this.conectores.find((c) => c.carregador_id === carregadorId && c.connector_id === connectorId) ?? null;
+  }
+
+  async listarConectores(carregadorId: string) {
+    return this.conectores.filter((c) => c.carregador_id === carregadorId);
   }
 
   async upsertConector(carregadorId: string, connectorId: number, patch: ConectorPatch) {
@@ -236,6 +245,13 @@ export class MemoryRepo implements Repo {
     };
     this.comandos.push(c);
     return { comando: c, criado: true };
+  }
+
+  // --- alerta ---
+
+  async alertar(a: Alerta) {
+    this.carregador(a.carregador_id);
+    this.alertas.push(a);
   }
 
   // --- trilha ---

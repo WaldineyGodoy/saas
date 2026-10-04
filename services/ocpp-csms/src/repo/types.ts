@@ -156,8 +156,19 @@ export interface Mensagem {
   payload: unknown | null;
 }
 
+// Alerta interno (no Supabase vira uma linha em notification_logs).
+export interface Alerta {
+  carregador_id: string;
+  connector_id: number | null;
+  tipo: string; // ex.: 'conector_falha_grave'
+  mensagem: string;
+  dados?: Record<string, unknown>;
+}
+
 export interface Repo {
   // carregador
+  // carregadores com online = true (verificador de contato)
+  listarOnline(): Promise<Carregador[]>;
   buscarCarregador(ocppId: string): Promise<Carregador | null>;
   registrarBoot(carregadorId: string, dados: DadosBoot): Promise<void>;
   registrarContato(carregadorId: string): Promise<void>;
@@ -165,6 +176,7 @@ export interface Repo {
 
   // conector
   buscarConector(carregadorId: string, connectorId: number): Promise<Conector | null>;
+  listarConectores(carregadorId: string): Promise<Conector[]>;
   upsertConector(carregadorId: string, connectorId: number, patch: ConectorPatch): Promise<Conector>;
 
   // idTag
@@ -193,6 +205,9 @@ export interface Repo {
   atualizarComando(id: string, patch: ComandoPatch): Promise<Comando>;
   // mesma chave_idempotencia nao duplica; chave nula sempre cria
   enfileirarComando(dados: NovoComando): Promise<{ comando: Comando; criado: boolean }>;
+
+  // alerta interno
+  alertar(a: Alerta): Promise<void>;
 
   // trilha de frames
   logMensagem(m: Mensagem): Promise<void>;

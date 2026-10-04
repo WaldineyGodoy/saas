@@ -171,3 +171,26 @@ describe('log de mensagens', () => {
     expect(repo.mensagens.map((m) => m.ocpp_id)).toEqual(['CP-1', 'X']);
   });
 });
+
+describe('listagens e alertas (Tarefa 4)', () => {
+  it('listarOnline devolve so os carregadores online', async () => {
+    const outro = repo.semearCarregador({ ocppId: 'CP-2' }).id;
+    expect(await repo.listarOnline()).toHaveLength(0);
+    await repo.registrarContato(outro);
+    expect((await repo.listarOnline()).map((c) => c.ocpp_id)).toEqual(['CP-2']);
+    await repo.marcarOffline(outro);
+    expect(await repo.listarOnline()).toHaveLength(0);
+  });
+  it('listarConectores filtra pelo carregador', async () => {
+    const outro = repo.semearCarregador({ ocppId: 'CP-2' }).id;
+    await repo.upsertConector(cpId, 0, {});
+    await repo.upsertConector(cpId, 1, {});
+    await repo.upsertConector(outro, 1, {});
+    expect((await repo.listarConectores(cpId)).map((c) => c.connector_id)).toEqual([0, 1]);
+  });
+  it('alertar guarda o alerta e recusa carregador inexistente', async () => {
+    await repo.alertar({ carregador_id: cpId, connector_id: 1, tipo: 'conector_falha_grave', mensagem: 'x' });
+    expect(repo.alertas).toHaveLength(1);
+    await expect(repo.alertar({ carregador_id: 'nao-existe', connector_id: null, tipo: 't', mensagem: 'm' })).rejects.toThrow(/inexistente/);
+  });
+});

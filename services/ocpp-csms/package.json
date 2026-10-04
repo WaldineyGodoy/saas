@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "CSMS OCPP 1.6-J do B2W Charge",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
@@ -16,8 +18,10 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/ws": "^8.18.2",
     "tsx": "^4",
     "typescript": "^5",
-    "vitest": "^2"
+    "vitest": "^2",
+    "ws": "^8.22.0"
   }
 }
