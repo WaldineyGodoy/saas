@@ -108,7 +108,7 @@ Todas as tabelas `ocpp_*` e de carregador: RLS ligada, **sem acesso `anon`**, es
 | `id` uuid, `carregador_id`, `acao` | `RemoteStartTransaction`, `RemoteStopTransaction`, `Reset`, `ChangeAvailability`, `GetConfiguration`, `ChangeConfiguration`, `UnlockConnector`, `TriggerMessage` |
 | `payload jsonb` | validado pelo CSMS contra o schema OCA antes de enviar |
 | `status` | `pendente → enviado → aceito / rejeitado / erro / expirado` |
-| `tentativas int`, `proxima_tentativa_em`, `expira_em` | backoff exponencial 2s/4s/8s, máx. 3 tentativas; `expira_em` padrão 2 min |
+| `tentativas int`, `proxima_tentativa_em`, `expira_em` | 1 envio + até 3 reenvios com espera 2s/4s/8s após cada timeout de 30 s (decisão do dono, 04/10); `expira_em` padrão 2 min, que na prática encerra antes do 4º timeout |
 | `resposta jsonb`, `erro text` | resposta do carregador ou CALLERROR |
 | `recarga_id` | opcional |
 | `chave_idempotencia text unique` | ex.: `start:<recarga_id>` — webhook duplicado não cria 2º comando |
@@ -144,7 +144,7 @@ Todas as tabelas `ocpp_*` e de carregador: RLS ligada, **sem acesso `anon`**, es
 | :--- | :--- |
 | `BootNotification` | `Accepted`, `currentTime`, `interval = heartbeat_intervalo_s`. Grava vendor/modelo/firmware, `online = true`, limpa `bloqueado_ate_reset` se o boot veio depois de um `Reset` aceito. |
 | `Heartbeat` | `currentTime` do servidor (UTC). Atualiza `ultimo_contato_em`. Sem contato por 3 × intervalo → `online = false`. |
-| `StatusNotification` | Upsert em `eletroposto_conectores`. `Faulted` com `EmergencyStop`/`GroundFailure` → `bloqueado_ate_reset = true` e alerta interno (`notification_logs`). |
+| `StatusNotification` | Upsert em `eletroposto_conectores`. `Faulted` com `GroundFailure` ou `OverCurrentFailure` (mantido pelo dono), ou parada de emergência → `bloqueado_ate_reset = true`. `EmergencyStop` não é `ChargePointErrorCode` válido no 1.6: a emergência chega como `Faulted` + `OtherError` com `info`/`vendorErrorCode` contendo "emerg" e depois `StopTransaction(reason=EmergencyStop)` e alerta interno (`notification_logs`). |
 | `Authorize` | Consulta `ocpp_id_tags`: válido, não usado, não expirado → `Accepted`; senão `Invalid`/`Expired`/`Blocked`. |
 | `StartTransaction` | Valida idTag; cria (ou devolve, se retransmissão) `ocpp_transacoes`; recarga → `charging`, grava `kwh_limite = valor / tarifa`. idTag inválido → `idTagInfo.status = Invalid` e `transactionId` ainda é devolvido (o 1.6 exige); o carregador deve encerrar. |
 | `MeterValues` | Normaliza unidade (kWh→Wh, kW→W), grava com dedupe, atualiza `recargas_eletroposto.kwh_consumido` (a tela lê por `fn_recarga_publica`). Se energia ≥ `kwh_limite` → enfileira `RemoteStopTransaction` (uma vez só). Registro de energia menor que o anterior → ignora e alerta. |
@@ -162,7 +162,8 @@ Todas as tabelas `ocpp_*` e de carregador: RLS ligada, **sem acesso `anon`**, es
 
 ### 5.4 Ponte com o app
 
-- `create-charging-checkout`: antes de criar o PaymentIntent, recusa se o conector não existir, estiver offline, bloqueado ou não `Available`/`Preparing` (mensagem clara para a tela).
+- `create-charging-checkout`: antes de criar o PaymentIntent, recusa se o posto não estiver `operando`, se o conector (por `numero` público no posto) não existir, estiver offline, bloqueado, não `Available`/`Preparing`, ou **reservado** (decisão do dono, 04/10): recarga `pending_payment` com menos de 10 min ocupa o conector; checagem e inserção atômicas (`fn_reservar_recarga`, trava por conector). Pagamento tardio de reserva vencida com outra recarga no conector → recarga `failed` + estorno total, sem `RemoteStart` (`fn_confirmar_inicio`).
+- Preço mostrado na tela = `tarifa_motorista_kwh` do plano, lido por RPC pública (`fn_eletroposto_publico`/`fn_eletropostos_publicos`, só postos `operando`, sem dados pessoais). Sem tarifa → "Recarga indisponível neste posto"; nenhum valor reserva.
 - `stripe-charging-webhook`: em `payment_intent.succeeded` (só na primeira entrega), gera o idTag e insere `ocpp_comandos(RemoteStartTransaction, {connectorId, idTag}, chave start:<recarga>)`.
 - Parar pelo app: Edge Function `stop-charging` (motorista prova posse com o `client_secret` do PaymentIntent ou é o `user_id` logado) → insere `RemoteStopTransaction`.
 - Tela `/recarga` após o pagamento: estados "Conecte o cabo" (`starting`) → "Carregando" com kWh/R$ ao vivo (`charging`) → resumo com valor final e estorno (`completed`) / mensagens de `failed`/`canceled`.
