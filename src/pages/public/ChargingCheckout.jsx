@@ -19,13 +19,14 @@ import {
   Plug,
   ArrowLeft
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  getStripe, 
-  fetchEletroposto, 
-  listEletropostos, 
-  createChargingCheckoutSession 
+import {
+  getStripe,
+  fetchEletroposto,
+  listEletropostos,
+  createChargingCheckoutSession,
+  acompanharRecarga,
+  statusPagamentoDaRecarga
 } from '../../services/stripeChargingService';
 
 /**
@@ -199,33 +200,16 @@ export default function ChargingCheckout() {
     }
   }, [user, profile]);
 
-  // Monitorar via Realtime atualizações na tabela recargas_eletroposto
+  // Acompanha a confirmação do webhook por polling de fn_recarga_publica
+  // (anon não lê recargas_eletroposto; ver acompanharRecarga). Para quando
+  // o pagamento é confirmado.
   useEffect(() => {
-    if (!sessionData?.recargaId) return;
+    if (!sessionData?.recargaId || paymentStatus === 'paid') return;
 
-    const recargaId = sessionData.recargaId;
-    const channel = supabase
-      .channel(`recarga-${recargaId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'recargas_eletroposto',
-          filter: `id=eq.${recargaId}`,
-        },
-        (payload) => {
-          if (payload?.new && (payload.new.status === 'paid' || payload.new.status === 'succeeded')) {
-            setPaymentStatus('paid');
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [sessionData?.recargaId]);
+    return acompanharRecarga(sessionData.recargaId, (recarga) => {
+      if (statusPagamentoDaRecarga(recarga.status)) setPaymentStatus('paid');
+    });
+  }, [sessionData?.recargaId, paymentStatus]);
 
   // Cálculos dinâmicos de energia e autonomia
   const tarifaKwh = Number(selectedPosto?.tarifa_investidor_kwh) || 2.15;

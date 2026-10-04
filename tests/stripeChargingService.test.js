@@ -1,9 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   getStripe,
   fetchEletroposto,
   listEletropostos,
   createChargingCheckoutSession,
+  buscarRecargaPublica,
+  acompanharRecarga,
+  statusPagamentoDaRecarga,
 } from '../src/services/stripeChargingService';
 import { supabase } from '../src/lib/supabase';
 import { loadStripe } from '@stripe/stripe-js';
@@ -15,6 +18,7 @@ vi.mock('@stripe/stripe-js', () => ({
 vi.mock('../src/lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     functions: {
       invoke: vi.fn(),
     },
@@ -214,6 +218,127 @@ describe('stripeChargingService', () => {
       await expect(
         createChargingCheckoutSession({ eletroposto_id: 'posto-123', valor: 2 })
       ).rejects.toThrow('O valor mínimo para recarga é de R$ 5,00.');
+    });
+  });
+
+  describe('buscarRecargaPublica', () => {
+    it('lê a recarga pela RPC fn_recarga_publica (anon não lê a tabela)', async () => {
+      const linha = { status: 'paid', valor: 50, kwh_estimado: 23.26, nome_posto: 'Posto' };
+      supabase.rpc.mockResolvedValue({ data: [linha], error: null });
+
+      const result = await buscarRecargaPublica('recarga-1');
+
+      expect(supabase.rpc).toHaveBeenCalledWith('fn_recarga_publica', { p_recarga_id: 'recarga-1' });
+      expect(supabase.from).not.toHaveBeenCalled();
+      expect(result).toEqual(linha);
+    });
+
+    it('devolve null quando a recarga não existe', async () => {
+      supabase.rpc.mockResolvedValue({ data: [], error: null });
+      expect(await buscarRecargaPublica('nao-existe')).toBeNull();
+    });
+
+    it('devolve null e registra o erro quando a RPC falha', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      supabase.rpc.mockResolvedValue({ data: null, error: new Error('rede') });
+
+      expect(await buscarRecargaPublica('recarga-1')).toBeNull();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('não chama a RPC sem id', async () => {
+      expect(await buscarRecargaPublica(null)).toBeNull();
+      expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('statusPagamentoDaRecarga', () => {
+    it.each(['paid', 'starting', 'charging', 'completed'])('recarga %s → pagamento confirmado', (s) => {
+      expect(statusPagamentoDaRecarga(s)).toBe('paid');
+    });
+
+    it.each(['pending_payment', 'failed', 'canceled', 'succeeded', undefined])('recarga %s → tela não muda', (s) => {
+      expect(statusPagamentoDaRecarga(s)).toBeNull();
+    });
+  });
+
+  describe('acompanharRecarga (polling de 3 s)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    const respostas = (...status) => {
+      for (const s of status) {
+        supabase.rpc.mockResolvedValueOnce({ data: s ? [{ status: s }] : [], error: null });
+      }
+    };
+
+    it('consulta na hora e depois a cada 3 s, entregando cada leitura', async () => {
+      respostas('pending_payment', 'pending_payment', 'paid');
+      const onDados = vi.fn();
+
+      const parar = acompanharRecarga('recarga-1', onDados);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onDados).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(supabase.rpc).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(onDados).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(onDados).toHaveBeenLastCalledWith({ status: 'paid' });
+      parar();
+    });
+
+    it.each(['completed', 'failed', 'canceled'])('para sozinho no status terminal %s', async (terminal) => {
+      respostas('paid', terminal);
+      const onDados = vi.fn();
+
+      acompanharRecarga('recarga-1', onDados);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(onDados).toHaveBeenLastCalledWith({ status: terminal });
+
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(supabase.rpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('para quando a função devolvida é chamada', async () => {
+      supabase.rpc.mockResolvedValue({ data: [{ status: 'pending_payment' }], error: null });
+      const parar = acompanharRecarga('recarga-1', vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
+      parar();
+
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it('não entrega leitura que chegou depois de parar', async () => {
+      let resolver;
+      supabase.rpc.mockReturnValueOnce(new Promise((r) => { resolver = r; }));
+      const onDados = vi.fn();
+
+      const parar = acompanharRecarga('recarga-1', onDados);
+      parar();
+      resolver({ data: [{ status: 'paid' }], error: null });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(onDados).not.toHaveBeenCalled();
+    });
+
+    it('segue tentando quando uma leitura falha ou não acha a recarga', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      supabase.rpc.mockResolvedValueOnce({ data: null, error: new Error('rede') });
+      respostas(null, 'paid');
+      const onDados = vi.fn();
+
+      const parar = acompanharRecarga('recarga-1', onDados);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(onDados).toHaveBeenCalledTimes(1);
+      expect(onDados).toHaveBeenCalledWith({ status: 'paid' });
+      parar();
+      console.error.mockRestore();
     });
   });
 });

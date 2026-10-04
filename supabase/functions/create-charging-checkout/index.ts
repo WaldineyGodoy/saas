@@ -88,13 +88,19 @@ serve(async (req) => {
       }
     })
 
-    // 3. Atualizar recarga com o ID do PaymentIntent
-    await supabase
+    // 3. Atualizar recarga com o ID do PaymentIntent (o webhook localiza a
+    // recarga por ele; sem isso o pagamento nunca vira 'paid')
+    const { error: piErr } = await supabase
       .from("recargas_eletroposto")
       .update({
         stripe_payment_intent_id: paymentIntent.id
       })
       .eq("id", recarga.id)
+
+    if (piErr) {
+      await stripe.paymentIntents.cancel(paymentIntent.id).catch(() => {})
+      throw piErr
+    }
 
     return new Response(
       JSON.stringify({

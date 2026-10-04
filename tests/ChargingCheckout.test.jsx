@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom';
 import ChargingCheckout, { StripePaymentForm } from '../src/pages/public/ChargingCheckout';
 import * as stripeService from '../src/services/stripeChargingService';
 import * as authContext from '../src/contexts/AuthContext';
-import { supabase } from '../src/lib/supabase';
 
 // Mocks
 vi.mock('@stripe/react-stripe-js', () => ({
@@ -19,14 +18,10 @@ vi.mock('@stripe/stripe-js', () => ({
   loadStripe: vi.fn(() => Promise.resolve({})),
 }));
 
+// A tela não fala mais com o Supabase direto: o andamento vem de
+// acompanharRecarga (polling de fn_recarga_publica).
 vi.mock('../src/lib/supabase', () => ({
-  supabase: {
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn().mockReturnThis(),
-    })),
-    removeChannel: vi.fn(),
-  },
+  supabase: {},
 }));
 
 vi.mock('../src/services/stripeChargingService', () => ({
@@ -34,6 +29,8 @@ vi.mock('../src/services/stripeChargingService', () => ({
   fetchEletroposto: vi.fn(),
   listEletropostos: vi.fn(),
   createChargingCheckoutSession: vi.fn(),
+  acompanharRecarga: vi.fn(() => () => {}),
+  statusPagamentoDaRecarga: vi.fn(() => null),
 }));
 
 vi.mock('../src/contexts/AuthContext', () => ({

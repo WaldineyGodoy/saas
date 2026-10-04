@@ -66,3 +66,49 @@ export const createChargingCheckoutSession = async ({
 
   return data;
 };
+
+// Status em que a recarga não muda mais (spec OCPP §4.8).
+export const STATUS_TERMINAIS = ['completed', 'failed', 'canceled'];
+
+// Status da recarga em que o pagamento já foi confirmado pelo webhook.
+const RECARGA_PAGA = ['paid', 'starting', 'charging', 'completed'];
+
+export const statusPagamentoDaRecarga = (status) =>
+  RECARGA_PAGA.includes(status) ? 'paid' : null;
+
+// Andamento da recarga sem dados pessoais. anon não lê a tabela
+// recargas_eletroposto (RLS), só esta RPC.
+export const buscarRecargaPublica = async (recargaId) => {
+  if (!recargaId) return null;
+  const { data, error } = await supabase.rpc('fn_recarga_publica', { p_recarga_id: recargaId });
+
+  if (error) {
+    console.error('Erro ao consultar andamento da recarga:', error);
+    return null;
+  }
+  return data?.[0] ?? null;
+};
+
+// Polling de 3 s (e não Realtime postgres_changes: com a RLS fechada o
+// Realtime não entrega nada para anon, e um canal de broadcast exigiria que
+// toda escrita na recarga também publicasse no canal). Para sozinho em status
+// terminal; a função devolvida para antes disso.
+export const acompanharRecarga = (recargaId, onDados, { intervaloMs = 3000 } = {}) => {
+  let ativo = true;
+  let timer = null;
+
+  const consultar = async () => {
+    const dados = await buscarRecargaPublica(recargaId);
+    if (!ativo) return;
+    if (dados) onDados(dados);
+    if (dados && STATUS_TERMINAIS.includes(dados.status)) return;
+    timer = setTimeout(consultar, intervaloMs);
+  };
+
+  consultar();
+
+  return () => {
+    ativo = false;
+    clearTimeout(timer);
+  };
+};
