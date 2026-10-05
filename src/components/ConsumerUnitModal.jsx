@@ -2876,7 +2876,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.6rem' }}>
                                                     Troca de titularidade (origem desta UC)
                                                 </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
                                                     <div>
                                                         <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>Número da UC anterior</label>
                                                         <input
