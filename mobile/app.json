@@ -45,7 +45,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#070A1E",
+        "backgroundColor": "#0B1124",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -72,9 +72,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#070A1E",
-          "image": "./assets/icon.png",
-          "imageWidth": 160
+          "backgroundColor": "#0B1124",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
         }
       ],
       [
@@ -95,7 +95,7 @@
       ]
     ],
     "scheme": "b2wenergia",
-    "backgroundColor": "#070A1E",
+    "backgroundColor": "#0B1124",
     "experiments": {
       "typedRoutes": true
     },

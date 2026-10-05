@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import {
-  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View,
   type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,16 +37,16 @@ export function Screen({
   );
 }
 
+const LOGO_HORIZONTAL = require('../../assets/logo-horizontal.png');
+
 /** Cabecalho fixo das telas (logo, "Online", sino, avatar), como no Stitch. */
 export function TopBar({ initials, onAvatar }: { initials?: string; onAvatar?: () => void }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[s.topbar, { paddingTop: insets.top }]}>
       <View style={s.topbarRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={s.logoMark}><Text style={s.logoMarkTxt}>B2W</Text></View>
-          <Text style={s.logoTxt}>Energia</Text>
-        </View>
+        {/* Logo oficial (Stitch: B2W_E_V1_FUNDOESCURO) */}
+        <Image source={LOGO_HORIZONTAL} style={{ width: 104, height: 30 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <View style={s.online}>
             <View style={s.onlineDot} />
@@ -281,9 +281,6 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 const criarFolha = () => StyleSheet.create({
   topbar: { backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.headerBorder },
   topbarRow: { height: 56, paddingHorizontal: space.gutterMobile, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  logoMark: { backgroundColor: colors.primary, borderRadius: radius.base, paddingHorizontal: 6, paddingVertical: 2 },
-  logoMarkTxt: { fontFamily: fonts.display, color: '#fff', fontSize: 14, letterSpacing: 0.5 },
-  logoTxt: { fontFamily: fonts.headline, color: colors.headerInk, fontSize: 16 },
   online: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1A` },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.headerAccent },
   onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase' },

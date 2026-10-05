@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Button, Card } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { envOk } from '../../lib/env';
 import { PRIVACIDADE_URL } from '../../lib/links';
-import { colors, esquemaAtual, fonts, radius, space, type } from '../../theme/tokens';
+import { colors, esquemaAtual, radius, space, type } from '../../theme/tokens';
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -32,10 +32,10 @@ export default function Login() {
       <StatusBar style={esquemaAtual === 'light' ? 'dark' : 'light'} />
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.lg, paddingTop: insets.top + space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: 'center', gap: 10 }}>
-          <View style={{ backgroundColor: colors.primary, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 6 }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 28, color: '#fff', letterSpacing: 1 }}>B2W</Text>
+          {/* Logo oficial (Stitch: B2W_E_V2_FUNDOESCURO) sobre o azul-marinho da marca */}
+          <View style={{ backgroundColor: colors.header, borderRadius: radius.xl, padding: 18 }}>
+            <Image source={require('../../../assets/logo-vertical.png')} style={{ width: 132, height: 125 }} resizeMode="contain" accessibilityLabel="B2W Energia" />
           </View>
-          <Text style={[type.headlineLg, { color: colors.inkPrimary }]}>B2W Energia</Text>
           <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
             Sua energia, suas usinas e sua rede de indicações em um só lugar.
           </Text>
