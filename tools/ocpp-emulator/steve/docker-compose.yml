@@ -1,0 +1,43 @@
+# L5 (spec §7): conformidade do emulador contra o SteVe (CSMS de referencia, steve-community/steve).
+# SOMENTE TESTE LOCAL. NAO RODADO ainda (disco insuficiente na maquina de desenvolvimento): ver
+# docs/ocpp/RUNBOOK.md, secao "Conformidade (L5)". Ajuste o que divergir quando rodar pela primeira vez.
+#
+# O projeto NAO publica imagem oficial no Docker Hub/GHCR (verificado em 05/10/2026: `docker manifest
+# inspect` -> denied). A imagem e construida do codigo-fonte (JDK + Maven): precisa de ~3 GB livres
+# em disco e alguns minutos. Se a branch/tag abaixo mudar, atualize `STEVE_REF`.
+#
+#   docker compose -f tools/ocpp-emulator/steve/docker-compose.yml up -d --build
+#   UI:        http://localhost:8180/steve/manager   (login padrao do projeto: admin / 1234)
+#   Endpoint:  ws://localhost:8180/steve/websocket/CentralSystemService/<ocpp_id>
+#
+# Derrubar (e liberar a imagem): docker compose -f tools/ocpp-emulator/steve/docker-compose.yml down
+name: b2w-steve
+
+services:
+  steve-db:
+    image: mariadb:10.4
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: stevedb
+      MYSQL_USER: steve
+      MYSQL_PASSWORD: steve-local-only   # so este banco descartavel; nao reutilizar em lugar nenhum
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  steve:
+    build:
+      context: https://github.com/steve-community/steve.git#${STEVE_REF:-master}
+    depends_on:
+      steve-db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8180:8180"   # HTTP (UI + WebSocket OCPP-J)
+    environment:
+      # Valores lidos pelo perfil `docker` do SteVe (application-docker.properties)
+      DB_HOST: steve-db
+      DB_DATABASE: stevedb
+      DB_USER: steve
+      DB_PASSWORD: steve-local-only
