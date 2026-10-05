@@ -1,13 +1,16 @@
+import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { envOk } from '../../lib/env';
+import { PRIVACIDADE_URL } from '../../lib/links';
 import { colors, fonts, radius, space, type } from '../../theme/tokens';
 
 export default function Login() {
-  const { signIn, resetPassword } = useAuth();
+  const { signIn } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -21,12 +24,7 @@ export default function Login() {
     setEnviando(false);
   };
 
-  const esqueci = async () => {
-    if (!email) return setErro('Digite seu e-mail para receber o link de redefinição.');
-    const e = await resetPassword(email);
-    if (e) setErro(e);
-    else Alert.alert('Verifique seu e-mail', 'Enviamos um link para você criar uma nova senha.');
-  };
+  const esqueci = () => router.push({ pathname: '/recuperar-senha', params: email ? { email } : {} });
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -60,6 +58,7 @@ export default function Login() {
         <Text style={[type.bodySm, { color: colors.inkMuted, textAlign: 'center' }]}>
           Use o mesmo e-mail cadastrado no seu contrato B2W.
         </Text>
+        <Button label="Política de privacidade" variant="ghost" onPress={() => WebBrowser.openBrowserAsync(PRIVACIDADE_URL)} style={{ alignSelf: 'center', minHeight: 36 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

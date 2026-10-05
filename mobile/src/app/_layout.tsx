@@ -39,6 +39,7 @@ function RootStack() {
     >
       <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)/recuperar-senha" options={{ headerShown: false }} />
       </Stack.Protected>
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

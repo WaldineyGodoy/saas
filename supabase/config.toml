@@ -100,3 +100,7 @@ verify_jwt = true
 # Termo aditivo pedido pelo app: exige sessao do assinante (requireUser dentro).
 [functions.aditivo-nova-uc]
 verify_jwt = true
+
+# Excluir conta pelo app: exige sessao do proprio usuario (requireUser dentro).
+[functions.excluir-conta-app]
+verify_jwt = true

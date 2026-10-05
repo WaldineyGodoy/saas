@@ -4,6 +4,9 @@ import { CRM_URL } from './env';
  *  o mesmo assinante passa a ter dois links e a indicacao se perde. */
 export const LANDING_RAIZ = 'https://b2wenergia.com.br/';
 
+/** Politica de privacidade (exigida pelas lojas; link no login e em "Mais"). */
+export const PRIVACIDADE_URL = 'https://b2wenergia.com.br/politica-de-privacidade/';
+
 const primeiro = (nome?: string | null) => (nome || '').trim().replace(/\s+/g, ' ').split(' ')[0] || '';
 
 export const linkIndicacao = (sub?: { id: string; name: string; short_url: string | null } | null) => {
