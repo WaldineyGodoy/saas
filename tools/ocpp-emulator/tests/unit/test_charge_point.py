@@ -562,8 +562,11 @@ async def test_stop_heartbeat_silences_periodic_heartbeat_keeping_socket(make_ri
     # CP-05: carregador mudo (sem Heartbeat) com a conexao aberta
     rig = make_rig()
     await rig.connect()
+    # connect() volta quando as StatusNotification saem; o loop de Heartbeat so
+    # nasce depois da resposta da ultima (fim do _announce). Espera por ele.
+    assert await settle(lambda: rig.cp._heartbeat_task is not None)
     task = rig.cp._heartbeat_task
-    assert task is not None and not task.done()
+    assert not task.done()
     rig.cp.stop_heartbeat()
     assert await settle(task.done)
     assert rig.cp.connected
