@@ -3,11 +3,12 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Button, Card } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { envOk } from '../../lib/env';
 import { PRIVACIDADE_URL } from '../../lib/links';
-import { colors, fonts, radius, space, type } from '../../theme/tokens';
+import { colors, esquemaAtual, fonts, radius, space, type } from '../../theme/tokens';
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -28,6 +29,7 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar style={esquemaAtual === 'light' ? 'dark' : 'light'} />
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.lg, paddingTop: insets.top + space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: 'center', gap: 10 }}>
           <View style={{ backgroundColor: colors.primary, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 6 }}>

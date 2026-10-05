@@ -7,9 +7,10 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { colors, fonts } from '../theme/tokens';
+import { aplicarEsquema, colors, fonts, type Esquema } from '../theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -31,7 +32,7 @@ function RootStack() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.header },
-        headerTintColor: colors.inkPrimary,
+        headerTintColor: colors.headerInk,
         headerTitleStyle: { fontFamily: fonts.headline },
         contentStyle: { backgroundColor: colors.surface },
         headerBackButtonDisplayMode: 'minimal',
@@ -55,6 +56,9 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  // Tema do celular (decisao do dono, 05/10/2026). Sem preferencia, escuro.
+  const esquema: Esquema = useColorScheme() === 'light' ? 'light' : 'dark';
+  aplicarEsquema(esquema);
   const [qc] = useState(
     () => new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } }),
   );
@@ -63,7 +67,8 @@ export default function RootLayout() {
       <QueryClientProvider client={qc}>
         <AuthProvider>
           <StatusBar style="light" />
-          <RootStack />
+          {/* key: troca de tema redesenha o app inteiro com a paleta nova */}
+          <RootStack key={esquema} />
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

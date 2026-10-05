@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toneColor, type Tone } from '../lib/status';
-import { colors, fonts, radius, space, type } from '../theme/tokens';
+import { colors, esquemaAtual, fonts, radius, space, type, type Esquema } from '../theme/tokens';
 
 export type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -277,19 +277,24 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   );
 }
 
-const s = StyleSheet.create({
-  topbar: { backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+// Uma folha por tema, criada na primeira vez que o tema aparece.
+const criarFolha = () => StyleSheet.create({
+  topbar: { backgroundColor: colors.header, borderBottomWidth: 1, borderBottomColor: colors.headerBorder },
   topbarRow: { height: 56, paddingHorizontal: space.gutterMobile, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   logoMark: { backgroundColor: colors.primary, borderRadius: radius.base, paddingHorizontal: 6, paddingVertical: 2 },
   logoMarkTxt: { fontFamily: fonts.display, color: '#fff', fontSize: 14, letterSpacing: 0.5 },
-  logoTxt: { fontFamily: fonts.headline, color: colors.inkPrimary, fontSize: 16 },
-  online: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${colors.secondary}1A` },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.secondary },
-  onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.secondary, textTransform: 'uppercase' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceHigh, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong },
-  avatarTxt: { fontFamily: fonts.headline, fontSize: 12, color: colors.inkPrimary },
+  logoTxt: { fontFamily: fonts.headline, color: colors.headerInk, fontSize: 16 },
+  online: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: `${colors.headerAccent}1A` },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.headerAccent },
+  onlineTxt: { fontFamily: fonts.mono, fontSize: 9, color: colors.headerAccent, textTransform: 'uppercase' },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.headerChip, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.headerBorder },
+  avatarTxt: { fontFamily: fonts.headline, fontSize: 12, color: colors.headerInk },
   card: { backgroundColor: colors.surfaceLowest, borderRadius: radius.xl, padding: space.md, borderWidth: 1, borderColor: colors.borderSubtle },
   btn: { minHeight: 48, borderRadius: radius.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
   search: { height: 44, borderRadius: radius.xl, backgroundColor: colors.surfaceLowest, borderWidth: 1, borderColor: colors.borderSubtle, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
   iconBox: { width: 40, height: 40, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+});
+const folhas: Partial<Record<Esquema, ReturnType<typeof criarFolha>>> = {};
+const s = new Proxy({} as ReturnType<typeof criarFolha>, {
+  get: (_alvo, chave: string) => (folhas[esquemaAtual] ??= criarFolha())[chave as keyof ReturnType<typeof criarFolha>],
 });

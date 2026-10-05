@@ -2,9 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Button, Card } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
-import { colors, radius, space, type } from '../../theme/tokens';
+import { colors, esquemaAtual, radius, space, type } from '../../theme/tokens';
 
 const SENHA_MINIMA = 8;
 
@@ -52,6 +53,7 @@ export default function RecuperarSenha() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar style={esquemaAtual === 'light' ? 'dark' : 'light'} />
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: space.lg, paddingTop: insets.top + space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 8 }}>
           <Text style={[type.headlineLg, { color: colors.inkPrimary }]}>Recuperar senha</Text>

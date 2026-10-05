@@ -11,13 +11,17 @@ export const pedidoUcStatus = (s: string): [string, Tone] => ({
   encerrado: ['Encerrado', 'neutral'],
 } as Record<string, [string, Tone]>)[s] ?? ['Em análise', 'neutral'];
 
-export const toneColor: Record<Tone, string> = {
+// Funcao, nao objeto: precisa ler a paleta do tema atual a cada render.
+const coresDoTom = (): Record<Tone, string> => ({
   ok: colors.statusVerified,
   warn: colors.secondary,
   bad: colors.statusProvisional,
   neutral: colors.inkSecondary,
   info: colors.statusCalculated,
-};
+});
+export const toneColor: Record<Tone, string> = new Proxy({} as Record<Tone, string>, {
+  get: (_alvo, tom: string) => coresDoTom()[tom as Tone],
+});
 
 const UC: Record<string, [string, Tone]> = {
   ativo: ['Ativa', 'ok'],

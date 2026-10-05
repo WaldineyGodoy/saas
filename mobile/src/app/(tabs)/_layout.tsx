@@ -20,7 +20,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         header: () => <TopBar initials={iniciais(perfil?.name)} onAvatar={() => router.navigate('/mais')} />,
-        tabBarStyle: { backgroundColor: colors.header, borderTopColor: 'rgba(255,255,255,0.08)' },
+        tabBarStyle: { backgroundColor: colors.tabBar, borderTopColor: colors.tabBarBorder },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.inkMuted,
         tabBarLabelStyle: { fontFamily: fonts.bodySemi, fontSize: 11 },

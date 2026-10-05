@@ -1,6 +1,23 @@
-// Design system "B2W Energia Helios Sovereign" (Stitch, projeto 2359134248600550624).
-// Os valores vem do designMd do projeto — mudar la e aqui juntos.
-export const colors = {
+// Design system do Stitch (projeto 2359134248600550624), em dois temas:
+//   escuro: "B2W Energia Helios Sovereign" (colorMode DARK)
+//   claro:  "Helios Sovereign" (colorMode LIGHT)
+// O app segue o tema do celular (decisao do dono, 05/10/2026). Os valores vem
+// do designMd de cada um — mudar la e aqui juntos. O cabecalho continua azul-
+// marinho nos dois temas, como nas telas "(Light)" do Stitch.
+
+type Paleta = {
+  background: string; surface: string; surfaceLowest: string; surfaceLow: string; surfaceContainer: string;
+  surfaceHigh: string; surfaceHighest: string;
+  header: string; headerInk: string; headerAccent: string; headerChip: string; headerBorder: string;
+  tabBar: string; tabBarBorder: string;
+  onSurface: string; onSurfaceVariant: string; inkPrimary: string; inkSecondary: string; inkMuted: string;
+  outline: string; outlineVariant: string; borderSubtle: string; borderStrong: string;
+  primary: string; primaryLight: string; primaryHover: string; onPrimary: string;
+  secondary: string; tertiary: string; tertiaryContainer: string; navyAccent: string; navyDeep: string;
+  error: string; statusVerified: string; statusCalculated: string; statusProvisional: string;
+};
+
+const escuro: Paleta = {
   background: '#070A1E',
   surface: '#0F1226',
   surfaceLowest: '#090D21',
@@ -9,6 +26,12 @@ export const colors = {
   surfaceHigh: '#25293E',
   surfaceHighest: '#303349',
   header: '#0B1124',
+  headerInk: '#F8F9FB',
+  headerAccent: '#E9C349',
+  headerChip: '#25293E',
+  headerBorder: 'rgba(255,255,255,0.08)',
+  tabBar: '#0B1124',
+  tabBarBorder: 'rgba(255,255,255,0.08)',
   onSurface: '#DFE0FD',
   onSurfaceVariant: '#E1C0B0',
   inkPrimary: '#F8F9FB',
@@ -31,7 +54,62 @@ export const colors = {
   statusVerified: '#0E9F6E',
   statusCalculated: '#6FE9F0',
   statusProvisional: '#E25454',
-} as const;
+};
+
+const claro: Paleta = {
+  background: '#F5F7FB',
+  surface: '#F5F7FB',
+  surfaceLowest: '#FFFFFF',
+  surfaceLow: '#FFFFFF',
+  surfaceContainer: '#FFFFFF',
+  surfaceHigh: '#EDF2F7',
+  surfaceHighest: '#E2E8F0',
+  header: '#0B1124',
+  headerInk: '#F8F9FB',
+  headerAccent: '#2DD4BF',
+  headerChip: '#1C2248',
+  headerBorder: 'rgba(255,255,255,0.08)',
+  tabBar: '#FFFFFF',
+  tabBarBorder: '#E2E8F0',
+  onSurface: '#0B1124',
+  onSurfaceVariant: '#64748B',
+  inkPrimary: '#0B1124',
+  inkSecondary: '#334155',
+  inkMuted: '#64748B',
+  outline: '#94A3B8',
+  outlineVariant: '#CBD5E1',
+  borderSubtle: '#E2E8F0',
+  borderStrong: '#CBD5E1',
+  primary: '#F26B00',
+  primaryLight: '#D95F00',
+  primaryHover: '#D95F00',
+  onPrimary: '#FFFFFF',
+  secondary: '#008B99',
+  tertiary: '#008B99',
+  tertiaryContainer: '#006973',
+  navyAccent: '#3B5BA5',
+  navyDeep: '#031952',
+  error: '#DC2626',
+  statusVerified: '#0E9F6E',
+  statusCalculated: '#0284C7',
+  statusProvisional: '#DC2626',
+};
+
+export type Esquema = 'light' | 'dark';
+let paletaAtual = escuro;
+export let esquemaAtual: Esquema = 'dark';
+
+/** Troca o tema. O layout raiz chama com o tema do celular antes de desenhar. */
+export const aplicarEsquema = (e: Esquema) => {
+  esquemaAtual = e;
+  paletaAtual = e === 'light' ? claro : escuro;
+};
+
+/** Cores do tema atual, lidas na hora do render. A troca de tema redesenha o
+ *  app a partir da raiz (key no layout), e cada tela pega a paleta nova. */
+export const colors: Paleta = new Proxy({} as Paleta, {
+  get: (_alvo, chave: string) => paletaAtual[chave as keyof Paleta],
+});
 
 export const fonts = {
   display: 'Manrope_800ExtraBold',
