@@ -199,31 +199,29 @@ export default function ChargingCheckout() {
     }
   }, [user, profile]);
 
-  // Monitorar via Realtime atualizações na tabela recargas_eletroposto
+  // Status da recarga por consulta periodica a fn_recarga_status. A tabela
+  // recargas_eletroposto nao e legivel por quem nao tem login (traz nome,
+  // e-mail e telefone dos motoristas), e nunca esteve na publicacao do
+  // Realtime: o canal antigo nao recebia nada.
   useEffect(() => {
     if (!sessionData?.recargaId) return;
 
     const recargaId = sessionData.recargaId;
-    const channel = supabase
-      .channel(`recarga-${recargaId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'recargas_eletroposto',
-          filter: `id=eq.${recargaId}`,
-        },
-        (payload) => {
-          if (payload?.new && (payload.new.status === 'paid' || payload.new.status === 'succeeded')) {
-            setPaymentStatus('paid');
-          }
-        }
-      )
-      .subscribe();
+    let ativo = true;
+    let timer = null;
+    const consultar = async () => {
+      const { data } = await supabase.rpc('fn_recarga_status', { p_id: recargaId });
+      if (ativo && (data === 'paid' || data === 'succeeded')) {
+        setPaymentStatus('paid');
+        clearInterval(timer);
+      }
+    };
+    timer = setInterval(consultar, 4000);
+    consultar();
 
     return () => {
-      supabase.removeChannel(channel);
+      ativo = false;
+      clearInterval(timer);
     };
   }, [sessionData?.recargaId]);
 

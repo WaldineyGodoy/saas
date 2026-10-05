@@ -11,6 +11,7 @@ import {
     FileSignature, Loader2, Send, ExternalLink, Clock, Ban, RefreshCcw
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import ConvidarAppButton from './ConvidarAppButton';
 import ContratoFornecedor from './ContratoFornecedor';
 import { baixarPdfContratoFornecedor, DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
 import { numeroBr, paraNumero } from '../lib/contratoBase';
@@ -2779,8 +2780,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 )}
                             </div>
                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                <button 
-                                    type="button" 
+                                {supplier?.id && (
+                                    <ConvidarAppButton tipo="supplier" id={supplier.id} nome={supplier.name} style={{ borderRadius: '14px', padding: '0.75rem 1.25rem' }} />
+                                )}
+                                <button
+                                    type="button"
                                     onClick={onClose}
                                     style={{
                                         padding: '0.75rem 1.5rem',
