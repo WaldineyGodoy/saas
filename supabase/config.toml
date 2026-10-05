@@ -96,3 +96,7 @@ verify_jwt = true
 # (requireUser dentro da funcao): cada chamada custa uma requisicao na API.
 [functions.parse-invoice-image]
 verify_jwt = true
+
+# Termo aditivo pedido pelo app: exige sessao do assinante (requireUser dentro).
+[functions.aditivo-nova-uc]
+verify_jwt = true

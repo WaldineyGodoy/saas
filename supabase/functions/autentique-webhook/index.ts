@@ -207,6 +207,20 @@ serve(async (req) => {
                     continue;
                 }
 
+                // Termo aditivo pedido pelo app (aditivo-nova-uc): assinado, a
+                // UC nasce em 'em_ativacao' com o plano escolhido. A funcao do
+                // banco e idempotente, entao evento repetido nao duplica a UC.
+                if (sig.signer_type === 'lead' && sig.document_type === 'aditivo_uc') {
+                    const { data: criada, error: ucErr } = await supabaseAdmin
+                        .rpc('fn_criar_uc_do_aditivo', { p_lead: sig.signer_id });
+                    if (ucErr || !criada?.ok) {
+                        console.error(`Termo aditivo ${docId} assinado, UC nao criada:`, ucErr ?? criada);
+                        continue;
+                    }
+                    if (!criada.ja_existia) promovidos.push(sig.signer_id);
+                    continue;
+                }
+
                 if (sig.signer_type !== 'subscriber') continue;
 
                 const { error: subErr } = await supabaseAdmin
