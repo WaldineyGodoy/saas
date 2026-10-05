@@ -181,11 +181,19 @@ Migrações **ainda não aplicadas** em produção. O dono aplica no SQL Editor,
 3. `supabase/migrations/20261004c_conector_numero.sql`
 4. `supabase/migrations/20261004d_recarga_publica_tarifa.sql`
 
-Depois de cada uma, rodar o teste correspondente de `supabase/tests/` (termina em `SANDBOX_OK`; tudo é desfeito no fim).
+Depois de cada uma, rodar o teste correspondente de `supabase/tests/` no SQL Editor. Cada teste é um bloco `DO` que termina em `RAISE EXCEPTION 'SANDBOX_OK'` (o erro é o sucesso: tudo é desfeito, nada persiste), por isso é seguro em produção.
+
+| Migração | Teste |
+|---|---|
+| `20261004a_recarga_seguranca` | `supabase/tests/recarga_seguranca.test.sql` |
+| `20261004b_ocpp_estrutura` | `supabase/tests/ocpp_estrutura.test.sql` |
+| `20261004c_conector_numero` | `supabase/tests/conector_numero.test.sql` |
+| `20261004d_recarga_publica_tarifa` | não há arquivo próprio: o `recarga_seguranca.test.sql` cobre a coluna `tarifa_kwh_aplicada` de `fn_recarga_publica`; **rodar de novo depois da d** |
 
 Edge Functions e configuração:
 
-- Defina `STRIPE_WEBHOOK_SECRET` **antes** de publicar `stripe-charging-webhook`: ele recusa eventos sem assinatura válida. Esta função deve continuar publicada com **verify_jwt desligado** (a Stripe não envia JWT).
+- Defina `STRIPE_WEBHOOK_SECRET` **antes** de publicar `stripe-charging-webhook`: ele recusa eventos sem assinatura válida. Esta função precisa de **verify_jwt desligado** (a Stripe não envia JWT; a autenticidade vem da assinatura). Está em `supabase/config.toml` (`[functions.stripe-charging-webhook] verify_jwt = false`) e vale no deploy pelo CLI; para não depender disso, publique com o comando explícito: `npx supabase functions deploy stripe-charging-webhook --no-verify-jwt`. Confira no painel (Edge Functions) depois do deploy.
+- Demais funções de recarga, com `verify_jwt = true` (padrão e `config.toml`): `create-charging-checkout` (sem entrada no `config.toml`, vale o padrão) e `stop-charging` são chamadas pela tela pública com a chave anon, que é um JWT válido; a autorização real é feita dentro de cada função (token do usuário, se houver, e posse do PaymentIntent). `refund-charging` exige o bearer igual à service role. Se o projeto passar a usar chaves `sb_publishable_` (que não são JWT), `create-charging-checkout` e `stop-charging` precisarão de `verify_jwt = false`.
 - `refund-charging` compara o bearer com `SUPABASE_SERVICE_ROLE_KEY`. Se o projeto migrar para as chaves novas `sb_secret_`, **revisar** essa comparação.
 - Em cada plano de eletroposto, preencha `tarifa_motorista_kwh`; sem ela o posto mostra "Recarga indisponível neste posto" e nenhum valor é reservado.
 - Atribua `numero` aos conectores (seção 5).

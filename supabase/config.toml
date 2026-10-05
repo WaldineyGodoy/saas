@@ -95,3 +95,8 @@ verify_jwt = true
 # (usuario dono ou client_secret do PaymentIntent) e checada dentro da funcao.
 [functions.stop-charging]
 verify_jwt = true
+
+# Webhook da Stripe (B2W Charge). A Stripe chama sem JWT do Supabase; a
+# autenticidade vem da assinatura Stripe verificada dentro da funcao.
+[functions.stripe-charging-webhook]
+verify_jwt = false
