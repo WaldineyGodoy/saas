@@ -115,4 +115,27 @@ describe('AcompanhamentoRecarga (estados da recarga ao vivo, spec §5.4)', () =>
     const html = render(<AcompanhamentoRecarga recarga={null} onParar={vi.fn()} />);
     expect(html).toContain('Confirmando pagamento');
   });
+
+  it('pending_payment (cartão confirmado, webhook ainda não rodou) não diz para conectar o cabo', () => {
+    const html = render(<AcompanhamentoRecarga recarga={{ ...base, status: 'pending_payment' }} onParar={vi.fn()} />);
+    expect(html).toContain('Confirmando pagamento');
+    expect(html).not.toContain('Conecte o cabo');
+    expect(html).not.toContain('Pagamento confirmado');
+    expect(html).not.toContain('liberado');
+  });
+
+  it('recarga ainda não carregada (null) não diz para conectar o cabo', () => {
+    const html = render(<AcompanhamentoRecarga recarga={null} />);
+    expect(html).toContain('Confirmando pagamento');
+    expect(html).not.toContain('Conecte o cabo');
+  });
+
+  it('status desconhecido mostra estado neutro, sem afirmar sucesso nem estorno', () => {
+    const html = render(<AcompanhamentoRecarga recarga={{ ...base, status: 'algo_novo' }} onParar={vi.fn()} />);
+    expect(html).toContain('Atualizando');
+    expect(html).not.toContain('Conecte o cabo');
+    expect(html).not.toContain('Pagamento confirmado');
+    expect(html).not.toContain('estornado');
+    expect(html).not.toContain('Parar recarga');
+  });
 });

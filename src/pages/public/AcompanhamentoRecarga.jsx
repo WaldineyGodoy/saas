@@ -55,7 +55,8 @@ export default function AcompanhamentoRecarga({ recarga, onParar, parando = fals
     </div>
   );
 
-  if (!recarga) {
+  // Pagamento ainda não confirmado pelo servidor (cartão aceito no navegador, webhook pendente)
+  if (!recarga || status === 'pending_payment') {
     return moldura(
       <Cabecalho icone={<Loader2 className="w-10 h-10 animate-spin" />} titulo="Confirmando pagamento..." />,
       alerta,
@@ -129,7 +130,15 @@ export default function AcompanhamentoRecarga({ recarga, onParar, parando = fals
     );
   }
 
-  // paid | starting (e qualquer status pago ainda sem energia)
+  if (status !== 'paid' && status !== 'starting') {
+    // status que a tela não conhece: neutro, sem afirmar sucesso nem estorno
+    return moldura(
+      <Cabecalho icone={<Loader2 className="w-10 h-10 animate-spin" />} titulo="Atualizando..." />,
+      alerta,
+    );
+  }
+
+  // paid | starting: o servidor já confirmou o pagamento
   return moldura(
     <Cabecalho icone={<Plug className="w-10 h-10" />} titulo="Conecte o cabo ao veículo" texto="Pagamento confirmado. O conector está liberado!" />,
     <>
