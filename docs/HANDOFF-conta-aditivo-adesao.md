@@ -76,3 +76,45 @@ Estimativa: 4 a 5 dias.
 - Para ver o app sem login: configuração `app-mobile-web-demo` em `.claude/launch.json` do workspace
   (Expo web com `EXPO_PUBLIC_DEMO=1`, porta 8081). CRM local: `saas-mobile-dev` (porta 5173; usa
   `saas-mobile/.env.local`, ignorado pelo git).
+
+---
+
+# Lançamento do app para consulta (iniciado em 05/10/2026)
+
+A adesão por documentos está **suspensa** até nova ordem do dono. Foco: publicar o app para
+assinantes, UCs, faturas, usinas e fornecedores consultarem o que já existe no CRM.
+
+## Decisões do dono
+
+| Item | Decisão |
+|---|---|
+| Segurança dos dados | Fechar tudo antes de abrir — **feito** (abaixo) |
+| Extrato de pagamento | Fica para a **V1.1** |
+| Convite de quem não tem login | O dono envia pelo WhatsApp |
+| Recuperar senha | Criar tela no app |
+| Excluir conta / cancelar | Criar botão no app |
+| Política de privacidade | O dono já tem; vai mandar os links |
+| Contas Apple e Google | O dono vai criar |
+| EAS (build e envio) | Claude configura |
+| Ficha das lojas | Claude escreve |
+| Conta de teste para a revisão | O dono cria |
+| Teste em celular (TestFlight / teste interno) | Na etapa de testes |
+
+## Feito
+
+- `20261005b` e `20261005c` (produção): fim das policies "true". Equipe vê tudo como antes;
+  originador só a própria comissão e o histórico da própria carteira; fornecedor só protocolos,
+  rateios e áreas das próprias usinas; assinante e fornecedor não leem o histórico do CRM.
+  Testado por papel em transação desfeita e nas telas do CRM com sessão de admin.
+
+## Próximos passos
+
+1. **Recuperar senha no app**: o link do e-mail precisa abrir o app (deep link `b2wenergia://`)
+   numa tela de nova senha; configurar a URL de redirecionamento no Supabase Auth.
+2. **Excluir conta / cancelar**: botão em "Mais"; definir se apaga o login ou abre pedido de
+   cancelamento da assinatura (o contrato continua existindo).
+3. **Link da política de privacidade** no app (aguardando os links do dono).
+4. **EAS**: `eas init` (projectId no app.json), variáveis `EXPO_PUBLIC_*` no EAS, perfis de build.
+5. **Ficha das lojas**: textos, palavras-chave, classificação, respostas de privacidade/Data safety.
+6. Ligar **proteção contra senhas vazadas** no Supabase Auth (painel → Authentication → Password
+   security) — não há ferramenta para isso pelo MCP.
