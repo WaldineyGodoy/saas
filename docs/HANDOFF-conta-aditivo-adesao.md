@@ -107,14 +107,19 @@ assinantes, UCs, faturas, usinas e fornecedores consultarem o que já existe no 
   rateios e áreas das próprias usinas; assinante e fornecedor não leem o histórico do CRM.
   Testado por papel em transação desfeita e nas telas do CRM com sessão de admin.
 
-## Próximos passos
+- `e38be0d`: **recuperar senha por código** (tela `(auth)/recuperar-senha`), **excluir conta**
+  (opção b do dono: apaga o login e abre protocolo de cancelamento; `excluir-conta-app` +
+  `20261005d`) e **política de privacidade** no login e em "Mais".
 
-1. **Recuperar senha no app**: o link do e-mail precisa abrir o app (deep link `b2wenergia://`)
-   numa tela de nova senha; configurar a URL de redirecionamento no Supabase Auth.
-2. **Excluir conta / cancelar**: botão em "Mais"; definir se apaga o login ou abre pedido de
-   cancelamento da assinatura (o contrato continua existindo).
-3. **Link da política de privacidade** no app (aguardando os links do dono).
-4. **EAS**: `eas init` (projectId no app.json), variáveis `EXPO_PUBLIC_*` no EAS, perfis de build.
-5. **Ficha das lojas**: textos, palavras-chave, classificação, respostas de privacidade/Data safety.
-6. Ligar **proteção contra senhas vazadas** no Supabase Auth (painel → Authentication → Password
-   security) — não há ferramenta para isso pelo MCP.
+## Pendências do dono para o lançamento
+
+- **Template de e-mail de recuperação** (Supabase → Authentication → Emails → Reset password):
+  incluir o código `{{ .Token }}` além do link, senão o app não tem o que digitar.
+- Proteção contra senhas vazadas (Authentication → Password security).
+- Contas Apple e Google, conta de teste para revisão, convites por WhatsApp (depois dos testes).
+
+## Próximos passos (Claude)
+
+1. **EAS**: `eas init` (projectId no app.json), variáveis `EXPO_PUBLIC_*` no EAS, perfis de build.
+2. **Ficha das lojas**: textos, palavras-chave, classificação, respostas de privacidade/Data safety.
+3. Teste do fluxo de recuperação com e-mail real, quando houver conta de teste.
