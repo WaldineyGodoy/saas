@@ -23,6 +23,13 @@ export const MIGRACOES_OCPP = [
   'supabase/migrations/20261004b_ocpp_estrutura.sql',
   'supabase/migrations/20261004c_conector_numero.sql',
   'supabase/migrations/20261004d_recarga_publica_tarifa.sql',
+  'supabase/migrations/20261004e_recarga_estorno_tardio.sql',
+];
+
+// Migracoes so de CREATE OR REPLACE/grants: reaplicadas mesmo num banco local que ja tem as anteriores
+// (o banco local criado antes delas as recebe no proximo `migrar`).
+export const MIGRACOES_OCPP_REAPLICAVEIS = [
+  'supabase/migrations/20261004e_recarga_estorno_tardio.sql',
 ];
 
 export const TESTES_SQL_OCPP = [
@@ -30,6 +37,7 @@ export const TESTES_SQL_OCPP = [
   'supabase/tests/recarga_seguranca.test.sql',
   'supabase/tests/ocpp_estrutura.test.sql',
   'supabase/tests/conector_numero.test.sql',
+  'supabase/tests/recarga_estorno_tardio.test.sql',
 ];
 
 export function containerDb() {
@@ -59,7 +67,12 @@ function psqlArquivo(rel) {
 export function migrar({ log = console.log } = {}) {
   const r = psql("select (to_regclass('public.ocpp_comandos') is not null)::text;");
   if (r.status === 0 && r.stdout.includes('true')) {
-    log('[ocpp-db] migracoes OCPP ja aplicadas');
+    log('[ocpp-db] migracoes OCPP ja aplicadas; reaplicando as reaplicaveis');
+    for (const m of MIGRACOES_OCPP_REAPLICAVEIS) {
+      log(`[ocpp-db] aplicando ${m}`);
+      psqlArquivo(m);
+    }
+    psql("notify pgrst, 'reload schema';");
     return false;
   }
   log('[ocpp-db] aplicando scripts/ocpp-local-bootstrap.sql');

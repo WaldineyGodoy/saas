@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
-import { comandoParada, podeParar } from "../_shared/recarga.ts"
+import { podeParar } from "../_shared/recarga.ts"
+import { enfileirarParada } from "../_shared/parada-recarga.ts"
 
 // Criado na primeira chamada: sem STRIPE_SECRET_KEY o SDK lanca no construtor e derrubava a
 // funcao inteira no boot (500), ate nos caminhos que nao usam a Stripe.
@@ -70,19 +71,10 @@ serve(async (req) => {
       return resposta(409, { success: false, error: "Esta recarga nao esta em andamento.", status: recarga.status })
     }
 
-    const cmd = comandoParada(recarga)
-    // Mesma chave do corte pre-pago do CSMS: duplicata e ignorada.
-    const { error: cErr } = await supabase.from("ocpp_comandos").upsert(
-      {
-        carregador_id: recarga.carregador_id,
-        acao: cmd.acao,
-        payload: cmd.payload,
-        chave_idempotencia: cmd.chave_idempotencia,
-        recarga_id: recarga.id,
-      },
-      { onConflict: "chave_idempotencia", ignoreDuplicates: true },
-    )
-    if (cErr) throw cErr
+    // Mesma chave do corte pre-pago do CSMS (stop:<recarga>). Parada anterior que terminou sem
+    // aceite (expirado/rejeitado/erro) e rearmada, com alerta a operacao (I3).
+    const resultado = await enfileirarParada(supabase, recarga)
+    console.log(`[stop-charging] Recarga ${recarga.id}: parada ${resultado}.`)
 
     return resposta(200, { success: true })
   } catch (err: any) {

@@ -6,6 +6,9 @@ import { deveCortar, kwhLimite } from '../domain/recarga.js';
 import type { NovaMedicao, Recarga, Repo, Transacao } from '../repo/types.js';
 
 const ENERGIA = 'Energy.Active.Import.Register';
+// RemoteStop que terminou sem aceite e pode ser rearmado pelo corte pre-pago (I3)
+const STATUS_PARADA_REARMAVEL = new Set(['expirado', 'rejeitado', 'erro']);
+const EXPIRA_PARADA_MS = 2 * 60 * 1000;
 
 interface SampledValueOcpp {
   value: string; unit?: string; measurand?: string; phase?: string; context?: string;
@@ -239,10 +242,21 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
     const r = await repo.buscarRecarga(t.recarga_id);
     if (!r || r.status !== 'charging' || r.kwh_limite === null || r.kwh_consumido === null) return;
     if (!deveCortar(r.kwh_consumido, r.kwh_limite)) return;
-    await repo.enfileirarComando({
+    const chave = `stop:${r.id}`;
+    const { comando, criado } = await repo.enfileirarComando({
       carregador_id: carregadorId, acao: 'RemoteStopTransaction', payload: { transactionId: t.id },
-      recarga_id: r.id, chave_idempotencia: `stop:${r.id}`,
+      recarga_id: r.id, chave_idempotencia: chave,
     });
+    // I3: a chave e permanente; se a parada anterior terminou sem aceite (expirado/rejeitado/erro), a
+    // energia segue alem do pago. Rearma o MESMO comando (update guardado: so um chamador rearma).
+    if (!criado && STATUS_PARADA_REARMAVEL.has(comando.status)) {
+      const rearmado = await repo.rearmarComando(chave, new Date(ctx.agora().getTime() + EXPIRA_PARADA_MS).toISOString());
+      if (rearmado) {
+        await alertar(t.connector_id, 'parada_rearmada',
+          `Recarga ${r.id} no limite pre-pago: RemoteStop anterior terminou ${comando.status}; reenfileirado`,
+          { recargaId: r.id, comandoId: comando.id, statusAnterior: comando.status, origem: 'corte' });
+      }
+    }
   }
 
   // Transacao de outro carregador (ou inexistente) e tratada como desconhecida: nada e lido nem gravado.
@@ -297,7 +311,16 @@ export function registrarHandlers(cliente: ClienteHandlers, ctx: ContextoHandler
     }
     // recarga concluida com diferenca a devolver: pede (ou repete o pedido, idempotente)
     if (r && r.status === 'completed' && (r.valor_estornado ?? 0) > 0) {
-      await repo.solicitarEstorno(r.id, { valor: r.valor_estornado as number, motivo: `StopTransaction ${motivo}` });
+      try {
+        await repo.solicitarEstorno(r.id, { valor: r.valor_estornado as number, motivo: `StopTransaction ${motivo}` });
+      } catch (e) {
+        // I2: a varredura (reconciliarEstornos) repete o pedido enquanto stripe_refund_id for nulo, mesmo
+        // que o carregador desista de retransmitir o Stop. O erro segue para o carregador (CALLERROR).
+        await alertar(t.connector_id, 'estorno_falhou',
+          `Estorno de R$ ${r.valor_estornado} da recarga ${r.id} falhou no StopTransaction; a varredura repete`,
+          { recargaId: r.id, valor: r.valor_estornado, erro: (e as Error)?.message ?? String(e) }).catch(() => undefined);
+        throw e;
+      }
     }
     return {};
   });

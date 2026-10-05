@@ -79,6 +79,8 @@ async function main() {
     SUPABASE_ANON_KEY: sb.ANON_KEY, OCPP_COMPOSE_FILE: COMPOSE,
   };
   rodar('docker', ['compose', '-f', COMPOSE, 'up', '-d', '--build'], { env });
+  // o substituto le o estorno-stub.mjs montado do repo: reinicia para pegar mudancas (e zerar o estado)
+  rodar('docker', ['compose', '-f', COMPOSE, 'restart', 'estorno-stub'], { env });
   await esperar('http://127.0.0.1:9220/health', 'CSMS');
   await esperar('http://127.0.0.1:54398/__stub/health', 'substituto do estorno');
 

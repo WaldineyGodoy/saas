@@ -105,9 +105,18 @@ describe('AcompanhamentoRecarga (estados da recarga ao vivo, spec §5.4)', () =>
   });
 
   it.each(['failed', 'canceled'])('status %s informa o estorno total do valor pago', (status) => {
-    const html = render(<AcompanhamentoRecarga recarga={{ ...base, status }} onParar={vi.fn()} />);
+    // pago e encerrado sem energia: o servidor grava valor_final = 0 junto com a marca de estorno total
+    const html = render(<AcompanhamentoRecarga recarga={{ ...base, status, valor_final: 0 }} onParar={vi.fn()} />);
     expect(html).toContain('estornado integralmente');
     expect(html).toContain('R$ 50,00');
+    expect(html).not.toContain('Parar recarga');
+  });
+
+  it.each(['failed', 'canceled'])('status %s sem pagamento confirmado (valor_final nulo) nao promete estorno', (status) => {
+    const html = render(<AcompanhamentoRecarga recarga={{ ...base, status, valor_final: null }} onParar={vi.fn()} />);
+    expect(html).not.toContain('estornado');
+    expect(html).toContain('Nenhum valor foi cobrado');
+    expect(html).toContain('nova recarga');
     expect(html).not.toContain('Parar recarga');
   });
 

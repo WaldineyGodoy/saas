@@ -30,6 +30,17 @@ import {
 } from '../../services/stripeChargingService';
 import AcompanhamentoRecarga from './AcompanhamentoRecarga';
 
+// Recusa no Payment Element (C1). O PaymentIntent continua válido: o motorista pode tentar de novo
+// aqui mesmo (outro cartão ou Pix) e a recarga só vale quando o pagamento for aprovado. Se desistir,
+// a reserva do conector vence sozinha. Nada foi cobrado, então não há estorno a prometer.
+export function mensagemPagamentoRecusado(error) {
+  const base = error?.message || 'Erro ao processar pagamento.';
+  if (error?.type === 'card_error') {
+    return `${base} Nenhum valor foi cobrado. Tente outro cartão ou pague com Pix.`;
+  }
+  return base;
+}
+
 /**
  * Subcomponente interno para formulário Stripe Elements.
  * Deve ser renderizado obrigatoriamente dentro de um <Elements>.
@@ -58,7 +69,7 @@ export function StripePaymentForm({
       });
 
       if (error) {
-        setErrorMessage(error.message || 'Erro ao processar pagamento.');
+        setErrorMessage(mensagemPagamentoRecusado(error));
         if (onPaymentError) onPaymentError(error);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         if (onPaymentSuccess) onPaymentSuccess(paymentIntent);

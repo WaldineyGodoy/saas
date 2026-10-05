@@ -175,11 +175,17 @@ class Db:
         return self.get("ocpp_mensagens", f)
 
 
-def estornos(recarga_id: str) -> list[dict]:
+def estornos(recarga_id: str, status: int = 200) -> list[dict]:
     """Pedidos que o CSMS fez a refund-charging (substituto local, scripts/ocpp-local/estorno-stub.mjs)."""
-    status, corpo = _http("GET", f"{STUB_URL}/__stub/estornos?recarga_id={recarga_id}")
-    assert status == 200, corpo
-    return [p for p in corpo if p["status"] == 200]
+    st, corpo = _http("GET", f"{STUB_URL}/__stub/estornos?recarga_id={recarga_id}")
+    assert st == 200, corpo
+    return [p for p in corpo if p["status"] == status]
+
+
+def falhar_estornos(recarga_id: str, vezes: int) -> None:
+    """Os proximos `vezes` pedidos de estorno da recarga respondem 502 (Stripe fora do ar)."""
+    st, corpo = _http("POST", f"{STUB_URL}/__stub/falhar?recarga_id={recarga_id}&vezes={vezes}")
+    assert st == 200, corpo
 
 
 def checkout(eletroposto_id: str, numero: int, valor: float = 20) -> tuple[int, dict]:
@@ -273,12 +279,15 @@ def _garantir_comando_inicio(db: Db, rid: str) -> str:
 
 
 def webhook_pagamento_aprovado(db: Db, pi: str) -> str | None:
-    """Espelho do ramo payment_intent.succeeded do stripe-charging-webhook (sem a assinatura)."""
+    """Espelho do ramo payment_intent.succeeded (supabase/functions/_shared/webhook-recarga.ts, sem a
+    assinatura). Devolve o veredito: 'ok' | 'conflito' | 'sem_destino' | 'ignorada' | 'estorno_tardio' | None."""
     rid = db.rpc("fn_marcar_recarga_paga", {"p_payment_intent_id": pi})
     if not rid:
         paga = db.get("recargas_eletroposto", f"stripe_payment_intent_id=eq.{pi}&status=eq.paid&select=id")
         if not paga:
-            return None
+            # C1: pagamento de recarga ja encerrada sem energia -> estorno total pendente
+            tardia = db.rpc("fn_marcar_estorno_pagamento_tardio", {"p_payment_intent_id": pi})
+            return "estorno_tardio" if tardia else None
         rid = paga[0]["id"]
     veredito = db.rpc("fn_confirmar_inicio", {"p_recarga_id": rid, "p_reserva_min": RESERVA_PAGAMENTO_MIN})
     if veredito != "ok":
@@ -288,19 +297,30 @@ def webhook_pagamento_aprovado(db: Db, pi: str) -> str | None:
 
 
 def webhook_pagamento_falhou(db: Db, pi: str) -> None:
-    """Espelho do ramo payment_intent.payment_failed."""
-    db.update("recargas_eletroposto", f"stripe_payment_intent_id=eq.{pi}&status=eq.pending_payment",
-              {"status": "failed"})
+    """Espelho do ramo payment_intent.payment_failed: so registra. A recarga segue pending_payment
+    (o motorista tenta de novo no mesmo PaymentIntent; se desistir, a reserva vence sozinha)."""
+    return None
 
 
-def parar_pelo_app(db: Db, rid: str) -> None:
-    """Espelho do stop-charging depois da prova de posse: comandoParada (stop:<recarga>)."""
+PARADA_REARMAVEL = ("expirado", "rejeitado", "erro")
+
+
+def parar_pelo_app(db: Db, rid: str) -> str:
+    """Espelho de enfileirarParada (supabase/functions/_shared/parada-recarga.ts) depois da prova de posse:
+    stop:<recarga>; parada anterior que terminou sem aceite volta a pendente (update guardado)."""
     r = db.recarga(rid)
-    db.insert("ocpp_comandos", {
+    criado = db.insert("ocpp_comandos", {
         "carregador_id": r["carregador_id"], "acao": "RemoteStopTransaction",
         "payload": {"transactionId": int(r["ocpp_transacao_id"])},
         "chave_idempotencia": f"stop:{rid}", "recarga_id": rid,
     }, conflito="chave_idempotencia", ignorar=True)
+    if criado:
+        return "enfileirada"
+    rearmado = db.update("ocpp_comandos",
+                         f"chave_idempotencia=eq.stop:{rid}&status=in.({','.join(PARADA_REARMAVEL)})",
+                         {"status": "pendente", "tentativas": 0, "proxima_tentativa_em": agora_iso(),
+                          "expira_em": agora_iso(120), "erro": None, "resposta": None})
+    return "rearmada" if rearmado else "existente"
 
 
 def comando_operador(db: Db, carregador_id: str, acao: str, payload: dict, **extra) -> dict:

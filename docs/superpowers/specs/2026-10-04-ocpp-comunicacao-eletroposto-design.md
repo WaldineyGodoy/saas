@@ -164,8 +164,8 @@ Todas as tabelas `ocpp_*` e de carregador: RLS ligada, **sem acesso `anon`**, es
 
 - `create-charging-checkout`: antes de criar o PaymentIntent, recusa se o posto não estiver `operando`, se o conector (por `numero` público no posto) não existir, estiver offline, bloqueado, não `Available`/`Preparing`, ou **reservado** (decisão do dono, 04/10): recarga `pending_payment` com menos de 10 min ocupa o conector; checagem e inserção atômicas (`fn_reservar_recarga`, trava por conector). Pagamento tardio de reserva vencida com outra recarga no conector → recarga `failed` + estorno total, sem `RemoteStart` (`fn_confirmar_inicio`).
 - Preço mostrado na tela = `tarifa_motorista_kwh` do plano, lido por RPC pública (`fn_eletroposto_publico`/`fn_eletropostos_publicos`, só postos `operando`, sem dados pessoais). Sem tarifa → "Recarga indisponível neste posto"; nenhum valor reserva.
-- `stripe-charging-webhook`: em `payment_intent.succeeded` (só na primeira entrega), gera o idTag e insere `ocpp_comandos(RemoteStartTransaction, {connectorId, idTag}, chave start:<recarga>)`.
-- Parar pelo app: Edge Function `stop-charging` (motorista prova posse com o `client_secret` do PaymentIntent ou é o `user_id` logado) → insere `RemoteStopTransaction`.
+- `stripe-charging-webhook`: em `payment_intent.succeeded` (só na primeira entrega), gera o idTag e insere `ocpp_comandos(RemoteStartTransaction, {connectorId, idTag}, chave start:<recarga>)`. `payment_intent.payment_failed` só registra (não encerra a recarga). Pagamento confirmado de recarga já encerrada sem energia, ou de recarga sem destino resolvido, vira estorno total pendente (revisão final, C1/I1). Métodos do PaymentIntent: `card` + `pix` explícitos (QR do Pix vence em 10 min, junto com a reserva).
+- Parar pelo app: Edge Function `stop-charging` (motorista prova posse com o `client_secret` do PaymentIntent ou é o `user_id` logado) → insere `RemoteStopTransaction`. Se o `stop:<recarga>` anterior terminou sem aceite, é rearmado (pendente, novas tentativas) com alerta à operação.
 - Tela `/recarga` após o pagamento: estados "Conecte o cabo" (`starting`) → "Carregando" com kWh/R$ ao vivo (`charging`) → resumo com valor final e estorno (`completed`) / mensagens de `failed`/`canceled`.
 
 ## 6. Emulador (`tools/ocpp-emulator`)
@@ -229,7 +229,11 @@ Cada cenário vira um teste automatizado (L3b, com o ID no nome do teste: `test_
 | RC-06 (opção 2 do guia — totem) | `Authorize(idTag válido)` → `StartTransaction` local | Aceito; mesmo fluxo de medição |
 | RC-07 (= TC-03) | `Authorize("TAG_DESCONHECIDA_99")`, depois `StartTransaction` com ela | `Invalid` nos dois; emulador encerra; nenhuma recarga muda |
 | RC-08 | Reusar idTag de recarga já concluída | `Expired` |
-| RC-09 | `payment_intent.payment_failed` | Nenhum comando criado; recarga `failed` |
+| RC-09 | `payment_intent.payment_failed` (cartão recusado), depois nova tentativa aprovada no **mesmo** PaymentIntent | Nenhum comando no `payment_failed` e a recarga **continua `pending_payment`** (revisão final, C1: o Payment Element segue aberto; se o motorista desistir, a reserva de 10 min vence sozinha). O `succeeded` posterior inicia a recarga normalmente |
+| RC-09b | `succeeded` de recarga já `failed`/`canceled` sem transação OCPP nem estorno | `fn_marcar_estorno_pagamento_tardio` grava `estorno_total_pendente`; a varredura do CSMS estorna o valor inteiro; nenhum comando |
+| RC-09c | Recarga paga sem destino resolvido (`carregador_id`/`ocpp_connector_id` nulos, checkout antigo) | `fn_confirmar_inicio` devolve `sem_destino`: recarga `failed` (`motivo_fim = sem_destino`) + estorno total; webhook responde 200 (sem laço de reenvio) |
+| RC-05b | Estorno parcial falha no `StopTransaction` (refund-charging fora do ar) | Alerta `estorno_falhou`; a varredura repete o pedido enquanto `completed` + `ocpp_transacao_id` + `valor_estornado > 0` + `stripe_refund_id` nulo |
+| RC-04b | `stop:<recarga>` anterior terminou `expirado`/`rejeitado`/`erro` e o motorista toca "Parar" (ou o corte pré-pago dispara de novo) | O mesmo comando volta a `pendente` por um UPDATE guardado (só um chamador rearma), alerta `parada_rearmada`; o carregador recebe o `RemoteStopTransaction` |
 | RC-10 | Webhook `succeeded` entregue 2× | Um único comando `start:<recarga>`; um único `RemoteStart` chega ao emulador |
 
 ### 8.4 Resiliência (RS)

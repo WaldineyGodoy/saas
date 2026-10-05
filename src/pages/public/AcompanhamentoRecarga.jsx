@@ -111,7 +111,7 @@ export default function AcompanhamentoRecarga({ recarga, onParar, parando = fals
           {estornado > 0 && <Linha rotulo="Valor estornado" valor={brl(estornado)} testid="valor-estornado" />}
         </div>
         {estornado > 0 && (
-          <p className="text-xs text-slate-500 text-center">O estorno volta para o cartão usado no pagamento.</p>
+          <p className="text-xs text-slate-500 text-center">O estorno volta para o meio de pagamento usado (cartão ou Pix).</p>
         )}
         {novaRecarga}
       </>,
@@ -119,12 +119,22 @@ export default function AcompanhamentoRecarga({ recarga, onParar, parando = fals
   }
 
   if (status === 'failed' || status === 'canceled') {
+    // Pago e encerrado sem energia: o servidor grava valor_final = 0 com a marca de estorno total.
+    // valor_final nulo = o pagamento nunca foi confirmado (recarga antiga encerrada por cartão
+    // recusado, ou checkout cancelado): não há o que estornar.
+    const pagou = recarga.valor_final != null;
     return moldura(
       <Cabecalho tom="red" icone={<Undo2 className="w-10 h-10" />} titulo="Recarga não realizada" />,
       <>
-        <p className="text-sm text-slate-700 text-center" data-testid="estorno-total">
-          O valor de {brl(recarga.valor)} será estornado integralmente para o seu cartão.
-        </p>
+        {pagou ? (
+          <p className="text-sm text-slate-700 text-center" data-testid="estorno-total">
+            O valor de {brl(recarga.valor)} será estornado integralmente para o meio de pagamento usado.
+          </p>
+        ) : (
+          <p className="text-sm text-slate-700 text-center" data-testid="sem-cobranca">
+            Nenhum valor foi cobrado. Para carregar, inicie uma nova recarga.
+          </p>
+        )}
         {novaRecarga}
       </>,
     );

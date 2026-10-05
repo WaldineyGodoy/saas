@@ -230,8 +230,18 @@ export interface Repo {
   listarComandosEnviadosAntigos(antesDe: string): Promise<Comando[]>;
   // recargas em paid|starting com RemoteStart aceito, com o instante da aceitacao (base do RC-03, sobrevive a restart)
   listarRecargasComPartidaAceita(): Promise<{ recarga: Recarga; aceito_em: string }[]>;
-  // recargas failed/canceled com metadata[META_ESTORNO_PENDENTE] = true
+  // Estornos a (re)pedir pela varredura:
+  //  * failed/canceled com metadata[META_ESTORNO_PENDENTE] = true (estorno TOTAL de `valor`);
+  //  * completed com transacao OCPP (ocpp_transacao_id), valor_estornado > 0 e stripe_refund_id nulo:
+  //    estorno PARCIAL calculado no StopTransaction (valor_estornado = quanto devolver) que ainda nao foi
+  //    confirmado pela refund-charging (ela grava stripe_refund_id). Completed sem transacao OCPP
+  //    (anterior ao OCPP ou acerto manual) fica de fora.
   listarRecargasComEstornoPendente(): Promise<Recarga[]>;
+  // Comando com esta chave_idempotencia que terminou SEM aceite (expirado/rejeitado/erro) volta a
+  // pendente: tentativas 0, proxima_tentativa_em = agora, novo expira_em, erro/resposta limpos.
+  // UM update guardado pelo status (concorrentes: so um rearma). Devolve o comando rearmado, ou null
+  // (inexistente, pendente/enviado/aceito, ou outro ja rearmou).
+  rearmarComando(chave: string, expiraEm: string): Promise<Comando | null>;
   // opcional: avisa quando um comando e inserido (Realtime no Supabase / callback na memoria). Devolve o cancelamento.
   assinarComandos?(cb: () => void): () => void;
   // mesma chave_idempotencia nao duplica; chave nula sempre cria

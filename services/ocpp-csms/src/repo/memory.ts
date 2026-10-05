@@ -10,6 +10,7 @@ import type {
 } from './types.js';
 
 const EXPIRA_COMANDO_MS = 2 * 60 * 1000;
+const STATUS_REARMAVEIS: StatusComando[] = ['expirado', 'rejeitado', 'erro'];
 
 export class MemoryRepo implements Repo {
   carregadores: Carregador[] = [];
@@ -275,7 +276,20 @@ export class MemoryRepo implements Repo {
 
   async listarRecargasComEstornoPendente() {
     return this.recargas.filter((r) =>
-      (r.status === 'failed' || r.status === 'canceled') && r.metadata[META_ESTORNO_PENDENTE] === true);
+      ((r.status === 'failed' || r.status === 'canceled') && r.metadata[META_ESTORNO_PENDENTE] === true) ||
+      (r.status === 'completed' && r.ocpp_transacao_id !== null && (r.valor_estornado ?? 0) > 0 && r.stripe_refund_id === null));
+  }
+
+  async rearmarComando(chave: string, expiraEm: string) {
+    const c = this.comandos.find((x) => x.chave_idempotencia === chave);
+    if (!c || !STATUS_REARMAVEIS.includes(c.status)) return null;
+    const agora = this.iso();
+    Object.assign(c, {
+      status: 'pendente', tentativas: 0, proxima_tentativa_em: agora, expira_em: new Date(expiraEm).toISOString(),
+      erro: null, resposta: null, atualizado_em: agora,
+    });
+    for (const cb of this.ouvintesComandos) cb();
+    return c;
   }
 
   async listarRecargasComPartidaAceita() {
@@ -322,6 +336,10 @@ export class MemoryRepo implements Repo {
     if (!(e.valor > 0)) throw new Error('valor do estorno deve ser maior que zero');
     if (this.estornos.some((x) => x.recarga_id === recargaId)) return;
     this.estornos.push({ recarga_id: recargaId, ...e });
+    // mesmo efeito da refund-charging no banco: confirma o estorno na recarga
+    const r = this.recargas.find((x) => x.id === recargaId)!;
+    r.stripe_refund_id = `re_mem_${this.estornos.length}`;
+    r.valor_estornado = e.valor;
   }
 
   // --- alerta ---

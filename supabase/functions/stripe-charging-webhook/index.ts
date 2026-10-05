@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
-import {
-  comandoInicio, exigirAssinatura, expiraIdTag, gerarIdTag, novaExpiracaoDeTagReutilizado, RESERVA_PAGAMENTO_MIN,
-} from "../_shared/recarga.ts"
+import { exigirAssinatura } from "../_shared/recarga.ts"
+// Efeitos na recarga (testados no Vitest): succeeded -> paid + RemoteStart, conflito/sem destino e
+// pagamento tardio -> estorno total pendente; payment_failed so registra (o motorista tenta de novo).
+import { tratarEventoRecarga } from "../_shared/webhook-recarga.ts"
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || ""
 
@@ -22,94 +23,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   })
-
-// Garante idTag + comando de inicio da recarga. Idempotente e reentrante: se a
-// primeira entrega caiu no meio (recarga ja 'paid', Stripe reenvia e o RPC
-// devolve nulo), a nova tentativa reaproveita o idTag existente e o unique
-// de chave_idempotencia ('start:<id>') impede o 2o comando (RC-10).
-async function garantirComandoInicio(supabase: any, recargaId: string) {
-  const { data: recarga, error: rErr } = await supabase
-    .from("recargas_eletroposto")
-    .select("id, carregador_id, ocpp_connector_id, ocpp_id_tag")
-    .eq("id", recargaId)
-    .single()
-  if (rErr) throw rErr
-  if (!recarga.carregador_id) throw new Error(`Recarga ${recargaId} sem carregador resolvido no checkout.`)
-
-  // Duas entregas simultaneas podem chegar aqui juntas. A verdade e o tag que
-  // esta em ocpp_id_tags (unique parcial por recarga_id): quem perde o insert
-  // (23505) le o vencedor, e todos usam o mesmo tag no comando e na recarga.
-  const lerTag = async (): Promise<string | null> => {
-    const { data, error } = await supabase
-      .from("ocpp_id_tags").select("id_tag").eq("recarga_id", recargaId).limit(1)
-    if (error) throw error
-    return data?.[0]?.id_tag ?? null
-  }
-  let idTag = await lerTag()
-  let tagNovo = false
-  if (!idTag) {
-    const candidato = gerarIdTag()
-    const { error } = await supabase.from("ocpp_id_tags").insert({
-      id_tag: candidato,
-      recarga_id: recargaId,
-      expira_em: expiraIdTag(),
-    })
-    if (error && error.code !== "23505") throw error
-    idTag = error ? await lerTag() : candidato
-    tagNovo = !error
-    if (!idTag) throw new Error(`Recarga ${recargaId}: idTag nao encontrado apos conflito.`)
-  }
-  if (recarga.ocpp_id_tag !== idTag) {
-    const { error } = await supabase.from("recargas_eletroposto").update({ ocpp_id_tag: idTag }).eq("id", recargaId)
-    if (error) throw error
-  }
-
-  // Tag reutilizado (entrega anterior morreu antes do comando): sem comando start
-  // a validade e renovada, senao o CSMS poderia responder Expired a quem pagou.
-  if (!tagNovo) {
-    const { data: existente, error: eErr } = await supabase
-      .from("ocpp_comandos").select("id").eq("chave_idempotencia", `start:${recargaId}`).maybeSingle()
-    if (eErr) throw eErr
-    const nova = novaExpiracaoDeTagReutilizado(!!existente)
-    if (nova) {
-      const { error } = await supabase.from("ocpp_id_tags").update({ expira_em: nova }).eq("id_tag", idTag)
-      if (error) throw error
-    }
-  }
-
-  const cmd = comandoInicio(recarga, idTag)
-  const { error: cErr } = await supabase.from("ocpp_comandos").upsert(
-    {
-      carregador_id: recarga.carregador_id,
-      acao: cmd.acao,
-      payload: cmd.payload,
-      chave_idempotencia: cmd.chave_idempotencia,
-      expira_em: cmd.expira_em,
-      recarga_id: recargaId,
-    },
-    { onConflict: "chave_idempotencia", ignoreDuplicates: true },
-  )
-  if (cErr) throw cErr
-}
-
-// Depois de pago: so inicia se o conector ainda e desta recarga. A reserva de
-// 10 min pode ter vencido e outro motorista reservado/pago o mesmo conector;
-// nesse caso fn_confirmar_inicio marca esta recarga failed com
-// metadata.estorno_total_pendente (o CSMS faz o estorno total) e NENHUM
-// comando start e criado.
-async function iniciarRecarga(supabase: any, recargaId: string) {
-  const { data: veredito, error } = await supabase.rpc("fn_confirmar_inicio", {
-    p_recarga_id: recargaId,
-    p_reserva_min: RESERVA_PAGAMENTO_MIN,
-  })
-  if (error) throw error
-  if (veredito === "conflito") {
-    console.warn(`[stripe-charging-webhook] Recarga ${recargaId}: conector ja reservado por outro; falhou com estorno total pendente.`)
-    return
-  }
-  if (veredito !== "ok") return
-  await garantirComandoInicio(supabase, recargaId)
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -139,51 +52,11 @@ serve(async (req) => {
   try {
     console.log(`[stripe-charging-webhook] Evento recebido: ${event.type} (${event.id})`)
 
-    if (event.type === "payment_intent.succeeded") {
-      const pi = event.data.object as Stripe.PaymentIntent
-
-      // RC-10: so a primeira entrega surte efeito; reenvio devolve nulo.
-      const { data: recargaId, error } = await supabase.rpc("fn_marcar_recarga_paga", {
-        p_payment_intent_id: pi.id,
-      })
-      if (error) throw error
-
-      if (recargaId) {
-        console.log(`[stripe-charging-webhook] Recarga ${recargaId} marcada como 'paid'.`)
-        await iniciarRecarga(supabase, recargaId)
-      } else {
-        // Reenvio. Se a 1a entrega morreu depois de marcar 'paid' e antes de
-        // criar o comando, a recarga ainda esta 'paid' sem start: completa agora.
-        // Em qualquer outro status (starting/charging/...) o comando ja existiu.
-        const { data: paga, error: pErr } = await supabase
-          .from("recargas_eletroposto")
-          .select("id")
-          .eq("stripe_payment_intent_id", pi.id)
-          .eq("status", "paid")
-          .maybeSingle()
-        if (pErr) throw pErr
-        if (paga) {
-          console.log(`[stripe-charging-webhook] Recarga ${paga.id} 'paid' sem comando: recuperando.`)
-          await iniciarRecarga(supabase, paga.id)
-        } else {
-          console.log(`[stripe-charging-webhook] PI ${pi.id}: recarga ja processada ou inexistente; nada a fazer.`)
-        }
-      }
-    } else if (event.type === "payment_intent.payment_failed") {
-      const pi = event.data.object as Stripe.PaymentIntent
-
-      const { data, error } = await supabase
-        .from("recargas_eletroposto")
-        .update({ status: "failed", updated_at: new Date().toISOString() })
-        .eq("stripe_payment_intent_id", pi.id)
-        .eq("status", "pending_payment")
-        .select("id")
-      if (error) throw error
-
-      if (data?.length) {
-        console.log(`[stripe-charging-webhook] Recarga ${data[0].id} marcada como 'failed'.`)
-      }
-    }
+    const resultado = await tratarEventoRecarga(supabase, {
+      type: event.type,
+      data: { object: { id: (event.data.object as { id: string }).id } },
+    })
+    console.log(`[stripe-charging-webhook] ${event.id}: ${resultado}`)
 
     return json({ received: true })
   } catch (err: any) {

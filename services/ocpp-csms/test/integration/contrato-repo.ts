@@ -429,6 +429,43 @@ export function contratoRepo(fabrica: FabricaMundo): void {
       await repo.atualizarRecarga(recarga.id, { metadata: { estorno_total_pendente: false } });
       expect(await minhas()).toEqual([]);
     });
+    it('listarRecargasComEstornoPendente traz completed OCPP com estorno parcial sem stripe_refund_id (I2)', async () => {
+      const { transacao } = await repo.criarOuObterTransacao('i2-' + aleatorio(), {
+        carregador_id: cp.id, connector_id: 1, recarga_id: recarga.id, id_tag: 'RCI2AAAAAAAAAAAAAAAA',
+        meter_start_wh: 0, inicio_em: '2026-10-04T12:00:00.000Z',
+      });
+      const parcial = await m.semearRecarga({
+        status: 'completed', valor: 50, valor_final: 20, valor_estornado: 30, ocpp_transacao_id: transacao.id,
+      });
+      const semEstorno = await m.semearRecarga({ status: 'completed', valor: 50, valor_final: 50, valor_estornado: 0, ocpp_transacao_id: transacao.id });
+      // recarga completed sem transacao OCPP (anterior ao OCPP / acerto manual): fora da varredura
+      const legado = await m.semearRecarga({ status: 'completed', valor: 50, valor_estornado: 30 });
+      const ids = [parcial.id, semEstorno.id, legado.id];
+      const minhas = async () => (await repo.listarRecargasComEstornoPendente()).filter((r) => ids.includes(r.id)).map((r) => r.id);
+      expect(await minhas()).toEqual([parcial.id]);
+      await repo.atualizarRecarga(parcial.id, { stripe_refund_id: 're_teste' });
+      expect(await minhas()).toEqual([]);
+    });
+    it('rearmarComando: so de expirado/rejeitado/erro para pendente, um UPDATE guardado (I3)', async () => {
+      const chave = 'stop:rearme-' + aleatorio();
+      const { comando } = await novo({ acao: 'RemoteStopTransaction', payload: { transactionId: 1 }, chave_idempotencia: chave });
+      const expira = em(120_000);
+      expect(await repo.rearmarComando(chave, expira)).toBeNull(); // pendente: nada a rearmar
+      for (const terminal of ['expirado', 'rejeitado', 'erro'] as const) {
+        await repo.atualizarComando(comando.id, { status: terminal, tentativas: 4, erro: 'x', resposta: { status: 'Rejected' } });
+        const r = await Promise.all([1, 2, 3].map(() => repo.rearmarComando(chave, expira)));
+        const feitos = r.filter((x) => x !== null);
+        expect(feitos).toHaveLength(1); // concorrentes nao rearmam duas vezes
+        expect(feitos[0]).toMatchObject({ id: comando.id, status: 'pendente', tentativas: 0, erro: null, resposta: null });
+        expect(new Date(feitos[0]!.expira_em).getTime()).toBe(new Date(expira).getTime());
+        expect(new Date(feitos[0]!.proxima_tentativa_em).getTime()).toBeLessThanOrEqual(m.agora().getTime() + 1000);
+      }
+      for (const vivo of ['enviado', 'aceito'] as const) {
+        await repo.atualizarComando(comando.id, { status: vivo });
+        expect(await repo.rearmarComando(chave, expira)).toBeNull();
+      }
+      expect(await repo.rearmarComando('stop:nao-existe-' + aleatorio(), expira)).toBeNull();
+    });
   });
 
   describe('log de mensagens e alertas', () => {

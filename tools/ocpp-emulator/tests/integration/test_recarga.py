@@ -5,8 +5,14 @@ from emulator.charge_point import State
 from emulator.scenarios import wait_idle
 
 from conftest import (
-    TARIFA, aguardar, estornos, parar_pelo_app, reservar, webhook_pagamento_aprovado, webhook_pagamento_falhou,
+    TARIFA, aguardar, estornos, falhar_estornos, parar_pelo_app, reservar, webhook_pagamento_aprovado,
+    webhook_pagamento_falhou,
 )
+
+
+def r_id_curto() -> str:
+    import uuid
+    return uuid.uuid4().hex[:16]
 
 
 def _acoes(db, ocpp_id, direcao, tipo=2):
@@ -179,18 +185,103 @@ async def test_RC08_idtag_de_recarga_concluida_expired(db, posto, emulador, reca
     assert cp.erros == []
 
 
-async def test_RC09_pagamento_falhou_nenhum_comando(db, posto, emulador):
-    cp = await emulador()
+async def test_RC09_pagamento_falhou_nenhum_comando_e_nova_tentativa_no_mesmo_pi(db, posto, emulador):
+    cp = await emulador(plug_delay_s=None)
     r = reservar(db, posto, 30)
     webhook_pagamento_falhou(db, r["pi"])
-    assert db.recarga(r["id"])["status"] == "failed"
-    # entrega atrasada do succeeded nao ressuscita a recarga
-    assert webhook_pagamento_aprovado(db, r["pi"]) is None
-    assert db.recarga(r["id"])["status"] == "failed"
+    # cartao recusado nao encerra a recarga: segue pending_payment, sem comando nem idTag
+    assert db.recarga(r["id"])["status"] == "pending_payment"
     assert db.comandos(posto["carregador_id"]) == []
     assert db.get("ocpp_id_tags", f"recarga_id=eq.{r['id']}&select=id_tag") == []
     assert db.frames(cp.id, acao="RemoteStartTransaction") == []
-    assert cp.received_commands == []
+    # o motorista tenta de novo (outro cartao/Pix) no MESMO PaymentIntent e e aprovado: recarga normal
+    assert webhook_pagamento_aprovado(db, r["pi"]) == "ok"
+    await aguardar(lambda: db.recarga(r["id"])["status"] == "starting", oque="starting")
+    assert [a for a, _ in cp.received_commands] == ["RemoteStartTransaction"]
+    assert estornos(r["id"]) == []
+    assert cp.erros == []
+
+
+async def _estorno_total(db, rid: str, valor: float):
+    """Varredura do CSMS: pedido de estorno do valor inteiro, confirmado e marca limpa."""
+    fim = await aguardar(lambda: (x := db.recarga(rid))["stripe_refund_id"] and
+                         (x["metadata"] or {}).get("estorno_total_pendente") is False and x,
+                         timeout=30, oque="estorno total pela varredura")
+    pedidos = estornos(rid)
+    assert len(pedidos) == 1 and pedidos[0]["valor_centavos"] == round(valor * 100)
+    assert float(fim["valor_estornado"]) == valor and float(fim["valor_final"]) == 0
+    return fim
+
+
+async def test_RC09b_pagamento_apos_recarga_encerrada_vira_estorno_total(db, posto, emulador):
+    """C1: recarga encerrada sem energia (ex.: failed pelo webhook antigo) recebe o succeeded depois."""
+    cp = await emulador()
+    r = reservar(db, posto, 30)
+    db.update("recargas_eletroposto", f"id=eq.{r['id']}", {"status": "failed"})
+    assert webhook_pagamento_aprovado(db, r["pi"]) == "estorno_tardio"
+    assert webhook_pagamento_aprovado(db, r["pi"]) is None  # reentrega: nada a fazer
+    fim = await _estorno_total(db, r["id"], 30)
+    assert fim["status"] == "failed" and fim["motivo_fim"] == "pago_apos_falha"
+    assert db.comandos(posto["carregador_id"]) == []
+    assert db.frames(cp.id, acao="RemoteStartTransaction") == []
+    assert cp.erros == []
+
+
+async def test_RC09c_recarga_paga_sem_destino_falha_com_estorno_total(db, posto, emulador):
+    """I1: recarga do checkout antigo (sem carregador/conector resolvidos) e paga: nao fica em loop."""
+    cp = await emulador()
+    pi = f"pi_local_semdestino_{r_id_curto()}"
+    r = db.insert("recargas_eletroposto", {
+        "eletroposto_id": posto["eletroposto_id"], "conector_numero": 1, "tipo_usuario": "avulso", "valor": 20,
+        "tarifa_kwh_aplicada": TARIFA, "status": "pending_payment", "stripe_payment_intent_id": pi,
+    })[0]
+    assert webhook_pagamento_aprovado(db, pi) == "sem_destino"
+    assert webhook_pagamento_aprovado(db, pi) is None  # reentrega: ja encerrada e marcada
+    fim = await _estorno_total(db, r["id"], 20)
+    assert fim["status"] == "failed" and fim["motivo_fim"] == "sem_destino"
+    assert db.comandos(posto["carregador_id"]) == []
+    assert db.frames(cp.id, acao="RemoteStartTransaction") == []
+    assert cp.erros == []
+
+
+async def test_RC05b_estorno_parcial_que_falhou_no_stop_e_refeito_pela_varredura(db, posto, emulador, recarga_paga):
+    """I2: refund-charging fora do ar no StopTransaction; o carregador nao retransmite (CALLERROR)."""
+    cp = await emulador(time_scale=60)
+    r = recarga_paga(50)
+    await _carregando(db, r, 2)
+    falhar_estornos(r["id"], 2)  # o pedido do Stop e a 1a rodada da varredura falham
+    await cp.stop_transaction(1, reason="EVDisconnected")
+    fim = await aguardar(lambda: (x := db.recarga(r["id"]))["status"] == "completed" and x, oque="completed")
+    devolver = float(fim["valor_estornado"])
+    assert devolver > 0 and fim["stripe_refund_id"] is None
+    await aguardar(lambda: db.alertas(posto["carregador_id"], "estorno_falhou"), oque="alerta estorno_falhou")
+    ok = await aguardar(lambda: db.recarga(r["id"])["stripe_refund_id"], timeout=30, oque="estorno pela varredura")
+    assert ok.startswith("re_stub_")
+    assert len(estornos(r["id"], status=502)) == 2
+    pedidos = estornos(r["id"])
+    assert len(pedidos) == 1 and pedidos[0]["valor_centavos"] == round(devolver * 100)
+    depois = db.recarga(r["id"])
+    assert depois["status"] == "completed" and float(depois["valor_estornado"]) == devolver
+
+
+async def test_RC04b_parada_pelo_app_rearma_stop_que_expirou(db, posto, emulador, recarga_paga):
+    """I3: um stop:<recarga> anterior terminou expirado; 'Parar' de novo precisa chegar ao carregador."""
+    cp = await emulador(time_scale=60)
+    r = recarga_paga(50)
+    x = await _carregando(db, r, 1)
+    db.insert("ocpp_comandos", {
+        "carregador_id": posto["carregador_id"], "acao": "RemoteStopTransaction",
+        "payload": {"transactionId": int(x["ocpp_transacao_id"])}, "chave_idempotencia": f"stop:{r['id']}",
+        "recarga_id": r["id"], "status": "expirado", "tentativas": 4, "erro": "sem resposta",
+    })
+    assert parar_pelo_app(db, r["id"]) == "rearmada"
+    assert parar_pelo_app(db, r["id"]) == "existente"  # 2o clique: nada a rearmar
+    fim = await aguardar(lambda: (y := db.recarga(r["id"]))["status"] == "completed" and y, oque="completed")
+    await wait_idle(cp, 1, timeout=10)
+    stops = db.comandos(posto["carregador_id"], "RemoteStopTransaction")
+    assert len(stops) == 1 and stops[0]["status"] == "aceito"
+    assert _acoes(db, cp.id, "saida").count("RemoteStopTransaction") == 1
+    assert fim["motivo_fim"] == "Remote"
     assert cp.erros == []
 
 

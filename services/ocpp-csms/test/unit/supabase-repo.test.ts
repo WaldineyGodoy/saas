@@ -119,11 +119,30 @@ describe('SupabaseRepo (cliente falso)', () => {
     expect((linhas as unknown[])[0]).toMatchObject({ measurand: 'Energy.Active.Import.Register', phase: '', contexto: null });
   });
 
-  it('estorno pendente usa filtro jsonb por texto', async () => {
-    const { client, chamadas } = clienteFalso([{ data: [], error: null }]);
-    await new SupabaseRepo(client).listarRecargasComEstornoPendente();
+  it('estorno pendente usa filtro jsonb por texto; parcial nao confirmado = completed OCPP sem stripe_refund_id (I2)', async () => {
+    const { client, chamadas } = clienteFalso([
+      { data: [recargaDb({ id: 'r1', status: 'failed' })], error: null },
+      { data: [recargaDb({ id: 'r2', status: 'completed', valor_estornado: 30 })], error: null },
+    ]);
+    const l = await new SupabaseRepo(client).listarRecargasComEstornoPendente();
+    expect(l.map((r) => r.id)).toEqual(['r1', 'r2']);
     expect(op(chamadas[0]!, 'eq')).toEqual([['metadata->>estorno_total_pendente', 'true']]);
     expect(op(chamadas[0]!, 'in')[0]).toEqual(['status', ['failed', 'canceled']]);
+    expect(op(chamadas[1]!, 'eq')).toEqual([['status', 'completed']]);
+    expect(op(chamadas[1]!, 'not')).toEqual([['ocpp_transacao_id', 'is', null]]);
+    expect(op(chamadas[1]!, 'gt')).toEqual([['valor_estornado', 0]]);
+    expect(op(chamadas[1]!, 'is')).toEqual([['stripe_refund_id', null]]);
+  });
+
+  it('rearmarComando e UM update guardado por chave e status terminal sem aceite (I3)', async () => {
+    const { client, chamadas } = clienteFalso([{ data: [], error: null }]);
+    expect(await new SupabaseRepo(client).rearmarComando('stop:r1', '2026-10-04T12:02:00.000Z')).toBeNull();
+    expect(chamadas).toHaveLength(1);
+    expect(op(chamadas[0]!, 'update')[0]![0]).toMatchObject({
+      status: 'pendente', tentativas: 0, expira_em: '2026-10-04T12:02:00.000Z', erro: null, resposta: null,
+    });
+    expect(op(chamadas[0]!, 'eq')).toEqual([['chave_idempotencia', 'stop:r1']]);
+    expect(op(chamadas[0]!, 'in')).toEqual([['status', ['expirado', 'rejeitado', 'erro']]]);
   });
 
   it('solicitarEstorno: corpo em centavos; funcao com erro lanca; ja estornada nao chama; valor invalido nao consulta', async () => {

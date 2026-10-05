@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import ChargingCheckout, { StripePaymentForm } from '../src/pages/public/ChargingCheckout';
+import ChargingCheckout, { StripePaymentForm, mensagemPagamentoRecusado } from '../src/pages/public/ChargingCheckout';
 import * as stripeService from '../src/services/stripeChargingService';
 import * as authContext from '../src/contexts/AuthContext';
 
@@ -167,5 +167,22 @@ describe('ChargingCheckout Component', () => {
     );
 
     expect(html).toContain('data-testid="pay-submit-button"');
+  });
+});
+
+describe('mensagemPagamentoRecusado (C1: cartao recusado nao encerra a recarga)', () => {
+  it('cartao recusado: diz que nada foi cobrado e o que fazer, sem prometer estorno', () => {
+    const m = mensagemPagamentoRecusado({ type: 'card_error', message: 'Your card was declined.' });
+    expect(m).toContain('Your card was declined.');
+    expect(m).toContain('Nenhum valor foi cobrado');
+    expect(m).toMatch(/outro cartão|Pix/);
+    expect(m).not.toMatch(/estorn/i);
+  });
+  it('dados invalidos no formulario: so a mensagem da Stripe', () => {
+    expect(mensagemPagamentoRecusado({ type: 'validation_error', message: 'Número do cartão incompleto.' })).toBe('Número do cartão incompleto.');
+  });
+  it('erro sem mensagem: texto padrao', () => {
+    expect(mensagemPagamentoRecusado({})).toBe('Erro ao processar pagamento.');
+    expect(mensagemPagamentoRecusado(null)).toBe('Erro ao processar pagamento.');
   });
 });

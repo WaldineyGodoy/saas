@@ -4,6 +4,7 @@ import {
   conectorDisponivel, mensagemConectorIndisponivel, comandoInicio, comandoParada, gerarIdTag,
   igualConstante, podeParar, valorEstornoCentavos, validarPedidoEstorno, tarifaDoMotorista,
   ESTORNO_MINIMO_CENTAVOS, RESERVA_PAGAMENTO_MIN, EXPIRA_ID_TAG_MS, expiraIdTag, novaExpiracaoDeTagReutilizado, postoAceitaRecarga,
+  metodosDePagamento, pixIndisponivel,
 } from '../supabase/functions/_shared/recarga';
 
 describe('exigirAssinatura (SG-03)', () => {
@@ -265,4 +266,27 @@ describe('postoAceitaRecarga (checkout so em posto operando)', () => {
   test('operando aceita', () => expect(postoAceitaRecarga('operando')).toBe(true));
   test.each(['pre_operacao', 'em_instalacao', 'manutencao', 'inativo', 'cancelado', null, undefined, ''])(
     '%s recusa', (st) => expect(postoAceitaRecarga(st as never)).toBe(false));
+});
+
+describe('metodosDePagamento (M3: Pix e cartao, nada de metodo que liquida em dias)', () => {
+  test('cartao e Pix explicitos; sem automatic_payment_methods (Boleto liquidaria depois da reserva)', () => {
+    const p = metodosDePagamento();
+    expect(p.payment_method_types).toEqual(['card', 'pix']);
+    expect(p).not.toHaveProperty('automatic_payment_methods');
+  });
+  test('o QR do Pix vence junto com a reserva do conector', () => {
+    expect(metodosDePagamento().payment_method_options).toEqual({ pix: { expires_after_seconds: RESERVA_PAGAMENTO_MIN * 60 } });
+    expect(RESERVA_PAGAMENTO_MIN * 60).toBeGreaterThanOrEqual(10); // minimo aceito pela Stripe
+  });
+  test('sem Pix (conta sem Pix habilitado): so cartao', () => {
+    expect(metodosDePagamento({ pix: false })).toEqual({ payment_method_types: ['card'] });
+  });
+  test('pixIndisponivel reconhece a recusa da Stripe ao tipo pix e nada mais', () => {
+    expect(pixIndisponivel({ type: 'StripeInvalidRequestError', param: 'payment_method_types', message: 'The payment method type "pix" is invalid.' })).toBe(true);
+    expect(pixIndisponivel({ type: 'StripeInvalidRequestError', param: 'payment_method_options[pix]', message: 'x' })).toBe(true);
+    expect(pixIndisponivel({ type: 'StripeInvalidRequestError', param: 'amount', message: 'pix' })).toBe(false);
+    expect(pixIndisponivel({ type: 'StripeCardError', param: 'payment_method_types', message: 'pix' })).toBe(false);
+    expect(pixIndisponivel(new Error('rede'))).toBe(false);
+    expect(pixIndisponivel(null)).toBe(false);
+  });
 });

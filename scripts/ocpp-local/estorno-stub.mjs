@@ -7,6 +7,8 @@
 //     stripe_refund_id = 're_stub_<n>' e valor_estornado na recarga (o mesmo efeito no banco) e
 //     guarda o pedido recebido;
 //   * GET  /__stub/estornos[?recarga_id=]   -> pedidos recebidos (os testes L3b conferem aqui);
+//   * POST /__stub/falhar?recarga_id=&vezes= -> os proximos `vezes` pedidos dessa recarga respondem 502
+//     (Stripe fora do ar; a L3b usa para provar que a varredura do CSMS repete o estorno);
 //   * todo o resto (REST, Realtime por WebSocket) -> repassado sem mudanca ao Supabase local.
 // O CSMS roda a imagem de producao sem alteracao; so o SUPABASE_URL dele aponta para ca.
 import http from 'node:http';
@@ -21,6 +23,7 @@ if (!CHAVE) {
 }
 
 const pedidos = []; // { recarga_id, valor_centavos, motivo, status, recebido_em }
+const falhas = new Map(); // recarga_id -> quantas respostas 502 ainda faltam
 let seq = 0;
 
 const json = (res, status, corpo) => {
@@ -70,6 +73,10 @@ async function estornar(req, res) {
   pedidos.push(registro);
   const responder = (status, b) => { registro.status = status; return json(res, status, b); };
   if (typeof recarga_id !== 'string' || !recarga_id) return responder(400, { error: 'recarga_id obrigatorio.' });
+  if ((falhas.get(recarga_id) ?? 0) > 0) {
+    falhas.set(recarga_id, falhas.get(recarga_id) - 1);
+    return responder(502, { error: 'falha simulada (stub)' });
+  }
   try {
     const [recarga] = await rest(`recargas_eletroposto?id=eq.${encodeURIComponent(recarga_id)}&select=id,valor,status,stripe_payment_intent_id,stripe_refund_id`);
     if (!recarga) return responder(404, { error: 'Recarga inexistente.' });
@@ -106,6 +113,13 @@ const server = http.createServer((req, res) => {
     return json(res, 200, id ? pedidos.filter((p) => p.recarga_id === id) : pedidos);
   }
   if (req.method === 'GET' && url.pathname === '/__stub/health') return json(res, 200, { status: 'ok' });
+  if (req.method === 'POST' && url.pathname === '/__stub/falhar') {
+    const id = url.searchParams.get('recarga_id');
+    const vezes = Number(url.searchParams.get('vezes') ?? 1);
+    if (!id || !Number.isInteger(vezes) || vezes < 0) return json(res, 400, { error: 'recarga_id e vezes (inteiro >= 0)' });
+    falhas.set(id, vezes);
+    return json(res, 200, { recarga_id: id, vezes });
+  }
   if (req.method === 'POST' && url.pathname === '/functions/v1/refund-charging') return void estornar(req, res);
   return repassar(req, res);
 });

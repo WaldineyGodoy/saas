@@ -5,10 +5,19 @@
 import type { OnErro } from './auth.js';
 import { META_ESTORNO_PENDENTE, type Comando, type Recarga, type Repo } from '../repo/types.js';
 
-// Conclui o que falta numa recarga failed/canceled marcada: idTag Expired, pedido de estorno
+// Conclui o que falta numa recarga completed com estorno parcial nao confirmado (so o pedido) ou
+// numa recarga failed/canceled marcada: idTag Expired, pedido de estorno
 // (idempotente por recarga) e so entao valor_estornado + limpa a marca. Se algo lanca, a marca fica
 // e a varredura repete.
 export async function reconciliarRecarga(repo: Repo, r: Recarga): Promise<void> {
+  if (r.status === 'completed') {
+    // I2: estorno PARCIAL do StopTransaction que nao foi confirmado (valor_estornado = quanto devolver;
+    // stripe_refund_id nulo). So repete o pedido (idempotente por recarga); a recarga ja esta fechada.
+    if ((r.valor_estornado ?? 0) > 0 && !r.stripe_refund_id) {
+      await repo.solicitarEstorno(r.id, { valor: r.valor_estornado as number, motivo: `varredura: ${r.motivo_fim ?? 'StopTransaction'}` });
+    }
+    return;
+  }
   if (r.ocpp_id_tag && (await repo.buscarIdTag(r.ocpp_id_tag))) {
     await repo.atualizarIdTag(r.ocpp_id_tag, { status: 'Expired' });
   }

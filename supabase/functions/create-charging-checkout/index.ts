@@ -4,6 +4,8 @@ import Stripe from "npm:stripe@^17.7.0"
 import { corsHeaders } from "../_shared/cors.ts"
 import {
   conectorDisponivel,
+  metodosDePagamento,
+  pixIndisponivel,
   mensagemConectorIndisponivel,
   postoAceitaRecarga,
   RESERVA_PAGAMENTO_MIN,
@@ -139,12 +141,12 @@ serve(async (req) => {
     // 2. Criar PaymentIntent na Stripe
     const amountInCents = Math.round(numValor * 100)
     let paymentIntent: Stripe.PaymentIntent
-    try {
-    paymentIntent = await stripe().paymentIntents.create({
+    const criarPi = (pix: boolean) => stripe().paymentIntents.create({
       amount: amountInCents,
       currency: "brl",
       description: `Recarga VE - ${nomePosto} (Conector ${numero}) - ~${kwhEstimado} kWh`,
-      automatic_payment_methods: { enabled: true },
+      // Pix e cartao explicitos (M3): nada de metodo que liquida em dias
+      ...metodosDePagamento({ pix }),
       metadata: {
         recarga_id: recarga.id,
         eletroposto_id: postoId,
@@ -153,6 +155,15 @@ serve(async (req) => {
         motorista_email: motorista?.email || ""
       }
     })
+    try {
+      try {
+        paymentIntent = await criarPi(true)
+      } catch (e) {
+        if (!pixIndisponivel(e)) throw e
+        // conta sem Pix ativado: vende so com cartao em vez de recusar todas as recargas
+        console.warn("[create-charging-checkout] Pix indisponivel na conta Stripe; seguindo so com cartao:", (e as Error).message)
+        paymentIntent = await criarPi(false)
+      }
     } catch (e) {
       await liberar()
       throw e

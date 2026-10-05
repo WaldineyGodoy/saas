@@ -126,6 +126,36 @@ describe('RC - corte pre-pago', () => {
       payload: { transactionId: s.transactionId }, recarga_id: recarga.id, chave_idempotencia: `stop:${recarga.id}`,
     });
   });
+
+  it('I3 stop:<recarga> que terminou sem aceite e rearmado pelo corte (um UPDATE guardado) com alerta', async () => {
+    const { recarga } = await preparar();
+    fila.parar(); // so o estado da fila importa aqui; sem envio ao carregador
+    await conectar('Preparing');
+    const s = await cli.call('StartTransaction', {
+      connectorId: 1, idTag: TAG, meterStart: 1000, timestamp: '2026-10-04T12:00:00.000Z',
+    }) as { transactionId: number };
+    const mv = (ts: string, wh: number) => cli.call('MeterValues', {
+      connectorId: 1, transactionId: s.transactionId,
+      meterValue: [{ timestamp: ts, sampledValue: [{ value: String(wh) }] }],
+    });
+    await mv('2026-10-04T12:10:00.000Z', 26000); // limite
+    const stop = c.repo.comandos.find((x) => x.acao === 'RemoteStopTransaction')!;
+    for (const terminal of ['expirado', 'rejeitado', 'erro'] as const) {
+      await c.repo.atualizarComando(stop.id, { status: terminal, tentativas: 4, erro: 'falhou' });
+      await mv(`2026-10-04T12:1${['expirado', 'rejeitado', 'erro'].indexOf(terminal) + 1}:00.000Z`, 27000 + 1000 * ['expirado', 'rejeitado', 'erro'].indexOf(terminal));
+      expect(cmd(stop.id)).toMatchObject({ status: 'pendente', tentativas: 0, erro: null });
+      expect(new Date(cmd(stop.id).expira_em).getTime()).toBeGreaterThan(Date.now());
+    }
+    expect(c.repo.comandos.filter((x) => x.acao === 'RemoteStopTransaction')).toHaveLength(1);
+    const alertas = c.repo.alertas.filter((a) => a.tipo === 'parada_rearmada');
+    expect(alertas).toHaveLength(3);
+    expect(alertas[0]!.dados).toMatchObject({ recargaId: recarga.id });
+    // aceito (ou ainda pendente/enviado): nao mexe
+    await c.repo.atualizarComando(stop.id, { status: 'aceito' });
+    await mv('2026-10-04T12:20:00.000Z', 31000);
+    expect(cmd(stop.id).status).toBe('aceito');
+    expect(c.repo.alertas.filter((a) => a.tipo === 'parada_rearmada')).toHaveLength(3);
+  });
 });
 
 describe('RS - resiliencia dos comandos', () => {
@@ -290,6 +320,34 @@ describe('FIX - recuperacao de falhas parciais', () => {
     await vi.waitFor(() => expect(c.repo.estornos).toHaveLength(1), { timeout: 3000 });
     await vi.waitFor(() => expect(rec(recarga.id).valor_estornado).toBe(50), { timeout: 3000 });
     expect(tag(TAG).status).toBe('Expired');
+  });
+
+  it('I2 estorno parcial que falhou no StopTransaction: alerta e a varredura pede de novo, uma vez so', async () => {
+    // varredura so quando o teste manda (senao ela pode pedir o estorno antes do Stop)
+    const { recarga } = await preparar({ ...semRuido, varreduraMs: 60_000 });
+    await conectar('Preparing');
+    const s = await cli.call('StartTransaction', {
+      connectorId: 1, idTag: TAG, meterStart: 1000, timestamp: '2026-10-04T12:00:00.000Z',
+    }) as { transactionId: number };
+    await fila.processar();
+    const espiao = vi.spyOn(c.repo, 'solicitarEstorno').mockRejectedValueOnce(new Error('stripe fora'));
+    // 10 kWh x R$ 2 = R$ 20; pago R$ 50 -> devolver R$ 30. O Stop recebe CALLERROR (o carregador pode desistir).
+    await expect(cli.call('StopTransaction', {
+      transactionId: s.transactionId, meterStop: 11000, timestamp: '2026-10-04T12:20:00.000Z', reason: 'EVDisconnected',
+    })).rejects.toBeTruthy();
+    expect(rec(recarga.id)).toMatchObject({ status: 'completed', valor_estornado: 30, stripe_refund_id: null });
+    expect(c.repo.alertas.filter((a) => a.tipo === 'estorno_falhou')).toEqual([
+      expect.objectContaining({ dados: expect.objectContaining({ recargaId: recarga.id, valor: 30 }) }),
+    ]);
+    expect(c.repo.estornos).toEqual([]);
+    await fila.processar(); // varredura
+    expect(c.repo.estornos).toEqual([expect.objectContaining({ recarga_id: recarga.id, valor: 30 })]);
+    expect(rec(recarga.id).stripe_refund_id).not.toBeNull();
+    const chamadas = espiao.mock.calls.length;
+    await fila.processar();
+    await fila.processar();
+    expect(espiao.mock.calls.length).toBe(chamadas); // confirmado: nao e mais listado
+    expect(rec(recarga.id)).toMatchObject({ status: 'completed', valor_final: 20, valor_estornado: 30 });
   });
 
   it('FIX-2 comando preso em enviado (queda entre a trava e a resposta) e reenviado pela varredura', async () => {

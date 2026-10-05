@@ -39,6 +39,26 @@ export type MotivoIndisponivel = 'offline' | 'ocupado' | 'bloqueado' | 'reservad
 // a fn_reservar_recarga; o SQL nao tem constante propria.
 export const RESERVA_PAGAMENTO_MIN = 10;
 
+// Metodos do PaymentIntent (M3). A tela vende Pix e cartao; automatic_payment_methods ligava tambem
+// metodos que liquidam em dias (Boleto), que sempre chegariam depois da reserva do conector e cairiam
+// no estorno. O QR do Pix vence junto com a reserva: pagamento depois disso nao e possivel.
+export function metodosDePagamento({ pix = true }: { pix?: boolean } = {}) {
+  if (!pix) return { payment_method_types: ['card'] };
+  return {
+    payment_method_types: ['card', 'pix'],
+    payment_method_options: { pix: { expires_after_seconds: RESERVA_PAGAMENTO_MIN * 60 } },
+  };
+}
+
+// Conta Stripe sem Pix ativado recusa o PaymentIntent (StripeInvalidRequestError no parametro do
+// tipo/opcao pix). So nesse caso o checkout repete com cartao, para nao parar todas as vendas.
+export function pixIndisponivel(err: unknown): boolean {
+  const e = err as { type?: string; param?: string; message?: string } | null;
+  if (!e || e.type !== 'StripeInvalidRequestError') return false;
+  const param = e.param ?? '';
+  return param.includes('pix') || (param.startsWith('payment_method_types') && /pix/i.test(e.message ?? ''));
+}
+
 // Antes de criar o PaymentIntent (ST-04, UI-01). Preparing entra: o motorista
 // pode pagar com o cabo ja plugado. Faulted/Unavailable contam como bloqueado
 // (nao e ocupacao por outra recarga e so sai com operador/Reset).

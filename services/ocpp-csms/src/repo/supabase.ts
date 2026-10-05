@@ -29,6 +29,7 @@ type ErroPg = { message: string; code?: string } | null;
 const EXPIRA_COMANDO_MS = 2 * 60 * 1000;
 const MEDICAO_PADRAO = 'Energy.Active.Import.Register';
 const TENTATIVAS_METADATA = 8;
+const STATUS_REARMAVEIS: StatusComando[] = ['expirado', 'rejeitado', 'erro'];
 
 const COLS_CARREGADOR = 'id,eletroposto_id,ocpp_id,senha_hash,vendor,modelo,serial,firmware,heartbeat_intervalo_s,online,ultimo_boot_em,ultimo_contato_em,estado_registro';
 const COLS_CONECTOR = 'id,carregador_id,connector_id,status,error_code,info,vendor_error_code,status_em,bloqueado_ate_reset';
@@ -380,9 +381,20 @@ export class SupabaseRepo implements Repo {
   }
 
   async listarRecargasComEstornoPendente() {
-    const r = ok('listarRecargasComEstornoPendente', await this.c.from(T.recargas).select(COLS_RECARGA)
-      .in('status', ['failed', 'canceled']).eq('metadata->>estorno_total_pendente', 'true'));
-    return (r as Linha[]).map(mapRecarga);
+    const totais = ok('listarRecargasComEstornoPendente', await this.c.from(T.recargas).select(COLS_RECARGA)
+      .in('status', ['failed', 'canceled']).eq('metadata->>estorno_total_pendente', 'true')) as Linha[];
+    const parciais = ok('listarRecargasComEstornoPendente', await this.c.from(T.recargas).select(COLS_RECARGA)
+      .eq('status', 'completed').not('ocpp_transacao_id', 'is', null).gt('valor_estornado', 0)
+      .is('stripe_refund_id', null)) as Linha[];
+    return [...totais, ...parciais].map(mapRecarga);
+  }
+
+  async rearmarComando(chave: string, expiraEm: string) {
+    // um UPDATE guardado pelo status: dois chamadores simultaneos nao rearmam duas vezes
+    const r = ok('rearmarComando', await this.c.from(T.comandos).update({
+      status: 'pendente', tentativas: 0, proxima_tentativa_em: this.iso(), expira_em: expiraEm, erro: null, resposta: null,
+    }).eq('chave_idempotencia', chave).in('status', STATUS_REARMAVEIS).select(COLS_COMANDO)) as Linha[];
+    return r[0] ? mapComando(r[0]) : null;
   }
 
   assinarComandos(cb: () => void): () => void {
