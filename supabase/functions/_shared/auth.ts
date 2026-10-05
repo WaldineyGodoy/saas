@@ -80,3 +80,36 @@ export async function requireUser(req: Request, supabase: SupabaseClient): Promi
 
     return { ok: true, userId: user!.id, role: profile?.role ?? 'unknown' }
 }
+
+/** Mesmos papeis de public.fn_papel_interno: a equipe que opera o CRM. */
+const PAPEIS_INTERNOS = ['super_admin', 'admin', 'manager', 'coordinator']
+
+/**
+ * Portao para funcoes que so a equipe (CRM) ou outra Edge Function chamam.
+ *
+ * Outra Edge Function chega com a chave de servidor no Authorization (o
+ * supabase-js de service_role manda ela como Bearer). Usuario logado precisa
+ * de papel interno: assinante, fornecedor e originador nao passam.
+ */
+export async function requireInternoOuServidor(req: Request, supabase: SupabaseClient): Promise<AuthResult> {
+    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim()
+    const chaveServidor = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (token && chaveServidor && token === chaveServidor) {
+        return { ok: true, userId: 'service_role', role: 'service_role' }
+    }
+
+    const { user, failure } = await resolveUser(req, supabase)
+    if (failure) return failure
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user!.id)
+        .single()
+
+    if (!profile || !PAPEIS_INTERNOS.includes(profile.role)) {
+        return { ok: false, status: 403, error: 'Sem permissão para gerar documentos de assinatura.' }
+    }
+
+    return { ok: true, userId: user!.id, role: profile.role }
+}

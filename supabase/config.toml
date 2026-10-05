@@ -47,8 +47,10 @@ verify_jwt = true
 [functions.cancel-autentique-document]
 verify_jwt = true
 
+# Equipe (CRM) ou outra Edge Function (onboarding-finalizar, com a chave de
+# servidor). O portao de verdade e requireInternoOuServidor dentro da funcao.
 [functions.create-autentique-document]
-verify_jwt = false
+verify_jwt = true
 
 [functions.autentique-webhook]
 verify_jwt = false
