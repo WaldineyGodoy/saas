@@ -1012,6 +1012,10 @@ export default function InvoiceFormModal({ invoice, ucs, onClose, onSave, extraA
             const targetId = localInvoiceId || invoice?.id;
             // Pass the current vencimento from form to ensure Asaas uses the new date
             const result = await createAsaasCharge(targetId, 'invoice', { dueDate: formData.vencimento });
+            if (result.semBoleto) {
+                showAlert(result.mensagem, 'info');
+                return;
+            }
             const finalBoletoUrl = result.url || localBoletoUrl || invoice?.asaas_boleto_url;
 
             if (finalBoletoUrl) {

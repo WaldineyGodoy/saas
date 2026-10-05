@@ -997,8 +997,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                             showAlert('Fatura ativa atualizada! Gerando boleto de faturamento...', 'info');
                             try {
                                 const result = await createAsaasCharge(upsertData.id, 'invoice');
-                                showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
-                                await triggerActiveInvoiceNotification(upsertData, result.url);
+                                if (result.semBoleto) {
+                                    showAlert(result.mensagem, 'info');
+                                } else {
+                                    showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
+                                    await triggerActiveInvoiceNotification(upsertData, result.url);
+                                }
                             } catch (asaasErr) {
                                 console.error('Erro na emissão automática do Asaas:', asaasErr);
                                 showAlert('Fatura atualizada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
@@ -1050,8 +1054,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 showAlert('Fatura ativa criada localmente! Gerando boleto de faturamento...', 'info');
                 try {
                     const result = await createAsaasCharge(data.id, 'invoice');
-                    showAlert('Fatura cadastrada e boleto gerado no Asaas com sucesso!', 'success');
-                    await triggerActiveInvoiceNotification(data, result.url);
+                    if (result.semBoleto) {
+                        showAlert(result.mensagem, 'info');
+                    } else {
+                        showAlert('Fatura cadastrada e boleto gerado no Asaas com sucesso!', 'success');
+                        await triggerActiveInvoiceNotification(data, result.url);
+                    }
                 } catch (asaasErr) {
                     console.error('Erro na emissão automática do Asaas:', asaasErr);
                     showAlert('Fatura cadastrada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');

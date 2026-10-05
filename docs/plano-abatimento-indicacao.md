@@ -69,10 +69,36 @@ Se a cobrança for cancelada (`cancel-asaas-charge`) ou a fatura for para `cance
 
 O descarte daquele ciclo **não** é desfeito.
 
-## Pontos a decidir antes de implementar
+## Decididos em 05/10/2026
 
-- **Mínimo do Asaas.** O boleto mínimo no Asaas é R$ 5,00. Se depois do abatimento o ciclo ficar entre R$ 0,01 e R$ 4,99, a proposta é reduzir o abatimento para o boleto sair com R$ 5,00. A diferença fica no saldo para o próximo ciclo, como exceção à regra de descarte, porque o cliente não deixou de usar o crédito.
-- **Conta do descarte:** criar a 3.1.5, como proposto acima, ou lançar na 3.1.1 (Taxa de Gestão)?
+- **Boleto mínimo (R$ 5,00):** ciclo abaixo disso não gera boleto. O crédito é abatido normalmente; as faturas ficam com `cobranca_adiada = true` e a fila (`fn_fila_emissao_faturas`) as junta ao ciclo aberto mais antigo do assinante, que é o que o emissor escolhe primeiro. Vale para qualquer ciclo pequeno, com ou sem crédito.
+- **Descarte:** conta nova 3.1.5.
+
+## Implementado (06/10/2026, ainda não aplicado em produção)
+
+- Migração `supabase/migrations/20261006a_abatimento_credito_indicacao.sql` e teste `supabase/tests/abatimento_credito_indicacao.test.sql`, que roda junto com a migração num lote desfeito no fim (`SANDBOX_OK`):
+  - ordem e empate;
+  - transbordo;
+  - quitada por crédito, sem taxa do Asaas;
+  - chamada repetida;
+  - recálculo;
+  - estorno no cancelamento;
+  - descarte só com o ciclo fechado;
+  - fatura de outro assinante recusada;
+  - razão balanceado;
+  - fila com a adiada.
+- A fila nova devolveu exatamente o mesmo que a atual sobre os dados de produção. Na data do teste a fila estava vazia, então essa comparação não cobre nada; a cobertura real é o teste 9.
+- `create-asaas-charge`:
+  - aplica o crédito depois dos portões e antes do boleto;
+  - quando o ciclo inteiro é quitado pelo crédito, responde `quitado_por_credito`;
+  - abaixo de R$ 5,00, adia e responde `adiada`;
+  - quando o boleto sai, limpa `cobranca_adiada`.
+- `emissor` aceita a adiada de outro mês no ciclo e registra no log "quitado", "adiado" ou "crédito abatido".
+- CRM:
+  - `createAsaasCharge` devolve `semBoleto` e `mensagem`;
+  - as seis telas que emitem tratam o caso sem boleto, sem forçar `a_vencer` e sem notificar o cliente com um boleto que não existe.
+
+Limitação do teste: as UCs do teste não têm usina, então o gatilho do razão para no motivo `uc_sem_usina` antes da taxa, e o teste 1h (sem taxa do Asaas) não chega a ser exercitado de verdade. O patch da taxa foi conferido no texto da função.
 
 ## Testes
 

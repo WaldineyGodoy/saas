@@ -180,8 +180,28 @@ export const fetchOfferData = async (ibge) => {
 
 export const createAsaasCharge = async (id, type = 'invoice', extra = {}) => {
     const payload = type === 'invoice' ? { invoice_id: id, ...extra } : { subscriber_id: id, ...extra };
-    return callFunction('create-asaas-charge', payload);
+    const result = await callFunction('create-asaas-charge', payload);
+    return comAvisoSemBoleto(result);
 };
+
+const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/**
+ * Duas saídas da emissão não têm boleto (20261006a): o crédito de indicação
+ * quitou o ciclo inteiro, ou o ciclo ficou abaixo do mínimo do Asaas e foi
+ * adiado para o próximo. Quem chama confere `semBoleto` antes de mexer no
+ * status da fatura ou notificar o cliente com um boleto que não existe.
+ */
+export function comAvisoSemBoleto(result) {
+    if (result?.quitado_por_credito) {
+        return { ...result, semBoleto: true, mensagem: 'Fatura quitada inteira pelo crédito de indicação. Nenhum boleto foi gerado.' };
+    }
+    if (result?.adiada) {
+        return { ...result, semBoleto: true, mensagem: `Total de ${brl(result.valor)} abaixo do boleto mínimo (R$ 5,00). A cobrança vai junto na próxima fatura.` };
+    }
+    const abatido = Number(result?.credito?.aplicado || 0);
+    return abatido > 0 ? { ...result, mensagem: `Crédito de indicação de ${brl(abatido)} abatido nesta cobrança.` } : result;
+}
 
 export async function cancelAsaasCharge(invoiceId, type = 'invoice') {
     return callFunction('cancel-asaas-charge', { invoice_id: invoiceId, type });
