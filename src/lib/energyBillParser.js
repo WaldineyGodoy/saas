@@ -115,6 +115,34 @@ export const separarNumero = (logradouro) => {
     return m ? { rua: m[1].trim(), numero: m[2] } : { rua: String(logradouro || '').trim(), numero: '' };
 };
 
+const nomeComparavel = (nome) => String(nome || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/\s+/g, ' ').trim();
+
+const LIGACOES = ['monofasico', 'bifasico', 'trifasico'];
+
+// Conta lida -> campos do formulário de UC nova (ConsumerUnitModal). Só volta o
+// que a conta trouxe. O documento da conta vem mascarado e não é usado; o
+// titular só vira o assinante quando o nome confere com o dele.
+export const contaParaUc = (conta, { assinante = null, concessionarias = [] } = {}) => {
+    const end = conta?.endereco || {};
+    const { rua, numero } = separarNumero(end.logradouro);
+    const campos = {
+        numero_uc: conta?.numeroUc,
+        titular_conta: conta?.titular,
+        tipo_ligacao: LIGACOES.includes(conta?.ligacao) ? conta.ligacao : undefined,
+        concessionaria: concessionarias.includes(conta?.concessionaria) ? conta.concessionaria : undefined,
+        franquia: conta?.mediaKwh ? String(conta.mediaKwh) : undefined,
+        cep: end.cep, rua, numero,
+        complemento: end.complemento, bairro: end.bairro, cidade: end.cidade, uf: end.uf,
+    };
+    if (assinante?.id && conta?.titular && nomeComparavel(conta.titular) === nomeComparavel(assinante.name)) {
+        campos.titular_fatura_id = assinante.id;
+        campos.cpf_cnpj_fatura = assinante.cpf_cnpj || undefined;
+    }
+    return Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+};
+
 // Parser central de faturas da Neoenergia Cosern (usando pdfjs).
 // ucsDoCadastro: numero_uc e/ou numero_uc_anterior da UC esperada (string ou array).
 export const parseEnergyBill = async (pdfFile, ucsDoCadastro = null) => {
