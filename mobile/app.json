@@ -98,6 +98,13 @@
     "backgroundColor": "#070A1E",
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "b2wenergiabr",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "486ef9b2-45ad-492a-a2fa-eac2e8db766a"
+      }
     }
   }
 }
