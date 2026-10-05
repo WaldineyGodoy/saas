@@ -91,3 +91,22 @@ entre os ligados à distribuidora da UC (`app_planos_para_uc`) → confere → a
 - Rede de *motoristas* indicados no Drive Connect (não há tabela de indicação de motorista);
   o app mostra o link de indicação e os eletropostos em que o usuário tem cota.
 - Notificações push.
+
+## Publicação (EAS)
+
+Pronto no repositório: `eas.json` com os perfis `development`, `preview` e `production`, cada um
+apontando para o ambiente EAS de mesmo nome; permissões de microfone e de armazenamento antigo
+bloqueadas (o app não grava áudio e usa o seletor de fotos do sistema); privacy manifest do iOS.
+Ficha das lojas: [`loja/ficha-lojas.md`](loja/ficha-lojas.md).
+
+Primeira vez (precisa da conta Expo do dono):
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest init
+npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL --value https://abbysvxnnhwvvzhftoms.supabase.co --visibility plaintext
+npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <chave anon> --visibility plaintext
+```
+
+Repita os dois `env:create` para `preview`. Depois: `eas build --profile preview` (APK de teste
+para Android) e, com as contas das lojas, `eas build --profile production` + `eas submit`.

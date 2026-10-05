@@ -10,9 +10,37 @@
       "supportsTablet": false,
       "bundleIdentifier": "br.com.b2wenergia.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "A c\u00e2mera \u00e9 usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
+        "NSCameraUsageDescription": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
         "NSPhotoLibraryUsageDescription": "Usamos suas fotos para enviar a conta de energia.",
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "E174.1"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -26,6 +54,11 @@
       "package": "br.com.b2wenergia.app",
       "permissions": [
         "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -47,13 +80,17 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "A c\u00e2mera \u00e9 usada para escanear o QR Code do carregador e fotografar sua conta de energia."
+          "cameraPermission": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Usamos suas fotos para enviar a conta de energia."
+          "photosPermission": "Usamos suas fotos para enviar a conta de energia.",
+          "microphonePermission": false,
+          "cameraPermission": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia."
         }
       ]
     ],
