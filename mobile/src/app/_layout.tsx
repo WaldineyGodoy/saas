@@ -43,6 +43,7 @@ function RootStack() {
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="energia/[ucId]" options={{ title: 'Unidade consumidora' }} />
+        <Stack.Screen name="energia/nova-uc" options={{ title: 'Nova UC' }} />
         <Stack.Screen name="invest/[usinaId]" options={{ title: 'Detalhamento da usina' }} />
         <Stack.Screen name="connect/home" options={{ title: 'Home Connect' }} />
         <Stack.Screen name="connect/drive" options={{ title: 'Drive Connect' }} />

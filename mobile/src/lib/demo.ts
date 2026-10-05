@@ -68,6 +68,7 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
   switch (fn) {
     case 'app_perfil': return perfil;
     case 'app_minhas_ucs': return ucs;
+    case 'app_solicitar_nova_uc': return { lead_id: 'demo', ja_existia: false };
     case 'app_uc_detalhe': {
       const uc = ucs.find((u) => u.id === args?.p_uc);
       return uc ? { uc, faturas } : null;

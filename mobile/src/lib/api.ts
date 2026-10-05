@@ -50,3 +50,37 @@ export const useEletropostosPublicos = () =>
 
 export const useMinhasRecargas = () =>
   useQuery({ queryKey: ['recargas'], queryFn: () => rpc<Recarga[]>('app_minhas_recargas') });
+
+// ---------------------------------------------------------------------------
+// Nova UC pela conta de energia
+// ---------------------------------------------------------------------------
+
+const CONTA_DEMO: Record<string, unknown> = {
+  numeroUc: '7000000001', codigoCliente: '7000000001', titular: 'CLIENTE DEMONSTRACAO', documentoTipo: 'CPF',
+  documento: '123.4**.***-**', classificacao: 'B1 RESIDENCIAL', tipoFornecimento: 'Conv. Monômia - Monofásico',
+  ligacao: 'monofasico', mediaKwh: 275, mesReferencia: '05/2026', consumoKwh: 166, valorTotal: 403.09,
+  endereco: { logradouro: 'RUA DAS FLORES 100', bairro: 'CENTRO', cep: '59678-000', cidade: 'TIBAU', uf: 'RN', completo: 'RUA DAS FLORES 100, CENTRO, 59678-000 TIBAU RN' },
+};
+
+/** Le a conta (foto JPEG ou PDF, em base64) na Edge Function. Devolve a leitura
+ *  ja com os campos derivados (numeroUc, ligacao, mediaKwh). */
+export async function lerConta(base64: string, mediaType: 'image/jpeg' | 'application/pdf'): Promise<Record<string, unknown>> {
+  if (DEMO) return CONTA_DEMO;
+  const { data, error } = await supabase.functions.invoke('parse-invoice-image', {
+    body: { imageBase64: base64, mediaType },
+  });
+  // functions.invoke devolve o erro em `error`; a mensagem util vem no corpo.
+  if (error || !data?.ok) {
+    let msg: string | undefined = data?.error;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx?.json) {
+      try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+    }
+    throw new Error(msg || 'Não foi possível ler a conta. Tente de novo.');
+  }
+  return data.dados as Record<string, unknown>;
+}
+
+/** Pedido de nova UC: vira um lead para a equipe. Nao cria UC. */
+export const solicitarNovaUc = (conta: unknown) =>
+  rpc<{ lead_id: string; ja_existia: boolean }>('app_solicitar_nova_uc', { p_conta: conta });

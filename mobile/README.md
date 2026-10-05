@@ -14,6 +14,7 @@ design system *Helios Sovereign*). As telas originais exportadas estão em `../m
 | Tela Home Connect | `src/app/connect/home.tsx` |
 | Tela Drive Connect | `src/app/connect/drive.tsx` |
 | Tela do Eletroposto | `src/app/(tabs)/eletroposto.tsx` + `src/app/scan.tsx` |
+| (sem tela no Stitch) Nova UC pela conta de luz | `src/app/energia/nova-uc.tsx` |
 
 ## Acesso aos dados: só pelas funções `app_*`
 
@@ -62,6 +63,15 @@ npx eas-cli@latest submit --platform android  # Google Play
 Identificadores: `br.com.b2wenergia.app` (iOS e Android). Defina as variáveis `EXPO_PUBLIC_*`
 como *EAS environment variables* para os builds de nuvem.
 
+## Nova UC pela conta de luz
+
+O assinante fotografa a conta (ou envia o PDF) em `energia/nova-uc`. A leitura é feita na Edge
+Function `parse-invoice-image` (a mesma do CRM, que aceita foto e PDF) e o pedido vai por
+`app_solicitar_nova_uc` (migration `20261004h_pedido_nova_uc.sql`): vira um **lead** com a conta lida,
+marcado com o assinante. **Não cria UC** — a equipe vê a UC preenchida na aba "Conta de Energia" do
+lead, e a UC só nasce depois do termo assinado. Pedido repetido para a mesma UC não duplica; UC que já
+é do assinante é recusada.
+
 ## Pagamentos
 
 - **Fatura de energia**: PIX copia-e-cola, código de barras e PDF vindos de `invoices`
@@ -76,5 +86,6 @@ como *EAS environment variables* para os builds de nuvem.
 - "Solicitar resgate de receita" da usina e relatório de telemetria do inversor em PDF.
 - Rede de *motoristas* indicados no Drive Connect (não há tabela de indicação de motorista);
   o app mostra o link de indicação e os eletropostos em que o usuário tem cota.
-- Upload/escaneamento da conta de energia direto no app (hoje leva à simulação no site).
+- Termo aditivo para o assinante assinar a UC nova pedida pelo app (o pedido chega à equipe, mas a
+  UC só pode ser criada depois da assinatura).
 - Notificações push.

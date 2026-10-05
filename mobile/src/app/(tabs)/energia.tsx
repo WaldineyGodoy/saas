@@ -1,10 +1,8 @@
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel } from '../../components/ui';
 import { useMinhasUcs, usePerfil } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtKwh, primeiroNome } from '../../lib/format';
-import { LANDING_RAIZ } from '../../lib/links';
 import { ucStatus } from '../../lib/status';
 import { colors, type } from '../../theme/tokens';
 import { Text } from 'react-native';
@@ -59,13 +57,15 @@ export default function Energia() {
           );
         })
       )}
-      <Card style={{ gap: 10 }}>
-        <Text style={[type.headlineSm, { color: colors.onSurface }]}>Cadastrar nova conta</Text>
-        <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
-          Tem outro imóvel? Faça a simulação com a conta de luz dele e veja o desconto antes de assinar.
-        </Text>
-        <Button label="Simular nova UC" icon="psychology" variant="secondary" onPress={() => WebBrowser.openBrowserAsync(LANDING_RAIZ)} />
-      </Card>
+      {perfil.data?.subscriber ? (
+        <Card style={{ gap: 10 }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Cadastrar nova UC</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
+            Tem outro imóvel? Fotografe a conta de luz dele: lemos os dados e a equipe B2W prepara o termo para você assinar.
+          </Text>
+          <Button label="Adicionar UC pela conta de luz" icon="photo-camera" variant="secondary" onPress={() => router.push('/energia/nova-uc')} />
+        </Card>
+      ) : null}
     </Screen>
   );
 }
