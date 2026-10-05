@@ -81,6 +81,37 @@ export async function lerConta(base64: string, mediaType: 'image/jpeg' | 'applic
   return data.dados as Record<string, unknown>;
 }
 
-/** Pedido de nova UC: vira um lead para a equipe. Nao cria UC. */
-export const solicitarNovaUc = (conta: unknown) =>
-  rpc<{ lead_id: string; ja_existia: boolean }>('app_solicitar_nova_uc', { p_conta: conta });
+export type PlanoUc = { id: string; nome: string; desconto_assinante: number | null };
+
+/** Planos ativos que valem para a distribuidora da UC (planos_distribuidoras). */
+export const usePlanosParaUc = (concessionaria?: string) =>
+  useQuery({
+    queryKey: ['planos-uc', concessionaria],
+    queryFn: () => rpc<PlanoUc[]>('app_planos_para_uc', { p_concessionaria: concessionaria }),
+    enabled: Boolean(concessionaria),
+  });
+
+export type PedidoUc = {
+  lead_id: string; numero_uc: string; plano: string | null; criado_em: string;
+  situacao: 'em_preparo' | 'aguardando_assinatura' | 'assinado' | 'uc_criada' | 'encerrado';
+  link_assinatura: string | null;
+};
+
+export const useMeusPedidosUc = (enabled = true) =>
+  useQuery({ queryKey: ['pedidos-uc'], queryFn: () => rpc<PedidoUc[]>('app_meus_pedidos_uc'), enabled });
+
+/** Gera o termo aditivo da UC nova com o plano escolhido e devolve o link de
+ *  assinatura (Edge Function aditivo-nova-uc). A UC so nasce depois de assinado. */
+export async function gerarTermoAditivo(conta: unknown, planoId: string): Promise<{ lead_id: string; link: string }> {
+  if (DEMO) return { lead_id: 'demo', link: 'https://www.autentique.com.br/' };
+  const { data, error } = await supabase.functions.invoke('aditivo-nova-uc', { body: { conta, plano_id: planoId } });
+  if (error || !data?.ok) {
+    let msg: string | undefined = data?.error;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx?.json) {
+      try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+    }
+    throw new Error(msg || 'Não foi possível gerar o termo. Tente de novo.');
+  }
+  return { lead_id: data.lead_id, link: data.link };
+}

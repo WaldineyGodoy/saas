@@ -1,15 +1,20 @@
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel } from '../../components/ui';
-import { useMinhasUcs, usePerfil } from '../../lib/api';
+import { useMeusPedidosUc, useMinhasUcs, usePerfil } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtKwh, primeiroNome } from '../../lib/format';
-import { ucStatus } from '../../lib/status';
+import { pedidoUcStatus, ucStatus } from '../../lib/status';
 import { colors, type } from '../../theme/tokens';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 export default function Energia() {
   const perfil = usePerfil();
   const ucs = useMinhasUcs();
+  const ehAssinante = Boolean(perfil.data?.subscriber);
+  // Pedidos de nova UC ainda sem UC: a que ja virou UC aparece na lista normal.
+  const pedidos = useMeusPedidosUc(ehAssinante);
+  const pendentes = (pedidos.data ?? []).filter((p) => p.situacao !== 'uc_criada');
   const [busca, setBusca] = useState('');
 
   const tot = useMemo(() => {
@@ -24,7 +29,7 @@ export default function Energia() {
   });
 
   return (
-    <Screen refreshing={ucs.isRefetching} onRefresh={() => ucs.refetch()}>
+    <Screen refreshing={ucs.isRefetching} onRefresh={() => { ucs.refetch(); pedidos.refetch(); }}>
       <Hero
         kicker={`Olá, ${primeiroNome(perfil.data?.name)}`}
         title="Energia por assinatura"
@@ -57,11 +62,37 @@ export default function Energia() {
           );
         })
       )}
-      {perfil.data?.subscriber ? (
+      {pendentes.length > 0 && (
+        <>
+          <SectionLabel title="Novas UCs em andamento" aside={`${pendentes.length}`} />
+          {pendentes.map((p) => {
+            const [label, tone] = pedidoUcStatus(p.situacao);
+            return (
+              <Card key={p.lead_id} style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <Text style={[type.headlineSm, { color: colors.onSurface, flex: 1 }]}>{`UC ${p.numero_uc}`}</Text>
+                  <Badge label={label} tone={tone} />
+                </View>
+                {p.plano ? <Text style={[type.bodySm, { color: colors.inkSecondary }]}>{p.plano}</Text> : null}
+                {p.situacao === 'aguardando_assinatura' && p.link_assinatura ? (
+                  <Button label="Assinar termo" icon="draw" onPress={async () => {
+                    await WebBrowser.openBrowserAsync(p.link_assinatura!);
+                    pedidos.refetch();
+                    ucs.refetch();
+                  }} />
+                ) : p.situacao === 'assinado' ? (
+                  <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Termo assinado. A UC aparece aqui em instantes.</Text>
+                ) : null}
+              </Card>
+            );
+          })}
+        </>
+      )}
+      {ehAssinante ? (
         <Card style={{ gap: 10 }}>
           <Text style={[type.headlineSm, { color: colors.onSurface }]}>Cadastrar nova UC</Text>
           <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
-            Tem outro imóvel? Fotografe a conta de luz dele: lemos os dados e a equipe B2W prepara o termo para você assinar.
+            Tem outro imóvel? Fotografe a conta de luz dele, escolha o plano e assine o termo aditivo aqui mesmo.
           </Text>
           <Button label="Adicionar UC pela conta de luz" icon="photo-camera" variant="secondary" onPress={() => router.push('/energia/nova-uc')} />
         </Card>

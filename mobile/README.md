@@ -63,14 +63,18 @@ npx eas-cli@latest submit --platform android  # Google Play
 Identificadores: `br.com.b2wenergia.app` (iOS e Android). Defina as variáveis `EXPO_PUBLIC_*`
 como *EAS environment variables* para os builds de nuvem.
 
-## Nova UC pela conta de luz
+## Nova UC pela conta de luz (termo aditivo)
 
-O assinante fotografa a conta (ou envia o PDF) em `energia/nova-uc`. A leitura é feita na Edge
-Function `parse-invoice-image` (a mesma do CRM, que aceita foto e PDF) e o pedido vai por
-`app_solicitar_nova_uc` (migration `20261004h_pedido_nova_uc.sql`): vira um **lead** com a conta lida,
-marcado com o assinante. **Não cria UC** — a equipe vê a UC preenchida na aba "Conta de Energia" do
-lead, e a UC só nasce depois do termo assinado. Pedido repetido para a mesma UC não duplica; UC que já
-é do assinante é recusada.
+Tudo no app, em `energia/nova-uc`: o assinante fotografa a conta (ou envia o PDF) → escolhe um plano
+entre os ligados à distribuidora da UC (`app_planos_para_uc`) → confere → assina o termo aditivo.
+
+- Leitura: Edge Function `parse-invoice-image` (foto ou PDF).
+- Termo: Edge Function `aditivo-nova-uc` cria o pedido (lead com a conta lida e o plano), gera o PDF
+  no servidor e o documento na Autentique; o app abre o link de assinatura no navegador interno.
+- Assinado: o `autentique-webhook` chama `fn_criar_uc_do_aditivo`, que cria a UC em "Em ativação"
+  com o plano escolhido (migrations `20261004h` e `20261005a`).
+- A aba Energia lista os pedidos em andamento (`app_meus_pedidos_uc`) com o botão "Assinar termo".
+- Plano sem distribuidora marcada (CRM → Configurações → Planos) não aparece no app.
 
 ## Pagamentos
 
@@ -86,6 +90,4 @@ lead, e a UC só nasce depois do termo assinado. Pedido repetido para a mesma UC
 - "Solicitar resgate de receita" da usina e relatório de telemetria do inversor em PDF.
 - Rede de *motoristas* indicados no Drive Connect (não há tabela de indicação de motorista);
   o app mostra o link de indicação e os eletropostos em que o usuário tem cota.
-- Termo aditivo para o assinante assinar a UC nova pedida pelo app (o pedido chega à equipe, mas a
-  UC só pode ser criada depois da assinatura).
 - Notificações push.

@@ -2,6 +2,15 @@ import { colors } from '../theme/tokens';
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'neutral' | 'info';
 
+/** Situacao do pedido de nova UC (app_meus_pedidos_uc). */
+export const pedidoUcStatus = (s: string): [string, Tone] => ({
+  em_preparo: ['Em preparo', 'neutral'],
+  aguardando_assinatura: ['Assinatura pendente', 'warn'],
+  assinado: ['Assinado', 'info'],
+  uc_criada: ['UC incluída', 'ok'],
+  encerrado: ['Encerrado', 'neutral'],
+} as Record<string, [string, Tone]>)[s] ?? ['Em análise', 'neutral'];
+
 export const toneColor: Record<Tone, string> = {
   ok: colors.statusVerified,
   warn: colors.secondary,

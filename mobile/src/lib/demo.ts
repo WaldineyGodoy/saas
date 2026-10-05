@@ -68,7 +68,13 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
   switch (fn) {
     case 'app_perfil': return perfil;
     case 'app_minhas_ucs': return ucs;
-    case 'app_solicitar_nova_uc': return { lead_id: 'demo', ja_existia: false };
+    case 'app_planos_para_uc': return [
+      { id: '00000000-0000-4000-8000-000000000001', nome: 'Plano Sol 20%', desconto_assinante: 20 },
+      { id: '00000000-0000-4000-8000-000000000002', nome: 'Plano Conect 15%', desconto_assinante: 15 },
+    ];
+    case 'app_meus_pedidos_uc': return [
+      { lead_id: 'demo', numero_uc: '7000000001', plano: 'Plano Sol 20%', criado_em: '2026-10-05T10:00:00Z', situacao: 'aguardando_assinatura', link_assinatura: 'https://www.autentique.com.br/' },
+    ];
     case 'app_uc_detalhe': {
       const uc = ucs.find((u) => u.id === args?.p_uc);
       return uc ? { uc, faturas } : null;

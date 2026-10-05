@@ -1,28 +1,34 @@
+import { useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
-import { Button, Card, Divider, Icon, KeyValue, Loading, Screen, SectionLabel } from '../../components/ui';
-import { lerConta, solicitarNovaUc } from '../../lib/api';
+import { Alert, Pressable, Text, View } from 'react-native';
+import { Button, Card, Divider, Empty, Icon, KeyValue, Loading, Screen, SectionLabel } from '../../components/ui';
+import { gerarTermoAditivo, lerConta, usePlanosParaUc, type PlanoUc } from '../../lib/api';
 import { contaParaPedido, LIGACAO, mensagemDeErro, PDF_MAXIMO_BYTES, tamanhoReduzido, type ContaLida } from '../../lib/conta';
-import { colors, type } from '../../theme/tokens';
+import { fmtPct } from '../../lib/format';
+import { colors, radius, type } from '../../theme/tokens';
 
-type Etapa = 'escolher' | 'lendo' | 'conferir' | 'enviando' | 'enviado';
+type Etapa = 'escolher' | 'lendo' | 'plano' | 'conferir' | 'gerando' | 'assinar';
 
 /**
- * Nova UC pela conta de energia. O assinante fotografa a conta (ou envia o
- * PDF), confere o que foi lido e manda o pedido. Nao cria UC: a equipe B2W
- * recebe o pedido ja preenchido e a UC so entra na assinatura depois do termo
- * assinado.
+ * Nova UC pela conta de energia, tudo no app (decisao do dono, 05/10/2026):
+ * le a conta -> escolhe o plano da distribuidora -> confere -> assina o termo
+ * aditivo. A UC so entra na assinatura depois do termo assinado; o
+ * autentique-webhook cria ela em "Em Ativacao" com o plano escolhido.
  */
 export default function NovaUc() {
+  const qc = useQueryClient();
   const [etapa, setEtapa] = useState<Etapa>('escolher');
   const [conta, setConta] = useState<ContaLida | null>(null);
+  const [plano, setPlano] = useState<PlanoUc | null>(null);
+  const [link, setLink] = useState('');
   const [erro, setErro] = useState('');
-  const [jaExistia, setJaExistia] = useState(false);
+  const planos = usePlanosParaUc(etapa === 'plano' ? conta?.concessionaria : undefined);
 
   const ler = async (obterArquivo: () => Promise<{ base64: string; tipo: 'image/jpeg' | 'application/pdf' } | null>) => {
     setErro('');
@@ -33,7 +39,8 @@ export default function NovaUc() {
       const lida = contaParaPedido(await lerConta(arquivo.base64, arquivo.tipo));
       if (!lida.numeroUc) throw new Error('Não encontramos o número da UC nesta conta. Tente outra foto, com a conta inteira e boa luz.');
       setConta(lida);
-      setEtapa('conferir');
+      setPlano(null);
+      setEtapa('plano');
     } catch (e) {
       setErro(mensagemDeErro(e instanceof Error ? e.message : String(e)));
       setEtapa('escolher');
@@ -74,43 +81,32 @@ export default function NovaUc() {
     return { base64: await new File(pdf.uri).base64(), tipo: 'application/pdf' as const };
   });
 
-  const enviar = async () => {
-    if (!conta) return;
+  const abrirTermo = async (url: string) => {
+    await WebBrowser.openBrowserAsync(url);
+    // Voltou do navegador: a situacao do pedido pode ter mudado.
+    qc.invalidateQueries({ queryKey: ['pedidos-uc'] });
+    qc.invalidateQueries({ queryKey: ['ucs'] });
+  };
+
+  const gerarEAssinar = async () => {
+    if (!conta || !plano) return;
     setErro('');
-    setEtapa('enviando');
+    setEtapa('gerando');
     try {
-      const r = await solicitarNovaUc(conta);
-      setJaExistia(r.ja_existia);
-      setEtapa('enviado');
+      const r = await gerarTermoAditivo(conta, plano.id);
+      setLink(r.link);
+      setEtapa('assinar');
+      await abrirTermo(r.link);
     } catch (e) {
       setErro(mensagemDeErro(e instanceof Error ? e.message : String(e)));
       setEtapa('conferir');
     }
   };
 
-  const recomecar = () => { setConta(null); setErro(''); setEtapa('escolher'); };
+  const recomecar = () => { setConta(null); setPlano(null); setErro(''); setEtapa('escolher'); };
 
   if (etapa === 'lendo') return <Loading label="Lendo a conta… pode levar uns 20 segundos" />;
-  if (etapa === 'enviando') return <Loading label="Enviando o pedido…" />;
-
-  if (etapa === 'enviado') {
-    return (
-      <Screen>
-        <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 10 }}>
-          <Icon name="check-circle" size={44} color={colors.statusVerified} />
-          <Text style={[type.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>
-            {jaExistia ? 'Pedido já registrado' : 'Pedido enviado'}
-          </Text>
-          <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
-            {jaExistia
-              ? `Já temos um pedido em aberto para a UC ${conta?.numeroUc}. A equipe B2W vai falar com você.`
-              : `A equipe B2W recebeu os dados da UC ${conta?.numeroUc} e vai preparar o termo para você assinar. A UC entra na sua assinatura depois da assinatura do termo.`}
-          </Text>
-          <Button label="Voltar para Energia" icon="arrow-back" onPress={() => router.back()} style={{ marginTop: 8, alignSelf: 'stretch' }} />
-        </Card>
-      </Screen>
-    );
-  }
+  if (etapa === 'gerando') return <Loading label="Preparando o termo para assinatura…" />;
 
   const Erro = erro ? (
     <Card style={{ flexDirection: 'row', gap: 10, borderColor: colors.error, borderWidth: 1 }}>
@@ -119,27 +115,85 @@ export default function NovaUc() {
     </Card>
   ) : null;
 
-  if (etapa === 'conferir' && conta) {
+  if (etapa === 'assinar') {
+    return (
+      <Screen>
+        <Card style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
+          <Icon name="draw" size={44} color={colors.primary} />
+          <Text style={[type.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>Termo pronto para assinar</Text>
+          <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
+            {`Assine o termo aditivo da UC ${conta?.numeroUc}. Depois de assinado, ela aparece na aba Energia como "Em ativação", com o plano ${plano?.nome}.`}
+          </Text>
+          <Button label="Abrir termo para assinar" icon="draw" onPress={() => abrirTermo(link)} style={{ marginTop: 8, alignSelf: 'stretch' }} />
+          <Button label="Voltar para Energia" icon="arrow-back" variant="ghost" onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
+        </Card>
+        <Text style={[type.bodySm, { color: colors.inkSecondary, textAlign: 'center' }]}>
+          Se fechar agora, o termo continua pendente na aba Energia.
+        </Text>
+      </Screen>
+    );
+  }
+
+  if (etapa === 'plano' && conta) {
+    return (
+      <Screen>
+        <SectionLabel title="Escolha o plano" aside={`UC ${conta.numeroUc}`} />
+        <Text style={[type.body, { color: colors.inkSecondary }]}>
+          {`Planos disponíveis para ${conta.concessionaria || 'a distribuidora da sua UC'}. O desconto vale para esta UC.`}
+        </Text>
+        {Erro}
+        {planos.isLoading ? <Loading label="Buscando planos…" /> : planos.error ? (
+          <Empty icon="error-outline" title="Não foi possível carregar os planos" text={mensagemDeErro(planos.error instanceof Error ? planos.error.message : String(planos.error))}
+            action={<Button label="Tentar de novo" icon="refresh" variant="secondary" onPress={() => planos.refetch()} style={{ marginTop: 8 }} />} />
+        ) : (planos.data ?? []).length === 0 ? (
+          <Empty icon="info-outline" title="Ainda sem plano para esta região"
+            text="Ainda não temos plano disponível para a distribuidora desta UC. Fale com o suporte B2W." />
+        ) : (
+          (planos.data ?? []).map((p) => {
+            const ativo = plano?.id === p.id;
+            return (
+              <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ checked: ativo }} onPress={() => setPlano(p)}>
+                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: ativo ? colors.primary : colors.borderSubtle, borderRadius: radius.lg }}>
+                  <Icon name={ativo ? 'radio-button-checked' : 'radio-button-unchecked'} color={ativo ? colors.primary : colors.inkMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[type.headlineSm, { color: colors.onSurface }]}>{p.nome}</Text>
+                    {p.desconto_assinante ? (
+                      <Text style={[type.bodySm, { color: colors.secondary }]}>{`${fmtPct(Number(p.desconto_assinante))} de desconto pagando em dia`}</Text>
+                    ) : null}
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })
+        )}
+        <Button label="Continuar" icon="arrow-forward" disabled={!plano} onPress={() => setEtapa('conferir')} />
+        <Button label="Ler outra conta" icon="refresh" variant="ghost" onPress={recomecar} />
+      </Screen>
+    );
+  }
+
+  if (etapa === 'conferir' && conta && plano) {
     const end = conta.endereco;
     return (
       <Screen>
-        <SectionLabel title="Confira os dados lidos" />
+        <SectionLabel title="Confira antes de assinar" />
         {Erro}
         <Card style={{ gap: 2 }}>
           <KeyValue k="Número da UC" v={conta.numeroUc} bold />
           <KeyValue k="Titular na conta" v={conta.titular || '—'} />
           <KeyValue k="Ligação" v={LIGACAO[conta.ligacao || ''] || conta.tipoFornecimento || '—'} />
           <KeyValue k="Consumo médio" v={conta.mediaKwh ? `${conta.mediaKwh} kWh` : '—'} />
-          <KeyValue k="Conta de referência" v={conta.mesReferencia || '—'} />
+          <KeyValue k="Plano" v={plano.nome} />
+          {plano.desconto_assinante ? <KeyValue k="Desconto" v={fmtPct(Number(plano.desconto_assinante))} vColor={colors.secondary} /> : null}
           <Divider />
           <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Endereço da UC</Text>
           <Text style={[type.body, { color: colors.onSurface }]}>{end?.completo || '—'}</Text>
         </Card>
         <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
-          Algum dado errado? Leia a conta de novo com uma foto mais nítida. A equipe B2W também confere tudo antes do termo.
+          Ao continuar, geramos o termo aditivo que inclui esta UC na sua assinatura. Algum dado errado? Leia a conta de novo com uma foto mais nítida.
         </Text>
-        <Button label="Enviar pedido" icon="send" onPress={enviar} />
-        <Button label="Ler outra conta" icon="refresh" variant="ghost" onPress={recomecar} />
+        <Button label="Gerar termo e assinar" icon="draw" onPress={gerarEAssinar} />
+        <Button label="Trocar plano" icon="swap-horiz" variant="ghost" onPress={() => setEtapa('plano')} />
       </Screen>
     );
   }
@@ -148,8 +202,8 @@ export default function NovaUc() {
     <Screen>
       <SectionLabel title="Nova UC pela conta de luz" />
       <Text style={[type.body, { color: colors.inkSecondary }]}>
-        Fotografe a conta de energia do imóvel novo ou envie o PDF. Lemos os dados da UC para você conferir e a equipe
-        B2W prepara o termo para assinatura. A UC só entra na sua assinatura depois do termo assinado.
+        Fotografe a conta de energia do imóvel novo ou envie o PDF. Você escolhe o plano, confere os dados e assina o termo
+        aditivo aqui mesmo. A UC entra na sua assinatura depois do termo assinado.
       </Text>
       {Erro}
       <Card style={{ gap: 10 }}>
