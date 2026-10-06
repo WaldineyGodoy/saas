@@ -65,7 +65,17 @@ Nesses casos a visita é registrada com `aplicada = false`, e o CRM mostra o mot
 - trava após o contrato;
 - arquivo e desarquivo.
 
-O caso 5b (celular de um dígito só) entrou depois dessa execução. Só a expressão regular foi conferida no banco; o caso ainda precisa rodar no lote completo.
+Também cobre:
+- o caso 5b (celular de um dígito só);
+- o caso 7d–7g, de adesão refeita: o cadastro nunca assinado da mesma pessoa é cancelado como "substituído", e o CPF igual vindo com celular e e-mail diferentes não derruba o cadastro de ninguém.
+
+As duas suítes rodaram de novo depois de aplicadas em produção (06/10/2026), as duas com `SANDBOX_OK`.
+
+## Aplicado em 06/10/2026
+
+- As migrações `20261006a` e `20261006b` foram aplicadas, e `create-asaas-charge` e `emissor` foram publicadas.
+- Seis grupos de duplicados foram juntados conforme a revisão do dono: ficou o lead mais recente e o histórico dos outros foi movido para ele. Os leads caíram de 42 para 33.
+- Os grupos (84) …0208 (leads de teste do dono) e (99) 99999‑9999 (lixo) ficaram de fora e aguardam decisão.
 
 ## Depois de publicar o front
 
