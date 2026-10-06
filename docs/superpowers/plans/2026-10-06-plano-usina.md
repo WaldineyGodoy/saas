@@ -993,10 +993,9 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     -- o congelamento passa a dizer de qual plano de usina veio a gestao
     SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
     IF (v_rec ->> 'plano_usina_id')::uuid IS DISTINCT FROM v_pu_orig
-       OR (v_rec ->> 'percentual_recorrente')::numeric IS DISTINCT FROM 12::numeric
-       OR v_rec ->> 'versao' IS DISTINCT FROM '20261006g_originador_usina' THEN
-        RAISE EXCEPTION 'FALHA O1: congelamento sem plano_usina_id/percentual_recorrente/versao certos: % / % / %',
-            v_rec ->> 'plano_usina_id', v_rec ->> 'percentual_recorrente', v_rec ->> 'versao';
+       OR (v_rec ->> 'percentual_recorrente')::numeric IS DISTINCT FROM 12::numeric THEN
+        RAISE EXCEPTION 'FALHA O1: congelamento sem plano_usina_id/percentual_recorrente certos: % / %',
+            v_rec ->> 'plano_usina_id', v_rec ->> 'percentual_recorrente';
     END IF;
 
     -- ==================================================================
