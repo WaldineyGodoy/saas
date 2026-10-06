@@ -79,5 +79,5 @@ As duas suítes rodaram de novo depois de aplicadas em produção (06/10/2026), 
 
 ## Depois de publicar o front
 
-- Retirar as políticas `leads_anon_insert_simulacao` e `leads_anon_select_recem_inserido`. Elas continuam ativas porque o site publicado ainda grava pelo insert direto, e retirá-las antes do deploy derrubaria o formulário.
+- Feito em 06/10/2026 (`20261006c`): o insert anônimo direto e a leitura "recém-inserido" saíram, e o insert autenticado ficou restrito à equipe e ao originador.
 - Juntar os duplicados de hoje depois da revisão do dono.
