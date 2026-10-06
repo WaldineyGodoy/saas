@@ -1,56 +1,17 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
-import { useBranding } from '../contexts/BrandingContext';
-import { fetchCpfCnpjData, fetchAddressByCep, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, sendWhatsapp } from '../lib/api';
+import { fetchCpfCnpjData, fetchAddressByCep } from '../lib/api';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone, cleanDigits } from '../lib/validators';
 import {
     History, User, MapPin, Wallet, X, Save, Trash2,
-    CheckCircle, AlertCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download,
-    FileSignature, Loader2, Send, ExternalLink, Clock, Ban, RefreshCcw
+    CheckCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
-import ContratoFornecedor from './ContratoFornecedor';
-import { baixarPdfContratoFornecedor, DEFAULTS_FORNECEDOR, dividirEmPaginasFornecedor, gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor } from '../lib/contratoFornecedor';
-import { numeroBr, paraNumero } from '../lib/contratoBase';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
-
-/**
- * Condições comerciais do contrato de gestão.
- *
- * Fora do componente porque a validação de envio e o formulário precisam
- * da mesma lista: duas cópias é como um campo novo entra na tela sem
- * entrar na checagem.
- */
-/**
- * Condições vindas do banco no formato da tela.
- *
- * O jsonb guarda número (17.5) e os campos são texto em pt-BR, então sem
- * esta conversão o desconto aparecia como "17.5" — com ponto, na tela de
- * quem digita com vírgula.
- */
-const condicoesParaTela = (termos) => {
-    const tela = { ...DEFAULTS_FORNECEDOR, ...(termos || {}) };
-    for (const chave of Object.keys(tela)) {
-        if (typeof tela[chave] === 'number') tela[chave] = numeroBr(tela[chave]);
-    }
-    return tela;
-};
-
-const CAMPOS_CONDICOES = [
-    { key: 'desconto', label: 'Desconto ao consumidor (%)' },
-    { key: 'percentualRecorrente', label: 'Remuneração recorrente (%)' },
-    { key: 'taxaAdmin', label: 'Taxa de administração (R$)' },
-    { key: 'taxaRecuperacao', label: 'Taxa de recuperação (%)' },
-    { key: 'diaCorte', label: 'Dia de corte' },
-    { key: 'diaRepasse', label: 'Dia do repasse' },
-    { key: 'prazoTransferencia', label: 'Prazo de transferência (dias)' },
-    { key: 'prazoHonorarios', label: 'Prazo de honorários (dias)' }
-];
-
 
 // Rótulos do status calculado. A ordem é a do ciclo do fornecedor.
 const STATUS_FORNECEDOR = {
@@ -64,12 +25,10 @@ const STATUS_FORNECEDOR = {
 export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const { profile } = useAuth();
     const { showAlert, showConfirm } = useUI();
-    const { branding } = useBranding();
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [activeTab, setActiveTab] = useState('geral');
     const [usinas, setUsinas] = useState([]);
-    const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [ledgerEntries, setLedgerEntries] = useState([]);
     const [repasseOrigins, setRepasseOrigins] = useState({});
     const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -106,18 +65,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [counterAccounts, setCounterAccounts] = useState([]);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-    // --- Contrato de gestão -------------------------------------------------
-    // Espelha o fluxo do SubscriberModal: monta o PDF fora da tela, sobe para
-    // a Autentique e dispara o link pela Evolution API.
-    const [signatures, setSignatures] = useState([]);
-    const [loadingSignatures, setLoadingSignatures] = useState(false);
-    const [isCreatingContract, setIsCreatingContract] = useState(false);
-    const [signatureLink, setSignatureLink] = useState('');
-    const [contractOpts, setContractOpts] = useState(DEFAULTS_FORNECEDOR);
-    // Rascunho editável: o texto gerado pode ser ajustado antes de subir.
-    // Sem isso, corrigir uma vírgula exigia alterar o código e publicar.
-    const [contractDraft, setContractDraft] = useState('');
-    const [cancelingSignature, setCancelingSignature] = useState(null);
     const extratoPrintRef = useRef(null);
 
     const [formData, setFormData] = useState({
@@ -164,450 +111,18 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 uf: supplier.address?.uf || ''
             });
 
-            // Condições comerciais gravadas mandam sobre o padrão. Enquanto
-            // isto não existia, editar o desconto não sobrevivia a fechar o
-            // modal: a tela voltava para os 20% do DEFAULTS_FORNECEDOR.
-            setContractOpts(condicoesParaTela(supplier.contract_terms));
-
-            fetchLinkedUsinas(supplier.id, supplier.contract_terms);
+            fetchLinkedUsinas(supplier.id);
             fetchLedgerStatement();
-            fetchSignatures(supplier.id);
-            setSignatureLink(supplier.signature_link || '');
         }
     }, [supplier]);
 
-    /**
-     * Grava a minuta como ela está na tela, salva o fornecedor e baixa o PDF.
-     *
-     * O botão antigo só refazia o texto e jogava fora o rascunho: quem
-     * reescrevia uma cláusula à mão e clicava aqui perdia a edição, e nada
-     * disso chegava ao banco — ao fechar o modal a minuta voltava ao texto
-     * automático. Agora a edição manda: vai para
-     * `contract_terms.minutas.gestao`, volta ao reabrir o modal e é o que sai
-     * no PDF e na Autentique. Para voltar ao automático existe "Descartar
-     * edições".
-     *
-     * Sem edição à mão nada é gravado em `minutas`, e as usinas do Anexo II
-     * são relidas antes de montar o texto. As condições da tela seguem
-     * valendo: passá-las como gravadas impede a releitura de trocar a
-     * Remuneração Recorrente digitada.
-     */
-    const gerarMinutaFornecedor = async () => {
-        if (!supplier?.id) { showAlert('Salve o fornecedor antes de gerar a minuta.', 'warning'); return; }
-
-        setGerandoMinuta(true);
-        try {
-            const editada = minutaEditada;
-            const texto = textoContratoAtual();
-
-            if (editada) {
-                setContractDraft(texto);
-            } else {
-                // O texto se refaz sozinho na renderização seguinte, com o
-                // cadastro recém-lido — e é ele que a folha do PDF imprime.
-                await fetchLinkedUsinas(supplier.id, contractOpts);
-                setContractDraft('');
-            }
-
-            // Só minuta escrita à mão é gravada. Guardar uma cópia do texto
-            // automático congelaria o contrato: ele pararia de acompanhar os
-            // campos, e apareceria "editada à mão" sem ninguém ter editado.
-            const minutas = { ...(contractOpts.minutas || {}) };
-            if (editada) minutas.gestao = texto;
-
-            const { error } = await supabase.from('suppliers')
-                .update({ ...montarPayloadFornecedor(), contract_terms: { ...condicoesParaGravar(), minutas } })
-                .eq('id', supplier.id);
-            if (error) throw error;
-            setContractOpts(prev => ({ ...prev, minutas }));
-
-            const arquivo = `Contrato_de_Gestao_${(formData.name || 'fornecedor').replace(/\s+/g, '_')}_MINUTA.pdf`;
-            await baixarPdfContratoFornecedor(arquivo);
-
-            showAlert(editada
-                ? 'Minuta editada salva no fornecedor e PDF baixado para análise.'
-                : 'Minuta refeita com o cadastro atual e PDF baixado para análise.', 'success');
-        } catch (e) {
-            console.error('Erro ao gerar minuta do fornecedor:', e);
-            showAlert('Erro ao gerar a minuta: ' + e.message, 'error');
-        } finally {
-            setGerandoMinuta(false);
-        }
-    };
-
-    /** Joga fora a minuta editada — a da tela e a gravada — e volta ao automático. */
-    const descartarEdicoesMinuta = async () => {
-        const minutas = { ...(contractOpts.minutas || {}) };
-        delete minutas.gestao;
-        setContractDraft('');
-        setContractOpts(prev => ({ ...prev, minutas }));
-        if (!supplier?.id) return;
-        try {
-            await supabase.from('suppliers')
-                .update({ contract_terms: { ...condicoesParaGravar(), minutas } })
-                .eq('id', supplier.id);
-        } catch (e) {
-            console.error('Erro ao descartar a minuta salva:', e);
-        }
-    };
-
-    const fetchLinkedUsinas = async (supplierId, termosGravados) => {
-        // O Anexo II lista as usinas do contrato, então precisamos de mais que
-        // id/name/status: sem UC geradora e potência o anexo sai vazio.
+    const fetchLinkedUsinas = async (supplierId) => {
         const { data } = await supabase
             .from('usinas')
-            .select('id, name, status, unidade_geradora, potencia_kwp, concessionaria, modalidade_gd, gestao_percentual, address')
+            .select('id, name, status')
             .eq('supplier_id', supplierId);
 
         setUsinas(data || []);
-
-        // A Remuneração Recorrente do contrato é a mesma taxa de gestão já
-        // cadastrada na usina. Digitá-la de novo aqui é como o contrato e o
-        // fechamento mensal acabam divergindo.
-        //
-        // Só serve de sugestão inicial: se o fornecedor já tem condições
-        // gravadas, elas mandam. Caso contrário esta consulta, que volta
-        // depois do carregamento, sobrescreveria o valor gravado.
-        const gestao = Number(data?.[0]?.gestao_percentual);
-        if (gestao > 0 && termosGravados?.percentualRecorrente === undefined) {
-            setContractOpts(prev => ({ ...prev, percentualRecorrente: gestao }));
-        }
-    };
-
-    const fetchSignatures = async (supplierId) => {
-        if (!supplierId) return;
-        setLoadingSignatures(true);
-        try {
-            const { data, error } = await supabase
-                .from('signatures')
-                .select('*')
-                .eq('signer_id', supplierId)
-                .eq('signer_type', 'supplier')
-                .order('created_at', { ascending: false });
-            if (error) throw error;
-            setSignatures(data || []);
-        } catch (error) {
-            console.error('Erro ao buscar assinaturas do fornecedor:', error);
-        } finally {
-            setLoadingSignatures(false);
-        }
-    };
-
-    /**
-     * Texto que será impresso: o rascunho editado, ou o gerado na hora.
-     *
-     * Memoizado porque cada tecla digitada em qualquer campo do modal chega
-     * aqui, e remontar 16 mil caracteres a cada uma não tem por quê.
-     */
-    /** O endereço mora achatado no formData e aninhado no registro. */
-    const enderecoDoForm = () => ({
-        cep: formData.cep,
-        logradouro: formData.rua,
-        rua: formData.rua,
-        numero: formData.numero,
-        complemento: formData.complemento,
-        bairro: formData.bairro,
-        municipio: formData.cidade,
-        cidade: formData.cidade,
-        uf: formData.uf
-    });
-
-    const dadosContratante = { ...supplier, ...formData, address: { ...(supplier?.address || {}), ...enderecoDoForm() } };
-
-    const textoGerado = useMemo(
-        () => montarTextoContratoFornecedor(dadosContratante, usinas, contractOpts),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [supplier, formData, usinas, contractOpts]
-    );
-
-    /** A minuta gravada no banco, se alguém já editou e salvou uma. */
-    const minutaSalva = () => (contractOpts.minutas || {}).gestao || '';
-
-    // Ordem de precedência: o que está sendo digitado agora, depois a minuta
-    // gravada, e por último o texto montado a partir dos campos.
-    const textoContratoAtual = () => contractDraft || minutaSalva() || textoGerado;
-
-    /**
-     * A minuta na tela não é mais a que os campos produzem.
-     *
-     * Vale tanto para o que está sendo digitado agora quanto para a minuta
-     * gravada por um "Gerar minuta" anterior. Enquanto durar, a minuta
-     * ignora os campos — e sem aviso isso se parece exatamente com "o campo
-     * não salvou".
-     */
-    const minutaEditada = textoContratoAtual() !== textoGerado;
-
-    /**
-     * Condições no formato que vai para o banco.
-     *
-     * Os campos são texto para aceitar a vírgula, então "17,5" precisa virar
-     * 17.5 antes de gravar — jsonb com string faria a próxima leitura
-     * depender de reinterpretar o formato. Campo ilegível não é gravado: o
-     * gerador cai no padrão e o valor volta a ser o do DEFAULTS.
-     */
-    const condicoesParaGravar = () => {
-        const gravar = { foro: contractOpts.foro };
-        for (const campo of CAMPOS_CONDICOES) {
-            const n = paraNumero(contractOpts[campo.key]);
-            if (Number.isFinite(n)) gravar[campo.key] = n;
-        }
-        // A minuta editada à mão não está em CAMPOS_CONDICOES e seria apagada
-        // pelo botão Salvar, que reescreve `contract_terms` inteiro.
-        if (contractOpts.minutas && Object.keys(contractOpts.minutas).length) {
-            gravar.minutas = contractOpts.minutas;
-        }
-        return gravar;
-    };
-
-    const mensagemContrato = (link) =>
-        `Olá ${formData.name}, aqui é a B2W Energia. ⚡\n\n` +
-        `Segue o Contrato de Administração e Gestão de Créditos Energéticos da sua usina para assinatura digital. 📄\n\n` +
-        `${link}\n\n` +
-        `Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
-
-    const handleSendContract = async () => {
-        if (!supplier?.id) {
-            showAlert('Salve o fornecedor antes de gerar o contrato.', 'warning');
-            return;
-        }
-        if (!formData.phone && !formData.email) {
-            showAlert('Cadastre telefone ou e-mail do fornecedor antes de enviar o contrato.', 'warning');
-            return;
-        }
-
-        // Condição em branco ou ilegível não pode ir para assinatura: o gerador
-        // cai no padrão para não imprimir NaN, e o contrato sairia prometendo
-        // 20% sem ninguém ver a troca. Foi assim que o campo de desconto
-        // pareceu "voltar para 20%".
-        const invalidos = CAMPOS_CONDICOES
-            .filter(campo => !Number.isFinite(paraNumero(contractOpts[campo.key])))
-            .map(campo => campo.label);
-
-        if (invalidos.length) {
-            showAlert(`Preencha com um número: ${invalidos.join(', ')}.`, 'warning');
-            return;
-        }
-
-        setIsCreatingContract(true);
-        try {
-            // Congela o texto que está na tela para que o PDF capturado seja
-            // exatamente o que o usuário revisou.
-            const texto = textoContratoAtual();
-            setContractDraft(texto);
-
-            const pdfBase64 = await gerarPdfContratoFornecedorBase64();
-
-            const fileName = `Contrato_Gestao_${(formData.name || 'fornecedor').replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-
-            // O bloco de assinatura fica no fim do texto, então a marca vai na
-            // última folha — que varia com o tamanho do contrato. Número fixo
-            // aqui coloca a assinatura no meio de uma cláusula.
-            const ultimaPagina = dividirEmPaginasFornecedor(texto).length;
-
-            const result = await createAutentiqueDocument({
-                documentName: fileName,
-                fileBase64: pdfBase64,
-                signers: [
-                    {
-                        // Sem `email`: com e-mail a Autentique entrega o
-                        // documento por conta dela e não devolve link público,
-                        // e a função cai num fallback que aponta para a página
-                        // de gestão do documento — 404 para quem vai assinar.
-                        // Quem entrega o link somos nós, por WhatsApp e e-mail.
-                        name: formData.name,
-                        action: 'SIGN',
-                        positions: [{ x: 50, y: 82, z: ultimaPagina }]
-                    }
-                ],
-                signerId: supplier.id,
-                signerType: 'supplier'
-            });
-
-            if (result.error) throw new Error(result.error);
-            if (!result?.documentId) throw new Error('Falha ao criar documento na Autentique: ID não retornado.');
-            if (result.signingLinkFound === false) {
-                throw new Error('A Autentique não devolveu link de assinatura para este documento. O documento foi criado, mas o link não pode ser enviado — verifique o documento no painel da Autentique.');
-            }
-
-            let finalLink = result.url;
-            try {
-                const shortRes = await shortenLink(
-                    result.url,
-                    `contrato-usina-${supplier.id.substring(0, 5)}-${Date.now().toString().slice(-4)}`,
-                    `Contrato de Gestão - ${formData.name}`
-                );
-                if (shortRes.success && shortRes.shortUrl) finalLink = shortRes.shortUrl;
-            } catch (shortErr) {
-                // Link longo assina igual: encurtar é conveniência, não requisito.
-                console.warn('Falha ao encurtar link do contrato:', shortErr);
-            }
-
-            // As condições vão junto: o contrato que acabou de subir para
-            // assinatura foi montado com elas, e o banco não pode continuar
-            // dizendo outra coisa se ninguém apertou Salvar antes de enviar.
-            await supabase
-                .from('suppliers')
-                .update({ signature_link: finalLink, contract_terms: condicoesParaGravar(),
-        ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {}) })
-                .eq('id', supplier.id);
-
-            // O link curto também vai para a própria assinatura. Sem isto o
-            // short_url só era preenchido no reenvio, e nada ligava o registro
-            // ao link que o cliente recebeu.
-            await supabase
-                .from('signatures')
-                // document_type: sem ele o webhook não distinguia a Gestão de
-                // uma Compra e Venda e promovia o fornecedor por qualquer uma.
-                .update({ short_url: finalLink, document_type: 'gestao' })
-                .eq('autentique_doc_id', result.documentId);
-            setSignatureLink(finalLink);
-
-            const envio = await enviarLinkContrato(finalLink);
-
-            showAlert(
-                algumCanalFalhou(envio)
-                    ? `Contrato criado, mas houve falha no envio. ${resumoEnvio(envio)}`
-                    : `Contrato gerado e enviado. ${resumoEnvio(envio)}`,
-                algumCanalFalhou(envio) ? 'warning' : 'success'
-            );
-            fetchSignatures(supplier.id);
-            addHistory('supplier', supplier.id, 'envio_contrato', {
-                document_name: fileName,
-                autentique_doc_id: result.documentId,
-                condicoes: contractOpts,
-                envio
-            }, `Contrato enviado para assinatura. ${resumoEnvio(envio)}`);
-        } catch (error) {
-            console.error('Erro ao enviar contrato do fornecedor:', error);
-            showAlert('Erro ao enviar contrato: ' + error.message, 'error');
-        } finally {
-            setIsCreatingContract(false);
-        }
-    };
-
-    /**
-     * Dispara o link por WhatsApp e e-mail e devolve o resultado de cada canal.
-     *
-     * Cada canal falha por conta própria: e-mail recusado não pode impedir o
-     * WhatsApp de sair, e nenhum dos dois invalida o contrato que já subiu
-     * para a Autentique. Só que falhar em silêncio virou problema — se o
-     * WhatsApp não saísse, nada aparecia em lugar nenhum, e a única forma de
-     * descobrir era perguntar ao cliente. Agora o resultado sobe para o
-     * histórico do fornecedor.
-     */
-    const enviarLinkContrato = async (link) => {
-        const texto = mensagemContrato(link);
-        const resultado = { whatsapp: null, email: null };
-
-        if (!formData.phone) {
-            resultado.whatsapp = 'não enviado (sem telefone cadastrado)';
-        } else {
-            try {
-                let instanceName = 'default';
-                const { data: config } = await supabase
-                    .from('integrations_config')
-                    .select('variables')
-                    .eq('service_name', 'evolution_api')
-                    .single();
-                if (config?.variables?.instance_name) instanceName = config.variables.instance_name;
-
-                await sendWhatsapp(formData.phone.replace(/\D/g, ''), texto, null, null, null, instanceName);
-                resultado.whatsapp = 'enviado';
-            } catch (waErr) {
-                console.error('Erro ao enviar WhatsApp:', waErr);
-                resultado.whatsapp = `falhou: ${waErr.message}`;
-            }
-        }
-
-        if (!formData.email) {
-            resultado.email = 'não enviado (sem e-mail cadastrado)';
-        } else {
-            try {
-                // `functions.invoke` devolve o erro em `error`, não lança. Sem
-                // checar isto, e-mail recusado passava como enviado.
-                const { error } = await supabase.functions.invoke('send-email', {
-                    body: {
-                        to: formData.email,
-                        subject: 'Contrato de Gestão de Créditos Energéticos - B2W Energia',
-                        text: texto
-                    }
-                });
-                if (error) throw error;
-                resultado.email = 'enviado';
-            } catch (emailErr) {
-                console.error('Erro ao enviar E-mail:', emailErr);
-                resultado.email = `falhou: ${emailErr.message}`;
-            }
-        }
-
-        return resultado;
-    };
-
-    /** Frase do histórico e do alerta, a partir do resultado dos canais. */
-    const resumoEnvio = (envio) =>
-        `WhatsApp: ${envio.whatsapp} · E-mail: ${envio.email}`;
-
-    const algumCanalFalhou = (envio) =>
-        String(envio.whatsapp).startsWith('falhou') || String(envio.email).startsWith('falhou');
-
-    /**
-     * Cancela o contrato na Autentique e marca a assinatura como cancelada.
-     *
-     * O contrato pendente que ninguém vai assinar — enviado por engano, ou
-     * com link quebrado — ficava "aguardando assinatura" para sempre, e o
-     * documento seguia vivo do lado da Autentique.
-     */
-    const handleCancelContract = async (sig) => {
-        const ok = await showConfirm(
-            'Cancelar este contrato na Autentique? O link de assinatura deixa de valer e o documento é removido de lá. Não dá para desfazer.',
-            'Cancelar contrato'
-        );
-        if (!ok) return;
-
-        setCancelingSignature(sig.id);
-        try {
-            const res = await cancelAutentiqueDocument(sig.id);
-            if (res?.error) throw new Error(res.error);
-
-            showAlert(res?.jaCancelado ? 'Este contrato já estava cancelado.' : 'Contrato cancelado.', 'success');
-            if (sig.short_url === signatureLink || sig.autentique_url === signatureLink) setSignatureLink('');
-            fetchSignatures(supplier.id);
-        } catch (error) {
-            showAlert('Erro ao cancelar contrato: ' + error.message, 'error');
-        } finally {
-            setCancelingSignature(null);
-        }
-    };
-
-    const handleResendContractLink = async (sig) => {
-        const ok = await showConfirm('Deseja reenviar o link de assinatura para o fornecedor?', 'Reenviar Link');
-        if (!ok) return;
-
-        try {
-            let finalLink = sig.short_url || sig.autentique_url;
-
-            if (!sig.short_url) {
-                try {
-                    const shortRes = await shortenLink(sig.autentique_url, `reenvio-usina-${sig.id.substring(0, 5)}`, `Reenvio Contrato - ${formData.name}`);
-                    if (shortRes.success && shortRes.shortUrl) {
-                        finalLink = shortRes.shortUrl;
-                        await supabase.from('signatures').update({ short_url: finalLink }).eq('id', sig.id);
-                    }
-                } catch (e) {
-                    console.warn('Falha no encurtamento durante reenvio:', e);
-                }
-            }
-
-            const envio = await enviarLinkContrato(finalLink);
-            showAlert(
-                algumCanalFalhou(envio) ? `Falha no reenvio. ${resumoEnvio(envio)}` : `Link reenviado. ${resumoEnvio(envio)}`,
-                algumCanalFalhou(envio) ? 'warning' : 'success'
-            );
-            addHistory('supplier', supplier.id, 'reenvio_contrato', { signature_id: sig.id, envio },
-                `Link de assinatura reenviado. ${resumoEnvio(envio)}`);
-        } catch (error) {
-            showAlert('Erro ao reenviar link: ' + error.message, 'error');
-        }
     };
 
     const fetchLedgerStatement = async () => {
@@ -1188,7 +703,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             cidade: formData.cidade,
             uf: formData.uf
         },
-        contract_terms: condicoesParaGravar(),
         ...(supplier?.lead_id ? { lead_id: supplier.lead_id } : {})
     });
 
@@ -1654,7 +1168,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                         { id: 'endereco', label: 'Endereço', icon: MapPin },
                         { id: 'financeiro', label: 'Financeiro', icon: Wallet },
                         { id: 'extrato', label: 'Extrato', icon: ArrowUpDown },
-                        { id: 'contrato', label: 'Contrato', icon: FileSignature },
                         { id: 'historico', label: 'Histórico', icon: History }
                     ].map(tab => (
                         <button
@@ -2498,237 +2011,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                             </div>
                         )}
 
-                        {activeTab === 'contrato' && (
-                            <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                                {!supplier ? (
-                                    <div style={{ ...sectionStyle, textAlign: 'center', color: '#64748b' }}>
-                                        Salve o fornecedor para gerar o Contrato de Gestão.
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div style={sectionStyle}>
-                                            <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                                <FileSignature size={20} color="#3b82f6" /> Condições Comerciais
-                                            </h4>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                                                {CAMPOS_CONDICOES.map(campo => (
-                                                    <div key={campo.key}>
-                                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
-                                                            {campo.label}
-                                                        </label>
-                                                        <input
-                                                            // Texto, e não `type="number"`: o campo de número recusa a
-                                                            // vírgula do teclado brasileiro — ao digitar "17,5" o
-                                                            // navegador devolve string vazia, e o campo parece não
-                                                            // aceitar o valor. A conversão é feita por paraNumero().
-                                                            type="text"
-                                                            inputMode="decimal"
-                                                            value={contractOpts[campo.key]}
-                                                            onChange={e => {
-                                                                // Só dígitos, vírgula e ponto: barra letra digitada por
-                                                                // engano sem brigar com quem está no meio de "17,".
-                                                                const limpo = e.target.value.replace(/[^\d.,]/g, '');
-                                                                setContractOpts({ ...contractOpts, [campo.key]: limpo });
-                                                                // Condição alterada invalida o rascunho: o texto precisa
-                                                                // ser remontado com o número novo.
-                                                                setContractDraft('');
-                                                            }}
-                                                            style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                        />
-                                                    </div>
-                                                ))}
-
-                                                <div>
-                                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.4rem' }}>
-                                                        Foro
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={contractOpts.foro}
-                                                        onChange={e => { setContractOpts({ ...contractOpts, foro: e.target.value }); setContractDraft(''); }}
-                                                        style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', outline: 'none' }}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {usinas.length === 0 && (
-                                                <div style={{ marginTop: '1rem', padding: '0.8rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', fontSize: '0.85rem', color: '#92400e', display: 'flex', gap: '0.5rem' }}>
-                                                    <AlertCircle size={18} />
-                                                    Nenhuma usina vinculada: o Anexo II sairá sem centrais geradoras.
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div style={sectionStyle}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b', flexWrap: 'wrap' }}>
-                                                    <Zap size={20} color="#3b82f6" /> Minuta
-                                                    {/*
-                                                      O rascunho editado à mão vence o texto gerado, e isso era
-                                                      invisível: dava para trocar uma condição, ver a minuta não
-                                                      mudar e concluir que o campo não salvou. Agora a tela diz
-                                                      qual dos dois está à frente, e oferece a saída.
-                                                    */}
-                                                    {minutaEditada && (
-                                                        <span style={{
-                                                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                                                            padding: '0.2rem 0.6rem', borderRadius: '999px',
-                                                            background: '#fffbeb', border: '1px solid #fde68a',
-                                                            color: '#92400e', fontSize: '0.72rem', fontWeight: 700
-                                                        }}>
-                                                            <AlertCircle size={13} /> editada à mão — não acompanha os campos
-                                                        </span>
-                                                    )}
-                                                </h4>
-                                                <div style={{ display: 'flex', gap: '0.6rem' }}>
-                                                    {minutaEditada && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={descartarEdicoesMinuta}
-                                                            style={{ padding: '0.6rem 1rem', background: 'white', color: '#92400e', border: '1px solid #fde68a', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}
-                                                        >
-                                                            Descartar edições
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        disabled={gerandoMinuta || isCreatingContract}
-                                                        onClick={gerarMinutaFornecedor}
-                                                        title="Salva a minuta como ela está na tela e baixa o PDF para análise"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.6rem 1rem', background: 'white', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '10px', fontWeight: 600, cursor: gerandoMinuta || isCreatingContract ? 'not-allowed' : 'pointer', fontSize: '0.85rem', opacity: gerandoMinuta || isCreatingContract ? 0.6 : 1 }}
-                                                    >
-                                                        {gerandoMinuta ? <><Loader2 size={15} className="spin-animation" /> Gerando…</> : <><RefreshCcw size={15} /> Gerar minuta (salva e baixa PDF)</>}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={isCreatingContract}
-                                                        onClick={handleSendContract}
-                                                        style={{
-                                                            display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                            padding: '0.6rem 1.2rem', background: isCreatingContract ? '#94a3b8' : '#3b82f6',
-                                                            color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700,
-                                                            cursor: isCreatingContract ? 'not-allowed' : 'pointer', fontSize: '0.85rem'
-                                                        }}
-                                                    >
-                                                        {isCreatingContract
-                                                            ? <><Loader2 size={16} className="spin-animation" /> Enviando…</>
-                                                            : <><Send size={16} /> Gerar e enviar para assinatura</>}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <textarea
-                                                value={textoContratoAtual()}
-                                                onChange={e => setContractDraft(e.target.value)}
-                                                spellCheck={false}
-                                                style={{
-                                                    width: '100%', minHeight: '340px', padding: '1rem',
-                                                    border: '1px solid #e2e8f0', borderRadius: '12px',
-                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                                    fontSize: '0.78rem', lineHeight: 1.6, outline: 'none', resize: 'vertical'
-                                                }}
-                                            />
-                                            <p style={{ margin: '0.6rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                                                O texto acima é o que será impresso no PDF enviado à Autentique. Alterar uma condição comercial acima remonta a minuta.
-                                            </p>
-                                        </div>
-
-                                        <div style={sectionStyle}>
-                                            <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
-                                                <History size={20} color="#3b82f6" /> Contratos enviados
-                                            </h4>
-
-                                            {loadingSignatures ? (
-                                                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Carregando…</p>
-                                            ) : signatures.length === 0 ? (
-                                                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Nenhum contrato enviado para assinatura.</p>
-                                            ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                                    {signatures.map(sig => {
-                                                        const cor = sig.status === 'signed' ? '#16a34a'
-                                                            : sig.status === 'rejected' || sig.status === 'canceled' ? '#dc2626'
-                                                                : '#d97706';
-                                                        const Icone = sig.status === 'signed' ? CheckCircle
-                                                            : sig.status === 'pending' ? Clock : AlertCircle;
-                                                        return (
-                                                            <div key={sig.id} style={{
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                                gap: '1rem', padding: '0.9rem 1rem', border: '1px solid #f1f5f9',
-                                                                borderRadius: '12px', flexWrap: 'wrap'
-                                                            }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
-                                                                    <Icone size={18} color={cor} />
-                                                                    <div style={{ minWidth: 0 }}>
-                                                                        <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                            {sig.document_name || 'Contrato de Gestão'}
-                                                                        </div>
-                                                                        <div style={{ fontSize: '0.78rem', color: cor, fontWeight: 600 }}>
-                                                                            {sig.status === 'signed' ? 'Assinado'
-                                                                                : sig.status === 'pending' ? 'Aguardando assinatura'
-                                                                                    : sig.status === 'rejected' ? 'Recusado' : 'Cancelado'}
-                                                                            {' · '}
-                                                                            {new Date(sig.created_at).toLocaleDateString('pt-BR')}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                                    <a
-                                                                        href={sig.short_url || sig.autentique_url}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', color: '#3b82f6', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600 }}
-                                                                    >
-                                                                        <ExternalLink size={14} /> Abrir
-                                                                    </a>
-                                                                    {sig.status === 'pending' && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleResendContractLink(sig)}
-                                                                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '10px', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                                                        >
-                                                                            <Send size={14} /> Reenviar
-                                                                        </button>
-                                                                    )}
-                                                                    {sig.status === 'pending' && (
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={cancelingSignature === sig.id}
-                                                                            onClick={() => handleCancelContract(sig)}
-                                                                            title="Cancela na Autentique e invalida o link"
-                                                                            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', border: '1px solid #fecaca', borderRadius: '10px', background: '#fef2f2', color: '#b91c1c', cursor: cancelingSignature === sig.id ? 'not-allowed' : 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                                                        >
-                                                                            {cancelingSignature === sig.id
-                                                                                ? <><Loader2 size={14} className="spin-animation" /> Cancelando…</>
-                                                                                : <><Ban size={14} /> Cancelar</>}
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-
-                                            {signatureLink && (
-                                                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', color: '#64748b' }}>
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{signatureLink}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { navigator.clipboard.writeText(signatureLink); showAlert('Link copiado.', 'success'); }}
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.35rem 0.6rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white', cursor: 'pointer', color: '#64748b' }}
-                                                    >
-                                                        <Copy size={13} /> Copiar
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-
                         {activeTab === 'historico' && supplier && (
                             <div className="no-print" style={{ animation: 'fadeIn 0.3s ease-out' }}>
                                 <div style={sectionStyle}>
@@ -3024,24 +2306,6 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                 </div>
             </div>
 
-            {/*
-              Folhas do contrato de gestão, fora da tela, prontas para o
-              html2canvas.
-              Montadas só durante a geração do PDF, e não enquanto a aba está
-              aberta. São 12 folhas A4 que ninguém vê antes de clicar em
-              enviar; medido, o custo de redesenhá-las é de ~21ms, então isto
-              é higiene de DOM, não correção de lentidão.
-              O gerarPdfBase64 espera 1500ms antes de varrer o DOM, tempo de
-              sobra para o React montar isto.
-            */}
-            {(isCreatingContract || gerandoMinuta) && supplier && (
-                <ContratoFornecedor
-                    supplier={dadosContratante}
-                    usinas={usinas}
-                    branding={branding}
-                    texto={textoContratoAtual()}
-                />
-            )}
         </div>
         </>
     );
