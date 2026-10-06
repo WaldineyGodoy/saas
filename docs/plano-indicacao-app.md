@@ -1,6 +1,6 @@
 # Indicação pelo app: link → loja → cadastro no app
 
-Branch `app-v1.3` · 06/10/2026 · Status: **plano para aprovação**. Nada foi implementado.
+Branch `app-v1.3` · 06/10/2026 · Status: **aprovado em 06/10/2026**. Etapa 1 (banco) pronta e testada, mas ainda não aplicada em produção.
 
 ## O que o dono pediu (05–06/10/2026)
 
@@ -68,19 +68,33 @@ No iPhone há uma melhoria opcional. A página do link copia o código para a á
 - **Contas de desenvolvedor Apple e Google**, que estão no roteiro do dono. Sem o app nas lojas, a página do link não tem para onde mandar. Até lá ela pode mandar para o site.
 - **Domínio da página do link:** sugiro `app.b2wenergia.com.br`, que já é GitHub Pages ("B2W App da energia"). É preciso saber de qual repositório ele sai.
 
-## Decisões do dono
+## Decisões do dono (06/10/2026)
 
-- **A. Quem abre o link no computador**: continua pela simulação do site (o fluxo de hoje) ou só vê "baixe o app"? **Sugestão:** manter o site como alternativa. Muita gente recebe o link no WhatsApp Web.
-- **B. Adesão no app**: telas nativas, como descrito (sugerido), ou o `/contrato` do site dentro do app, que é mais rápido mas tem uma experiência pior? E **a leitura da CNH** (o fluxo por documentos que está suspenso) entra agora ou fica para depois? **Sugestão:** nativo e com a conta de energia agora; a CNH quando o fluxo por documentos for retomado.
-- **C. Domínio** da página do link (ver o item 6).
-- **D. Eletroposto:** quem só usa a recarga, sem ser assinante de energia, também deve ver a pergunta da indicação ao conhecer a energia por assinatura? Ou a pergunta é só para o login totalmente novo, como foi dito ("login novo")? **Sugestão:** só o login novo, como o dono definiu.
+- **A.** No computador, o site continua como alternativa.
+- **B.** A adesão terá **telas próprias do app**. A CNH fica **para depois**.
+- **C.** Domínio novo: **`apps.b2wenergia.com.br`**, com o webapp e a rota `/i/<código>`.
+  - O `app.b2wenergia.com.br`, que é o portal web de assinante, originador e fornecedor publicado do repositório `WaldineyGodoy/app`, **não muda**.
+  - Os logins web continuam como estão.
+- **D.** A pergunta da indicação aparece só para **login novo**: sem assinante, sem fornecedor, sem parceiro e com papel `lead`.
+- **E.** Enquanto as lojas não existem, o app vai ao ar como **webapp** no `apps.b2wenergia.com.br`.
+  - No navegador o código de indicação vai na própria URL e não se perde, nem no iPhone.
+  - Quando as lojas estiverem prontas, o mesmo link passa a abrir o app nativo.
 
-## Ordem sugerida e estimativa
+## Etapa 1, banco (`20261006d_app_cadastro_indicacao.sql`)
 
-1. Banco: `app_registrar_interesse` e a função que confirma o indicador, com testes em lote desfeito (0,5 dia).
-2. App: criar conta com código por e-mail, e a tela da indicação com QR, colar link e o Install Referrer (1,5 dia).
-3. App: adesão nativa, reaproveitando as telas da Nova UC (2 dias).
-4. Página do link e arquivos de Universal Link e App Link, com a troca do destino dos links curtos (1 dia). Essa parte só fica completa com o app publicado nas lojas.
-5. Build de teste (APK) e roteiro de teste no Android e no iPhone pelo Expo Go (0,5 dia).
+Antes de abrir o cadastro pelo próprio usuário, duas correções:
+- **Segurança:** `handle_new_user` ligava o **originador pelo e-mail antes da confirmação**. Com o cadastro aberto, qualquer pessoa poderia criar um login com o e-mail de um parceiro e trocar o id dele, levando a carteira junto. Agora o originador só é ligado com o e-mail confirmado, como já acontecia com assinante e fornecedor.
+- **Troca de id do originador:** quem aponta para `originators_v2` passou a acompanhar a troca (ON UPDATE CASCADE): `lead_visitas`, `eletropostos`, o histórico de cargo e `lider_id`. Sem isso, o primeiro login de um parceiro que já tivesse visitas registradas falharia.
 
-Total: cerca de **5 dias**. O que depende das lojas fica pronto e é ligado no dia da publicação.
+O que entra:
+- **`leads.user_id`:** o lead do app fica ligado ao login.
+- **`fn_indicador_publico`:** devolve só o primeiro nome de quem indicou. Recusa quem não pode indicar e recusa a própria pessoa.
+- **`app_registrar_interesse`:**
+  - exige e-mail confirmado;
+  - recusa quem já é assinante;
+  - usa a mesma trava e a mesma regra de último link do site;
+  - o e-mail usado é sempre o da conta.
+- **`app_perfil`:** ganha `sem_produto` e o lead em andamento, com o nome de quem indicou.
+- **Papel do login:** sobe de `lead` para assinante quando o contrato é assinado, pelo webhook. A proteção de papel em `profiles` continua barrando qualquer troca feita na sessão do próprio usuário. O teste 8 confere isso.
+
+Testes: `supabase/tests/app_cadastro_indicacao.test.sql`, rodado em lote desfeito (`SANDBOX_OK`).
