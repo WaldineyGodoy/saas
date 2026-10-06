@@ -1,0 +1,64 @@
+name: Webapp apps.b2wenergia.com.br
+
+# Versao web do app (Expo) na Hostinger, enquanto as lojas nao existem
+# (docs/plano-indicacao-app.md, decisao E de 06/10/2026). Publica a cada
+# push na main que mexa no app, ou manualmente.
+#
+# Segredos do repositorio (Settings > Secrets and variables > Actions):
+#   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY  -> ja existem (deploy do CRM)
+#   HOSTINGER_FTP_SERVER     ex.: ftp.b2wenergia.com.br (ou o IP do painel)
+#   HOSTINGER_FTP_USERNAME   usuario FTP da Hostinger
+#   HOSTINGER_FTP_PASSWORD   senha desse usuario FTP
+#   HOSTINGER_FTP_DIR        (opcional) pasta no FTP; padrao abaixo
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/webapp-apps.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: webapp-apps
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - name: Testes
+        run: npx vitest run
+
+      - name: Exportar a versao web
+        run: npm run export:web
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Conferir o pacote
+        run: |
+          test -f dist/index.html
+          test -f dist/.htaccess
+          grep -q 'manifest.json' dist/index.html
+
+      - name: Enviar para a Hostinger (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_SERVER }}
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          local-dir: mobile/dist/
+          server-dir: ${{ secrets.HOSTINGER_FTP_DIR || 'domains/b2wenergia.com.br/public_html/apps/' }}
+          protocol: ftps
