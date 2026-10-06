@@ -115,3 +115,33 @@ export async function gerarTermoAditivo(conta: unknown, planoId: string): Promis
   }
   return { lead_id: data.lead_id, link: data.link };
 }
+
+// ---------------------------------------------------------------------------
+// Indicação e cadastro pelo app (migração 20261006d)
+// ---------------------------------------------------------------------------
+
+export type IndicadorPublico = { valido: boolean; id?: string; primeiro_nome?: string; motivo?: string };
+
+/** Confere o código do link/QR e devolve só o primeiro nome de quem indicou. */
+export const confirmarIndicador = (id: string) =>
+  rpc<IndicadorPublico>('fn_indicador_publico', { p_id: id });
+
+/** Link curto do QR (encurtador): o destino só aparece seguindo o redirecionamento. */
+export async function resolverLinkCurto(url: string): Promise<string> {
+  if (DEMO) return '3f2b9c1e-8a4d-4e2f-9b1a-0c5d6e7f8a9b';
+  const { data, error } = await supabase.functions.invoke('resolver-link-indicacao', { body: { url } });
+  if (error || !data?.id) {
+    let msg: string | undefined = data?.error;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx?.json) {
+      try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+    }
+    throw new Error(msg || 'Não foi possível abrir este link. Tente o QR Code.');
+  }
+  return data.id as string;
+}
+
+/** Registra o interesse (lead ligado ao login) e devolve o id da visita, que
+ *  segue para a adesão: é ele que decide a indicação no contrato. */
+export const registrarInteresse = (dados: { name: string; phone: string }, indicador: string | null, meio: 'qr' | 'app' | 'link') =>
+  rpc<string>('app_registrar_interesse', { p_dados: dados, p_indicador: indicador, p_meio: meio === 'qr' ? 'qr' : 'app' });

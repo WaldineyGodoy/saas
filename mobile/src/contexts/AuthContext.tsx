@@ -16,6 +16,11 @@ type AuthValue = {
   /** Apaga o login e abre pedido de cancelamento para a equipe (Edge Function excluir-conta-app). */
   excluirConta: () => Promise<string | null>;
   signOut: () => Promise<void>;
+  /** Login novo pela própria pessoa (cadastro aberto, 06/10/2026). Manda o
+   *  código de 6 dígitos para o e-mail; a sessão só abre ao confirmar. */
+  criarConta: (dados: { nome: string; celular: string; email: string; senha: string }) => Promise<string | null>;
+  confirmarCadastro: (email: string, codigo: string) => Promise<string | null>;
+  reenviarCodigoCadastro: (email: string) => Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -28,6 +33,8 @@ const traduzErro = (msg: string) => {
   if (/should be different|same.*password/i.test(msg)) return 'A senha nova precisa ser diferente da anterior.';
   if (/password should be at least|weak/i.test(msg)) return 'Senha fraca: use pelo menos 8 caracteres, misturando letras e números.';
   if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+  if (/already registered|already been registered|user already exists/i.test(msg)) return 'Este e-mail já tem conta. Entre com ele ou use "Esqueci minha senha".';
+  if (/signups? not allowed|signup.*disabled/i.test(msg)) return 'O cadastro pelo app ainda não está aberto.';
   return msg;
 };
 
@@ -95,6 +102,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut().catch(() => {});
         qc.clear();
         return null;
+      },
+      async criarConta({ nome, celular, email, senha }) {
+        if (DEMO) return null;
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password: senha,
+          options: { data: { name: nome.trim(), phone: celular } },
+        });
+        if (error) return traduzErro(error.message);
+        // E-mail já confirmado em outra conta: o Supabase responde sem erro e
+        // sem identidade nova, para não revelar quem tem conta.
+        if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          return 'Este e-mail já tem conta. Entre com ele ou use "Esqueci minha senha".';
+        }
+        return null;
+      },
+      async confirmarCadastro(email, codigo) {
+        if (DEMO) return null;
+        const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: codigo.trim(), type: 'signup' });
+        return error ? traduzErro(error.message) : null;
+      },
+      async reenviarCodigoCadastro(email) {
+        if (DEMO) return null;
+        const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
+        return error ? traduzErro(error.message) : null;
       },
       async signOut() {
         if (DEMO) return;

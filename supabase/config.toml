@@ -104,3 +104,6 @@ verify_jwt = true
 # Excluir conta pelo app: exige sessao do proprio usuario (requireUser dentro).
 [functions.excluir-conta-app]
 verify_jwt = true
+
+[functions.resolver-link-indicacao]
+verify_jwt = true

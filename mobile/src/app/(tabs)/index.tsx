@@ -1,7 +1,7 @@
-import { router, type Href } from 'expo-router';
+import { Redirect, router, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Text } from 'react-native';
-import { Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel, type IconName } from '../../components/ui';
+import { Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel, type IconName } from '../../components/ui';
 import { useMinhasUcs, useMinhasUsinas, usePerfil } from '../../lib/api';
 import { fmtBRL, primeiroNome } from '../../lib/format';
 import { colors, type } from '../../theme/tokens';
@@ -35,6 +35,9 @@ export default function Inicio() {
 
   if (perfil.isLoading) return <Loading />;
   if (perfil.error) return <Screen><ErrorState error={perfil.error} onRetry={refresh} /></Screen>;
+  // Login novo, sem produto e sem adesão começada: primeiro a indicação.
+  if (perfil.data?.sem_produto && !perfil.data?.lead) return <Redirect href="/indicacao" />;
+  const aderindo = Boolean(perfil.data?.sem_produto && perfil.data?.lead);
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
@@ -43,6 +46,15 @@ export default function Inicio() {
         title="Ecossistema B2W"
         subtitle="Acompanhe sua economia, seus investimentos e sua rede de indicações em poucos toques."
       />
+      {aderindo ? (
+        <Card style={{ gap: 8, borderColor: colors.secondary }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Continue sua adesão</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
+            {perfil.data?.lead?.indicador_nome ? `Indicação de ${perfil.data.lead.indicador_nome} registrada. ` : ''}Falta pouco para economizar na conta de luz.
+          </Text>
+          <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/adesao')} />
+        </Card>
+      ) : null}
       <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar solução (ex: Solar, Recarga, Indicar…)" />
       <Row>
         <Metric label="Economia no mês" value={fmtBRL(economia)} icon="savings" iconColor={colors.secondary} foot={`${ucs.data?.length ?? 0} UCs`} footIcon="bolt" />
