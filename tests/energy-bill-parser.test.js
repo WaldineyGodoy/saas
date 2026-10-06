@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { textoDosItens, parseEnergyBillText, normalizarUc, ucConfere, completarLeitura, contaParaPedido, separarNumero } from '../src/lib/energyBillParser.js';
+import { textoDosItens, parseEnergyBillText, normalizarUc, ucConfere, completarLeitura, contaParaPedido, contaParaUc, separarNumero } from '../src/lib/energyBillParser.js';
 
 // As contas reais (PDF) não vão para o git: têm nome, endereço e UC de clientes.
 // Os testes usam o texto que o pdfjs extrai delas (textoDosItens), com os dados
@@ -181,5 +181,38 @@ describe('pedido de nova UC (leads.conta_lida)', () => {
     expect(separarNumero('RUA DAS FLORES 100')).toEqual({ rua: 'RUA DAS FLORES', numero: '100' });
     expect(separarNumero('RODOVIA EXEMPLO 1000 CD- A')).toEqual({ rua: 'RODOVIA EXEMPLO 1000 CD- A', numero: '' });
     expect(separarNumero('')).toEqual({ rua: '', numero: '' });
+  });
+});
+
+describe('nova UC preenchida pela conta (ConsumerUnitModal)', () => {
+  const conta = {
+    numeroUc: '7000000001', titular: 'José da Silva', ligacao: 'monofasico', mediaKwh: 245,
+    concessionaria: 'Neoenergia Cosern', documento: '***.123.456-**',
+    endereco: { logradouro: 'RUA DAS FLORES 100', cep: '59000-000', bairro: 'CENTRO', cidade: 'NATAL', uf: 'RN' },
+  };
+  const opcoes = { concessionarias: ['Neoenergia Cosern'] };
+
+  test('preenche UC, ligação, consumo e endereço', () => {
+    const r = contaParaUc(conta, opcoes);
+    expect(r).toMatchObject({
+      numero_uc: '7000000001', titular_conta: 'José da Silva', tipo_ligacao: 'monofasico',
+      concessionaria: 'Neoenergia Cosern', franquia: '245', rua: 'RUA DAS FLORES', numero: '100',
+      cep: '59000-000', cidade: 'NATAL', uf: 'RN',
+    });
+    expect(r).not.toHaveProperty('complemento');
+    expect(r).not.toHaveProperty('titular_fatura_id');
+    expect(r).not.toHaveProperty('cpf_cnpj_fatura');
+  });
+
+  test('titular vira o assinante só quando o nome confere', () => {
+    const assinante = { id: 'a1', name: 'JOSE  DA SILVA', cpf_cnpj: '12345678900' };
+    expect(contaParaUc(conta, { ...opcoes, assinante })).toMatchObject({ titular_fatura_id: 'a1', cpf_cnpj_fatura: '12345678900' });
+    expect(contaParaUc(conta, { ...opcoes, assinante: { ...assinante, name: 'Maria Souza' } })).not.toHaveProperty('titular_fatura_id');
+  });
+
+  test('ignora ligação e concessionária fora das opções do formulário', () => {
+    const r = contaParaUc({ ...conta, ligacao: 'desconhecida', concessionaria: 'Outra' }, opcoes);
+    expect(r).not.toHaveProperty('tipo_ligacao');
+    expect(r).not.toHaveProperty('concessionaria');
   });
 });

@@ -16,6 +16,8 @@ import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import UCInvoicesModal from './UCInvoicesModal';
 import InvoiceFormModal from './InvoiceFormModal';
 import ManualInvoiceUploadModal from './ManualInvoiceUploadModal';
+import PreencherUcPelaConta from './PreencherUcPelaConta';
+import { contaParaUc } from '../lib/energyBillParser';
 import { sendWhatsapp } from '../lib/api';
 import { useBranding } from '../contexts/BrandingContext';
 import ContratoTransferencia from './ContratoTransferencia';
@@ -811,6 +813,25 @@ Qualquer dúvida, é só responder esta mensagem.`;
         }
     };
 
+    // UC nova: a conta lida preenche o formulário; a equipe confere e salva.
+    const aplicarContaNaUc = async (conta) => {
+        const assinante = subscribers.find(s => s.id === formData.subscriber_id) || null;
+        const campos = contaParaUc(conta, { assinante, concessionarias: concessionariaOptions.map(o => o.value) });
+        if (campos.cep) campos.cep = maskCEP(campos.cep);
+        setFormData(prev => ({ ...prev, ...campos }));
+        if (campos.titular_fatura_id) setTitularSearchTerm('');
+
+        const { data: existente } = await supabase
+            .from('consumer_units').select('id').eq('numero_uc', campos.numero_uc).limit(1);
+        if (existente?.length) {
+            showAlert(`A UC ${campos.numero_uc} já está cadastrada no sistema. Confira antes de salvar.`, 'warning');
+        } else if (!campos.titular_fatura_id) {
+            showAlert(`Conta lida: UC ${campos.numero_uc}. O titular da conta não é o assinante: defina o titular da fatura antes de salvar.`, 'success');
+        } else {
+            showAlert(`Conta lida: UC ${campos.numero_uc}. Confira os dados e salve.`, 'success');
+        }
+    };
+
     const handleSubscriberSaved = (savedSub) => {
         setSubscribers(prev => prev.map(s => s.id === savedSub.id ? { ...s, ...savedSub } : s));
     };
@@ -1448,6 +1469,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             {/* Tab Content: Geral */}
                             {activeTab === 'geral' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                    {!consumerUnit?.id && <PreencherUcPelaConta onLeitura={aplicarContaNaUc} />}
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                                         <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
