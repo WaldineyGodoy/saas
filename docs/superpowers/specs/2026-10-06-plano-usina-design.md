@@ -82,11 +82,15 @@ A migração cria **"Plano Usina Padrão"** com os valores de `DEFAULTS_USINA` (
 
 ### Resolução das regras
 
-Caminho novo: **UC → usina → `planos_usina` → `planos_assinatura_energia`**. `fn_plano_da_uc` e `fn_regras_recompensa_uc` são reescritas para esse caminho e passam a devolver também `percentual_recorrente` e o `plano_usina_id`.
+**Estado real em 06/10/2026** (levantado ao escrever o plano): desde o commit `64d668f` do `main` (03/10), o plano de assinatura é escolhido **na UC** (`consumer_units.plano_assinatura_id`, aba Financeiro do `ConsumerUnitModal`). 22 UCs estão no Plano Premium, e o motor novo já lançou 6 faturas reais (Bom Jesus e Bom Jesus II) em 06/10. Nenhuma usina tem `usinas.plano_assinatura_id`, e nenhum código do `main` grava essa coluna.
 
-- **Gestão B2W**: `planos_usina.percentual_recorrente`, **igual em todos os níveis** (sobrescreve `regras_multinivel.b2w` e `planos_assinatura_energia.gestao_percentual` na matriz sintética que o gatilho já monta desde a Task 11).
-- Matriz dos demais papéis, piso, desconto e `tipo_recompensa`: do plano de assinatura, como hoje.
-- **Usina sem plano de usina**: comportamento atual de `uc_sem_plano` — fornecedor fica com o caixa, 3.1.1 = 0.
+Resolução:
+
+- **Plano de recompensas** = `COALESCE(consumer_units.plano_assinatura_id, planos_usina.plano_assinatura_id)` — o plano contratado pelo assinante **na UC tem precedência**; o do plano de usina é o padrão para UC sem plano próprio. `fn_plano_da_uc` troca só o join da usina (`usinas.plano_assinatura_id` → `usinas.plano_usina_id → planos_usina.plano_assinatura_id`).
+- **Gestão B2W**: quando a usina tem plano de usina, `planos_usina.percentual_recorrente`, **igual em todos os níveis** — sobrescreve `regras_multinivel.b2w` e `gestao_percentual` do plano de recompensas resolvido, seja ele o da UC ou o da usina. `fn_regras_recompensa_uc` aplica a sobrescrita e devolve também `plano_usina_id` e `percentual_recorrente`. Só sobrescreve matriz válida: plano com `b2w.niveis` ausente continua caindo em `plano_sem_matriz`.
+- **Bônus Start**: na fatura do Start, o `b2w` do `start_config` continua mandando (decisão de 29/09 sobre o Start); a gestão do plano de usina vale para a recorrência e para a fatura de plano `start` fora da janela.
+- Matriz dos demais papéis, piso, desconto e `tipo_recompensa`: do plano de recompensas resolvido, como hoje.
+- **Usina sem plano de usina**: comportamento atual — com plano na UC, gestão da matriz desse plano; sem plano nenhum, `uc_sem_plano` (fornecedor fica com o caixa, 3.1.1 = 0).
 - O congelamento (`invoices.recompensas_aplicadas`) grava `plano_usina_id` e `percentual_recorrente` além do que já grava.
 
 ### Novo papel `originador_usina`
