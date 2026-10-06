@@ -3,6 +3,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.0"
 import { corsHeaders } from "../_shared/cors.ts"
 import { requireAdmin } from "../_shared/auth.ts"
 
+/** Menor boleto que o Asaas aceita. Abaixo disso a cobrança vai no próximo ciclo. */
+const VALOR_MINIMO_BOLETO = 5
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -179,6 +182,77 @@ serve(async (req) => {
         if (avisos.length > 0) {
             console.log('[Asaas Charge] Emitindo com avisos:', avisos);
         }
+
+        // ------------------------------------------------------------------
+        // Crédito de indicação (Assinante Connect) e boleto mínimo.
+        //
+        // O saldo é abatido AQUI, depois dos portões e antes do boleto: é o
+        // único momento em que o ciclo inteiro está na mão, então a ordem do
+        // dono (vencimento mais próximo; no empate, maior valor) vale de
+        // verdade. A função do banco abate, quita a fatura que zerar e
+        // descarta a sobra quando o ciclo fecha (20261006a).
+        //
+        // Ciclo abaixo de R$ 5,00 não vira boleto (mínimo do Asaas): fica
+        // adiado e a fila o junta ao próximo ciclo do assinante.
+        // ------------------------------------------------------------------
+        const semCobranca = invoicesToCharge.filter((i) => !i.asaas_payment_id && !i.consolidated_invoice_id);
+        let credito = null;
+        if (semCobranca.length === invoicesToCharge.length) {
+            const { data: cred, error: credErr } = await supabase.rpc('fn_aplicar_credito_indicacao', {
+                p_subscriber: subscriber.id,
+                p_invoice_ids: invoicesToCharge.map((i) => i.id),
+            });
+            if (credErr) throw new Error(`Falha ao aplicar o crédito de indicação: ${credErr.message}`);
+            credito = cred;
+
+            if (Number(cred?.aplicado || 0) > 0) {
+                const { data: atual, error: atualErr } = await supabase
+                    .from('invoices')
+                    .select('id, valor_a_pagar, status, abatimento_indicacao')
+                    .in('id', invoicesToCharge.map((i) => i.id));
+                if (atualErr) throw new Error(`Falha ao reler as faturas depois do crédito: ${atualErr.message}`);
+                const porId = new Map((atual || []).map((a) => [a.id, a]));
+                invoicesToCharge = invoicesToCharge
+                    .map((i) => ({ ...i, ...porId.get(i.id) }))
+                    .filter((i) => i.status !== 'pago');
+            }
+        }
+
+        if (invoicesToCharge.length === 0) {
+            console.log('[Asaas Charge] Ciclo quitado inteiro pelo crédito de indicação:', JSON.stringify(credito));
+            return new Response(
+                JSON.stringify({ success: true, quitado_por_credito: true, credito }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        const totalPrevio = Number(invoicesToCharge
+            .reduce((acc, inv) => acc + Number(inv.valor_a_pagar || 0), 0).toFixed(2));
+
+        if (totalPrevio < VALOR_MINIMO_BOLETO) {
+            const idsAdiados = invoicesToCharge.map((i) => i.id);
+            const { error: adiarErr } = await supabase.from('invoices')
+                .update({ cobranca_adiada: true, cobranca_adiada_em: new Date().toISOString() })
+                .in('id', idsAdiados);
+            if (adiarErr) throw new Error(`Falha ao adiar a cobrança: ${adiarErr.message}`);
+
+            await supabase.from('entity_history').insert(idsAdiados.map((id) => ({
+                entity_type: 'invoice',
+                entity_id: id,
+                action: 'payment_deferred',
+                details: { motivo: 'abaixo do boleto minimo', total: totalPrevio, minimo: VALOR_MINIMO_BOLETO, credito, emitido_por: auth.userId },
+            })));
+
+            console.log(`[Asaas Charge] Ciclo de ${totalPrevio} abaixo do mínimo: cobrança adiada para o próximo ciclo.`);
+            return new Response(
+                JSON.stringify({ success: true, adiada: true, valor: totalPrevio, credito }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Com fatura adiada de mês anterior junto, o vencimento e a referência
+        // do boleto são os do ciclo mais novo.
+        invoicesToCharge.sort((a, b) => String(b.mes_referencia).localeCompare(String(a.mes_referencia)));
 
         console.log(`[Asaas Charge] isSandbox: ${isSandbox}, asaasUrl: ${asaasUrl}`);
         console.log(`[Asaas Charge] subscriber: ${subscriber.name} (${subscriber.cpf_cnpj}), existing customer ID: ${subscriber.asaas_customer_id}`);
@@ -429,6 +503,7 @@ serve(async (req) => {
                 asaas_boleto_url: boletoUrl,
                 asaas_status: 'PENDING',
                 consolidated_invoice_id: consolidatedId,
+                cobranca_adiada: false,
                 vencimento: dueDate, // Sincronizar data de vencimento
                 status: newStatus // Transição automática de status
             })

@@ -2697,7 +2697,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                     .map(i => i.id)
                                                             });
 
-                                                            if (result.success) {
+                                                            if (result.semBoleto) {
+                                                                showAlert(result.mensagem, 'info');
+                                                                await fetchInvoices(subscriber.id);
+                                                            } else if (result.success) {
                                                                 showAlert('Fatura consolidada gerada com sucesso!', 'success');
                                                                 await Promise.all([
                                                                     fetchInvoices(subscriber.id),

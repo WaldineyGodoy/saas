@@ -5,10 +5,11 @@ import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, sendLeadMensagem } from '../lib/api';
 import { MODELOS_LEAD, montarMensagemLead, montarLinkIndicacao } from '../../supabase/functions/_shared/mensagem-lead.ts';
 import { maskPhone, validatePhone } from '../lib/validators';
-import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle } from 'lucide-react';
+import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle, Users } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import TagInput from './TagInput';
 import ContaEnergiaLead from './ContaEnergiaLead';
+import LeadVisitas from './LeadVisitas';
 import { separarNumero } from '../lib/energyBillParser';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
@@ -575,6 +576,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                         { id: 'endereco', label: 'Endereço', icon: Home, color: '#10b981', bg: '#ecfdf5' },
                         { id: 'conta', label: 'Conta de Energia', icon: FileText, color: '#0ea5e9', bg: '#f0f9ff' },
                         ...(formData.tags?.includes('Energia por Assinatura') ? [{ id: 'energia', label: 'Dados de Energia', icon: Zap, color: '#f59e0b', bg: '#fff7ed' }] : []),
+                        ...(lead?.id ? [{ id: 'visitas', label: 'Visitas e Indicações', icon: Users, color: '#0f766e', bg: '#f0fdfa' }] : []),
                         { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
                     ].map(tab => {
@@ -711,6 +713,10 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                         <form id="lead-form-conta" onSubmit={handleSubmit}>
                             <ContaEnergiaLead lead={lead} contaLida={contaLida} onLeitura={aplicarContaLida} />
                         </form>
+                    )}
+
+                    {activeTab === 'visitas' && (
+                        <LeadVisitas leadId={lead?.id} />
                     )}
 
                     {activeTab === 'endereco' && (

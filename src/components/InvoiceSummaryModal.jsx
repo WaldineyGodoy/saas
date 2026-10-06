@@ -724,6 +724,14 @@ export default function InvoiceSummaryModal({ invoice, consumerUnit, onClose, on
         try {
             const result = await createAsaasCharge(invoice.id, 'invoice', { dueDate: boletoDueDate });
 
+            // Sem boleto (quitada pelo crédito ou adiada): o banco já deixou a
+            // fatura no estado certo; forçar 'a_vencer' aqui desfaria isso.
+            if (result.semBoleto) {
+                showAlert(result.mensagem, 'info');
+                onClose?.();
+                return;
+            }
+
             if (!result.success && !result.url) {
                 throw new Error('Falha ao gerar cobrança no Asaas.');
             }

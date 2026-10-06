@@ -163,6 +163,8 @@ export default function LeadsList() {
     const [selectedTags, setSelectedTags] = useState([]);
     const [selectedStatuses, setSelectedStatuses] = useState([]);
     const [hideEmptyStatuses, setHideEmptyStatuses] = useState(false);
+    // Simulação parada há 90 dias é arquivada (20261006b) e some do padrão.
+    const [mostrarArquivados, setMostrarArquivados] = useState(false);
     const [activeId, setActiveId] = useState(null);
 
     const sensors = useSensors(
@@ -174,6 +176,7 @@ export default function LeadsList() {
     );
 
     const filteredLeads = leads.filter(lead => {
+        if (lead.arquivado_em && !mostrarArquivados) return false;
         let matchesSearch = true;
         let matchesTags = true;
         let matchesStatus = true;
@@ -440,6 +443,17 @@ export default function LeadsList() {
                             <label htmlFor="hide-empty" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>Ocultar colunas vazias</label>
                         </div>
                     )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <input
+                            type="checkbox"
+                            id="mostrar-arquivados"
+                            checked={mostrarArquivados}
+                            onChange={e => setMostrarArquivados(e.target.checked)}
+                        />
+                        <label htmlFor="mostrar-arquivados" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
+                            Mostrar arquivados ({leads.filter(l => l.arquivado_em).length})
+                        </label>
+                    </div>
                     <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                         <button
                             onClick={() => setViewMode('list')}
