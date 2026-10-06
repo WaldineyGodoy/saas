@@ -268,12 +268,20 @@ O CSMS repete a cada varredura (5 s) os estornos ainda não confirmados:
 
 Alertas novos em `notification_logs` (canal `sistema`, `metadata.tipo`): `estorno_falhou` (o pedido do `StopTransaction` falhou; a varredura repete) e `parada_rearmada` (um `RemoteStopTransaction` anterior terminou `expirado`/`rejeitado`/`erro` e foi reenfileirado pelo app ou pelo corte pré-pago). `parada_rearmada` repetido para a mesma recarga = o carregador não está parando: intervenha no local ou com `Reset`.
 
-## 9. Decisões pendentes (spec §10)
+## 9. Decisões do dono (spec §10)
 
-1. **CSMS próprio (D1)** em vez do broker da Joult ou de um CSMS SaaS. Se a Joult já fornecer backend com API, só a ponte (spec §5.4) muda de destino; emulador e catálogo valem igual. *Dono (04/10): decidir depois.*
-2. **Hospedagem do CSMS** (processo persistente com WSS: Fly.io, Railway ou VM). Não bloqueia os testes locais; bloqueia a homologação com o Joult real. *Dono (04/10): decidir depois.*
+1. **CSMS próprio (D1)** em vez do broker da Joult ou de um CSMS SaaS. *Dono: construir o CSMS próprio (feito neste PR).*
+2. **Hospedagem do CSMS**: *Dono (06/10): VPS da Contabo, publicada pelo Easy Panel* (imagem Docker de `services/ocpp-csms`).
 
-Decididas: tarifa ao motorista = coluna `tarifa_motorista_kwh` do plano (§4.9); estorno mínimo = R$ 0,50.
+Decididas também: tarifa ao motorista = coluna `tarifa_motorista_kwh` do plano (§4.9); estorno mínimo = R$ 0,50.
+
+### 9.1 Ordem dos próximos passos (dono, 06/10)
+
+1. Configurar a VPS Contabo + Easy Panel e subir o CSMS (WSS com domínio e TLS).
+2. Só depois: sequência §8.1 em produção e merge do PR.
+3. Homologação com o Joult real e pagamento real: aguardam a entrega do equipamento.
+4. Telas de operação no CRM **dentro do modal do eletroposto** (cadastro de carregadores/conectores e senha, status ao vivo, histórico de recargas/estornos, comandos do operador, alertas). Antes de começar: corrigir o `UPDATE` de drenagem do §8.1 (restringir aos PaymentIntents cancelados).
+5. Fluxo de recarga no app do motorista (`saas-mobile`): depois do item 4.
 
 ## 10. Desvios aceitos registrados durante o trabalho
 

@@ -285,8 +285,8 @@ Cada cenário vira um teste automatizado (L3b, com o ID no nome do teste: `test_
 
 ## 10. Decisões a confirmar com o dono
 
-1. **CSMS próprio (D1)** em vez de contratar/usar o broker da Joult ou um CSMS SaaS. Se a Joult já fornecer um backend com API, a ponte (§5.4) muda de destino, mas o emulador e o catálogo (§6–8) valem igual. *Dono (04/10): decidir depois.*
-2. **Hospedagem do CSMS** (precisa de processo persistente com WSS): Fly.io, Railway ou VM. Não bloqueia os testes locais. *Dono (04/10): decidir depois.*
+1. **CSMS próprio (D1)** em vez de contratar/usar o broker da Joult ou um CSMS SaaS. Se a Joult já fornecer um backend com API, a ponte (§5.4) muda de destino, mas o emulador e o catálogo (§6–8) valem igual. *Dono: construir o CSMS próprio.*
+2. **Hospedagem do CSMS** (precisa de processo persistente com WSS): Fly.io, Railway ou VM. Não bloqueia os testes locais. *Dono (06/10): VPS da Contabo via Easy Panel.*
 3. ~~**Tarifa ao motorista**~~ — **decidido:** coluna própria no plano de eletroposto (§4.9).
 4. ~~**Estorno mínimo**~~ — **decidido:** R$ 0,50.
 
