@@ -11,7 +11,7 @@
 DO $$
 DECLARE
   v_a uuid; v_b uuid; v_orig uuid; v_v1 uuid; v_v2 uuid; v_v3 uuid; v_v4 uuid; v_v5 uuid;
-  v_lead uuid; v_lead2 uuid; v_n int; v_txt text; v_json jsonb; v_ret jsonb; v_sub record; i int; v_aviso text := '';
+  v_lead uuid; v_lead2 uuid; v_n int; v_txt text; v_json jsonb; v_ret jsonb; v_ret2 jsonb; v_sub record; i int; v_aviso text := '';
 BEGIN
   SELECT id INTO v_orig FROM public.originators_v2 ORDER BY created_at LIMIT 1;
 
@@ -120,6 +120,40 @@ BEGIN
     RAISE EXCEPTION 'FALHA 7c: o lead deveria ficar com a atribuicao que valeu';
   END IF;
 
+  -- ---------------- 7d. adesao refeita substitui o cadastro nao assinado ----------------
+  v_ret2 := public.fn_criar_assinante_publico(
+    'Maria Teste', '39053344705', 'maria.teste@example.test', '84998887766',
+    '59000000', 'Rua Teste', '1', NULL, 'Centro', 'Natal', 'RN', '2408102',
+    NULL, v_v3,
+    jsonb_build_array(jsonb_build_object('numero_uc', 'TST-LEAD-0001', 'cpf_cnpj_fatura', '39053344705',
+      'tipo_ligacao', 'monofasico', 'ibge', '2408102', 'uf', 'RN')),
+    10, NULL, NULL, 'teste', NULL);
+  IF (SELECT status::text FROM public.subscribers WHERE id = (v_ret ->> 'subscriber_id')::uuid) <> 'cancelado' THEN
+    RAISE EXCEPTION 'FALHA 7d: o cadastro antigo nao assinado deveria ficar cancelado';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.crm_history WHERE entity_id = (v_ret ->> 'subscriber_id')::uuid
+                  AND metadata ->> 'acao' = 'substituido_por_nova_adesao') THEN
+    RAISE EXCEPTION 'FALHA 7e: substituicao sem registro no historico';
+  END IF;
+  -- a segunda adesao concluiu pela visita do estranho (link B): vale B
+  IF (SELECT indicador_assinante_id FROM public.subscribers WHERE id = (v_ret2 ->> 'subscriber_id')::uuid) IS DISTINCT FROM v_b THEN
+    RAISE EXCEPTION 'FALHA 7f: a adesao nova deveria valer pelo link da sessao que concluiu';
+  END IF;
+  -- outra pessoa com o mesmo CPF (celular e e-mail diferentes) NAO derruba o cadastro
+  BEGIN
+    PERFORM public.fn_criar_assinante_publico(
+      'Golpista', '39053344705', 'golpe@example.test', '84912345678',
+      '59000000', 'Rua X', '1', NULL, 'Centro', 'Natal', 'RN', '2408102', NULL, NULL,
+      jsonb_build_array(jsonb_build_object('numero_uc', 'TST-LEAD-0002', 'cpf_cnpj_fatura', '39053344705',
+        'tipo_ligacao', 'monofasico', 'ibge', '2408102', 'uf', 'RN')),
+      10, NULL, NULL, 'teste', NULL);
+  EXCEPTION WHEN SQLSTATE '23505' THEN NULL;  -- chamador interno: CPF em uso e recusado
+  END;
+  IF (SELECT status::text FROM public.subscribers WHERE id = (v_ret2 ->> 'subscriber_id')::uuid) <> 'ativacao' THEN
+    RAISE EXCEPTION 'FALHA 7g: CPF igual com outro celular e e-mail derrubou o cadastro';
+  END IF;
+  v_ret := v_ret2;
+
   -- ---------------- 8. contrato assinado trava a indicacao ----------------
   UPDATE public.subscribers SET status = 'contrato_assinado' WHERE id = (v_ret ->> 'subscriber_id')::uuid;
   v_v5 := public.fn_registrar_lead_publico(jsonb_build_object(
@@ -129,7 +163,7 @@ BEGIN
   END IF;
   SELECT lead_id INTO v_lead2 FROM public.lead_visitas WHERE id = v_v5;
   IF (SELECT indicador_assinante_id FROM public.leads WHERE id = v_lead2) IS DISTINCT FROM
-     (CASE WHEN v_lead2 = v_lead THEN v_a ELSE NULL END) THEN
+     (CASE WHEN v_lead2 = v_lead THEN v_b ELSE NULL END) THEN
     RAISE EXCEPTION 'FALHA 8b: a indicacao travada foi trocada';
   END IF;
 

@@ -304,6 +304,7 @@ DECLARE
   v_descontos jsonb := '[]'::jsonb; v_desc_primeiro numeric;
   v_indicador uuid; v_uc_indicadora uuid;
   v_lead uuid; v_visita record; v_sess_orig uuid; v_sess_ind uuid;
+  v_substituidos uuid[];
 BEGIN
   IF coalesce(btrim(p_aceite_versao), '') = '' THEN
     RAISE EXCEPTION 'Aceite os termos de uso e a politica de privacidade para continuar.' USING ERRCODE = '22023';
@@ -322,6 +323,25 @@ BEGIN
   IF jsonb_typeof(p_ucs) <> 'array' OR jsonb_array_length(p_ucs) = 0 THEN
     RAISE EXCEPTION 'Cadastre pelo menos uma unidade consumidora.' USING ERRCODE = '22023';
   END IF;
+
+  -- Adesao refeita (decisao do dono, 06/10/2026): o cadastro antigo da
+  -- mesma pessoa que nunca assinou e cancelado como "substituido", junto com
+  -- as UCs dele -- senao a UC repetida barraria a adesao nova. "Mesma
+  -- pessoa" exige CPF/CNPJ E celular ou e-mail iguais: so o CPF deixaria
+  -- qualquer um derrubar o cadastro pendente de outra pessoa.
+  SELECT array_agg(s.id) INTO v_substituidos
+    FROM public.subscribers s
+   WHERE public.fn_so_digitos(s.cpf_cnpj) = v_doc
+     AND s.status = 'ativacao'
+     AND (public.fn_telefone_br(s.phone) = public.fn_telefone_br(v_tel)
+          OR lower(btrim(s.email)) = lower(btrim(p_email)));
+  IF v_substituidos IS NOT NULL THEN
+    UPDATE public.consumer_units SET status = 'cancelado'
+     WHERE subscriber_id = ANY (v_substituidos)
+       AND status NOT IN ('cancelado', 'cancelado_inadimplente');
+    UPDATE public.subscribers SET status = 'cancelado' WHERE id = ANY (v_substituidos);
+  END IF;
+
   IF public.fn_documento_em_uso(v_doc) THEN
     RAISE EXCEPTION 'Ja existe um assinante com este CPF/CNPJ.' USING ERRCODE = '23505';
   END IF;
@@ -418,6 +438,18 @@ BEGIN
       v_uc_indicadora);
     v_n := v_n + 1;
   END LOOP;
+
+  IF v_substituidos IS NOT NULL THEN
+    INSERT INTO public.crm_history (entity_type, entity_id, content, metadata)
+    SELECT 'subscriber', x,
+           'Cadastro substituído por nova adesão da mesma pessoa (contrato nunca assinado). Novo cadastro: ' || v_sub_id,
+           jsonb_build_object('acao', 'substituido_por_nova_adesao', 'novo_subscriber_id', v_sub_id)
+      FROM unnest(v_substituidos) x;
+    INSERT INTO public.crm_history (entity_type, entity_id, content, metadata)
+    VALUES ('subscriber', v_sub_id,
+            'Adesão refeita: substituiu ' || cardinality(v_substituidos) || ' cadastro(s) anterior(es) não assinado(s).',
+            jsonb_build_object('acao', 'substitui_adesao_anterior', 'substituidos', to_jsonb(v_substituidos)));
+  END IF;
 
   -- O lead fica com a atribuicao que valeu.
   IF v_lead IS NOT NULL THEN
