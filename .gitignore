@@ -28,3 +28,10 @@ dist-ssr
 # Playwright
 test-results/
 playwright-report/
+
+# Arquivos locais/descartaveis (nunca versionar)
+.claude/settings.local.json
+scratch_*.js
+*.zip
+mobile/.expo/
+supabase/.branches/
