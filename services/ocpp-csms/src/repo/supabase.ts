@@ -1,5 +1,5 @@
 // Repo sobre o Supabase (service role: ignora RLS). Schema em
-// supabase/migrations/20261004b_ocpp_estrutura.sql; recargas em public.recargas_eletroposto.
+// supabase/migrations/20261007b_ocpp_estrutura.sql; recargas em public.recargas_eletroposto.
 //
 // Regras que este arquivo garante (o MemoryRepo e o teste de contrato espelham todas):
 //  * Transicao guardada = UM UPDATE condicional (`update ... where id = ? and status = ?` + `returning`),

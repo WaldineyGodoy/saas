@@ -1,5 +1,5 @@
 // Repo em memoria com as mesmas regras de unicidade e transicao do banco
-// (supabase/migrations/20261004b_ocpp_estrutura.sql). Usado pelos testes L1/L3a.
+// (supabase/migrations/20261007b_ocpp_estrutura.sql). Usado pelos testes L1/L3a.
 import { randomUUID } from 'node:crypto';
 import { META_ESTORNO_PENDENTE } from './types.js';
 import { transicaoValida } from '../domain/recarga.js';

@@ -10,15 +10,15 @@
 --   20260929a_eletropostos.sql
 --   20260929b_planos_escrita_so_admin.sql
 --   20260930_create_recargas_eletroposto.sql
---   20261004a_recarga_seguranca.sql
---   20261004b_ocpp_estrutura.sql
---   20261004c_conector_numero.sql
+--   20261007a_recarga_seguranca.sql
+--   20261007b_ocpp_estrutura.sql
+--   20261007c_conector_numero.sql
 --
 -- Cada objeto abaixo e a menor forma compativel com o que essas migracoes e os testes
 -- supabase/tests/{eletropostos,recarga_seguranca,ocpp_estrutura,conector_numero}.test.sql usam.
 -- Idempotente (pode rodar de novo).
 
--- pg_cron: 20261004b agenda a limpeza de ocpp_mensagens (cron.schedule)
+-- pg_cron: 20261007b agenda a limpeza de ocpp_mensagens (cron.schedule)
 create extension if not exists pg_cron;
 
 -- handle_updated_at: gatilho padrao de updated_at (usado por todas as tabelas novas)

@@ -22,8 +22,8 @@
 ## Mapa de arquivos
 
 ```
-supabase/migrations/20261004a_recarga_seguranca.sql          (T1)
-supabase/migrations/20261004b_ocpp_estrutura.sql             (T2)
+supabase/migrations/20261007a_recarga_seguranca.sql          (T1)
+supabase/migrations/20261007b_ocpp_estrutura.sql             (T2)
 supabase/tests/recarga_seguranca.test.sql                    (T1)
 supabase/tests/ocpp_estrutura.test.sql                       (T2)
 supabase/functions/_shared/recarga.ts                        (T1, T9)  regras puras compartilhadas
@@ -53,7 +53,7 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
 
 ### Tarefa 1: Fechar a liberação de energia forjável (pré-requisito)
 
-**Arquivos:** criar `supabase/migrations/20261004a_recarga_seguranca.sql`, `supabase/tests/recarga_seguranca.test.sql`, `supabase/functions/_shared/recarga.ts`, `tests/charging-recarga.test.ts`; modificar `supabase/functions/stripe-charging-webhook/index.ts`, `src/pages/public/ChargingCheckout.jsx`, `src/services/stripeChargingService.js`.
+**Arquivos:** criar `supabase/migrations/20261007a_recarga_seguranca.sql`, `supabase/tests/recarga_seguranca.test.sql`, `supabase/functions/_shared/recarga.ts`, `tests/charging-recarga.test.ts`; modificar `supabase/functions/stripe-charging-webhook/index.ts`, `src/pages/public/ChargingCheckout.jsx`, `src/services/stripeChargingService.js`.
 **Cenários:** SG-01, SG-02, SG-03, RC-10 (parte do banco).
 
 - [x] **1.1 Teste SQL primeiro.** Em `supabase/tests/recarga_seguranca.test.sql` (padrão `SANDBOX_OK`), com `set local role anon`:
@@ -62,7 +62,7 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
   - `fn_recarga_publica(id)` devolve só `status, kwh_estimado, kwh_consumido, valor, valor_final, valor_estornado, conector_numero, nome_posto` — sem `motorista_*` (SG-02);
   - `fn_marcar_recarga_paga(pi_id)` chamada duas vezes → primeira devolve `true`, segunda `false` (RC-10).
   Rodar pelo MCP `execute_sql`. **Esperado agora:** falha (políticas antigas e funções inexistentes).
-- [x] **1.2 Migração.** `20261004a_recarga_seguranca.sql`:
+- [x] **1.2 Migração.** `20261007a_recarga_seguranca.sql`:
   ```sql
   drop policy if exists "Permitir leitura da recarga" on public.recargas_eletroposto;
   drop policy if exists "Permitir criacao de solicitacao de recarga" on public.recargas_eletroposto;
@@ -95,7 +95,7 @@ docs/ocpp/RUNBOOK.md  docs/ocpp/homologacao-joult.md         (T12)
 
 ### Tarefa 2: Estrutura OCPP no banco
 
-**Arquivos:** criar `supabase/migrations/20261004b_ocpp_estrutura.sql`, `supabase/tests/ocpp_estrutura.test.sql`.
+**Arquivos:** criar `supabase/migrations/20261007b_ocpp_estrutura.sql`, `supabase/tests/ocpp_estrutura.test.sql`.
 **Cenários:** base de todos; testes L2 de dedupe (RS-01, RS-03), idempotência de comando (RC-10), transições (spec §4.8).
 
 - [x] **2.1 Teste SQL primeiro** (`SANDBOX_OK`), cobrindo:

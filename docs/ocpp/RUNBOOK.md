@@ -5,7 +5,7 @@ Spec: `docs/superpowers/specs/2026-10-04-ocpp-comunicacao-eletroposto-design.md`
 > **ANTES DO MERGE NA `main`** (merge = deploy do frontend pelo `.github/workflows/deploy.yml`)
 >
 > O frontend novo chama colunas e RPCs que só existem depois das migrações, e o webhook novo depende do checkout novo. Faça **toda** a sequência da seção 8.1 em produção e só depois faça o merge:
-> 1. migrações `20261004a` → `e` no SQL Editor, cada uma seguida do seu teste `SANDBOX_OK`;
+> 1. migrações `20261007a` → `e` no SQL Editor, cada uma seguida do seu teste `SANDBOX_OK`;
 > 2. segredos das funções (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`; `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` vêm do projeto) e **Pix ativado** no painel da Stripe;
 > 3. deploy de `create-charging-checkout`, `refund-charging`, `stop-charging`; esvaziar as recargas `pending_payment` do checkout antigo; deploy de `stripe-charging-webhook --no-verify-jwt`; endpoint da Stripe assinando `payment_intent.succeeded` e `payment_intent.payment_failed`;
 > 4. só então o merge.
@@ -107,7 +107,7 @@ Nomes em `services/ocpp-csms/.env.example`. Valores só no ambiente de execuçã
    values ('<uuid do eletroposto>', '<ocpp_id>', '<hash gerado>');
    ```
 
-   A linha em `eletroposto_conectores` nasce no primeiro `StatusNotification` e o gatilho da migração `20261004c` **atribui o `numero` público sozinho** (maior número do eletroposto + 1). Confira o número atribuído (é o que vai no QR/URL `/recarga?posto=..&conector=<numero>`) e mude **só se precisar**:
+   A linha em `eletroposto_conectores` nasce no primeiro `StatusNotification` e o gatilho da migração `20261007c` **atribui o `numero` público sozinho** (maior número do eletroposto + 1). Confira o número atribuído (é o que vai no QR/URL `/recarga?posto=..&conector=<numero>`) e mude **só se precisar**:
 
    ```sql
    select k.connector_id, k.numero, k.status
@@ -199,11 +199,11 @@ O merge na `main` publica o frontend (`.github/workflows/deploy.yml` roda em tod
 
    | # | Migração | Teste |
    |---|---|---|
-   | a | `supabase/migrations/20261004a_recarga_seguranca.sql` | `supabase/tests/recarga_seguranca.test.sql` |
-   | b | `supabase/migrations/20261004b_ocpp_estrutura.sql` | `supabase/tests/ocpp_estrutura.test.sql` |
-   | c | `supabase/migrations/20261004c_conector_numero.sql` | `supabase/tests/conector_numero.test.sql` |
-   | d | `supabase/migrations/20261004d_recarga_publica_tarifa.sql` | sem arquivo próprio: **rodar de novo** `recarga_seguranca.test.sql` (cobre `tarifa_kwh_aplicada` de `fn_recarga_publica`) |
-   | e | `supabase/migrations/20261004e_recarga_estorno_tardio.sql` | `supabase/tests/recarga_estorno_tardio.test.sql` e de novo `conector_numero.test.sql` (a `e` substitui `fn_confirmar_inicio`) |
+   | a | `supabase/migrations/20261007a_recarga_seguranca.sql` | `supabase/tests/recarga_seguranca.test.sql` |
+   | b | `supabase/migrations/20261007b_ocpp_estrutura.sql` | `supabase/tests/ocpp_estrutura.test.sql` |
+   | c | `supabase/migrations/20261007c_conector_numero.sql` | `supabase/tests/conector_numero.test.sql` |
+   | d | `supabase/migrations/20261007d_recarga_publica_tarifa.sql` | sem arquivo próprio: **rodar de novo** `recarga_seguranca.test.sql` (cobre `tarifa_kwh_aplicada` de `fn_recarga_publica`) |
+   | e | `supabase/migrations/20261007e_recarga_estorno_tardio.sql` | `supabase/tests/recarga_estorno_tardio.test.sql` e de novo `conector_numero.test.sql` (a `e` substitui `fn_confirmar_inicio`) |
 
 2. **Segredos das Edge Functions** (Painel → Edge Functions → Secrets, ou `npx supabase secrets set NOME=valor`; valores nunca no repositório):
 

@@ -1,7 +1,7 @@
 -- OCPP 1.6-J: estrutura no banco (Tarefa 2 do plano).
 -- Spec: docs/superpowers/specs/2026-10-04-ocpp-comunicacao-eletroposto-design.md §4
 -- Teste: supabase/tests/ocpp_estrutura.test.sql
--- Depende de 20261004a_recarga_seguranca.sql.
+-- Depende de 20261007a_recarga_seguranca.sql.
 --
 -- Quem escreve: o CSMS e as Edge Functions, com service role (ignora RLS).
 -- Pelo app, o interno cadastra carregador/conector e enfileira comando de

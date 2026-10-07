@@ -4,7 +4,7 @@
 --
 -- Sucesso = erro SANDBOX_OK (tudo desfeito, nada persiste).
 -- Rodar pelo MCP execute_sql. Qualquer outra mensagem = falha.
--- Depende de 20261004a_recarga_seguranca.sql.
+-- Depende de 20261007a_recarga_seguranca.sql.
 DO $$
 DECLARE
   v_adm      uuid := gen_random_uuid();   -- admin (papel interno)

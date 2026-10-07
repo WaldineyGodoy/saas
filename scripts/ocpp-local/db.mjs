@@ -19,17 +19,17 @@ export const MIGRACOES_OCPP = [
   'supabase/migrations/20260929a_eletropostos.sql',
   'supabase/migrations/20260929b_planos_escrita_so_admin.sql',
   'supabase/migrations/20260930_create_recargas_eletroposto.sql',
-  'supabase/migrations/20261004a_recarga_seguranca.sql',
-  'supabase/migrations/20261004b_ocpp_estrutura.sql',
-  'supabase/migrations/20261004c_conector_numero.sql',
-  'supabase/migrations/20261004d_recarga_publica_tarifa.sql',
-  'supabase/migrations/20261004e_recarga_estorno_tardio.sql',
+  'supabase/migrations/20261007a_recarga_seguranca.sql',
+  'supabase/migrations/20261007b_ocpp_estrutura.sql',
+  'supabase/migrations/20261007c_conector_numero.sql',
+  'supabase/migrations/20261007d_recarga_publica_tarifa.sql',
+  'supabase/migrations/20261007e_recarga_estorno_tardio.sql',
 ];
 
 // Migracoes so de CREATE OR REPLACE/grants: reaplicadas mesmo num banco local que ja tem as anteriores
 // (o banco local criado antes delas as recebe no proximo `migrar`).
 export const MIGRACOES_OCPP_REAPLICAVEIS = [
-  'supabase/migrations/20261004e_recarga_estorno_tardio.sql',
+  'supabase/migrations/20261007e_recarga_estorno_tardio.sql',
 ];
 
 export const TESTES_SQL_OCPP = [

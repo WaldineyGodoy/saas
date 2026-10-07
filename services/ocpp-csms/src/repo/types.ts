@@ -1,6 +1,6 @@
 // Contrato de persistencia do CSMS. Duas implementacoes: memory.ts (testes L1/L3a)
 // e a do Supabase (service role). Ambas seguem o schema de
-// supabase/migrations/20261004b_ocpp_estrutura.sql. Datas sempre ISO 8601 (UTC).
+// supabase/migrations/20261007b_ocpp_estrutura.sql. Datas sempre ISO 8601 (UTC).
 
 export type RecargaStatus =
   | 'pending_payment' | 'paid' | 'starting' | 'charging' | 'completed' | 'failed' | 'canceled';

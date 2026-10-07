@@ -4,7 +4,7 @@
 --
 -- Sucesso = erro SANDBOX_OK (tudo desfeito, nada persiste).
 -- Rodar pelo MCP execute_sql. Qualquer outra mensagem = falha.
--- Depende de 20261004a_recarga_seguranca.sql e 20261004b_ocpp_estrutura.sql.
+-- Depende de 20261007a_recarga_seguranca.sql e 20261007b_ocpp_estrutura.sql.
 DO $$
 DECLARE
   v_e1    uuid;

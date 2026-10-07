@@ -1,6 +1,6 @@
 -- OCPP (Tarefa 9): numero publico do conector e destino resolvido da recarga.
 -- Teste: supabase/tests/conector_numero.test.sql
--- Depende de 20261004b_ocpp_estrutura.sql.
+-- Depende de 20261007b_ocpp_estrutura.sql.
 --
 -- A URL /recarga?posto=<eletroposto_id>&conector=<numero> usa um numero
 -- sequencial por ELETROPOSTO (1, 2, 3...), nao o connector_id do OCPP, que

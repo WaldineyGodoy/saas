@@ -1,10 +1,10 @@
 -- B2W Charge: pagamento que chega depois da falha e recarga paga sem destino viram estorno total.
--- Revisao final (C1, I1). Migracao: supabase/migrations/20261004e_recarga_estorno_tardio.sql
+-- Revisao final (C1, I1). Migracao: supabase/migrations/20261007e_recarga_estorno_tardio.sql
 -- Spec: docs/superpowers/specs/2026-10-04-ocpp-comunicacao-eletroposto-design.md §5.4, §8.3 (RC-09)
 --
 -- Sucesso = erro SANDBOX_OK (tudo desfeito, nada persiste).
 -- Rodar no SQL Editor (ou `node scripts/ocpp-local/db.mjs testes-sql`). Qualquer outra mensagem = falha.
--- Depende de 20261004a..e.
+-- Depende de 20261007a..e.
 DO $$
 DECLARE
   v_e      uuid;

@@ -1,6 +1,6 @@
 -- B2W Charge: dinheiro capturado sem recarga sempre vira estorno total (revisao final, C1 e I1).
 -- Teste: supabase/tests/recarga_estorno_tardio.test.sql
--- Depende de 20261004a..d. So CREATE OR REPLACE + grants: pode ser reaplicada.
+-- Depende de 20261007a..d. So CREATE OR REPLACE + grants: pode ser reaplicada.
 --
 -- C1. Cartao recusado nao encerra mais a recarga (o webhook so registra o payment_failed e a reserva
 -- de 10 min vence sozinha). Mas recargas que ja viraram failed/canceled antes de o pagamento entrar
@@ -50,7 +50,7 @@ grant execute on function public.fn_marcar_estorno_pagamento_tardio(text) to ser
 -- ---------------------------------------------------------------------------
 -- 2. fn_confirmar_inicio: recarga paga sem destino -> 'sem_destino' (+ estorno total)
 -- ---------------------------------------------------------------------------
--- Igual a 20261004c, exceto o ramo sem destino:
+-- Igual a 20261007c, exceto o ramo sem destino:
 --   'ok'          nenhuma outra recarga segura o conector: pode iniciar;
 --   'conflito'    outra recarga segura o conector: failed + estorno total pendente;
 --   'sem_destino' recarga paga sem carregador/conector resolvido: failed + estorno total pendente;

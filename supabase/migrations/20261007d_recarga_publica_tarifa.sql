@@ -1,8 +1,8 @@
 -- OCPP (Tarefa 11): a tela /recarga mostra o valor parcial (kWh x tarifa) durante a
 -- recarga. A tarifa e a foto gravada no checkout (tarifa_kwh_aplicada), nao a do
 -- plano de hoje: o motorista paga o preco que viu. Dado nao pessoal.
--- Muda o tipo de retorno, por isso DROP + CREATE (mesmos GRANTs da 20261004a).
--- Depende de 20261004a_recarga_seguranca.sql.
+-- Muda o tipo de retorno, por isso DROP + CREATE (mesmos GRANTs da 20261007a).
+-- Depende de 20261007a_recarga_seguranca.sql.
 DROP FUNCTION IF EXISTS public.fn_recarga_publica(uuid);
 
 CREATE FUNCTION public.fn_recarga_publica(p_recarga_id uuid)
