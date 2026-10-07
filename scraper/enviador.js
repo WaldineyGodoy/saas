@@ -31,6 +31,10 @@
  *   node enviador.js --aplicar       # envia de verdade
  *   node enviador.js --fatura <uuid> # uma só
  *   node enviador.js --limite 5
+ *   node enviador.js --so-whatsapp --fatura <uuid>[,<uuid>] --aplicar
+ *       reenvia SÓ pelo WhatsApp faturas já entregues por e-mail cujo WhatsApp
+ *       falhou. Exige a lista explícita: sem ela, uma queda do WhatsApp viraria
+ *       um reenvio em massa de tudo que falhou no passado.
  */
 
 const { chromium } = require('playwright');
@@ -50,6 +54,8 @@ const opcao = (nome) => {
     return i >= 0 ? argv[i + 1] : null;
 };
 const FATURA_ALVO = opcao('--fatura');
+const FATURAS_ALVO = FATURA_ALVO ? FATURA_ALVO.split(',').map((s) => s.trim()).filter(Boolean) : [];
+const SO_WHATSAPP = argv.includes('--so-whatsapp');
 const LIMITE = Number(opcao('--limite')) || LIMITE_PADRAO;
 
 // ------------------------------------------------------------------ formato
@@ -313,7 +319,7 @@ async function enviarUm(item, navegador, contexto) {
     }
 
     if (!APLICAR) {
-        const canais = [item.subscriber_phone && 'whatsapp', item.subscriber_email && 'e-mail']
+        const canais = [item.subscriber_phone && 'whatsapp', !SO_WHATSAPP && item.subscriber_email && 'e-mail']
             .filter(Boolean).join(' + ');
         console.log(`   [simulado] ${rotulo} -> ${canais || 'NENHUM CANAL'}`);
         demonstrativos.forEach((d) =>
@@ -399,7 +405,9 @@ async function enviarUm(item, navegador, contexto) {
         resultados.whatsapp = 'sem telefone';
     }
 
-    if (email) {
+    if (SO_WHATSAPP) {
+        resultados.email = 'não reenviado (só WhatsApp)';
+    } else if (email) {
         try {
             await chamarFuncao('send-email', {
                 to: email,
@@ -429,23 +437,35 @@ async function enviarUm(item, navegador, contexto) {
     // canal saiu" — é dele que a fila do enviador depende — mas ele nunca
     // respondeu "o WhatsApp foi?", e essa pergunta apareceu três vezes numa
     // semana. Agora `enviado_whatsapp_em` e `enviado_email_em` respondem.
-    await supabase.rpc('fn_marcar_fatura_enviada', {
-        p_tipo: item.tipo,
-        p_id: item.id,
-        p_invoice_ids: item.invoice_ids,
-        p_erro: algumSaiu ? null : `WhatsApp ${resultados.whatsapp} | E-mail ${resultados.email}`,
-        p_whatsapp_ok: waOk,
-        p_whatsapp_erro: waOk ? null : resultados.whatsapp,
-        p_email_ok: emailOk,
-        p_email_erro: emailOk ? null : resultados.email,
-    });
+    // No reenvio só por WhatsApp a marcação é outra: fn_marcar_fatura_enviada
+    // regrava envio_canais inteiro e apagaria o registro do e-mail que já saiu.
+    if (SO_WHATSAPP) {
+        await supabase.rpc('fn_marcar_whatsapp_reenvio', {
+            p_tipo: item.tipo,
+            p_id: item.id,
+            p_invoice_ids: item.invoice_ids,
+            p_ok: waOk,
+            p_erro: waOk ? null : resultados.whatsapp,
+        });
+    } else {
+        await supabase.rpc('fn_marcar_fatura_enviada', {
+            p_tipo: item.tipo,
+            p_id: item.id,
+            p_invoice_ids: item.invoice_ids,
+            p_erro: algumSaiu ? null : `WhatsApp ${resultados.whatsapp} | E-mail ${resultados.email}`,
+            p_whatsapp_ok: waOk,
+            p_whatsapp_erro: waOk ? null : resultados.whatsapp,
+            p_email_ok: emailOk,
+            p_email_erro: emailOk ? null : resultados.email,
+        });
+    }
 
     await supabase.from('crm_history').insert({
         entity_type: 'subscriber',
         entity_id: item.subscriber_id,
-        content: `Envio automático de fatura ${item.referencia}: WhatsApp [${resultados.whatsapp}] | E-mail [${resultados.email}]`,
+        content: `${SO_WHATSAPP ? 'Reenvio por WhatsApp' : 'Envio automático'} de fatura ${item.referencia}: WhatsApp [${resultados.whatsapp}] | E-mail [${resultados.email}]`,
         metadata: {
-            origem: 'enviador',
+            origem: SO_WHATSAPP ? 'enviador-reenvio-whatsapp' : 'enviador',
             tipo: item.tipo,
             referencia: item.referencia,
             valor: Number(item.valor),
@@ -502,14 +522,23 @@ async function fecharExecucao(id, campos = {}) {
 }
 
 async function run(execucaoId) {
-    console.log(`\nEnviador de faturas — ${APLICAR ? 'ENVIO REAL' : 'SIMULAÇÃO (use --aplicar para enviar)'}`);
+    console.log(`\nEnviador de faturas — ${APLICAR ? 'ENVIO REAL' : 'SIMULAÇÃO (use --aplicar para enviar)'}`
+        + (SO_WHATSAPP ? ' — REENVIO SÓ POR WHATSAPP' : ''));
 
-    const { data: fila, error } = await supabase.rpc('fn_fila_envio_faturas', { p_limite: LIMITE });
-    if (error) throw new Error(`fila: ${error.message}`);
-
-    let itens = fila || [];
-    if (FATURA_ALVO) {
-        itens = itens.filter((i) => i.id === FATURA_ALVO || (i.invoice_ids || []).includes(FATURA_ALVO));
+    let itens;
+    if (SO_WHATSAPP) {
+        if (!FATURAS_ALVO.length) throw new Error('--so-whatsapp exige --fatura <uuid>[,<uuid>]');
+        const { data, error } = await supabase.rpc('fn_itens_reenvio_whatsapp', { p_ids: FATURAS_ALVO });
+        if (error) throw new Error(`reenvio: ${error.message}`);
+        itens = (data || []).slice(0, LIMITE);
+    } else {
+        const { data: fila, error } = await supabase.rpc('fn_fila_envio_faturas', { p_limite: LIMITE });
+        if (error) throw new Error(`fila: ${error.message}`);
+        itens = fila || [];
+        if (FATURAS_ALVO.length) {
+            itens = itens.filter((i) => FATURAS_ALVO.includes(i.id)
+                || (i.invoice_ids || []).some((id) => FATURAS_ALVO.includes(id)));
+        }
     }
 
     if (itens.length === 0) {

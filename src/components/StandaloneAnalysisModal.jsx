@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { deriveReadingStatus } from '../lib/readingStatus';
 import { supabase } from '../lib/supabase';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
-import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info } from 'lucide-react';
+import { FileText, Calculator, DollarSign, Zap, AlertCircle, Ban, CheckCircle, Plus, X, Loader2, Download, Info, Save } from 'lucide-react';
 import { useUI } from '../contexts/UIContext';
 import { useAuth } from '../contexts/AuthContext';
 import { parseInvoice, createAsaasCharge, mergePdf, sendCombinedNotification } from '../lib/api';
@@ -49,6 +49,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                     .select(`
                         id, numero_uc, concessionaria, titular_conta, status,
                         tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                        plano_assinatura_id,
+                        planos_assinatura_energia(desconto_assinante),
                         subscribers!consumer_units_subscriber_id_fkey(name),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     `)
@@ -78,7 +80,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 setSearchTerm(`UC: ${uc.numero_uc} - ${uc.titular_conta}`);
                 setFormData(prev => ({
                     ...prev,
-                    desconto_aplicado: uc.desconto_assinante || 0,
+                    desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0,
                     mes_referencia: initialMesReferencia ? initialMesReferencia.substring(0, 7) : prev.mes_referencia
                 }));
             }
@@ -162,6 +164,22 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         return isNegative ? -value : value;
     };
 
+    const getSubscriberDueDate = () => {
+        if (!selectedUc || !formData.mes_referencia) return null;
+        const dueDay = selectedUc.subscribers?.consolidated_due_day || selectedUc.dia_vencimento;
+        if (!dueDay) return null;
+        
+        const [year, month] = formData.mes_referencia.split('-').map(Number);
+        let nextMonth = month + 1;
+        let nextYear = year;
+        if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+        }
+        
+        return `${String(dueDay).padStart(2, '0')}/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
+    };
+
     // Filtros e badge de status da pesquisa de UCs
     const filteredUcs = allUcs.filter(uc => {
         if (!searchTerm) return true;
@@ -195,7 +213,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         setIsDropdownOpen(false);
         setFormData(prev => ({
             ...prev,
-            desconto_aplicado: uc.desconto_assinante || 0
+            desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0
         }));
     };
 
@@ -211,6 +229,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         .from('consumer_units')
                         .select(`
                             *,
+                            planos_assinatura_energia(desconto_assinante),
                             subscribers!consumer_units_subscriber_id_fkey(name),
                             titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                         `)
@@ -227,7 +246,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 if (uc) {
                     setFormData(prev => ({
                         ...prev,
-                        desconto_aplicado: uc.desconto_assinante || 0
+                        desconto_aplicado: uc.planos_assinatura_energia?.desconto_assinante ?? uc.desconto_assinante ?? 0
                     }));
                     
                     // Fetch global tariffs for this concessionaria
@@ -306,7 +325,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
             const desconto = formData.desconto_aplicado !== '' 
                 ? Number(formData.desconto_aplicado) 
-                : Number(selectedUc.desconto_assinante || 0);
+                : Number(selectedUc.planos_assinatura_energia?.desconto_assinante ?? selectedUc.desconto_assinante ?? 0);
 
             const multiplier = desconto > 1 ? desconto / 100 : desconto;
 
@@ -560,90 +579,72 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
 
                     // Auto-vinculação da UC se não selecionada anteriormente no dropdown
                     let currentUcId = selectedUcId;
+                    let extractedDesconto = undefined;
+
                     if (!currentUcId) {
                         setLoaderMessage('Buscando correspondência de UC via OCR...');
                         let extractedUcNumber = parsedData.numero_uc || parsedData.codigo_cliente || parsedData.conta_contrato;
                         
-                        if (!extractedUcNumber && cleanText) {
-                            const regexMatch = cleanText.match(/(?:Conta Contrato|C[óo]digo do Cliente|Instala[çc][ãa]o)[:\s]*(\d{9,11})/i) ||
-                                               cleanText.match(/N[úu]mero da \w+[:\s]*(\d{9,11})/i) ||
-                                               cleanText.match(/(\d{10})/);
-                            if (regexMatch) {
-                                extractedUcNumber = regexMatch[1] || regexMatch[0];
+                        // Funções auxiliares para limpar strings
+                        const getDigits = (str) => (str ? String(str).replace(/\D/g, '') : '');
+                        
+                        let matchedUc = null;
+                        
+                        // 1. Tenta limpar o número extraído e achar na lista local
+                        if (extractedUcNumber) {
+                            const extractedDigits = getDigits(extractedUcNumber);
+                            if (extractedDigits.length > 0) {
+                                matchedUc = allUcs.find(u => getDigits(u.numero_uc) === extractedDigits) || 
+                                            allUcs.find(u => getDigits(u.numero_uc).includes(extractedDigits) || extractedDigits.includes(getDigits(u.numero_uc)));
                             }
                         }
 
-                        if (extractedUcNumber) {
-                            const cleanUcNum = String(extractedUcNumber).trim();
-                            console.log('Tentando vincular UC automaticamente com o número:', cleanUcNum);
+                        // 2. Fallback PODEROSO: Procura todas as UCs cadastradas diretamente no texto do PDF!
+                        if (!matchedUc && cleanText) {
+                            const cleanTextDigits = getDigits(cleanText);
+                            // Filtra UCs que têm pelo menos 6 dígitos para evitar falsos positivos
+                            const possibleUcs = allUcs.filter(u => {
+                                const ucDigits = getDigits(u.numero_uc);
+                                return ucDigits.length > 5 && cleanTextDigits.includes(ucDigits);
+                            });
                             
-                            const { data: matchedUc, error: ucFindError } = await supabase
-                                .from('consumer_units')
-                                .select(`
-                                    id, numero_uc, concessionaria, titular_conta, status,
-                                    tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                    subscribers!consumer_units_subscriber_id_fkey(name),
-                                    titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                `)
-                                .eq('numero_uc', cleanUcNum)
-                                .maybeSingle();
-
-                            if (matchedUc) {
-                                currentUcId = matchedUc.id;
-                                setSelectedUcId(matchedUc.id);
-                                setSelectedUc(matchedUc);
-                                setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
-                                showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
-                            } else {
-                                // Tentar busca parcial caso haja zeros à esquerda ou outros formatos
-                                const { data: matchedUcPartial } = await supabase
-                                    .from('consumer_units')
-                                    .select(`
-                                        id, numero_uc, concessionaria, titular_conta, status,
-                                        tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
-                                        subscribers!consumer_units_subscriber_id_fkey(name),
-                                        titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
-                                    `)
-                                    .ilike('numero_uc', `%${cleanUcNum}%`)
-                                    .limit(1);
-
-                                if (matchedUcPartial && matchedUcPartial.length > 0) {
-                                    const matched = matchedUcPartial[0];
-                                    currentUcId = matched.id;
-                                    setSelectedUcId(matched.id);
-                                    setSelectedUc(matched);
-                                    setSearchTerm(`UC: ${matched.numero_uc} - ${matched.titular_conta}`);
-                                    showAlert(`UC ${matched.numero_uc} vinculada automaticamente por busca parcial!`, 'success');
-                                }
+                            if (possibleUcs.length === 1) {
+                                matchedUc = possibleUcs[0];
+                                console.log('[OCR] UC encontrada pelo fallback de texto completo:', matchedUc.numero_uc);
+                            } else if (possibleUcs.length > 1) {
+                                console.warn('[OCR] Múltiplas UCs encontradas no texto. Ignorando fallback para evitar conflitos.');
                             }
+                        }
+
+                        if (matchedUc) {
+                            console.log('UC vinculada automaticamente com sucesso:', matchedUc.numero_uc);
+                            currentUcId = matchedUc.id;
+                            extractedDesconto = matchedUc.planos_assinatura_energia?.desconto_assinante ?? matchedUc.desconto_assinante ?? 0;
+                            setSelectedUcId(matchedUc.id);
+                            setSelectedUc(matchedUc);
+                            setSearchTerm(`UC: ${matchedUc.numero_uc} - ${matchedUc.titular_conta}`);
+                            showAlert(`UC ${matchedUc.numero_uc} vinculada automaticamente com sucesso!`, 'success');
                             
                             // Tenta consertar o tipo de ligação no banco de dados se a UC não tiver
-                            const checkAndPatchUcTipoLigacao = async (ucObj) => {
-                                if (ucObj && !ucObj.tipo_ligacao) {
-                                    const ligacaoMatch = cleanText.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
-                                    if (ligacaoMatch) {
-                                        const foundLigacao = ligacaoMatch[1].toLowerCase();
-                                        ucObj.tipo_ligacao = foundLigacao;
-                                        setSelectedUc({ ...ucObj }); // Atualiza state
-                                        try {
-                                            await supabase
-                                                .from('consumer_units')
-                                                .update({ tipo_ligacao: foundLigacao })
-                                                .eq('id', ucObj.id);
-                                            console.log(`[OCR] UC ${ucObj.numero_uc} não tinha tipo de ligação. OCR encontrou e atualizou no banco para: ${foundLigacao}`);
-                                        } catch (err) {
-                                            console.warn('Erro ao fazer patch do tipo de ligação no DB:', err);
-                                        }
+                            if (!matchedUc.tipo_ligacao) {
+                                const ligacaoMatch = cleanText.match(/(?:Tipo\s+de\s+Fornecimento|Fornecimento|Liga[çc][ãa]o)[\s:a-z.\-]*?(Monof[áa]sic[oa]|Bif[áa]sic[oa]|Trif[áa]sic[oa])/i);
+                                if (ligacaoMatch) {
+                                    const foundLigacao = ligacaoMatch[1].toLowerCase();
+                                    matchedUc.tipo_ligacao = foundLigacao;
+                                    setSelectedUc({ ...matchedUc });
+                                    try {
+                                        await supabase
+                                            .from('consumer_units')
+                                            .update({ tipo_ligacao: foundLigacao })
+                                            .eq('id', matchedUc.id);
+                                        console.log(`[OCR] UC ${matchedUc.numero_uc} atualizou tipo de ligação para: ${foundLigacao}`);
+                                    } catch (err) {
+                                        console.warn('Erro ao fazer patch do tipo de ligação no DB:', err);
                                     }
                                 }
-                            };
-                            
-                            if (currentUcId === matchedUc?.id) {
-                                await checkAndPatchUcTipoLigacao(matchedUc);
-                            } else if (currentUcId && typeof matchedUcPartial !== 'undefined' && matchedUcPartial && matchedUcPartial.length > 0) {
-                                await checkAndPatchUcTipoLigacao(matchedUcPartial[0]);
                             }
-
+                        } else if (extractedUcNumber) {
+                            showAlert(`A UC extraída do PDF não foi encontrada no banco. Selecione a UC manualmente.`, 'warning');
                         } else {
                             throw new Error('Não foi possível identificar o número da UC no PDF automaticamente. Selecione a UC manualmente.');
                         }
@@ -668,7 +669,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                         linha_digitavel: parsedData.linha_digitavel || '',
                         pix_string: parsedData.pix_string || '',
                         fio_b_vr_unit: parsedData.fio_b_vr_unit !== undefined ? formatCurrency(parsedData.fio_b_vr_unit) : '',
-                        fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : ''
+                        fio_b_total: parsedData.fio_b_total !== undefined ? formatCurrency(parsedData.fio_b_total) : '',
+                        desconto_aplicado: extractedDesconto !== undefined ? extractedDesconto : prev.desconto_aplicado
                     }));
 
                     const classMatch = cleanText.match(/(?:CLASSIFICA(?:Ç|C)(?:Ã|A)O|Classe)[\s:]*(B[123]|Grupo A)/i);
@@ -929,10 +931,26 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             finalEnergyBillStatus = 'inconsistente';
         }
 
+        let faturaVencimento = formData.vencimento || null;
+        if (selectedUc && formData.mes_referencia) {
+            const dueDay = selectedUc.subscribers?.consolidated_due_day || selectedUc.dia_vencimento;
+            if (dueDay) {
+                const [year, month] = formData.mes_referencia.split('-').map(Number);
+                let nextMonth = month + 1;
+                let nextYear = year;
+                if (nextMonth > 12) {
+                    nextMonth = 1;
+                    nextYear++;
+                }
+                const dateObj = new Date(nextYear, nextMonth - 1, dueDay);
+                faturaVencimento = dateObj.toISOString().split('T')[0];
+            }
+        }
+
         const payload = {
             uc_id: selectedUcId,
             mes_referencia: `${formData.mes_referencia}-01`,
-            vencimento: formData.vencimento || null,
+            vencimento: faturaVencimento,
             vencimento_concessionaria: formData.vencimento || null,
             data_leitura_anterior: formData.data_leitura_anterior || null,
             data_leitura: formData.data_leitura || null,
@@ -950,7 +968,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
             economia_reais: simulation.economiaGerada,
             linha_digitavel: formData.linha_digitavel || null,
             pix_string: formData.pix_string || null,
-            desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.desconto_assinante || 0),
+            desconto_aplicado: formData.desconto_aplicado !== '' ? Number(formData.desconto_aplicado) : Number(selectedUc?.planos_assinatura_energia?.desconto_assinante ?? selectedUc?.desconto_assinante ?? 0),
             energy_bill_status: finalEnergyBillStatus,
             status: saveStatus,
             concessionaria_pdf_url: publicUrl,
@@ -979,8 +997,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                             showAlert('Fatura ativa atualizada! Gerando boleto de faturamento...', 'info');
                             try {
                                 const result = await createAsaasCharge(upsertData.id, 'invoice');
-                                showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
-                                await triggerActiveInvoiceNotification(upsertData, result.url);
+                                if (result.semBoleto) {
+                                    showAlert(result.mensagem, 'info');
+                                } else {
+                                    showAlert('Fatura atualizada e boleto gerado no Asaas com sucesso!', 'success');
+                                    await triggerActiveInvoiceNotification(upsertData, result.url);
+                                }
                             } catch (asaasErr) {
                                 console.error('Erro na emissão automática do Asaas:', asaasErr);
                                 showAlert('Fatura atualizada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
@@ -1032,8 +1054,12 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 showAlert('Fatura ativa criada localmente! Gerando boleto de faturamento...', 'info');
                 try {
                     const result = await createAsaasCharge(data.id, 'invoice');
-                    showAlert('Fatura cadastrada e boleto gerado no Asaas com sucesso!', 'success');
-                    await triggerActiveInvoiceNotification(data, result.url);
+                    if (result.semBoleto) {
+                        showAlert(result.mensagem, 'info');
+                    } else {
+                        showAlert('Fatura cadastrada e boleto gerado no Asaas com sucesso!', 'success');
+                        await triggerActiveInvoiceNotification(data, result.url);
+                    }
                 } catch (asaasErr) {
                     console.error('Erro na emissão automática do Asaas:', asaasErr);
                     showAlert('Fatura cadastrada, mas houve uma falha ao gerar cobrança no gateway: ' + asaasErr.message, 'warning');
@@ -1099,6 +1125,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                     .select(`
                         id, numero_uc, concessionaria, titular_conta, status,
                         tarifa_concessionaria, desconto_assinante, tipo_ligacao, dia_vencimento, subscriber_id,
+                        plano_assinatura_id,
+                        planos_assinatura_energia(desconto_assinante),
                         subscribers!consumer_units_subscriber_id_fkey(name),
                         titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name)
                     `)
@@ -1295,7 +1323,7 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
         const rawConsumo = Number(inv.consumo_kwh) || 0;
         const rawCompensado = Number(inv.consumo_compensado) || 0;
         const rawTarifa = Number(uc?.tarifa_concessionaria) || 0;
-        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.desconto_assinante) || 0);
+        const discountSnapshot = inv.desconto_aplicado !== undefined ? Number(inv.desconto_aplicado) : (Number(uc?.planos_assinatura_energia?.desconto_assinante ?? uc?.desconto_assinante) || 0);
         const multiplier = discountSnapshot > 1 ? discountSnapshot / 100 : discountSnapshot;
         
         // Calculations
@@ -2379,7 +2407,9 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#faf5ff', border: '1px solid #f3e8ff', padding: '0.75rem 1rem', borderRadius: '12px' }}>
                                                     <div>
                                                         <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#7c3aed' }}>Desconto Contratual</span>
-                                                        <span style={{ fontSize: '0.85rem', color: '#6b21a8', fontWeight: 500 }}>Cadastrado na UC selecionada</span>
+                                                        <span style={{ fontSize: '0.85rem', color: selectedUcId ? '#6b21a8' : '#ef4444', fontWeight: 500 }}>
+                                                            {selectedUcId ? 'Herdado do plano da UC selecionada' : 'Selecione a UC para carregar'}
+                                                        </span>
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                         <input 
@@ -2389,6 +2419,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                                             style={{ width: '64px', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid #d8b4fe', textAlign: 'center', fontWeight: 'bold', fontSize: '0.9rem', outline: 'none', transition: 'border-color 0.2s', backgroundColor: 'white' }} 
                                                         />
                                                         <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: '1rem' }}>%</span>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.75rem 1rem', borderRadius: '12px' }}>
+                                                    <div>
+                                                        <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#2563eb' }}>Data de Vencimento</span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 500 }}>Herdado do Assinante</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <span style={{ fontWeight: 800, color: '#1d4ed8', fontSize: '1rem' }}>
+                                                            {getSubscriberDueDate() || 'N/A'}
+                                                        </span>
                                                     </div>
                                                 </div>
 
@@ -2539,15 +2581,18 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                                             disabled={isSubmitting}
                                             className="sandbox-btn sandbox-btn-secondary"
                                         >
-                                            <Ban size={16} /> Registrar Operacional (Sem Faturamento)
+                                            <Save size={16} /> Salvar Conta de Energia
                                         </button>
-                                        <button 
-                                            onClick={() => handleSaveClick('a_vencer')}
-                                            disabled={isSubmitting}
-                                            className="sandbox-btn sandbox-btn-accent"
-                                        >
-                                            <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
-                                        </button>
+                                        
+                                        {!selectedUc?.subscribers?.consolidated_due_day && (
+                                            <button 
+                                                onClick={() => handleSaveClick('a_vencer')}
+                                                disabled={isSubmitting}
+                                                className="sandbox-btn sandbox-btn-accent"
+                                            >
+                                                <CheckCircle size={16} /> Gerar Fatura Ativa (Com Cobrança)
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

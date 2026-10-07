@@ -8,9 +8,10 @@ export default function SupplierDashboard() {
 
     useEffect(() => {
         async function fetchUsinas() {
-            const { data: suppData } = await supabase.from('suppliers').select('id').eq('profile_id', user.id).single();
-            if (suppData) {
-                const { data } = await supabase.from('usinas').select('*').eq('supplier_id', suppData.id);
+            // Vinculo pelo user_id (o profile_id nao e confiavel).
+            const { data: suppData } = await supabase.from('suppliers').select('id').eq('user_id', user.id);
+            if (suppData?.length) {
+                const { data } = await supabase.from('usinas').select('*').in('supplier_id', suppData.map((s) => s.id));
                 setUsinas(data || []);
             }
         }

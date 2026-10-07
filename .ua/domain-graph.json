@@ -1,0 +1,288 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "B2W Charge — Fluxogramas de Domínio de Negócio",
+    "languages": ["pt-BR"],
+    "frameworks": ["OCPP 1.6/2.0 (Joult 60/80kW)", "Stripe Connect", "Supabase RLS (tenant_id)"],
+    "description": "Domínios e fluxogramas horizontais passo a passo do B2W Charge para alinhamento com o time de desenvolvimento.",
+    "analyzedAt": "2026-09-24T15:28:00-03:00",
+    "gitCommitHash": "HEAD"
+  },
+  "nodes": [
+    {
+      "id": "domain:onboarding-multi-tenant",
+      "type": "domain",
+      "name": "1. Onboarding Multi-Tenant & Ativos (B2W GE + Local)",
+      "summary": "Estruturação de Operadores (B2W GE), Proprietários de Local (coincidentes ou terceiros), Estações, Conectores Joult (60/80 kW) e Tarifas com isolamento RLS por tenant_id.",
+      "tags": ["rls", "tenant_id", "b2w-ge", "proprietario-local"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Usuário Multi-Papel", "B2W GE (tenant_id)", "Local (Imóvel/Vaga)", "Estação Joult 60/80kW", "Conector", "Tarifa"],
+        "businessRules": [
+          "Banco Único com isolamento lógico rigoroso via tenant_id e Row-Level Security (RLS)",
+          "B2W GE e Proprietário do Local são entidades separadas que podem apontar para o mesmo titular ou titulares distintos",
+          "Cada B2W GE e Proprietário possui sua subconta Stripe Connect (stripe_account_id) e regra percentual de split",
+          "Tarifa é configurada pela B2W GE por Estação/horário com diferenciação de taxa por método (PIX < Cartão)"
+        ]
+      }
+    },
+    {
+      "id": "domain:operacao-recarga-ocpp",
+      "type": "domain",
+      "name": "2. Jornada de Recarga & Telemetria OCPP (Joult 60/80kW)",
+      "summary": "Experiência do Motorista (App iOS/Android ou QR Code sem App), pagamento na Stripe e comando remoto OCPP nos carregadores Joult de 60 kW e 80 kW.",
+      "tags": ["ocpp", "joult-60-80kw", "motorista", "qrcode-sem-app"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Motorista", "Conector OCPP", "Sessão de Recarga", "Transação Stripe (PIX/Cartão)"],
+        "businessRules": [
+          "Motorista pode iniciar recarga pelo App mobile ou diretamente via câmera no QR Code (Web sem App)",
+          "Liberação do conector Joult (RemoteStartTransaction) ocorre imediatamente após confirmação/pré-autorização na Stripe",
+          "Telemetria OCPP (MeterValues) atualiza kWh consumidos e custo acumulado em tempo real",
+          "Ao encerrar (StopTransaction), a sessão é gravada como 'capturada / aguardando lote diário'"
+        ]
+      }
+    },
+    {
+      "id": "domain:liquidacao-lote-split",
+      "type": "domain",
+      "name": "3. Fechamento Diário em Lote & Split 3/4 Partes (Stripe)",
+      "summary": "Motor de liquidação diária em lote (Batch Daily Settlement) que divide a receita entre B2W Pay Charger, B2W GE, Proprietário do Local e (Fase 2) Investidor B2W Invest.",
+      "tags": ["batch-diario", "stripe-connect", "split-3-4-partes", "carteiras"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Lote Diário (Batch)", "Split Item", "Carteira Digital", "Stripe Transfer", "Vínculo B2W Invest"],
+        "businessRules": [
+          "O split financeiro NÃO é pulverizado transação a transação: roda em Fechamento Diário em Lote",
+          "Split 3 Partes (MVP): 1) Taxa B2W Pay Charger, 2) Comissão do Proprietário do Local, 3) Saldo Líquido da B2W GE",
+          "Se B2W GE == Proprietário do Local, as cotas de Operador e Local são unificadas no repasse da B2W GE",
+          "Split 4 Partes (Fase 2): deduz percentual do Vínculo de Investimento para a carteira do Investidor B2W Invest"
+        ]
+      }
+    },
+    {
+      "id": "domain:compliance-fiscal-governanca",
+      "type": "domain",
+      "name": "4. Automação Fiscal (NFS-e) & Governança B2W Pay Charger",
+      "summary": "Emissão automática de NFS-e municipal por sessão, conciliação multi-tenant pela B2W Pay Charger e saques das carteiras digitais.",
+      "tags": ["nfse", "compliance", "b2w-pay-charger", "relatorios"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": ["NFS-e", "Painel B2W Pay Charger", "Solicitação de Saque", "Relatório Consolidado"],
+        "businessRules": [
+          "Cada transação liquidada dispara automaticamente a emissão de NFS-e municipal para o CPF/CNPJ do Motorista",
+          "Conformidade regulatória com Lei 14.300 e REN 1000 da ANEEL",
+          "B2W Pay Charger gerencia taxas globais da plataforma e monitora todas as B2W GE em visão multi-tenant"
+        ]
+      }
+    },
+    {
+      "id": "flow:fluxo-onboarding-estacao",
+      "type": "flow",
+      "name": "Fluxo 1: Cadastro de Tenant, Local e Homologação Joult OCPP",
+      "summary": "Passo a passo desde o cadastro da B2W GE e do Proprietário até o carregador Joult ficar online no mapa.",
+      "tags": ["fluxo", "onboarding", "joult"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "step:onb-1-cadastro-tenant",
+      "type": "step",
+      "name": "1. Criar Tenant B2W GE & Conta Stripe Connect",
+      "summary": "Cria registro com `tenant_id`, ativa políticas RLS e vincula conta bancária/PIX na Stripe Connect.",
+      "tags": ["etapa", "rls", "stripe"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:onb-2-vincular-local-proprietario",
+      "type": "step",
+      "name": "2. Cadastrar Local e Regra do Proprietário",
+      "summary": "Define se o imóvel é próprio (B2W GE = Proprietário) ou de terceiro (define % de comissão do Proprietário).",
+      "tags": ["etapa", "local", "split-config"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:onb-3-conectar-joult-tarifa",
+      "type": "step",
+      "name": "3. Parear Carregador Joult (60/80kW) via OCPP e Configurar Tarifa",
+      "summary": "Aponta URL WebSocket OCPP no carregador Joult, valida BootNotification e define R$/kWh por horário.",
+      "tags": ["etapa", "ocpp", "tarifa"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "flow:fluxo-sessao-recarga",
+      "type": "flow",
+      "name": "Fluxo 2: Sessão de Recarga (QR Code / App + Stripe + OCPP)",
+      "summary": "Jornada em tempo real do motorista recarregando o veículo em uma estação Joult.",
+      "tags": ["fluxo", "recarga", "ocpp"],
+      "complexity": "complex"
+    },
+    {
+      "id": "step:rec-1-leitura-qr-pagamento",
+      "type": "step",
+      "name": "1. Leitura do QR Code e Pagamento Stripe (PIX ou Cartão)",
+      "summary": "Motorista escaneia conector (com ou sem app), visualiza tarifa diferenciada (PIX vs Cartão) e confirma pagamento na Stripe.",
+      "tags": ["etapa", "qrcode", "stripe"],
+      "complexity": "simple"
+    },
+    {
+      "id": "step:rec-2-remote-start-telemetria",
+      "type": "step",
+      "name": "2. Comando OCPP RemoteStartTransaction & MeterValues",
+      "summary": "CSMS libera o conector Joult 60/80kW e transmite potência (kW), energia entregue (kWh) e valor em tempo real.",
+      "tags": ["etapa", "ocpp", "telemetria"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "step:rec-3-stop-registro-lote",
+      "type": "step",
+      "name": "3. Encerramento (StopTransaction) e Enfileiramento para Lote Diário",
+      "summary": "Finaliza a recarga, consolida kWh consumidos e marca a Transação como 'pronta para fechamento diário'.",
+      "tags": ["etapa", "stop", "transacao"],
+      "complexity": "simple"
+    },
+    {
+      "id": "flow:fluxo-fechamento-diario-split",
+      "type": "flow",
+      "name": "Fluxo 3: Motor de Fechamento Diário em Lote (Split 3/4 Partes + NFS-e)",
+      "summary": "Processamento noturno em lote que executa o split nativo na Stripe, atualiza carteiras e emite NFS-e.",
+      "tags": ["fluxo", "batch-diario", "split", "nfse"],
+      "complexity": "complex"
+    },
+    {
+      "id": "step:lote-1-agregacao-diaria",
+      "type": "step",
+      "name": "1. Agregação Diária por Tenant e Estação (Cron 23:59)",
+      "summary": "Seleciona todas as transações capturadas no dia e agrupa por tenant_id, estação e regra de propriedade do local.",
+      "tags": ["etapa", "cron", "agregacao"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "step:lote-2-calculo-split-stripe",
+      "type": "step",
+      "name": "2. Cálculo do Split (Pay Charger / B2W GE / Proprietário / Investidor) e Stripe Transfer",
+      "summary": "Executa as transferências do split nativo na Stripe para cada parte e registra os saldos nas Carteiras Digitais.",
+      "tags": ["etapa", "stripe-connect", "split"],
+      "complexity": "complex"
+    },
+    {
+      "id": "step:lote-3-emissao-nfse-relatorios",
+      "type": "step",
+      "name": "3. Disparo Automático de NFS-e e Atualização dos Painéis",
+      "summary": "Emite as notas fiscais municipais de cada sessão e libera o saldo para saque no painel da B2W GE e do Proprietário.",
+      "tags": ["etapa", "nfse", "saque"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "domain:onboarding-multi-tenant",
+      "target": "domain:operacao-recarga-ocpp",
+      "type": "cross_domain",
+      "direction": "forward",
+      "weight": 0.9,
+      "description": "Disponibiliza Estações Joult 60/80kW, Conectores e Tarifas com tenant_id"
+    },
+    {
+      "source": "domain:operacao-recarga-ocpp",
+      "target": "domain:liquidacao-lote-split",
+      "type": "cross_domain",
+      "direction": "forward",
+      "weight": 1.0,
+      "description": "Envia Sessões concluídas e Transações pagas na Stripe para o Lote Diário"
+    },
+    {
+      "source": "domain:liquidacao-lote-split",
+      "target": "domain:compliance-fiscal-governanca",
+      "type": "cross_domain",
+      "direction": "forward",
+      "weight": 0.9,
+      "description": "Aciona emissão automática de NFS-e e atualiza Carteiras Digitais / Painéis"
+    },
+    {
+      "source": "domain:onboarding-multi-tenant",
+      "target": "flow:fluxo-onboarding-estacao",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:fluxo-onboarding-estacao",
+      "target": "step:onb-1-cadastro-tenant",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:onb-1-cadastro-tenant",
+      "target": "step:onb-2-vincular-local-proprietario",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:onb-2-vincular-local-proprietario",
+      "target": "step:onb-3-conectar-joult-tarifa",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:operacao-recarga-ocpp",
+      "target": "flow:fluxo-sessao-recarga",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:fluxo-sessao-recarga",
+      "target": "step:rec-1-leitura-qr-pagamento",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:rec-1-leitura-qr-pagamento",
+      "target": "step:rec-2-remote-start-telemetria",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:rec-2-remote-start-telemetria",
+      "target": "step:rec-3-stop-registro-lote",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "domain:liquidacao-lote-split",
+      "target": "flow:fluxo-fechamento-diario-split",
+      "type": "contains_flow",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "flow:fluxo-fechamento-diario-split",
+      "target": "step:lote-1-agregacao-diaria",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:lote-1-agregacao-diaria",
+      "target": "step:lote-2-calculo-split-stripe",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "step:lote-2-calculo-split-stripe",
+      "target": "step:lote-3-emissao-nfse-relatorios",
+      "type": "flow_step",
+      "direction": "forward",
+      "weight": 1.0
+    }
+  ],
+  "layers": [],
+  "tour": []
+}

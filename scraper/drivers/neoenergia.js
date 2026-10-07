@@ -113,8 +113,11 @@ function parseMesRef(texto) {
     const porAbrev = t.match(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/(\d{4})/);
     if (porAbrev) return `${months[porAbrev[1]]}/${porAbrev[2]}`;
 
-    // Formato numérico: 07/2026
-    const porNumero = t.match(/\b(\d{1,2})\/(\d{4})\b/);
+    // Formato numérico: 07/2026. NUNCA o pedaço final de uma data: em
+    // "10/09/2026" (vencimento de parcela) o "09/2026" é o mês do vencimento,
+    // não a referência da conta. Ler isso como referência gravou contas
+    // fantasmas 09/2026 com o valor da parcela do acordo de 07/2026.
+    const porNumero = t.match(/(?<!\d\/)\b(\d{1,2})\/(\d{4})\b/);
     if (porNumero) return `${porNumero[1].padStart(2, '0')}/${porNumero[2]}`;
 
     return null;
@@ -497,48 +500,73 @@ module.exports = {
         // digitos ("7030003955"), outros formatados ("2.236.346.032-16"), e ha
         // ate um com espaco na frente. O portal sempre exibe 12 digitos, sem
         // pontuacao. Normalizar antes de buscar e antes de casar o card.
-        const digitosUC = uc.numero_uc.toString().replace(/\D/g, '');
-        const paddedUC = digitosUC.padStart(12, '0');
+        //
+        // A Cosern renumerou parte das UCs (formato "1.979.118.032-02" e o
+        // "70xxxxxxxx"). O card do portal pode trazer qualquer um dos dois,
+        // entao o numero anterior entra como segunda tentativa -- o
+        // orquestrador so o repassa quando e o mesmo imovel.
+        const candidatos = [uc.numero_uc, uc.numero_uc_anterior]
+            .map(n => String(n || '').replace(/\D/g, ''))
+            .filter((d, i, todos) => d && todos.findIndex(o => o.padStart(12, '0') === d.padStart(12, '0')) === i);
 
-        // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
-        await irPara(page, ROTAS.meusImoveis);
-        await page.waitForTimeout(3000);
-
-        const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
-        await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
-        await ucSearchInput.fill(digitosUC);
-
-        // Clica em Pesquisar
-        const pesquisarBtn = page.locator('button', { hasText: 'Pesquisar' }).first();
-        if (await pesquisarBtn.isVisible()) {
-            await pesquisarBtn.click();
-        } else {
-            await page.click('button[aria-label="Pesquisar"]');
-        }
-        await page.waitForTimeout(4000);
-
-        // Casa por DIGITO, nao por substring literal. O hasText comparava o
-        // texto do cadastro com o do portal: numero formatado nunca casava, e a
-        // UC caia em "card nao visivel" mesmo existindo na concessionaria.
-        const itens = page.locator('li');
-        const totalItens = await itens.count();
         let ucCardRow = null;
+        let paddedUC = null;
+        let totalItens = 0;
+        const tentados = [];
 
-        for (let i = 0; i < totalItens; i++) {
-            const item = itens.nth(i);
-            const digitosDoItem = (await item.innerText().catch(() => '')).replace(/\D/g, '');
-            if (digitosDoItem.includes(paddedUC)) {
-                ucCardRow = item.locator('div.row').first();
-                break;
+        for (const digitosUC of candidatos) {
+            paddedUC = digitosUC.padStart(12, '0');
+            tentados.push(paddedUC);
+
+            // Fase 3: Busca de UC em meus-imoveis (Reset explícito para cada UC)
+            await irPara(page, ROTAS.meusImoveis);
+            await page.waitForTimeout(3000);
+
+            const ucSearchInput = page.locator('input[placeholder*="Unidade Consumidora"]').first();
+            await ucSearchInput.waitFor({ state: 'visible', timeout: 15000 });
+            await ucSearchInput.fill(digitosUC);
+
+            // Clica em Pesquisar
+            const pesquisarBtn = page.locator('button', { hasText: 'Pesquisar' }).first();
+            if (await pesquisarBtn.isVisible()) {
+                await pesquisarBtn.click();
+            } else {
+                await page.click('button[aria-label="Pesquisar"]');
+            }
+            await page.waitForTimeout(4000);
+
+            // Casa por DIGITO, nao por substring literal. O hasText comparava o
+            // texto do cadastro com o do portal: numero formatado nunca casava, e a
+            // UC caia em "card nao visivel" mesmo existindo na concessionaria.
+            const itens = page.locator('li');
+            totalItens = await itens.count();
+
+            for (let i = 0; i < totalItens; i++) {
+                const item = itens.nth(i);
+                const digitosDoItem = (await item.innerText().catch(() => '')).replace(/\D/g, '');
+                // Compara com e sem zeros a esquerda: o numero novo da Anatel
+                // tem 11 digitos ("497.653.032-53") e o card o exibe assim; o
+                // preenchimento ate 12 ("049765303253") nunca casava, embora o
+                // portal tivesse achado a UC (03/10/2026, 6 UCs da Guanabara).
+                if (digitosDoItem.includes(paddedUC) || digitosDoItem.includes(digitosUC)) {
+                    ucCardRow = item.locator('div.row').first();
+                    break;
+                }
+            }
+            if (ucCardRow && await ucCardRow.count() > 0) break;
+            ucCardRow = null;
+            if (tentados.length < candidatos.length) {
+                log(`   [Faturista] Nenhum card com ${paddedUC}. Tentando o número anterior da UC...`);
             }
         }
 
-        if (ucCardRow && await ucCardRow.count() > 0) {
+        if (ucCardRow) {
             await ucCardRow.click({ force: true });
-            log(`   [Faturista] Card UC ${paddedUC} clicado. Portal deve redirecionar...`);
+            const pelo = tentados.length > 1 ? ' (pelo número anterior)' : '';
+            log(`   [Faturista] Card UC ${paddedUC} clicado${pelo}. Portal deve redirecionar...`);
             await page.waitForTimeout(4000); // Aguarda o redirect autônomo do portal
         } else {
-            throw new Error(`Unidade ${paddedUC} não encontrada no painel da concessionária (nenhum card com esse número entre os ${totalItens} listados).`);
+            throw new Error(`Unidade ${tentados.join(' / ')} não encontrada no painel da concessionária (nenhum card com esse número entre os ${totalItens} listados).`);
         }
 
         // Fase 4: Lista de Faturas (consultar-debitos)
@@ -737,23 +765,30 @@ module.exports = {
         // vencidas -> a vencer -> parceladas -> pagas, e nem toda linha
         // oferece checkbox de 2ª via. Se a conta existe mas não é baixável,
         // registrar o valor é muito melhor que gravar zero.
-        const achadoNoTexto = await page.evaluate((alvoRegex) => {
-            const blocos = [...document.querySelectorAll('div,li,tr')]
-                .map(el => (el.textContent || '').replace(/\s+/g, ' ').trim())
-                .filter(t => t.length > 20 && t.length < 600);
-            return blocos.find(t => new RegExp(alvoRegex, 'i').test(t)) || null;
-        }, mesRefAlvo.replace('/', '\\/')).catch(() => null);
+        //
+        // O bloco tem de TER a referência alvo, lida pelo mesmo parser das
+        // linhas com checkbox -- não basta conter o texto "09/2026". Antes
+        // bastava, e a parcela do acordo de 07/2026 com vencimento 10/09/2026
+        // virava "conta 09/2026 parcelada" (UCs 1.155.950.032-50 e
+        // 998.080.032-84 em 29/09, 1.301.793.032-70 em 03/10/2026). Entre os
+        // blocos que casam fica o menor: um contêiner maior junta várias
+        // linhas e o valor lido seria o da primeira.
+        const blocosDaTela = await page.evaluate(() => [...document.querySelectorAll('div,li,tr')]
+            .map(el => (el.textContent || '').replace(/\s+/g, ' ').trim())
+            .filter(t => t.length > 20 && t.length < 600)
+        ).catch(() => []);
+
+        const achadoNoTexto = (blocosDaTela || [])
+            .filter(t => PADRAO_PARCELADA.test(t) && parseMesRef(t) === mesRefAlvo)
+            .sort((a, b) => a.length - b.length)[0] || null;
 
         if (achadoNoTexto) {
-            const refTexto = parseMesRef(achadoNoTexto);
-            if (refTexto === mesRefAlvo && PADRAO_PARCELADA.test(achadoNoTexto)) {
-                log(`   [Faturista] Fatura [${mesRefAlvo}] existe como PARCELADA, sem opção de download nesta tela.`);
-                return {
-                    resultado: 'parcelada',
-                    ref: mesRefAlvo,
-                    valor: valorDaLinha(achadoNoTexto),
-                };
-            }
+            log(`   [Faturista] Fatura [${mesRefAlvo}] existe como PARCELADA, sem opção de download nesta tela. Linha: "${achadoNoTexto.slice(0, 160)}"`);
+            return {
+                resultado: 'parcelada',
+                ref: mesRefAlvo,
+                valor: valorDaLinha(achadoNoTexto),
+            };
         }
 
         log(`   [Faturista] Referência ${mesRefAlvo} não encontrada. Disponíveis na tela: ${refsVistas.length ? refsVistas.join(', ') : '(nenhuma)'}`);

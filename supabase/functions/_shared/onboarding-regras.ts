@@ -64,3 +64,12 @@ export const textoWhatsappContrato = (nome: string, url: string) =>
 
 export const textoOriginador = (cliente: string) =>
   `\ud83d\ude80 Novo cliente pelo seu link!\n\n${cliente} concluiu a ades\u00e3o e recebeu o contrato para assinar.\nAcompanhe pelo CRM.`;
+
+// Perfil ja existente NUNCA e reescrito pela adesao publica. O e-mail do
+// assinante pode ser de um embaixador/originador/admin que aderiu pelo proprio
+// link: o upsert cego rebaixava o papel para 'subscriber' e apagava nome, CPF,
+// telefone e endereco, derrubando o acesso ao CRM. So gravamos o perfil quando
+// ele nao existe (conta de auth recem-criada por este fluxo).
+export function decidirPerfil(p: { perfilExistente?: { role?: string | null } | null } | null | undefined): { acao: 'criar' | 'preservar' } {
+  return { acao: p?.perfilExistente ? 'preservar' : 'criar' };
+}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2.45.0'
+import { requireInternoOuServidor } from '../_shared/auth.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -38,6 +39,17 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
+
+        // Estava aberta (verify_jwt = false e nenhuma checagem): qualquer um
+        // criava documento na Autentique na conta da B2W e inseria linha em
+        // `signatures`, que o autentique-webhook usa para promover cadastro.
+        const auth = await requireInternoOuServidor(req, supabaseAdmin);
+        if (!auth.ok) {
+            return new Response(JSON.stringify({ error: auth.error }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: auth.status
+            });
+        }
 
         const body = await req.json().catch(() => ({}));
         const { documentName, signers, fileBase64, signerId, signerType } = body;

@@ -1,4 +1,4 @@
-import { baixarPdfContrato, dataPorExtenso, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
+import { baixarPdfContrato, dataPorExtenso, extensoReais, gerarPdfBase64, moeda, numeroBr, paginarTexto, paraNumero, percentualExtenso, porExtenso, qualificaParte, rotuloDocumento, valorEmReais } from './contratoBase';
 
 /**
  * Os três contratos que existem por USINA, e não por fornecedor: compra e
@@ -32,7 +32,6 @@ export const DEFAULTS_USINA = {
     parcela2: 0,
     parcela3: 0,
     prazoExecucao: 180,
-    prazoExecucaoReduzido: 90,
     amperagem: 200,
     limiteReforco: 20000,
     valorOpcaoImovel: 0,
@@ -157,12 +156,11 @@ export const montarCompraVenda = ({ usina, supplier, area } = {}, opts = {}) => 
     // graça. Campo vazio, então, é ausência de opção — não opção gratuita.
     const precoOpcao = num(p.valorOpcaoImovel);
     const opcaoImovel = precoOpcao > 0
-        ? `15.1. O INTERVENIENTE ANUENTE, na qualidade de proprietário, outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14, pelo preço de R$ ${moeda(precoOpcao)}, exercível em até 12 (doze) meses da assinatura deste Contrato, mediante notificação escrita.
+        ? `15.1. O INTERVENIENTE ANUENTE, na qualidade de proprietário, outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14, pelo preço de R$ ${moeda(precoOpcao)}, exercível em até 60 (sessenta) meses da assinatura deste Contrato, mediante notificação escrita.
 15.2. Findo o prazo sem exercício, nova alienação dependerá de acordo entre proprietário e INVESTIDOR.`
         : `15.1. Este Contrato não outorga ao INVESTIDOR opção de compra da área descrita na Cláusula 14.
 15.2. Eventual aquisição da área dependerá de acordo entre o INVESTIDOR e o proprietário, formalizado em instrumento próprio.`;
     const prazo = num(p.prazoExecucao, 180);
-    const prazoReduzido = num(p.prazoExecucaoReduzido, 90);
     const foro = ou(p.foro || area?.comarca || cidadeUfDe(usina), cidadeUfDe(usina));
     const distribuidora = ou(usina?.concessionaria, 'a distribuidora local');
     const areaM2 = num(area?.area_m2);
@@ -242,8 +240,7 @@ ${parcelasTexto}
 
 CLÁUSULA 7 – DO PRAZO DE EXECUÇÃO
 7.1. O prazo de implantação é de até ${prazo} (${porExtenso(prazo)}) dias contados do pagamento da primeira parcela, considerados os prazos regulatórios e operacionais junto à DISTRIBUIDORA.
-7.2. Havendo parecer de acesso já emitido ou em estágio avançado, o prazo reduz-se a até ${prazoReduzido} (${porExtenso(prazoReduzido)}) dias, mediante confirmação por escrito.
-7.3. Não correm contra a CONTRATADA os períodos de: (i) análise da DISTRIBUIDORA, desde que a documentação tenha sido protocolada tempestivamente; (ii) atraso do INVESTIDOR em pagamento ou entrega de documento; (iii) caso fortuito, força maior, embargo administrativo ou judicial da obra.
+7.2. Não correm contra a CONTRATADA os períodos de: (i) análise da DISTRIBUIDORA, desde que a documentação tenha sido protocolada tempestivamente; (ii) atraso do INVESTIDOR em pagamento ou entrega de documento; (iii) caso fortuito, força maior, embargo administrativo ou judicial da obra.
 
 CLÁUSULA 8 – DO ATRASO E DO INADIMPLEMENTO DA CONTRATADA
 8.1. Ultrapassado o prazo da Cláusula 7 por causa imputável à CONTRATADA, incidirá multa de ${numeroBr(num(p.multaAtrasoMes, 0.5))}% do valor do Contrato por mês de atraso, limitada a ${numeroBr(num(p.multaAtrasoTeto, 10))}% (${percentualExtenso(num(p.multaAtrasoTeto, 10))} por cento), abatida do saldo devedor ou restituída.
@@ -267,11 +264,7 @@ CLÁUSULA 11 – DA DESTINAÇÃO DA ENERGIA
 11.3. Optando o INVESTIDOR pela contratação, a relação será regida pelo Contrato de Administração e Gestão de Créditos Energéticos, celebrado diretamente com a ASSOCIAÇÃO.
 
 CLÁUSULA 12 – DA REMUNERAÇÃO DA ASSOCIAÇÃO E DO REPASSE
-12.1. Contratada a gestão, a remuneração da ASSOCIAÇÃO é a prevista no Contrato de Gestão e compreende, cumulativamente:
-(a) Remuneração Inicial — 100% (cem por cento) do valor integral da primeira fatura, devida apenas quanto a consumidores captados pela ASSOCIAÇÃO ou seus corretores;
-(b) Remuneração Recorrente — ${numeroBr(num(p.percentualRecorrente, 10))}% sobre as faturas efetivamente pagas pelos consumidores;
-(c) Taxa de Administração — ${valorEmReais(num(p.taxaAdmin, 10))} por consumidor ativo por mês;
-(d) Taxa de Recuperação de Crédito — ${numeroBr(num(p.taxaRecuperacao, 8))}% sobre o principal recuperado de fatura paga após 30 (trinta) dias do vencimento.
+12.1. Contratada a gestão, a remuneração da ASSOCIAÇÃO é a prevista no Contrato de Gestão.
 12.2. O INVESTIDOR declara ter recebido e lido o Contrato de Gestão, que integra este instrumento como Anexo I, antes da assinatura.
 12.3. O repasse observará o regime do Contrato de Gestão: ocorre somente após a compensação financeira dos pagamentos dos consumidores, encerrado o ciclo de apuração. Energia gerada, energia compensada na DISTRIBUIDORA e boleto emitido não constituem, isolada ou conjuntamente, fato gerador de repasse.
 
@@ -377,6 +370,21 @@ export const montarArrendamento = ({ usina, supplier, area } = {}, opts = {}) =>
     const dia = num(area?.dia_pagamento, 5);
     const indice = ou(area?.indice_reajuste, 'IPCA');
     const comarca = ou(area?.comarca || p.foro || cidadeUfDe(area), cidadeUfDe(area));
+    const precoOpcao = num(p.valorOpcaoImovel) || num(area?.valor_opcao_imovel);
+
+    const precoTexto = precoOpcao > 0
+        ? `R$ ${moeda(precoOpcao)}${extensoReais(precoOpcao) ? ` (${extensoReais(precoOpcao)})` : ''}`
+        : '';
+
+    const clausula83 = precoOpcao > 0
+        ? `8.3. Fica conferida ao ARRENDATÁRIO, e expressamente outorgada pelo ARRENDANTE, a opção irrevogável e irretratável de compra da área objeto deste contrato (ou do imóvel em sua totalidade, conforme a titularidade e desmembramento formal), a ser exercida nos seguintes termos:
+
+(a) Prazo Determinado (até 60 meses): Durante os primeiros 60 (sessenta) meses contados da data de assinatura deste contrato, o ARRENDANTE compromete-se a vender a área ao ARRENDATÁRIO pelo preço fixo de ${precoTexto};
+
+(b) Critério de Correção: O valor indicado na alínea "a" será corrigido monetariamente a contar da data de assinatura deste contrato até a data da formalização da notificação de exercício da compra, pela variação acumulada do IGP-M/FGV (Índice Geral de Preços do Mercado) ou, na sua falta ou vedação legal, pelo IPCA/IBGE;
+
+(c) Exercício após 60 meses: Transcorrido o prazo de 60 (sessenta) meses sem que o ARRENDATÁRIO tenha exercido a opção de compra pelo preço prefixado, a aquisição do imóvel ficará a critério exclusivo do ARRENDATÁRIO mediante proposta voluntária, ficando a aceitação e o preço sujeitos à livre negociação entre as Partes, permanecendo vigentes as condições locatícias e o direito de preferência legal.`
+        : `8.3. O ARRENDATÁRIO tem direito de preferência na aquisição do imóvel, em igualdade de condições com terceiros, exercível em 30 (trinta) dias contados do recebimento da proposta por escrito.`;
 
     return `CONTRATO DE ARRENDAMENTO DE ÁREA PARA GERAÇÃO DISTRIBUÍDA
 
@@ -430,7 +438,7 @@ CLÁUSULA 7 – DO ACESSO E DA PASSAGEM
 CLÁUSULA 8 – DA VIGÊNCIA EM CASO DE ALIENAÇÃO E DA AVERBAÇÃO
 8.1. Em caso de alienação do imóvel a qualquer título, este contrato permanece em vigor e obriga o adquirente, que se sub-roga em todos os direitos e obrigações do ARRENDANTE.
 8.2. O ARRENDANTE obriga-se a averbar este contrato na matrícula do imóvel em até 30 (trinta) dias da assinatura, arcando com os emolumentos, e a fazer constar a cláusula de vigência em qualquer instrumento de alienação, promessa ou oneração.
-8.3. O ARRENDATÁRIO tem direito de preferência na aquisição do imóvel, em igualdade de condições com terceiros, exercível em 30 (trinta) dias contados do recebimento da proposta por escrito.
+${clausula83}
 8.4. Descumprido o dever de averbação e sobrevindo alienação que resulte em desocupação, aplica-se ao ARRENDANTE a indenização da Cláusula 9.2.
 
 CLÁUSULA 9 – DA RESCISÃO E DAS PERDAS E DANOS

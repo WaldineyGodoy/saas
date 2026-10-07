@@ -103,7 +103,7 @@ async function autenticarRobo(supabase: any): Promise<string> {
 async function reconferir(supabase: any, item: any): Promise<number> {
     const { data: faturas, error } = await supabase
         .from('invoices')
-        .select('id, valor_a_pagar, asaas_payment_id, consolidated_invoice_id, mes_referencia')
+        .select('id, valor_a_pagar, asaas_payment_id, consolidated_invoice_id, mes_referencia, cobranca_adiada')
         .in('id', item.invoice_ids)
 
     if (error) throw new Error(`releitura falhou: ${error.message}`)
@@ -121,8 +121,9 @@ async function reconferir(supabase: any, item: any): Promise<number> {
         throw new Error(`soma mudou: fila dizia ${moeda(item.total)}, banco diz ${moeda(soma)}`)
     }
 
+    // Fatura adiada (ciclo anterior abaixo de R$ 5,00) vem junto de propósito.
     const foraDoCiclo = faturas.find(
-        (f: any) => String(f.mes_referencia).slice(0, 7) !== String(item.ciclo).slice(0, 7)
+        (f: any) => !f.cobranca_adiada && String(f.mes_referencia).slice(0, 7) !== String(item.ciclo).slice(0, 7)
     )
     if (foraDoCiclo) throw new Error(`fatura ${foraDoCiclo.id} é de outro ciclo`)
 
@@ -276,7 +277,16 @@ serve(async (req) => {
                 try { dados = JSON.parse(texto) } catch (_) { dados = { raw: texto } }
                 if (!resp.ok || dados.error) throw new Error(dados.error || dados.raw || `HTTP ${resp.status}`)
 
-                linhas.push(`[emitido] ${rotulo} — ${moeda(soma)} · ${dados.payment_id || dados.id || 'ok'}`)
+                if (dados.quitado_por_credito) {
+                    linhas.push(`[quitado] ${rotulo} — pago inteiro pelo crédito de indicação, sem boleto`)
+                } else if (dados.adiada) {
+                    linhas.push(`[adiado] ${rotulo} — ${moeda(dados.valor)} abaixo do boleto mínimo; vai no próximo ciclo`)
+                } else {
+                    const abatido = Number(dados.credito?.aplicado || 0)
+                    linhas.push(`[emitido] ${rotulo} — ${moeda(soma)}` +
+                        (abatido > 0 ? ` (crédito de indicação −${moeda(abatido)})` : '') +
+                        ` · ${dados.paymentId || dados.payment_id || dados.id || 'ok'}`)
+                }
                 for (const a of avisos) linhas.push(`          aviso: ${a}`)
                 emitidos++
             } catch (e) {

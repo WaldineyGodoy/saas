@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
+import ContratoGestaoUsina from './ContratoGestaoUsina';
 import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
 import { paraNumero } from '../lib/contratoBase';
 import { useAuth } from '../contexts/AuthContext';
@@ -324,7 +325,6 @@ const CAMPOS_COMPRA_VENDA = [
     { key: 'parcela2', label: '2a parcela, equipamentos (R$)' },
     { key: 'parcela3', label: '3a parcela, vistoria (R$)' },
     { key: 'prazoExecucao', label: 'Prazo de execução (dias)' },
-    { key: 'prazoExecucaoReduzido', label: 'Prazo com parecer (dias)' },
     { key: 'amperagem', label: 'Padrão de entrada (A)' },
     { key: 'limiteReforco', label: 'Limite de reforço de rede (R$)' },
     { key: 'valorOpcaoImovel', label: 'Opção de compra do imóvel (R$)' },
@@ -4712,8 +4712,28 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     {c.rotulo}
                                                 </button>
                                             ))}
+                                            {/*
+                                              O contrato de gestão é do fornecedor, não da usina: tem
+                                              condições comerciais e minuta próprias, em
+                                              ContratoGestaoUsina, e não passa pelo fluxo dos três
+                                              acima.
+                                            */}
+                                            <button
+                                                type="button"
+                                                onClick={() => { setTipoContrato('gestao'); setContractDraft(''); }}
+                                                style={{
+                                                    padding: '0.6rem 1.1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '0.85rem',
+                                                    border: tipoContrato === 'gestao' ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                                                    background: tipoContrato === 'gestao' ? '#eff6ff' : 'white',
+                                                    color: tipoContrato === 'gestao' ? '#1d4ed8' : '#64748b',
+                                                    fontWeight: tipoContrato === 'gestao' ? 700 : 500
+                                                }}
+                                            >
+                                                Gestão de Créditos
+                                            </button>
                                         </div>
 
+                                        {tipoContrato !== 'gestao' && (<>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>Área arrendada desta usina</label>
                                             <select
@@ -4791,7 +4811,17 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     : 'Sem área vinculada, as cláusulas 14 e 15 do compra e venda saem com o imóvel, o proprietário e o aluguel em branco.'}
                                             </div>
                                         )}
+                                        </>)}
                                     </div>
+
+                                    {tipoContrato === 'gestao' ? (
+                                        <ContratoGestaoUsina
+                                            usina={usina}
+                                            supplierId={formData.supplier_id}
+                                            registrarHistorico={addHistory}
+                                        />
+                                    ) : (
+                                    <>
 
                                     <div style={{ background: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '1.5rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -4875,6 +4905,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             </div>
                                         )}
                                     </div>
+                                    </>
+                                    )}
                                 </>
                             )}
                         </div>

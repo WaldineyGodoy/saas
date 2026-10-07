@@ -305,7 +305,9 @@ export default function SubscriberList() {
         setGeneratingId(sub.id);
         try {
             const result = await createAsaasCharge(sub.id, 'subscriber');
-            if (result.url) {
+            if (result.semBoleto) {
+                alert(result.mensagem);
+            } else if (result.url) {
                 alert('Boleto consolidado gerado com sucesso!');
                 window.open(result.url, '_blank');
             }

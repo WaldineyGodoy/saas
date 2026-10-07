@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import InvoiceFormModal from '../../components/InvoiceFormModal';
 import ConsumerUnitModal from '../../components/ConsumerUnitModal';
+import AssinanteConnect from '../../components/subscriber/AssinanteConnect';
 
 export default function SubscriberDashboard() {
     const { user, profile } = useAuth();
@@ -10,6 +11,7 @@ export default function SubscriberDashboard() {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeSubscriberId, setActiveSubscriberId] = useState(null);
+    const [subscriber, setSubscriber] = useState(null);
 
     // Modal State
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -41,11 +43,23 @@ export default function SubscriberDashboard() {
             //    OR if we are testing as admin, we need to create a subscriber profile for the admin or link one.
 
             // To make it robust:
-            const { data: subData } = await supabase.from('subscribers').select('id, name').eq('profile_id', user.id).single();
+            // `status`, `short_url` e `indicador_assinante_id` vem por causa da
+            // secao Assinante Connect: e aqui que o assinante ve o proprio link
+            // de indicacao, e nao so o time interno pelo modal.
+            // Vinculo pelo user_id, nunca pelo profile_id (ha assinante com
+            // profile_id apontando para o perfil de outra pessoa). Mais de um
+            // cadastro no mesmo login: o mais antigo, como no app.
+            const { data: subData } = await supabase.from('subscribers')
+                .select('id, name, status, short_url, indicador_assinante_id')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
 
             if (subData) {
                 targetSubscriberId = subData.id;
                 setActiveSubscriberId(subData.id);
+                setSubscriber(subData);
                 // 2. Get UCs
                 const { data: ucsData } = await supabase.from('consumer_units').select('*').eq('subscriber_id', targetSubscriberId);
                 setUcs(ucsData || []);
@@ -139,6 +153,12 @@ export default function SubscriberDashboard() {
                     <p style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--color-text-dark)' }}>{ucs.length}</p>
                 </div>
             </div>
+
+            {subscriber && (
+                <div style={{ marginBottom: '2rem' }}>
+                    <AssinanteConnect subscriber={subscriber} profile={profile} />
+                </div>
+            )}
 
             <h3>Minhas Faturas</h3>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

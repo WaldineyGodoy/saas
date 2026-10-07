@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .env
 .claude/worktrees/
+
+# Contas reais de clientes (dados pessoais); os testes usam o texto anonimizado (.txt)
+tests/fixtures/*.pdf

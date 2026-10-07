@@ -54,3 +54,18 @@ describe('regras do onboarding', () => {
     expect(r).toHaveProperty('erro'); expect((r as { erro: string }).erro).toMatch(/PDF, JPG ou PNG/);
   });
 });
+
+describe('decidirPerfil: adesao nunca sobrescreve perfil existente', () => {
+  test('perfil admin existente -> preservar', () =>
+    expect(R.decidirPerfil({ perfilExistente: { role: 'admin' } })).toEqual({ acao: 'preservar' }));
+  test('perfil originador existente -> preservar', () =>
+    expect(R.decidirPerfil({ perfilExistente: { role: 'originator' } })).toEqual({ acao: 'preservar' }));
+  test('perfil subscriber existente -> preservar (nem os dados dele sao reescritos)', () =>
+    expect(R.decidirPerfil({ perfilExistente: { role: 'subscriber' } })).toEqual({ acao: 'preservar' }));
+  test('perfil existente sem role -> preservar', () =>
+    expect(R.decidirPerfil({ perfilExistente: { role: null } })).toEqual({ acao: 'preservar' }));
+  test('sem perfil (null) -> criar', () =>
+    expect(R.decidirPerfil({ perfilExistente: null })).toEqual({ acao: 'criar' }));
+  test('sem perfil (undefined) -> criar', () =>
+    expect(R.decidirPerfil({ perfilExistente: undefined })).toEqual({ acao: 'criar' }));
+});

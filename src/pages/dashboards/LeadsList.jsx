@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import LeadModal from '../../components/LeadModal';
 import SubscriberModal from '../../components/SubscriberModal';
+import SupplierModal from '../../components/SupplierModal';
 import { getTagColor } from '../../lib/tagHelpers';
 import LeadAgenda from '../../components/LeadAgenda';
 import {
@@ -106,6 +107,7 @@ function KanbanCard({ lead, onClick, isOverlay }) {
                 <span>{lead.originator?.name?.split(' ')[0] || '-'}</span>
                 <span>{new Date(lead.created_at).toLocaleDateString()}</span>
             </div>
+
         </div>
     );
 }
@@ -153,6 +155,7 @@ export default function LeadsList() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
+    const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
     const [editingLead, setEditingLead] = useState(null);
     const [leadToConvert, setLeadToConvert] = useState(null);
     const [viewMode, setViewMode] = useState('kanban'); // Default to kanban
@@ -160,6 +163,8 @@ export default function LeadsList() {
     const [selectedTags, setSelectedTags] = useState([]);
     const [selectedStatuses, setSelectedStatuses] = useState([]);
     const [hideEmptyStatuses, setHideEmptyStatuses] = useState(false);
+    // Simulação parada há 90 dias é arquivada (20261006b) e some do padrão.
+    const [mostrarArquivados, setMostrarArquivados] = useState(false);
     const [activeId, setActiveId] = useState(null);
 
     const sensors = useSensors(
@@ -171,6 +176,7 @@ export default function LeadsList() {
     );
 
     const filteredLeads = leads.filter(lead => {
+        if (lead.arquivado_em && !mostrarArquivados) return false;
         let matchesSearch = true;
         let matchesTags = true;
         let matchesStatus = true;
@@ -236,9 +242,22 @@ export default function LeadsList() {
         setIsModalOpen(false);
     };
 
-    const handleConvert = (lead) => {
+    const handleConvert = (lead, type = 'assinante') => {
         setLeadToConvert(lead);
-        setIsSubscriberModalOpen(true);
+        if (type === 'assinante') {
+            setIsSubscriberModalOpen(true);
+        } else if (type === 'fornecedor') {
+            setIsSupplierModalOpen(true);
+        }
+    };
+
+    const handleSupplierSaved = async () => {
+        try {
+            fetchLeads();
+            alert('Lead convertido em Fornecedor!');
+        } catch (e) {
+            console.error('Erro ao converter', e);
+        }
     };
 
     const handleSubscriberSaved = async (newSubscriber) => {
@@ -424,6 +443,17 @@ export default function LeadsList() {
                             <label htmlFor="hide-empty" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>Ocultar colunas vazias</label>
                         </div>
                     )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <input
+                            type="checkbox"
+                            id="mostrar-arquivados"
+                            checked={mostrarArquivados}
+                            onChange={e => setMostrarArquivados(e.target.checked)}
+                        />
+                        <label htmlFor="mostrar-arquivados" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
+                            Mostrar arquivados ({leads.filter(l => l.arquivado_em).length})
+                        </label>
+                    </div>
                     <div className="btn-group" style={{ display: 'flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                         <button
                             onClick={() => setViewMode('list')}
@@ -520,8 +550,8 @@ export default function LeadsList() {
         <select
             onChange={(e) => {
                 if (e.target.value) {
-                    if (e.target.value === 'assinante') {
-                        handleConvert(lead);
+                    if (e.target.value === 'assinante' || e.target.value === 'fornecedor') {
+                        handleConvert(lead, e.target.value);
                     } else {
                         alert('Conversão para ' + e.target.value + ' em desenvolvimento!');
                     }
@@ -615,6 +645,31 @@ export default function LeadsList() {
                     } : null}
                     onClose={() => setIsSubscriberModalOpen(false)}
                     onSave={handleSubscriberSaved}
+                />
+            )}
+
+            {isSupplierModalOpen && (
+                <SupplierModal
+                    supplier={leadToConvert ? {
+                        name: leadToConvert.name,
+                        email: leadToConvert.email,
+                        phone: leadToConvert.phone,
+                        cnpj: leadToConvert.cpf_cnpj,
+                        lead_id: leadToConvert.id,
+                        address: {
+                            cep: leadToConvert.cep,
+                            logradouro: leadToConvert.rua,
+                            rua: leadToConvert.rua,
+                            numero: leadToConvert.numero,
+                            complemento: leadToConvert.complemento,
+                            bairro: leadToConvert.bairro,
+                            municipio: leadToConvert.cidade,
+                            cidade: leadToConvert.cidade,
+                            uf: leadToConvert.uf
+                        }
+                    } : null}
+                    onClose={() => setIsSupplierModalOpen(false)}
+                    onSave={handleSupplierSaved}
                 />
             )}
         </div>

@@ -1,0 +1,355 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "B2W Charge — Plataforma Multi-Tenant de Eletropostos & Split Financeiro",
+    "languages": ["TypeScript", "SQL (PostgreSQL RLS)", "OCPP 1.6J/2.0"],
+    "frameworks": ["React / React Native", "Supabase (Single-DB tenant_id RLS)", "Stripe Connect", "OCPP CSMS (Joult 60/80kW)"],
+    "description": "Plataforma de gestão de pagamentos, operação OCPP (Joult 60/80 kW) e monetização de eletropostos com split financeiro em lote diário de 3 partes no MVP (B2W Pay Charger, B2W GE e Proprietário do Local) e 4 partes na Fase 2 (+ Investidor B2W Invest).",
+    "analyzedAt": "2026-09-24T15:28:00-03:00",
+    "gitCommitHash": "HEAD"
+  },
+  "nodes": [
+    {
+      "id": "document:ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "type": "document",
+      "name": "ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Especificação completa de arquitetura e domínio do B2W Charge para o time de desenvolvimento: ADRs (Joult 60/80kW, Stripe Connect, Lote Diário, Banco Único com tenant_id + RLS), Modelo ER e Fluxogramas.",
+      "tags": ["especificacao", "arquitetura", "adr", "fluxograma"],
+      "complexity": "complex"
+    },
+    {
+      "id": "service:canal-motorista-app-qr",
+      "type": "service",
+      "name": "App Motorista & Web QR (Recarga Sem App)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Interface do Motorista (iOS/Android e Web Instantâneo via QR Code): mapa de estações, leitura de QR do conector, escolha de pagamento (PIX mais barato vs. Cartão), telemetria em tempo real e histórico fiscal.",
+      "tags": ["persona:motorista", "qrcode", "app-mobile", "pix-cartao"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:painel-b2w-ge-operador",
+      "type": "service",
+      "name": "Painel B2W GE (Gestão de Eletropostos)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Painel Web do Operador (dono do negócio de recarga): cadastro de Estações e Conectores, configuração de Tarifas por horário, acompanhamento de faturamento líquido e solicitação de saque.",
+      "tags": ["persona:b2w-ge", "operador", "tarifas", "saque"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:portal-proprietario-local",
+      "type": "service",
+      "name": "Portal do Proprietário do Local (Host)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Painel do dono do imóvel/vaga (posto, condomínio, empresa): acompanhamento transparente de recebíveis e comissões por hospedar o eletroposto sem precisar operar.",
+      "tags": ["persona:proprietario", "host", "comissao-local", "recebiveis"],
+      "complexity": "simple"
+    },
+    {
+      "id": "service:painel-b2w-pay-charger",
+      "type": "service",
+      "name": "Console B2W Pay Charger (Gestora Multi-Tenant)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Backoffice global da plataforma: visão consolidada de todos os tenants (B2W GE), configuração de taxas da plataforma por método (PIX/Cartão), compliance fiscal e suporte 24/7.",
+      "tags": ["persona:b2w-pay-charger", "multi-tenant", "governanca", "admin"],
+      "complexity": "complex"
+    },
+    {
+      "id": "service:modulo-b2w-invest-fase2",
+      "type": "service",
+      "name": "Módulo Investidor (B2W Invest — Fase 2)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Módulo de 4ª parte do split financeiro (Fase 2): vincula Investidores às Estações financiadas (`investment_links`) e distribui retorno proporcional ao desempenho real (kWh/receita) de cada eletroposto.",
+      "tags": ["persona:investidor", "b2w-invest", "fase-2", "split-4-partes"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "table:db:users_and_roles_rls",
+      "type": "table",
+      "name": "Usuários Multi-Papel & Isolamento RLS (tenant_id)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Banco Único com `tenant_id` e Row-Level Security (RLS). Suporta múltiplos papéis por Usuário e modela explicitamente quando B2W GE e Proprietário do Local coincidem ou são entidades distintas.",
+      "tags": ["database", "rls", "tenant_id", "multi-role"],
+      "complexity": "complex"
+    },
+    {
+      "id": "table:db:locations_stations_connectors",
+      "type": "table",
+      "name": "Hierarquia: Local ➔ Estação ➔ Conector ➔ Tarifa",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Cadastro estrutural: Local (pertence ao Proprietário) hospeda 1+ Estações (pertencem à B2W GE), cada Estação possui 1+ Conectores físicos e regras de Tarifa (R$/kWh + horário).",
+      "tags": ["database", "local", "estacao", "conector", "tarifa"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:broker-ocpp-joult",
+      "type": "service",
+      "name": "Broker CSMS OCPP 1.6/2.0 (Carregadores Joult 60kW e 80kW)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Servidor WebSocket OCPP homologado para carregadores rápidos Joult de 60 kW e 80 kW: monitora status (`Available`, `Charging`, `Faulted`), executa `RemoteStartTransaction`/`RemoteStopTransaction` e recebe telemetria `MeterValues` (kWh).",
+      "tags": ["ocpp", "joult-60kw-80kw", "telemetria", "hardware"],
+      "complexity": "complex"
+    },
+    {
+      "id": "table:db:charging_sessions_transactions",
+      "type": "table",
+      "name": "Sessões de Recarga & Transações",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Registra o vínculo Motorista + Conector (`inicio`, `fim`, `kwh_consumidos`, `valor_total`) e a Transação financeira associada com o método (`pix` ou `cartao`) e status de liquidação.",
+      "tags": ["database", "sessao-recarga", "transacao"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:gateway-stripe-connect",
+      "type": "service",
+      "name": "Integração Stripe Connect (PIX & Cartão com Split Nativo)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Processamento de pagamentos via Stripe suportando PIX e Cartão (com taxas diferenciadas por meio) e subcontas conectadas (`Connected Accounts`) para execução nativa do split.",
+      "tags": ["stripe", "psp", "split-nativo", "pix", "cartao"],
+      "complexity": "complex"
+    },
+    {
+      "id": "pipeline:job-fechamento-diario-lote",
+      "type": "pipeline",
+      "name": "Motor de Fechamento Diário em Lote (Daily Batch Split)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Rotina diária em lote que consolida todas as sessões pagas do dia, calcula o split de 3 partes (B2W Pay Charger, B2W GE e Proprietário do Local) ou 4 partes (+ Investidor), dispara os repasses na Stripe e alimenta as Carteiras Digitais.",
+      "tags": ["batch-diario", "split-3-partes", "liquidacao", "cron"],
+      "complexity": "complex"
+    },
+    {
+      "id": "table:db:digital_wallets_ledger",
+      "type": "table",
+      "name": "Carteiras Digitais & Razão Contábil (Ledger)",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Controle de saldos auditáveis de Motorista (créditos), B2W GE (receita líquida disponível para saque), Proprietário do Local (comissão de hospedagem) e Investidor.",
+      "tags": ["database", "carteira-digital", "ledger", "saldos"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "service:emissor-nfse-automatico",
+      "type": "service",
+      "name": "Motor de Emissão Automática de NFS-e Municipal",
+      "filePath": "B2W Charge/ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "summary": "Serviço assíncrono de compliance fiscal (Lei 14.300 / REN 1000 ANEEL) que emite automaticamente a NFS-e para cada transação liquidada e envia ao Motorista.",
+      "tags": ["nfse", "fiscal", "automacao", "aneel"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "document:ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+      "target": "table:db:users_and_roles_rls",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "service:painel-b2w-ge-operador",
+      "target": "table:db:locations_stations_connectors",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "service:portal-proprietario-local",
+      "target": "table:db:locations_stations_connectors",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "table:db:users_and_roles_rls",
+      "target": "table:db:locations_stations_connectors",
+      "type": "validates",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "service:canal-motorista-app-qr",
+      "target": "table:db:locations_stations_connectors",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "service:canal-motorista-app-qr",
+      "target": "service:gateway-stripe-connect",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "service:gateway-stripe-connect",
+      "target": "table:db:charging_sessions_transactions",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "table:db:charging_sessions_transactions",
+      "target": "service:broker-ocpp-joult",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "service:broker-ocpp-joult",
+      "target": "table:db:charging_sessions_transactions",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "table:db:charging_sessions_transactions",
+      "target": "pipeline:job-fechamento-diario-lote",
+      "type": "reads_from",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "pipeline:job-fechamento-diario-lote",
+      "target": "service:gateway-stripe-connect",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "pipeline:job-fechamento-diario-lote",
+      "target": "table:db:digital_wallets_ledger",
+      "type": "writes_to",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "pipeline:job-fechamento-diario-lote",
+      "target": "service:emissor-nfse-automatico",
+      "type": "triggers",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "table:db:digital_wallets_ledger",
+      "target": "service:painel-b2w-ge-operador",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "table:db:digital_wallets_ledger",
+      "target": "service:portal-proprietario-local",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "table:db:digital_wallets_ledger",
+      "target": "service:painel-b2w-pay-charger",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "table:db:digital_wallets_ledger",
+      "target": "service:modulo-b2w-invest-fase2",
+      "type": "serves",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:painel-b2w-pay-charger",
+      "target": "pipeline:job-fechamento-diario-lote",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.8
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:canais-personas",
+      "name": "1. Canais & Personas (Motorista, B2W GE, Proprietário, Investidor e Pay Charger)",
+      "description": "Interfaces de usuário e portais dedicados para cada um dos 5 atores do ecossistema B2W Charge.",
+      "nodeIds": [
+        "service:canal-motorista-app-qr",
+        "service:painel-b2w-ge-operador",
+        "service:portal-proprietario-local",
+        "service:painel-b2w-pay-charger",
+        "service:modulo-b2w-invest-fase2"
+      ]
+    },
+    {
+      "id": "layer:core-dados-rls",
+      "name": "2. Modelagem Multi-Tenant (Banco Único + tenant_id RLS)",
+      "description": "Isolamento lógico por tenant_id com Row-Level Security, hierarquia Local -> Estação -> Conector e separação flexível entre B2W GE e Proprietário do Local.",
+      "nodeIds": [
+        "document:ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+        "table:db:users_and_roles_rls",
+        "table:db:locations_stations_connectors"
+      ]
+    },
+    {
+      "id": "layer:operacao-ocpp-joult",
+      "name": "3. Operação de Recarga & Hardware OCPP (Joult 60kW e 80kW)",
+      "description": "Comunicação em tempo real com carregadores rápidos Joult de 60 e 80 kW via protocolo OCPP 1.6/2.0 e controle de sessões de recarga.",
+      "nodeIds": [
+        "service:broker-ocpp-joult",
+        "table:db:charging_sessions_transactions"
+      ]
+    },
+    {
+      "id": "layer:motor-financeiro-stripe-batch",
+      "name": "4. Motor de Pagamentos Stripe, Fechamento Diário em Lote & NFS-e",
+      "description": "Captura PIX/Cartão via Stripe Connect, processamento diário em lote do split de 3/4 partes, carteiras digitais e emissão automática de NFS-e.",
+      "nodeIds": [
+        "service:gateway-stripe-connect",
+        "pipeline:job-fechamento-diario-lote",
+        "table:db:digital_wallets_ledger",
+        "service:emissor-nfse-automatico"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Passo 1: Personas e Isolamento Multi-Tenant (RLS)",
+      "description": "Conheça os 5 atores (Motorista, B2W GE, Proprietário do Local, Investidor e B2W Pay Charger) e como o Banco Único usa tenant_id com RLS para permitir que B2W GE e Proprietário coincidam ou sejam distintos.",
+      "nodeIds": [
+        "document:ARQUITETURA_DOMINIO_B2W_CHARGE.md",
+        "table:db:users_and_roles_rls",
+        "service:painel-b2w-ge-operador",
+        "service:portal-proprietario-local"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Passo 2: Cadastro de Ativos e Integração OCPP (Joult 60kW / 80kW)",
+      "description": "Veja como um Local hospeda Estações e Conectores da marca Joult (60 e 80 kW), controlados via WebSocket OCPP 1.6/2.0 (RemoteStart, MeterValues e Stop).",
+      "nodeIds": [
+        "table:db:locations_stations_connectors",
+        "service:broker-ocpp-joult",
+        "table:db:charging_sessions_transactions"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Passo 3: Recarga pelo Motorista (App ou QR Code) e Cobrança Stripe",
+      "description": "O motorista inicia a recarga com ou sem app via QR Code e paga por PIX ou Cartão (com taxas diferenciadas) através da Stripe.",
+      "nodeIds": [
+        "service:canal-motorista-app-qr",
+        "service:gateway-stripe-connect"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "Passo 4: Fechamento Diário em Lote (Split 3/4 Partes) e NFS-e Automática",
+      "description": "No fechamento diário em lote, o motor calcula o split entre B2W Pay Charger, B2W GE e Proprietário do Local (+ Investidor na Fase 2), executa o repasse na Stripe, credita as Carteiras Digitais e emite a NFS-e.",
+      "nodeIds": [
+        "pipeline:job-fechamento-diario-lote",
+        "table:db:digital_wallets_ledger",
+        "service:emissor-nfse-automatico",
+        "service:painel-b2w-pay-charger",
+        "service:modulo-b2w-invest-fase2"
+      ]
+    }
+  ]
+}

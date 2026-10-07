@@ -1,0 +1,110 @@
+{
+  "expo": {
+    "name": "B2W Energia",
+    "slug": "b2w-energia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.b2wenergia.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
+        "NSPhotoLibraryUsageDescription": "Usamos suas fotos para enviar a conta de energia.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "E174.1"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1124",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "br.com.b2wenergia.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B1124",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Usamos suas fotos para enviar a conta de energia.",
+          "microphonePermission": false,
+          "cameraPermission": "A câmera é usada para escanear o QR Code do carregador e fotografar sua conta de energia."
+        }
+      ]
+    ],
+    "scheme": "b2wenergia",
+    "backgroundColor": "#0B1124",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "owner": "b2wenergiabr",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "486ef9b2-45ad-492a-a2fa-eac2e8db766a"
+      }
+    }
+  }
+}

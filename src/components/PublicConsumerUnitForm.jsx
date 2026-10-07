@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAddressByCep } from '../lib/api';
 import { useUI } from '../contexts/UIContext';
 import { maskCpfCnpj, validateDocument } from '../lib/validators';
@@ -60,6 +60,8 @@ export default function PublicConsumerUnitForm({
     titularDefault,
     franquiaDefault,
     enderecoDefault,
+    // UC lida da conta de energia (link de adesão gerado no CRM com a conta lida)
+    ucDefault,
     docAssinante,
     onClose,
     onSave
@@ -67,28 +69,49 @@ export default function PublicConsumerUnitForm({
     const { showAlert } = useUI();
     const [searchingCep, setSearchingCep] = useState(false);
 
+    // Endereço da conta, quando veio: a UC pode não ficar no endereço do assinante.
+    const enderecoInicial = ucDefault?.endereco?.cep ? ucDefault.endereco : enderecoDefault;
+
     const [formData, setFormData] = useState({
-        numero_uc: '',
-        titular_conta: titularDefault || '',
-        concessionaria: concessionariaDefault || '',
-        franquia: franquiaDefault || '',
+        numero_uc: ucDefault?.numero_uc || '',
+        titular_conta: ucDefault?.titular_conta || titularDefault || '',
+        concessionaria: concessionariaDefault || ucDefault?.concessionaria || '',
+        franquia: ucDefault?.franquia || franquiaDefault || '',
         // Documento de quem aparece na fatura. Quase sempre é o do próprio
         // assinante, por isso já vem preenchido — mas pode ser outro titular.
         cpf_cnpj_fatura: maskCpfCnpj(docAssinante || ''),
-        tipo_ligacao: '',
+        tipo_ligacao: ucDefault?.tipo_ligacao || '',
 
         // Endereço herdado do cadastro do assinante — na maioria das adesões
         // a UC fica no mesmo endereço, e redigitar é onde o cliente desiste.
-        cep: maskCEP(enderecoDefault?.cep || ''),
-        rua: enderecoDefault?.rua || '',
-        numero: enderecoDefault?.numero || '',
-        complemento: enderecoDefault?.complemento || '',
-        bairro: enderecoDefault?.bairro || '',
-        cidade: enderecoDefault?.cidade || '',
-        uf: enderecoDefault?.uf || '',
+        cep: maskCEP(enderecoInicial?.cep || ''),
+        rua: enderecoInicial?.rua || '',
+        numero: enderecoInicial?.numero || '',
+        complemento: enderecoInicial?.complemento || '',
+        bairro: enderecoInicial?.bairro || '',
+        cidade: enderecoInicial?.cidade || '',
+        uf: enderecoInicial?.uf || '',
         // Código IBGE do município: é por ele que a RPC acha o desconto.
-        ibge: enderecoDefault?.ibge || ''
+        ibge: enderecoInicial?.ibge || ''
     });
+
+    // Endereço vindo da conta não traz o IBGE: busca pelo CEP sem trocar a
+    // rua e o bairro que a conta já deu.
+    useEffect(() => {
+        const rawCep = formData.cep.replace(/\D/g, '');
+        if (formData.ibge || rawCep.length !== 8) return;
+        fetchAddressByCep(rawCep)
+            .then(addr => setFormData(prev => ({
+                ...prev,
+                ibge: addr.ibge || '',
+                rua: prev.rua || addr.rua || '',
+                bairro: prev.bairro || addr.bairro || '',
+                cidade: prev.cidade || addr.cidade || '',
+                uf: prev.uf || addr.uf || '',
+            })))
+            .catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleCepChange = (e) => {
         const masked = maskCEP(e.target.value);

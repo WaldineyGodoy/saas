@@ -35,6 +35,7 @@ export default function ScraperQueueModal({ isOpen, onClose, onProcessed }) {
                     reading_error,
                     consumer_units!inner (
                         numero_uc,
+                        numero_uc_anterior,
                         titular_fatura_id,
                         titular_fatura:titular_fatura_id(name)
                     )

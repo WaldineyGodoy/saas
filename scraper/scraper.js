@@ -30,6 +30,7 @@ async function run() {
     let targetedDays = [];
     let currentMesRef = "";
     let modoJanela = false;
+    let modoDias = false;
     const now = new Date();
 
     // ---- Regra da janela de disponibilidade (modo automático) ----
@@ -103,10 +104,15 @@ async function run() {
             targetedDays = [];
             currentMesRef = `${month}/${year}`;
         }
-        // Fallback: Modo manual antigo (ex: "5, 12, 18")
+        // Lista de dias (ex: "5, 12, 18") -- disparo manual e dos bots.
+        // O mes-alvo e o da ULTIMA leitura de cada UC, nao o mes do calendario.
+        // Disparado em 03/10/2026 com os dias 7,10,13,16,27, o robo procurou
+        // 10/2026 (leitura que ainda nao aconteceu) e ignorou a conta 09/2026
+        // que estava na tela -- Green Park SE-02 e Guanabara, entre outras.
         else {
             targetedDays = targetStr.split(',').map(d => parseInt(d.trim()));
-            currentMesRef = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+            modoDias = true;
+            currentMesRef = null; // definido POR UC
         }
     } else {
         // Disparo automático (cron diário) -> MODO JANELA.
@@ -119,7 +125,7 @@ async function run() {
         currentMesRef = null; // definido POR UC
     }
 
-    console.log(`[Faturista] REF: ${currentMesRef || "por UC (modo janela)"} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
+    console.log(`[Faturista] REF: ${currentMesRef || (modoJanela ? "por UC (modo janela)" : "por UC (mês da última leitura)")} | Dias de Leitura: ${targetedDays.length ? targetedDays.join(', ') : 'Todos no Mês'}`);
 
     // 2. Busca as UCs atendidas por algum driver registrado
     console.log('Pesquisando UCs aptas via código (Supabase)...');
@@ -129,6 +135,8 @@ async function run() {
         .select(`
             id,
             numero_uc,
+            numero_uc_anterior,
+            data_troca_titularidade,
             subscriber_id,
             titular_fatura_id,
             concessionaria,
@@ -208,11 +216,26 @@ async function run() {
         return;
     }
 
+    // Numero anterior so serve de reserva na busca do card quando e o MESMO
+    // imovel renumerado pela concessionaria (o portal pode exibir qualquer um
+    // dos dois formatos). Se o numero anterior e cadastro proprio no CRM, ou
+    // houve troca de titularidade, ele e outra conta -- usar baixaria a fatura
+    // de outro titular para esta UC.
+    const soDigitos12 = (n) => String(n || '').replace(/\D/g, '').padStart(12, '0');
+    const { data: todosNumeros } = await supabase.from('consumer_units').select('numero_uc');
+    const numerosCadastrados = new Set((todosNumeros || []).map(u => soDigitos12(u.numero_uc)));
+
     // 2.1 Refinamento Híbrido: Verifica se a fatura já existe no banco (via código)
     const ucsToScrape = [];
     for (const uc of (allUcs || [])) {
         if (uc.numero_uc) {
             uc.numero_uc = String(uc.numero_uc).trim();
+        }
+        if (uc.numero_uc_anterior) {
+            const anterior = String(uc.numero_uc_anterior).trim();
+            uc.numero_uc_anterior = (uc.data_troca_titularidade || numerosCadastrados.has(soDigitos12(anterior)))
+                ? null
+                : anterior;
         }
 
         // Sem titular não há login de portal: o agrupamento é por titular das
@@ -276,6 +299,8 @@ async function run() {
                 continue;
             }
             console.log(`[Janela] UC ${uc.numero_uc}: elegível — leitura há ${j.diasDesdeLeitura}d, buscando ${j.mesRef}`);
+        } else if (modoDias) {
+            uc.mesRefAlvo = calcularJanelaUC(uc.dia_leitura, null).mesRef;
         } else {
             uc.mesRefAlvo = currentMesRef;
         }

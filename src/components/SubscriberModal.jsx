@@ -2,16 +2,18 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
+import ConvidarAppButton from './ConvidarAppButton';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
 import { maskCpfCnpj, maskPhone, validateDocument, validatePhone } from '../lib/validators';
 import { ehDiaUtil, proximoDiaUtil, proximaOcorrenciaDoDia } from '../lib/diasUteis';
 import { ehPapelInterno } from '../lib/papeis';
-import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer } from 'lucide-react';
+import { CreditCard, Plus, Trash2, History, User, Home, Zap, X, Eye, EyeOff, Key, DollarSign, Calendar, FileText, CheckCircle, Clock, AlertCircle, Ban, TicketCheck, TicketMinus, Download, Loader2, ArrowLeft, Info, RefreshCw, Send, MessageSquare, Paperclip, MessageCircle, Copy, Pencil, Printer, Share2 } from 'lucide-react';
 import ConsumerUnitModal from './ConsumerUnitModal';
 import ContratoAdesao from './ContratoAdesao';
 import DocumentosAssinante from './subscriber/DocumentosAssinante';
+import AssinanteConnect from './subscriber/AssinanteConnect';
 import { montarTextoContrato, gerarPdfContratoBase64, paginasTermoAdesao } from '../lib/contrato';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import jsPDF from 'jspdf';
@@ -2050,7 +2052,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '90%', maxWidth: '900px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* 1140px porque com 900px as abas nao cabiam: "Documentos" ficava
+                cortada na borda, virando um clipe solto, e a de Contratos
+                encostava nele. */}
+            <div style={{ background: 'white', padding: '0', borderRadius: '12px', width: '95%', maxWidth: '1140px', maxHeight: '95vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {/* Modal Header */}
                 <div style={{
                     padding: '1.25rem 2rem',
@@ -2072,12 +2077,17 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                 </div>
 
                 {/* Tabs Menu */}
+                {/* As abas quebram para a linha de baixo em vez de espremer ou
+                    sumir na borda: com 8 delas, em tela estreita a de
+                    Documentos virava um clipe solto no canto. Aba escondida e
+                    aba que nao existe. */}
                 <div style={{
                     display: 'flex',
+                    flexWrap: 'wrap',
                     background: 'white',
                     padding: '0 2rem',
                     borderBottom: '1px solid #e2e8f0',
-                    gap: '2rem'
+                    columnGap: '1.5rem'
                 }}>
                     {[
                         { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
@@ -2086,7 +2096,8 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                         { id: 'faturas', label: 'Faturas', icon: CreditCard, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' },
                         { id: 'contratos', label: 'Contratos', icon: FileText, color: '#003366', bg: '#f0f9ff' },
-                        { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' }
+                        { id: 'documentos', label: 'Documentos', icon: Paperclip, color: '#8b5cf6', bg: '#f5f3ff' },
+                        { id: 'conect', label: 'Assinante Connect', icon: Share2, color: '#0f766e', bg: '#f0fdfa' }
                     ]
                         // A aba Faturas nao e consulta: emite boleto, cancela,
                         // reenvia e desvincula fatura consolidada — tudo escrita
@@ -2122,7 +2133,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     transition: 'all 0.2s',
                                     fontSize: '0.9rem',
                                     fontWeight: isActive ? 700 : 500,
-                                    position: 'relative'
+                                    position: 'relative',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap'
                                 }}
                             >
                                 <div style={{
@@ -2238,6 +2251,13 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                     style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '6px', outline: 'none' }}
                                 />
                             </div>
+
+                            </div>
+                        )}
+
+                        {activeTab === 'conect' && (
+                            <div style={{ paddingBottom: '1rem' }}>
+                                <AssinanteConnect subscriber={subscriber} profile={profile} />
                             </div>
                         )}
 
@@ -2677,7 +2697,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                     .map(i => i.id)
                                                             });
 
-                                                            if (result.success) {
+                                                            if (result.semBoleto) {
+                                                                showAlert(result.mensagem, 'info');
+                                                                await fetchInvoices(subscriber.id);
+                                                            } else if (result.success) {
                                                                 showAlert('Fatura consolidada gerada com sucesso!', 'success');
                                                                 await Promise.all([
                                                                     fetchInvoices(subscriber.id),
@@ -3437,6 +3460,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                {subscriber?.id && (
+                                    <ConvidarAppButton tipo="subscriber" id={subscriber.id} nome={subscriber.name} />
+                                )}
                                 {subscriber && onDelete && (
                                     <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
                                         Excluir

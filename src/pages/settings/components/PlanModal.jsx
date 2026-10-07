@@ -25,6 +25,7 @@ import {
     nivelPermitidoParaCargo,
     semChavesLegadas
 } from '../../../lib/planoRecompensas';
+import DistribuidorasDoPlano from './DistribuidorasDoPlano';
 
 // Formatadores numéricos padrão PT-BR
 const formatCurrencyUnit = (val, decimals = 4) => {
@@ -56,7 +57,7 @@ const DEFAULT_MULTILEVEL_RULES = Object.fromEntries(
 const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
 const LEVEL_LABELS = {
     L1: { short: 'Nível L1', desc: 'Venda Direta (Parceiro Power)' },
-    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Conect)' },
+    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Connect)' },
     L3: { short: 'Nível L3', desc: '2ª Indicação (Corte Parceiro Power)' },
     L4: { short: 'Nível L4+', desc: 'Expansão Profunda (Corte Líder)' }
 };
@@ -70,6 +71,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
     // Lista de Concessionárias (Lastro e Ponto de Partida)
     const [concessionarias, setConcessionarias] = useState([]);
+    // Onde o plano pode ser contratado (planos_distribuidoras)
+    const [distribuidoras, setDistribuidoras] = useState([]);
     const [loadingCons, setLoadingCons] = useState(false);
     const [selectedConsKey, setSelectedConsKey] = useState('');
     const [concessionariaNome, setConcessionariaNome] = useState('Cosern');
@@ -127,6 +130,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
     useEffect(() => {
         if (!isOpen) return;
         setActiveLevelView('L1');
+
+        setDistribuidoras([]);
+        if (planToEdit?.id) {
+            supabase.from('planos_distribuidoras').select('concessionaria').eq('plano_id', planToEdit.id)
+                .then(({ data }) => setDistribuidoras((data || []).map(d => d.concessionaria).sort()));
+        }
 
         if (planToEdit) {
             setNome(planToEdit.nome || '');
@@ -556,22 +565,43 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         };
 
         try {
-            if (planToEdit?.id) {
+            let planoId = planToEdit?.id;
+            if (planoId) {
                 const { error } = await supabase
                     .from('planos_assinatura_energia')
                     .update(payload)
-                    .eq('id', planToEdit.id);
+                    .eq('id', planoId);
 
                 if (error) throw error;
-                showAlert('Plano de assinatura atualizado com sucesso!', 'success');
             } else {
-                const { error } = await supabase
+                const { data: novo, error } = await supabase
                     .from('planos_assinatura_energia')
-                    .insert([payload]);
+                    .insert([payload])
+                    .select('id')
+                    .single();
 
                 if (error) throw error;
-                showAlert('Plano de assinatura criado com sucesso!', 'success');
+                planoId = novo.id;
             }
+
+            // Distribuidoras: apaga as desmarcadas e grava as marcadas.
+            const { data: atuais, error: lerErr } = await supabase
+                .from('planos_distribuidoras').select('concessionaria').eq('plano_id', planoId);
+            if (lerErr) throw lerErr;
+            const remover = (atuais || []).map(d => d.concessionaria).filter(c => !distribuidoras.includes(c));
+            if (remover.length) {
+                const { error: delErr } = await supabase
+                    .from('planos_distribuidoras').delete().eq('plano_id', planoId).in('concessionaria', remover);
+                if (delErr) throw delErr;
+            }
+            if (distribuidoras.length) {
+                const { error: upErr } = await supabase
+                    .from('planos_distribuidoras')
+                    .upsert(distribuidoras.map(concessionaria => ({ plano_id: planoId, concessionaria })), { onConflict: 'plano_id,concessionaria' });
+                if (upErr) throw upErr;
+            }
+
+            showAlert(planToEdit?.id ? 'Plano de assinatura atualizado com sucesso!' : 'Plano de assinatura criado com sucesso!', 'success');
 
             if (onSave) onSave();
             onClose();
@@ -930,6 +960,12 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                 </div>
                             </div>
                         </div>
+
+                        <DistribuidorasDoPlano
+                            opcoes={[...new Set(concessionarias.map(c => c.Concessionaria).filter(Boolean))].sort()}
+                            selecionadas={distribuidoras}
+                            onChange={setDistribuidoras}
+                        />
 
                         {/* =========================================================================
                             BLOCO 2: DEMONSTRATIVO DINÂMICO E MATRIZ DE NÍVEIS (L1, L2, L3 e L4+)
@@ -1378,7 +1414,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                             <div className="ledger-row">
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                     <Users size={15} color="#10b981" />
-                                                    <span>(-) Assinante Conect</span>
+                                                    <span>(-) Assinante Connect</span>
                                                 </div>
                                                 <div>
                                                     {renderMultilevelCenterControl('assinante_conect', [

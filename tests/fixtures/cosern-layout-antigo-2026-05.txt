@@ -1,0 +1,149 @@
+Consumo-TUSD   kWh   166,00   0,61545996   102,16   5,95   102,16   20,00   20,43   0,45662206 
+Consumo-TE   kWh   166,00   0,40820275   67,76   3,92   67,76   20,00   13,55   0,30285379 
+Acrés. Band. AMARELA   0,71   0,03   0,71   20,00   0,14 
+Ilum. Púb. Municipal   18,00
+Parc1/2 *000001   208,74
+IPCA-NF-150000002   5,72 
+www.neoenergia.com|Ligue grátis 116 
+DANFE - DOCUMENTO AUXILIAR DA NOTA   FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA 2ª VIA 
+COMPANHIA ENERGÉTICA DO RIO GRANDE DO NORTE 
+RUA MERMOZ, 150, BALDO, NATAL, RIO GRANDE DO NORTE CEP 59025-250 
+CNPJ 08.324.196/0001-81 INSCRIÇÃO ESTADUAL 20055199-0 
+CLASSIFICAÇÃO:   B1 RESIDENCIAL -RESIDENCIAL   TIPO DE FORNECIMENTO:   Conv. Monômia - Monofásico 
+NOME DO CLIENTE: 
+MARIA EXEMPLO DA SILVA 
+CPF: 123.4**.***-** 
+ENDEREÇO: 
+RUA DAS FLORES 100 
+CENTRO/AREA URBANA 
+59678-000 TIBAU RN 
+CÓDIGO DA INSTALAÇÃO 
+6000001 
+CÓDIGO DO CLIENTE 
+7000000001 
+DATAS DE LEITURAS   LEITURA ANTERIOR   06/04/2026   LEITURA ATUAL   05/05/2026   N° DE DIAS   29   PRÓXIMA LEITURA   03/06/2026 
+NOTA FISCAL N°   150000001   - SÉRIE 000 / DATA DE EMISSÃO: 30/05/2026 
+Consulte pela Chave de Acesso em: 
+https://dfe-portal.svrs.rs.gov.br/Nf3e/consulta 
+chave de acesso: 
+2426 0508 3241 9600 0181 6600 0150 0000 0110 0000 0001 
+Protocolo de autorização: 3242600000000001 - 30/05/2026 às 21:13:29 
+REF:MÊS/ANO 
+05/2026   VENCIMENTO 
+11/06/2026 
+TOTAL A PAGAR R$ 
+403,09 
+Cadastra-se e receba a sua fatura por e-mail, utilizando o QR code no verso da fatura. 
+TRIBUTO   BASE DE   ALÍQUOTA   VALOR (R$) 
+CÁLCULO (R$)   (%) 
+PIS   136,50   1,29   1,76 
+COFINS   136,50   5,97   8,14 
+ICMS   170,63   20,00   34,12 
+CONSUMO / kWh 
+CONSUMO FATURADO   N°DIAS FAT 
+MAI26   166   29
+ABR26   279   32
+MAR26   380   30
+FEV26   511   27
+JAN26   402   33
+DEZ25   211   31
+NOV25   239   29
+OUT25   262   31
+SET25   203   31
+AGO25   258   33
+JUL25   284   29
+JUN25   298   30
+MAI25   87   32
+MEDIDOR   GRANDEZAS   POSTOS   LEITURA   LEITURA   CONST.   CONSUMO
+HORÁRIOS   ANTERIOR   ATUAL   MEDIDOR   kWh 
+2200000001   Energia Ativa   Único   4.750,00   4.916,00   1,00000   166,00 
+RESERVADO AO FISCO 
+ATENÇÃO! APÓS 17/06/2026, DÉBITOS EXISTENTES CAUSARÃO SUSPENSÃO DO FORNECIMENTO. 
+Vencto   Dt reaviso   Valor   Vencto   Dt reaviso   Valor 
+11/05/26   02/06/26   293,21
+Este comunicado   NÃO   substitui aviso de débitos anteriores e   NÃO   contempla débitos em discussão judicial. Caso a suspensão
+do fornecimento persista por dois ciclos de faturamento, poderá ocorrer o encerramento do contrato, podendo também existir
+cobrança conforme os critérios definidos no Art. 322 REN 1000/Aneel. Podem ocorrer ações de cobrança, bem como inclusão nos
+registros de restrições de crédito SPC e SERASA. 
+Saldo anterior total = 0,0000 
+Energia injetada no mês = 0,0000 
+Energia compensada total = 0,0000 
+Saldo atual total = 0,0000 
+Excedente do mês = 0,0000 
+ITAU   PAGÁVEL EM QUALQUER REDE BANCÁRIA 
+34191.00000   00000.000000   00000.000000   1   14740000040309 
+PAGADOR | CPF/CNPJ | ENDEREÇO 
+MARIA EXEMPLO DA SILVA 123.4**.***-** 
+RUA DAS FLORES 100   CENTRO/AREA URBANA   59678-000 TIBAU RN 
+NOSSO NÚMERO 
+100000000001 
+N° DO DOCUMENTO 
+7000001 
+CÓDIGO DO CLIENTE 
+7000000001 
+DATA DE VENCIMENTO 
+11/06/2026 
+VALOR DO DOCUMENTO 
+403,09 
+BENEFICIÁRIO 
+COMPANHIA ENERGÉTICA DO RIO GRANDE DO NORTE   CNPJ 08.324.196/0001-81 
+RUA MERMOZ, 150, BALDO, NATAL, RIO GRANDE DO NORTE CEP 59025-250 
+AGÊNCIA/CODIGO CEDENTE 2938/58328- 
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+INFORMAÇÕES IMPORTANTES 
+Na data da leitura a bandeira em vigor é a Amarela. Mais informações em www.aneel.gov.br.
+ATENÇÃO! Em Julho seu Nº da Unidade Consumidora terá 15 dígitos conforme padrão Aneel
+A partir de 22/04, tarifas com reajuste médio de 3,74% para Baixa Tensão e 10,90% para Alta Tensão. Res. ANEEL 3.573/26. Na tarifa aplicada consta encargo CDE-Escassez Hídrica REN1008/22.
+A fatura pode ser emitida com base na leitura informada pelo cliente.
+Em caso de suspensão de fornecimento, o encerramento do contrato poderá ocorrer após 2 ciclos de faturamento, podendo também ser cobrado o custo de disponibilidade no ciclo em que ocorrer a suspensão. 
+05/2026   CÓDIGO DO CLIENTE   7000000001   VENCIMENTO   11/06/2026   TOTAL A PAGAR R$   403,09 
+PARA CADASTRAR SUA CONTA EM DÉBITO AUTOMÁTICO, UTILIZE O CÓDIGO DO CLIENTE. 
+1/1 
+PAGUE COM PIX 
+TOTAL   403,09 
+ITENS DA FATURA   UNID.   QUANT.   PREÇO UNIT.   VALOR   PIS/   BASE CALC.   ALÍQUOTA   ICMS (R$)   TARIFA 
+COM TRIB.(R$)   (R$)   COFINS(R$)   ICMS(R$)   ICMS(%)   UNIT(R$) 
+Fale com a gente! | Nossos Canais de Atendimento
+TELEATENDIMENTO: 116 ou 0800 283 0800 
+(Ligação gratuita de telefones fixos e móveis) 
+Atendimento ao deficiente auditivo ou de fala: 0800 701 0155 
+Ouvidoria: 0800 084 0404
+Agência de Regulação dos Serviços Públicos do Rio Grande do
+Norte - ARSEP 0800 727 0167
+Agência Nacional de Energia Elétrica - ANEEL 167
+(Ligação gratuita de telefones fixos e móveis) 
+INFORMAÇÕES IMPORTANTES 
+Todo Consumidor pode solicitar a apuração dos indicadores de
+continuidade e limites aplicáveis   (DIC, FIC, DMIC e DICRI).   As
+informações podem ser consultadas a qualquer tempo, basta
+acessar:   www.neoenergia.com -   Na Agência Virtual. 
+DIC   - NÚMERO DE HORAS SEM ENERGIA 
+FIC   - NÚMERO DE VEZES SEM ENERGIA 
+DMIC   - DURAÇÃO MÁXIMA DE INTERRUPÇÃO CONTÍNUA 
+DICRI   - DURAÇÃO DE INTERRUPÇÃO EM DIA CRÍTICO 
+INFORMAÇÕES IMPORTANTES 
+O Cliente é compensado quando há violação na continuidade
+individual ou do nível de tensão de fornecimento.
+Pagamento em atraso gera multa 2%(Res.1.000/ANEEL),
+juros 1% a.m (lei 10.438/02) e atualização monetária no
+próximo mês.
+O cliente é compensado quando há descumprimento do prazo
+definido para os padrões de atendimento comercial.
+Regras para cobrança da contribuição para custeio de serviço
+de iluminação pública(COSIP) estão à disposição site
+www.neoenergia.com/Poder Público/Contribuição de
+Iluminação Pública.
+As informações suplementares estão disponíveis no site
+www.neoenergia.com - Na Agência Virtual, ou nas lojas de
+atendimento.
+As condições gerais de fornecimento (Resolução ANEEL 414/2010), tarifas, produtos, serviços prestados e tributos se encontram
+à disposição, para consulta em nossas unidades de atendimento e no site   www.neoenergia.com 
+ACESSE WWW.NEOENERGIA.COM E CONFIRA NOSSO AVISO DE PRIVACIDADE. 
+DANFE - DOCUMENTO AUXILIAR DA NOTA 
+FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA 
+NOME DO CLIENTE: 
+MARIA EXEMPLO DA SILVA 
+ENDEREÇO: 
+RUA DAS FLORES 100 
+CENTRO/AREA URBANA 
+59678-000 TIBAU RN 

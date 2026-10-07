@@ -34,6 +34,15 @@ on:
         description: 'Máximo de faturas nesta execução'
         required: false
         default: '30'
+      so_whatsapp:
+        description: 'Reenviar SÓ pelo WhatsApp as faturas listadas (já entregues por e-mail)'
+        type: boolean
+        required: false
+        default: false
+      faturas:
+        description: 'IDs das faturas (consolidadas ou individuais), separados por vírgula'
+        required: false
+        default: ''
 
 jobs:
   enviar:
@@ -69,6 +78,9 @@ jobs:
           ARGS="--limite ${{ github.event.inputs.limite || '30' }}"
           if [ "${{ github.event.inputs.simular }}" = "false" ]; then
             ARGS="$ARGS --aplicar"
+          fi
+          if [ "${{ github.event.inputs.so_whatsapp }}" = "true" ]; then
+            ARGS="$ARGS --so-whatsapp --fatura ${{ github.event.inputs.faturas }}"
           fi
           echo "node enviador.js $ARGS"
           node enviador.js $ARGS
