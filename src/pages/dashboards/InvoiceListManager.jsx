@@ -710,7 +710,10 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         setGeneratingId(inv.id);
         try {
             const result = await createAsaasCharge(inv.id);
-            if (result.url) {
+            if (result.semBoleto) {
+                showAlert(result.mensagem, 'info');
+                fetchInvoices();
+            } else if (result.url) {
                 showAlert('Boleto gerado com sucesso!', 'success');
                 window.open(result.url, '_blank');
                 fetchInvoices();

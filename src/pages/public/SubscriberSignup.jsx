@@ -10,6 +10,7 @@ import ContratoAdesao from '../../components/ContratoAdesao';
 import PassoDocumentos from './onboarding/PassoDocumentos';
 import { gerarPdfContratoBase64, paginasTermoAdesao } from '../../lib/contrato';
 import { DIAS_VENCIMENTO, VERSAO_TERMOS, lerErroFuncao, uuidOuNulo } from '../../lib/onboarding';
+import { separarNumero } from '../../lib/energyBillParser';
 import { Zap, CheckCircle, Plus, Trash2, ArrowRight, Clock, Link2, FileSignature } from 'lucide-react';
 
 const URL_TERMOS_USO = 'https://b2wenergia.com.br/termos-de-uso/';
@@ -147,6 +148,47 @@ export default function SubscriberSignup() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paramCep]);
+
+    // Link de adesão gerado no CRM (`/contrato?lead_id=`): os dados do lead e a
+    // UC lida da conta de energia preenchem o cadastro, sem passar pela URL.
+    const [ucDaConta, setUcDaConta] = useState(null);
+    const [consumoDoLead, setConsumoDoLead] = useState('');
+    useEffect(() => {
+        const leadId = uuidOuNulo(paramLeadId);
+        if (!leadId || paramRetomar) return;
+        supabase.rpc('fn_lead_adesao', { p_lead: leadId }).then(({ data, error }) => {
+            if (error || !data) return;
+            setFormData(prev => ({
+                ...prev,
+                name: prev.name || data.name || '',
+                email: prev.email || data.email || '',
+                phone: prev.phone || maskPhone(data.phone || ''),
+                cep: prev.cep || data.cep || '',
+                rua: prev.rua || data.rua || '',
+                numero: prev.numero || data.numero || '',
+                complemento: prev.complemento || data.complemento || '',
+                bairro: prev.bairro || data.bairro || '',
+                cidade: prev.cidade || data.cidade || '',
+                uf: prev.uf || data.uf || '',
+            }));
+            // Sem CEP na URL, busca o IBGE do endereço do lead (é ele que dá o desconto).
+            if (!paramCep && data.cep) handleCepBlur(data.cep);
+            if (data.consumo_kwh) setConsumoDoLead(String(Math.round(data.consumo_kwh)));
+            if (data.uc?.numeroUc) {
+                const end = data.uc.endereco || {};
+                const { rua, numero } = separarNumero(end.logradouro);
+                setUcDaConta({
+                    numero_uc: data.uc.numeroUc,
+                    titular_conta: data.uc.titular || '',
+                    tipo_ligacao: data.uc.ligacao || '',
+                    franquia: data.uc.mediaKwh ? String(data.uc.mediaKwh) : '',
+                    concessionaria: data.concessionaria || '',
+                    endereco: { cep: end.cep || '', rua, numero, complemento: end.complemento || '', bairro: end.bairro || '', cidade: end.cidade || '', uf: end.uf || '' },
+                });
+            }
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paramLeadId, paramRetomar]);
 
     // Retomada: o link `/contrato?retomar=<token>` reabre a adesão no passo
     // em que ela parou.
@@ -743,6 +785,12 @@ export default function SubscriberSignup() {
                         </button>
                     </div>
 
+                    {ucDaConta && consumerUnits.length === 0 && (
+                        <div className="mb-4 p-4 rounded-xl border border-sky-200 bg-sky-50 text-sky-900 text-sm">
+                            Já trouxemos a UC <b>{ucDaConta.numero_uc}</b> da sua conta de energia. Clique em <b>Adicionar UC</b> para conferir e completar os dados.
+                        </div>
+                    )}
+
                     {consumerUnits.length === 0 ? (
                         <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                             <p>Nenhuma UC cadastrada. Adicione pelo menos uma para continuar.</p>
@@ -915,9 +963,10 @@ export default function SubscriberSignup() {
             {showUcModal && (
                 <PublicConsumerUnitForm
                     concessionariaDefault={paramConcessionaria}
+                    ucDefault={consumerUnits.length === 0 ? ucDaConta : null}
                     titularDefault={formData.name}
                     docAssinante={formData.cpf_cnpj}
-                    franquiaDefault={consumerUnits.length === 0 ? paramConsumo : ''}
+                    franquiaDefault={consumerUnits.length === 0 ? (paramConsumo || consumoDoLead) : ''}
                     enderecoDefault={{
                         cep: formData.cep,
                         rua: formData.rua,

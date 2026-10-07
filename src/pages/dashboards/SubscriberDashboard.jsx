@@ -46,9 +46,15 @@ export default function SubscriberDashboard() {
             // `status`, `short_url` e `indicador_assinante_id` vem por causa da
             // secao Assinante Connect: e aqui que o assinante ve o proprio link
             // de indicacao, e nao so o time interno pelo modal.
+            // Vinculo pelo user_id, nunca pelo profile_id (ha assinante com
+            // profile_id apontando para o perfil de outra pessoa). Mais de um
+            // cadastro no mesmo login: o mais antigo, como no app.
             const { data: subData } = await supabase.from('subscribers')
                 .select('id, name, status, short_url, indicador_assinante_id')
-                .eq('profile_id', user.id).single();
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
 
             if (subData) {
                 targetSubscriberId = subData.id;

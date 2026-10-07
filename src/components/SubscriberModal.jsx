@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useUI } from '../contexts/UIContext';
+import ConvidarAppButton from './ConvidarAppButton';
 import { useBranding } from '../contexts/BrandingContext';
 import { fetchAddressByCep, fetchCpfCnpjData, createAsaasCharge, manageAsaasCustomer, mergePdf, sendCombinedNotification, sendWhatsapp, createAutentiqueDocument, cancelAutentiqueDocument, shortenLink, cancelAsaasCharge, salvarSenhaPortal, semSenha } from '../lib/api';
 import { getSecurePdfUrl } from '../lib/pdfHelper';
@@ -2696,7 +2697,10 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
                                                                     .map(i => i.id)
                                                             });
 
-                                                            if (result.success) {
+                                                            if (result.semBoleto) {
+                                                                showAlert(result.mensagem, 'info');
+                                                                await fetchInvoices(subscriber.id);
+                                                            } else if (result.success) {
                                                                 showAlert('Fatura consolidada gerada com sucesso!', 'success');
                                                                 await Promise.all([
                                                                     fetchInvoices(subscriber.id),
@@ -3456,6 +3460,9 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid #eee', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                {subscriber?.id && (
+                                    <ConvidarAppButton tipo="subscriber" id={subscriber.id} nome={subscriber.name} />
+                                )}
                                 {subscriber && onDelete && (
                                     <button type="button" onClick={handleDelete} style={{ padding: '0.6rem 1.25rem', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: '1px solid #fecaca', fontWeight: 600 }}>
                                         Excluir

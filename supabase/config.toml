@@ -47,8 +47,10 @@ verify_jwt = true
 [functions.cancel-autentique-document]
 verify_jwt = true
 
+# Equipe (CRM) ou outra Edge Function (onboarding-finalizar, com a chave de
+# servidor). O portao de verdade e requireInternoOuServidor dentro da funcao.
 [functions.create-autentique-document]
-verify_jwt = false
+verify_jwt = true
 
 [functions.autentique-webhook]
 verify_jwt = false
@@ -100,3 +102,20 @@ verify_jwt = true
 # autenticidade vem da assinatura Stripe verificada dentro da funcao.
 [functions.stripe-charging-webhook]
 verify_jwt = false
+# Convite para o app (WhatsApp com link de senha). So admin: o portao
+# requireAdmin fica dentro da funcao, verify_jwt sozinho nao basta.
+[functions.convidar-app]
+verify_jwt = true
+
+# Leitura de foto de conta de luz via OpenRouter (modelo com visao). Exige sessao real
+# (requireUser dentro da funcao): cada chamada custa uma requisicao na API.
+[functions.parse-invoice-image]
+verify_jwt = true
+
+# Termo aditivo pedido pelo app: exige sessao do assinante (requireUser dentro).
+[functions.aditivo-nova-uc]
+verify_jwt = true
+
+# Excluir conta pelo app: exige sessao do proprio usuario (requireUser dentro).
+[functions.excluir-conta-app]
+verify_jwt = true

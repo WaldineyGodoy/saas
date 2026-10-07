@@ -9,6 +9,7 @@ import {
     CheckCircle, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, Copy, Zap, Download
 } from 'lucide-react';
 import HistoryTimeline from './HistoryTimeline';
+import ConvidarAppButton from './ConvidarAppButton';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import autoTable from 'jspdf-autotable';
@@ -2061,8 +2062,11 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
                                 )}
                             </div>
                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                <button 
-                                    type="button" 
+                                {supplier?.id && (
+                                    <ConvidarAppButton tipo="supplier" id={supplier.id} nome={supplier.name} style={{ borderRadius: '14px', padding: '0.75rem 1.25rem' }} />
+                                )}
+                                <button
+                                    type="button"
                                     onClick={onClose}
                                     style={{
                                         padding: '0.75rem 1.5rem',

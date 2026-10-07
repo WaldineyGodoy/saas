@@ -35,3 +35,5 @@ scratch_*.js
 *.zip
 mobile/.expo/
 supabase/.branches/
+# Contas reais de clientes (dados pessoais); os testes usam o texto anonimizado (.txt)
+tests/fixtures/*.pdf

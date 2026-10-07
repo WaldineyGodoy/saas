@@ -5,9 +5,12 @@ import { useUI } from '../contexts/UIContext';
 import { fetchAddressByCep, fetchOfferData, sendWhatsapp, sendLeadMensagem } from '../lib/api';
 import { MODELOS_LEAD, montarMensagemLead, montarLinkIndicacao } from '../../supabase/functions/_shared/mensagem-lead.ts';
 import { maskPhone, validatePhone } from '../lib/validators';
-import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle } from 'lucide-react';
+import { Clock, User, Home, Zap, CreditCard, History, X, MessageSquare, FileText, Calendar, MessageCircle, Users } from 'lucide-react';
 import HistoryTimeline, { CollapsibleSection } from './HistoryTimeline';
 import TagInput from './TagInput';
+import ContaEnergiaLead from './ContaEnergiaLead';
+import LeadVisitas from './LeadVisitas';
+import { separarNumero } from '../lib/energyBillParser';
 
 export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }) {
     const { profile } = useAuth();
@@ -72,9 +75,13 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
 
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
+    // Leitura da conta de energia (leads.conta_lida); fica fora do formData
+    // para o salvar dos outros campos não depender dela.
+    const [contaLida, setContaLida] = useState(null);
 
     useEffect(() => {
         fetchOriginators();
+        setContaLida(lead?.conta_lida || null);
         if (lead) {
             setFormData({
                 name: lead.name,
@@ -207,6 +214,33 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
         }
     };
 
+    // Conta lida: guarda a UC e completa só os campos do lead ainda vazios.
+    // Lead já salvo grava na hora, para o link de adesão sair com a UC.
+    const aplicarContaLida = async (conta) => {
+        const end = conta.endereco || {};
+        const { rua, numero } = separarNumero(end.logradouro);
+        setContaLida(conta);
+        setFormData(prev => ({
+            ...prev,
+            cep: prev.cep || end.cep || '',
+            rua: prev.rua || rua,
+            numero: prev.numero || numero,
+            complemento: prev.complemento || end.complemento || '',
+            bairro: prev.bairro || end.bairro || '',
+            cidade: prev.cidade || end.cidade || '',
+            uf: prev.uf || end.uf || '',
+            concessionaria: prev.concessionaria || conta.concessionaria || '',
+            consumo_kwh: prev.consumo_kwh || conta.mediaKwh || '',
+        }));
+        if (lead?.id) {
+            const { error } = await supabase.from('leads').update({ conta_lida: conta }).eq('id', lead.id);
+            if (error) throw error;
+            showAlert(`Conta lida: UC ${conta.numeroUc}. Endereço e consumo vazios foram preenchidos; salve o lead para gravá-los.`, 'success');
+        } else {
+            showAlert(`Conta lida: UC ${conta.numeroUc}. Será gravada ao salvar o lead.`, 'success');
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -227,6 +261,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
             dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;
             dataToSave.desconto_assinante = dataToSave.desconto_assinante ? Number(dataToSave.desconto_assinante) : null;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
+            if (contaLida) dataToSave.conta_lida = contaLida;
 
             let result;
             if (lead?.id) {
@@ -325,6 +360,7 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
             dataToSave.consumo_kwh = dataToSave.consumo_kwh ? Number(dataToSave.consumo_kwh) : null;
             dataToSave.desconto_assinante = dataToSave.desconto_assinante ? Number(dataToSave.desconto_assinante) : null;
             if (dataToSave.originator_id === '') dataToSave.originator_id = null;
+            if (contaLida) dataToSave.conta_lida = contaLida;
 
             let result;
             if (lead?.id) {
@@ -538,7 +574,9 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                     [
                         { id: 'dados', label: 'Dados Cadastrais', icon: User, color: '#003366', bg: '#f0f9ff' },
                         { id: 'endereco', label: 'Endereço', icon: Home, color: '#10b981', bg: '#ecfdf5' },
+                        { id: 'conta', label: 'Conta de Energia', icon: FileText, color: '#0ea5e9', bg: '#f0f9ff' },
                         ...(formData.tags?.includes('Energia por Assinatura') ? [{ id: 'energia', label: 'Dados de Energia', icon: Zap, color: '#f59e0b', bg: '#fff7ed' }] : []),
+                        ...(lead?.id ? [{ id: 'visitas', label: 'Visitas e Indicações', icon: Users, color: '#0f766e', bg: '#f0fdfa' }] : []),
                         { id: 'agendamentos', label: 'Agendamentos', icon: Calendar, color: '#8b5cf6', bg: '#f5f3ff' },
                         { id: 'comunicacao', label: 'Comunicados', icon: MessageCircle, color: '#25D366', bg: '#f0fdf4' }
                     ].map(tab => {
@@ -669,6 +707,16 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                                 
                             </div>
                         </form>
+                    )}
+
+                    {activeTab === 'conta' && (
+                        <form id="lead-form-conta" onSubmit={handleSubmit}>
+                            <ContaEnergiaLead lead={lead} contaLida={contaLida} onLeitura={aplicarContaLida} />
+                        </form>
+                    )}
+
+                    {activeTab === 'visitas' && (
+                        <LeadVisitas leadId={lead?.id} />
                     )}
 
                     {activeTab === 'endereco' && (
@@ -1051,12 +1099,13 @@ export default function LeadModal({ lead, onClose, onSave, onDelete, onConvert }
                             </select>
                         )}
                         <button type="button" onClick={onClose} style={{ padding: '0.6rem 1.25rem', background: 'white', color: '#475569', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 600 }}>Cancelar</button>
-                        {['dados', 'endereco', 'energia', 'agendamentos', 'comunicacao'].includes(activeTab) && (
+                        {['dados', 'endereco', 'conta', 'energia', 'agendamentos', 'comunicacao'].includes(activeTab) && (
                             <button
                                 type="button"
                                 onClick={(e) => {
                                     let formId = 'lead-form-dados';
                                 if (activeTab === 'endereco') formId = 'lead-form-endereco';
+                                else if (activeTab === 'conta') formId = 'lead-form-conta';
                                 else if (activeTab === 'energia') formId = 'lead-form-energia';
                                 else if (activeTab === 'agendamentos' || activeTab === 'comunicacao') {
                                     formId = 'lead-form-dados';

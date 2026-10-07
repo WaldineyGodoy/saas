@@ -1,0 +1,134 @@
+Consumo-TUSD   kWh   4.623,00   0,64966059   3.003,38   172,74   3.003,38   20,00   600,67   0,48236000 
+Consumo-TE   kWh   4.623,00   0,39521603   1.827,08   105,08   1.827,08   20,00   365,41   0,29344000 
+G2Comp.oUC-nM-TUSD   kWh   4.623,00-   0,43390830   2.005,95-   115,38-   2.005,95-   20,00   401,19-   0,32216824 
+G2Comp.oUC-nM-TE   kWh   4.623,00-   0,39521603   1.827,08-   105,08-   1.827,08-   20,00   365,41-   0,29344000 
+Acrés. Band. AMARELA   117,36   6,74   117,36   20,00   23,47 
+G2-Acrés.Bd.AM-Comp.   117,36-   6,74-   117,36-   20,00   23,47- 
+Ilum. Púb. Municipal   661,25
+Multa-NF 160000002   14,70
+Multa-NF 160000003   21,14
+Juros-NF 160000002   1,22
+Juros-NF 160000003   6,69
+IPCA-NF-160000002   0,08 
+www.neoenergia.com|Ligue grátis 116 
+DANFE - DOCUMENTO AUXILIAR DA NOTA   FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA 2ª VIA 
+COMPANHIA ENERGÉTICA DO RIO GRANDE DO NORTE 
+RUA MERMOZ, 150, BALDO, NATAL, RIO GRANDE DO NORTE CEP 59025-250 
+CNPJ 08.324.196/0001-81 INSCRIÇÃO ESTADUAL 20055199-0 
+CLASSIFICAÇÃO:   B1 RESIDENCIAL -RESIDENCIAL   TIPO DE FORNECIMENTO:   Conv. Monômia - Trifásico 
+NOME DO CLIENTE: 
+ASSOCIACAO EXEMPLO DE ENERGIA 
+CNPJ: 12.345.***/****-** 
+ENDEREÇO: 
+RODOVIA EXEMPLO 1000 CD- A 
+COND EXEMPLO 
+SE- 02 
+JARDINS/AREA URBANA 
+59294-390 SAO GONCALO DO AMARANTE RN 
+NÚMERO DA UNIDADE CONSUMIDORA 
+1.900.000.001-23 
+DATAS DE LEITURAS   LEITURA ANTERIOR   11/08/2026   LEITURA ATUAL   10/09/2026   N° DE DIAS   30   PRÓXIMA LEITURA   08/10/2026 
+NOTA FISCAL N°   160000001   - SÉRIE 000 / DATA DE EMISSÃO: 28/09/2026 
+Consulte pela Chave de Acesso em: 
+https://dfe-portal.svrs.rs.gov.br/Nf3e/consulta 
+chave de acesso: 
+2426 0908 3241 9600 0181 6600 0160 0000 0110 0000 0002 
+Protocolo de autorização: 3242600015000001 - 28/09/2026 às 22:03:50 
+REF:MÊS/ANO 
+09/2026   VENCIMENTO 
+26/10/2026 
+TOTAL A PAGAR R$ 
+1.702,51 
+Cadastra-se e receba a sua fatura por e-mail, utilizando o QR code no verso da fatura. 
+TRIBUTO   BASE DE   ALÍQUOTA   VALOR (R$) 
+CÁLCULO (R$)   (%) 
+PIS   797,94   1,28   10,21 
+COFINS   797,94   5,91   47,15 
+ICMS   997,43   20,00   199,48 
+CONSUMO / kWh 
+CONSUMO FATURADO   N°DIAS FAT 
+SET26   4623   30
+AGO26   4948   33
+JUL26   3450   35
+JUN26
+MAI26
+ABR26
+MAR26
+FEV26
+JAN26
+DEZ25
+NOV25
+OUT25
+SET25
+MEDIDOR   GRANDEZAS   POSTOS   LEITURA   LEITURA   CONST.   CONSUMO
+HORÁRIOS   ANTERIOR   ATUAL   MEDIDOR   kWh 
+2200000002   Energia Ativa   Único   87.504,00   92.127,00   1,00000   4.623,00 
+2200000002   Energia Reativa   Único   55.121,00   58.138,00   1,00000   3.017,00 
+RESERVADO AO FISCO 
+Até a emissão desta fatura você não possui débitos para esse código de cliente.Parabéns por manter suas contas em dia! Conte
+sempre com a gente. Este comunicado não contempla débitos em discussão judicial.A compensação do pagamento ocorrerá em
+até 3 dias úteis, após data do pagamento. 
+Saldo anterior total = 0,0000 
+Energia injetada no mês = 0,0000 
+Energia compensada total = 4.623,0000 
+Saldo atual total = 0,0000 
+Excedente do mês = 15.476,0000 
+838700000170 000000000000 000000000000 000000000000 
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+INFORMAÇÕES IMPORTANTES 
+Na data da leitura a bandeira em vigor é a Amarela. Mais informações em www.aneel.gov.br.
+Conheça o termo de adesão, direitos e deveres e mais em www.neoenergia.com/rn
+A fatura pode ser emitida com base na leitura informada pelo cliente. 
+09/2026   CÓDIGO DÉBITO EM CONTA   7000000003   VENCIMENTO   26/10/2026   TOTAL A PAGAR R$   1.702,51 
+PARA CADASTRAR SUA CONTA EM DÉBITO AUTOMÁTICO, UTILIZE O CÓDIGO ACIMA. 
+1/1 
+PAGUE COM PIX 
+TOTAL   1.702,51 
+ITENS DA FATURA   UNID.   QUANT.   PREÇO UNIT.   VALOR   PIS/   BASE CALC.   ALÍQUOTA   ICMS (R$)   TARIFA 
+COM TRIB.(R$)   (R$)   COFINS(R$)   ICMS(R$)   ICMS(%)   UNIT(R$) 
+Fale com a gente! | Nossos Canais de Atendimento
+TELEATENDIMENTO: 116 ou 0800 283 0800 
+(Ligação gratuita de telefones fixos e móveis) 
+Atendimento ao deficiente auditivo ou de fala: 0800 701 0155 
+Ouvidoria: 0800 084 0404
+Agência de Regulação dos Serviços Públicos do Rio Grande do
+Norte - ARSEP 0800 727 0167
+Agência Nacional de Energia Elétrica - ANEEL 167
+(Ligação gratuita de telefones fixos e móveis) 
+INFORMAÇÕES IMPORTANTES 
+Todo Consumidor pode solicitar a apuração dos indicadores de
+continuidade e limites aplicáveis   (DIC, FIC, DMIC e DICRI).   As
+informações podem ser consultadas a qualquer tempo, basta
+acessar:   www.neoenergia.com -   Na Agência Virtual. 
+DIC   - NÚMERO DE HORAS SEM ENERGIA 
+FIC   - NÚMERO DE VEZES SEM ENERGIA 
+DMIC   - DURAÇÃO MÁXIMA DE INTERRUPÇÃO CONTÍNUA 
+DICRI   - DURAÇÃO DE INTERRUPÇÃO EM DIA CRÍTICO 
+INFORMAÇÕES IMPORTANTES 
+O Cliente é compensado quando há violação na continuidade
+individual ou do nível de tensão de fornecimento.
+Pagamento em atraso gera multa 2%(Res.1.000/ANEEL),
+juros 1% a.m (lei 10.438/02) e atualização monetária no
+próximo mês.
+O cliente é compensado quando há descumprimento do prazo
+definido para os padrões de atendimento comercial.
+Regras para cobrança da contribuição para custeio de serviço
+de iluminação pública(COSIP) estão à disposição site
+www.neoenergia.com/Poder Público/Contribuição de
+Iluminação Pública.
+As informações suplementares estão disponíveis no site
+www.neoenergia.com - Na Agência Virtual, ou nas lojas de
+atendimento.
+As condições gerais de fornecimento (Resolução ANEEL 414/2010), tarifas,serviços prestados e tributos se encontram à
+disposição, para consulta em nossas unidades de atendimento e no site   www.neoenergia.com 
+ACESSE WWW.NEOENERGIA.COM E CONFIRA NOSSO AVISO DE PRIVACIDADE. 
+DANFE - DOCUMENTO AUXILIAR DA NOTA 
+FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA 
+NOME DO CLIENTE: 
+ASSOCIACAO EXEMPLO DE ENERGIA 
+ENDEREÇO: 
+RODOVIA EXEMPLO 1000 CD- A 
+COND EXEMPLO 
+SE- 02 
+JARDINS/AREA URBANA 
+59294-390 SAO GONCALO DO AMARANTE RN 

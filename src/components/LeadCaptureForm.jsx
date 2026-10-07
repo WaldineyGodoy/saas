@@ -42,6 +42,8 @@ export default function LeadCaptureForm() {
     });
 
     const [offerData, setOfferData] = useState(null);
+    // Campo invisível: gente não vê nem preenche; robô preenche (20261006b).
+    const [armadilha, setArmadilha] = useState('');
 
     const handleCepBlur = async () => {
         const rawCep = form.cep.replace(/\D/g, '');
@@ -123,13 +125,7 @@ export default function LeadCaptureForm() {
             const validOriginatorId = (originatorId && uuidRegex.test(originatorId)) ? originatorId : null;
             const validIndicadorId = (indicadorAssinanteId && uuidRegex.test(indicadorAssinanteId)) ? indicadorAssinanteId : null;
 
-            // O id é gerado no cliente para que o insert não precise de
-            // `.select()` — devolver a linha exigia uma policy de SELECT para
-            // `anon` que expunha o cadastro inteiro de todos os leads.
-            const leadId = crypto.randomUUID();
-
             const payload = {
-                id: leadId,
                 name: form.name,
                 email: form.email,
                 phone: form.phone.replace(/\D/g, ''),
@@ -151,11 +147,24 @@ export default function LeadCaptureForm() {
                 indicador_assinante_id: validIndicadorId
             };
 
-            const { error } = await supabase.from('leads').insert(payload);
+            // Um lead por pessoa (20261006b): a função acha o lead em aberto do
+            // mesmo celular (ou e-mail) em vez de criar outro, e devolve o id da
+            // VISITA — nunca o do lead. É esse id que segue para o /contrato.
+            const { data: visitaId, error } = await supabase.rpc('fn_registrar_lead_publico', {
+                p_dados: {
+                    ...payload,
+                    consumo_kwh: String(payload.consumo_kwh ?? ''),
+                    calculated_discount: String(payload.calculated_discount ?? ''),
+                    tarifa_concessionaria: String(payload.tarifa_concessionaria ?? ''),
+                    desconto_assinante: String(payload.desconto_assinante ?? ''),
+                },
+                p_meio: 'link',
+                p_armadilha: armadilha || null,
+            });
 
             if (error) throw error;
 
-            setSavedLead({ ...payload, calculated_discount: calculatedDiscount });
+            setSavedLead({ ...payload, id: visitaId, calculated_discount: calculatedDiscount });
             setShowResult(true);
 
         } catch (error) {
@@ -345,6 +354,16 @@ export default function LeadCaptureForm() {
                 )}
 
                 <form onSubmit={handleSubmit} style={styles.formSpace}>
+                    <input
+                        type="text"
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        aria-hidden="true"
+                        value={armadilha}
+                        onChange={e => setArmadilha(e.target.value)}
+                        style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, opacity: 0 }}
+                    />
 
                     <div style={styles.grid}>
                         {/* CEP */}
