@@ -21,6 +21,7 @@ import { useBranding } from '../contexts/BrandingContext';
 import ContratoTransferencia from './ContratoTransferencia';
 import { dividirEmPaginasTransferencia, gerarPdfTransferenciaBase64, montarTermoTransferencia } from '../lib/contratoTransferencia';
 import SubscriberModal from './SubscriberModal';
+import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
@@ -61,6 +62,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [invoiceToEdit, setInvoiceToEdit] = useState(null);
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
     const [showZeroInvoiceModal, setShowZeroInvoiceModal] = useState(false);
+    const [showNewUsinaModal, setShowNewUsinaModal] = useState(false);
     const [zeroInvoiceMonth, setZeroInvoiceMonth] = useState(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
     const [subscriberSearchTerm, setSubscriberSearchTerm] = useState('');
     const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
@@ -2237,7 +2239,21 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     )}
                                                 </div>
 
-                                                {/* Card da Usina Vinculada */}
+                                                <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => setShowNewUsinaModal(true)}
+                                                          style={{
+                                                              background: 'none', border: 'none', color: 'var(--color-blue)', 
+                                                              fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                                              display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
+                                                          }}
+                                                      >
+                                                          <PlusCircle size={14} /> Nova Usina
+                                                      </button>
+                                                  </div>
+
+                                                  {/* Card da Usina Vinculada */}
                                                 {(() => {
                                                     const usina = usinas.find(u => u.id === formData.usina_id);
                                                     if (!usina) return null;
@@ -3428,6 +3444,24 @@ Qualquer dúvida, é só responder esta mensagem.`;
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showNewUsinaModal && (
+                <PowerPlantModal
+                    usina={{
+                        supplier_id: formData.titular_fornecedor_id || '',
+                        concessionaria: formData.concessionaria || '',
+                        unidade_geradora: formData.numero_uc || '',
+                        name: `Usina ${formData.numero_uc || ''}`.trim()
+                    }}
+                    onClose={() => setShowNewUsinaModal(false)}
+                    onSave={(novaUsina) => {
+                        setUsinas(prev => [...prev, novaUsina]);
+                        setFormData(prev => ({ ...prev, usina_id: novaUsina.id }));
+                        setShowNewUsinaModal(false);
+                        showAlert('Usina criada com sucesso e já vinculada à UC.', 'success');
+                    }}
+                />
             )}
 
             {activeSubscriberForModal && (
