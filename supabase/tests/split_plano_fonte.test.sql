@@ -21,6 +21,25 @@ DECLARE
   v_n         integer;
   v_txt       text;
 BEGIN
+
+    -- Plano de Usina (20261006f): a usina deixou de apontar direto para o
+    -- plano de assinatura; agora aponta para um plano de usina, que aponta
+    -- para ele. pg_temp.pu cria o plano de usina com a MESMA gestao que o
+    -- plano ja dava (b2w.L1 da matriz valida, ou gestao_percentual), para
+    -- nenhum numero esperado deste arquivo mudar. Some no rollback.
+    EXECUTE $pu$
+      CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
+        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        SELECT 'SANDBOX pu ' || p.nome,
+               COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
+                             THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
+                        p.gestao_percentual, 0),
+               p.id
+          FROM public.planos_assinatura_energia p
+         WHERE p.id = p_plano
+        RETURNING id
+      $f$
+    $pu$;
   -- ======================================================================
   -- setup: dois planos de teste, duas usinas, tres UCs
   -- ======================================================================
@@ -32,7 +51,7 @@ BEGIN
   VALUES ('SANDBOX Plano da Usina', 9, 40, 'geracao_compartilhada', 22)
   RETURNING id INTO v_plano_usina;
 
-  INSERT INTO public.usinas (name, plano_assinatura_id) VALUES ('SANDBOX Usina Com Plano', v_plano_usina) RETURNING id INTO v_usina1;
+  INSERT INTO public.usinas (name, plano_usina_id) VALUES ('SANDBOX Usina Com Plano', pg_temp.pu(v_plano_usina)) RETURNING id INTO v_usina1;
   INSERT INTO public.usinas (name) VALUES ('SANDBOX Usina Sem Plano') RETURNING id INTO v_usina2;
 
   INSERT INTO public.subscribers DEFAULT VALUES RETURNING id INTO v_sub;
@@ -94,8 +113,11 @@ BEGIN
   IF (v_regras->>'plano_id')::uuid IS DISTINCT FROM v_plano_uc THEN
     RAISE EXCEPTION 'FALHOU 4: plano_id veio % (esperado %)', v_regras->>'plano_id', v_plano_uc;
   END IF;
-  IF (v_regras->>'gestao_pct')::numeric IS DISTINCT FROM 12::numeric THEN
-    RAISE EXCEPTION 'FALHOU 4: gestao_pct veio % (esperado 12)', v_regras->>'gestao_pct';
+  -- Plano de Usina (spec 2026-10-06 secao 2): a gestao B2W vem do plano de
+  -- usina mesmo quando a UC tem plano proprio. O plano da UC continua
+  -- mandando no resto (plano_id, piso, desconto, modalidade).
+  IF (v_regras->>'gestao_pct')::numeric IS DISTINCT FROM 9::numeric THEN
+    RAISE EXCEPTION 'FALHOU 4: gestao_pct veio % (esperado 9, a gestao do plano de usina)', v_regras->>'gestao_pct';
   END IF;
   IF (v_regras->>'piso_pct')::numeric IS DISTINCT FROM 55::numeric THEN
     RAISE EXCEPTION 'FALHOU 4: piso_pct veio % (esperado 55)', v_regras->>'piso_pct';

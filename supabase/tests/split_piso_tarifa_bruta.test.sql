@@ -100,6 +100,25 @@ DECLARE
     v_esp_piso        numeric;
     v_esp_teto        numeric;
 BEGIN
+
+    -- Plano de Usina (20261006f): a usina deixou de apontar direto para o
+    -- plano de assinatura; agora aponta para um plano de usina, que aponta
+    -- para ele. pg_temp.pu cria o plano de usina com a MESMA gestao que o
+    -- plano ja dava (b2w.L1 da matriz valida, ou gestao_percentual), para
+    -- nenhum numero esperado deste arquivo mudar. Some no rollback.
+    EXECUTE $pu$
+      CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
+        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        SELECT 'SANDBOX pu ' || p.nome,
+               COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
+                             THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
+                        p.gestao_percentual, 0),
+               p.id
+          FROM public.planos_assinatura_energia p
+         WHERE p.id = p_plano
+        RETURNING id
+      $f$
+    $pu$;
     -- ------------------------------------------------------------------
     -- contas
     -- ------------------------------------------------------------------
@@ -138,8 +157,8 @@ BEGIN
     INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id)
     VALUES ('SANDBOX I1 PPE', 'ppe', true, v_lider) RETURNING id INTO v_ppe;
 
-    INSERT INTO public.usinas (plano_assinatura_id, grupo_tarifario)
-    VALUES (v_plano, 'B1 Residencial') RETURNING id INTO v_usina;
+    INSERT INTO public.usinas (plano_usina_id, grupo_tarifario)
+    VALUES (pg_temp.pu(v_plano), 'B1 Residencial') RETURNING id INTO v_usina;
 
     -- usina SEM plano_assinatura_id: e o caminho do caso 2. gestao_percentual
     -- 15 de proposito -- sem plano NAO existe gestao nenhuma, e se alguem

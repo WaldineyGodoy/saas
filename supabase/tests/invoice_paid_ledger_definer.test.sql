@@ -16,6 +16,10 @@
 --                 admin, que e o cenario original da Task 16.
 -- Se a politica de invoices for afrouxada de novo, o ramo de comparacao volta a
 -- rodar sozinho.
+-- ATENCAO (04/10/2026): desde a 20261004d_rls_fechamento a politica
+-- invoices_update_interno tem USING fn_papel_interno(), e nao so WITH CHECK.
+-- O UPDATE do papel nao interno agora tambem e barrado como 0 linhas
+-- atualizadas, sem erro; o teste reconhece o bloqueio por ROW_COUNT = 0.
 --
 -- Rodar pelo MCP execute_sql. Sucesso = erro 'SANDBOX_OK' (tudo desfeito).
 
@@ -54,10 +58,30 @@ DECLARE
     v_adm_gestao        numeric;
     v_adm_investidor    numeric;
 
+    v_linhas_externo    integer;
     v_secdef            boolean;
     v_dona              text;
     v_config            text;
 BEGIN
+
+    -- Plano de Usina (20261006f): a usina deixou de apontar direto para o
+    -- plano de assinatura; agora aponta para um plano de usina, que aponta
+    -- para ele. pg_temp.pu cria o plano de usina com a MESMA gestao que o
+    -- plano ja dava (b2w.L1 da matriz valida, ou gestao_percentual), para
+    -- nenhum numero esperado deste arquivo mudar. Some no rollback.
+    EXECUTE $pu$
+      CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
+        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        SELECT 'SANDBOX pu ' || p.nome,
+               COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
+                             THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
+                        p.gestao_percentual, 0),
+               p.id
+          FROM public.planos_assinatura_energia p
+         WHERE p.id = p_plano
+        RETURNING id
+      $f$
+    $pu$;
     -- 0a. escolhe os dois perfis (mesma lista de papeis de fn_papel_interno).
     SELECT id INTO v_perfil_admin
       FROM public.profiles
@@ -133,8 +157,8 @@ BEGIN
 
     -- gestao_percentual 15 de proposito: a gestao vem do PLANO (10), nao da
     -- usina -- se alguem reverter isso, v_esp_gestao acusa.
-    INSERT INTO public.usinas (gestao_percentual, plano_assinatura_id)
-    VALUES (15, v_plano) RETURNING id INTO v_usina;
+    INSERT INTO public.usinas (gestao_percentual, plano_usina_id)
+    VALUES (15, pg_temp.pu(v_plano)) RETURNING id INTO v_usina;
 
     INSERT INTO public.subscribers (originator_id, short_url)
     VALUES (v_orig, 'sandbox://task16/definer') RETURNING id INTO v_sub;
@@ -168,11 +192,16 @@ BEGIN
 
     BEGIN
         UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
-        v_externo_rodou := true;
+        GET DIAGNOSTICS v_linhas_externo = ROW_COUNT;
+        -- desde a 20261004d o bloqueio chega como 0 linhas, sem erro: so
+        -- "rodou" se o UPDATE de fato tocou a fatura.
+        v_externo_rodou := (v_linhas_externo > 0);
     EXCEPTION WHEN insufficient_privilege THEN
         -- barrado por invoices_update_interno (20260922h): o cenario original da
         -- Task 16 nao e mais alcancavel por esta porta. Sem silencio: o papel
-        -- nao interno nao lanca meio rateio, ele simplesmente nao passa.
+        -- nao interno nao lanca meio rateio, ele simplesmente nao passa. O
+        -- bloqueio chega de duas formas: excecao (este ramo) ou 0 linhas
+        -- atualizadas, sem erro (20261004d, acima).
         v_externo_rodou := false;
     END;
 

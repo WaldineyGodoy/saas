@@ -148,6 +148,25 @@ DECLARE
     -- fix round 2
     v_residuo         numeric;
 BEGIN
+
+    -- Plano de Usina (20261006f): a usina deixou de apontar direto para o
+    -- plano de assinatura; agora aponta para um plano de usina, que aponta
+    -- para ele. pg_temp.pu cria o plano de usina com a MESMA gestao que o
+    -- plano ja dava (b2w.L1 da matriz valida, ou gestao_percentual), para
+    -- nenhum numero esperado deste arquivo mudar. Some no rollback.
+    EXECUTE $pu$
+      CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
+        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        SELECT 'SANDBOX pu ' || p.nome,
+               COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
+                             THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
+                        p.gestao_percentual, 0),
+               p.id
+          FROM public.planos_assinatura_energia p
+         WHERE p.id = p_plano
+        RETURNING id
+      $f$
+    $pu$;
     -- ------------------------------------------------------------------
     -- 0. pre-requisitos estruturais
     -- ------------------------------------------------------------------
@@ -285,10 +304,10 @@ BEGIN
     INSERT INTO public.originators_v2 (name, cargo, ativo, licenca_vencimento)
     VALUES ('SANDBOX Task6 PPP vencido', 'ppp', true, CURRENT_DATE - 1) RETURNING id INTO v_ppp;
 
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano)       RETURNING id INTO v_usina;
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_p73)   RETURNING id INTO v_usina_p73;
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_p95)   RETURNING id INTO v_usina_p95;
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_start) RETURNING id INTO v_usina_start;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano))       RETURNING id INTO v_usina;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_p73))   RETURNING id INTO v_usina_p73;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_p95))   RETURNING id INTO v_usina_p95;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_start)) RETURNING id INTO v_usina_start;
     -- gestao_percentual 15 de proposito: se o gatilho voltar a ler a usina em
     -- vez do plano, os numeros dos casos 1-3 mudam e o teste acusa.
     INSERT INTO public.usinas (gestao_percentual) VALUES (15) RETURNING id INTO v_usina_sem_plano;
@@ -1036,7 +1055,7 @@ BEGIN
             '{"regras_multinivel": {"b2w": {"niveis": null, "max_niveis": 4}}}'::jsonb)
     RETURNING id INTO v_plano_nula;
 
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_nula) RETURNING id INTO v_usina_nula;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_nula)) RETURNING id INTO v_usina_nula;
 
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c13') RETURNING id INTO v_sub;
@@ -1285,7 +1304,7 @@ BEGIN
                                     "papel_inexistente": {"niveis": {"L1":"3"}, "max_niveis": 1}}}'::jsonb)
     RETURNING id INTO v_plano_orfao;
 
-    INSERT INTO public.usinas (plano_assinatura_id) VALUES (v_plano_orfao) RETURNING id INTO v_usina_orfao;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (pg_temp.pu(v_plano_orfao)) RETURNING id INTO v_usina_orfao;
 
     EXECUTE $f$
       CREATE OR REPLACE FUNCTION public.fn_participantes_recompensa(p_uc uuid)

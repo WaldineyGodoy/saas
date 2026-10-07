@@ -303,6 +303,86 @@ BEGIN
 
     UPDATE public.suppliers SET originator_id = v_orig_usina WHERE id = v_forn_orig;   -- SQL direto: passa
 
+    -- ==================================================================
+    -- fixture do motor: PPE com lider; venda direta (nivel 1)
+    --   base 1000, piso 50 -> teto 1000 - 1000 x 1,20 x 50% = 400
+    -- ==================================================================
+    INSERT INTO public.originators_v2 (name, cargo, ativo)
+    VALUES ('SANDBOX PU Lider', 'lider', true) RETURNING id INTO v_lider;
+    INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id)
+    VALUES ('SANDBOX PU PPE', 'ppe', true, v_lider) RETURNING id INTO v_ppe;
+
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX PU rec da UC', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', c_matriz))
+    RETURNING id INTO v_rec_plano_uc;
+
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+    VALUES ('SANDBOX PU 12', 12, v_rec_plano) RETURNING id INTO v_pu2;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu2) RETURNING id INTO v_usina2;
+
+    -- ==================================================================
+    -- M1 -- gestao vem do plano de usina (12%), UC sem plano proprio.
+    --   B2W 120 | PPE 5% 50 + Lider 1% 10 | fornecedor 1000 - 180 = 820
+    -- ==================================================================
+    v_inv    := pg_temp.fatura_paga(v_usina2, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-120, -60, -820, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA M1: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-60,-820,0}', v_contas;
+    END IF;
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF (v_rec ->> 'plano_id')::uuid IS DISTINCT FROM v_rec_plano THEN
+        RAISE EXCEPTION 'FALHA M1: plano_id congelado = %, esperado o plano de recompensas do plano de usina %', v_rec ->> 'plano_id', v_rec_plano;
+    END IF;
+
+    -- ==================================================================
+    -- M2 -- UC com plano proprio na mesma usina: o plano de recompensas e o
+    --       da UC, mas a gestao continua a do plano de usina (12%).
+    -- ==================================================================
+    v_inv    := pg_temp.fatura_paga(v_usina2, v_ppe, v_rec_plano_uc);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-120, -60, -820, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA M2: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-60,-820,0}', v_contas;
+    END IF;
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF (v_rec ->> 'plano_id')::uuid IS DISTINCT FROM v_rec_plano_uc THEN
+        RAISE EXCEPTION 'FALHA M2: plano_id congelado = %, esperado o plano da UC %', v_rec ->> 'plano_id', v_rec_plano_uc;
+    END IF;
+
+    -- ==================================================================
+    -- M3 -- usina SEM plano de usina, UC com plano proprio: comportamento de
+    --       hoje, gestao da matriz do plano da UC (10%).
+    --   B2W 100 | 60 | fornecedor 840
+    -- ==================================================================
+    INSERT INTO public.usinas (name) VALUES ('SANDBOX PU sem plano de usina') RETURNING id INTO v_usina3;
+    v_inv    := pg_temp.fatura_paga(v_usina3, v_ppe, v_rec_plano_uc);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-100, -60, -840, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA M3: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-100,-60,-840,0}', v_contas;
+    END IF;
+
+    -- ==================================================================
+    -- M4 -- matriz invalida NAO e consertada pela sobrescrita: b2w.niveis
+    --       null continua null (o gatilho tem de cair em plano_sem_matriz).
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX PU matriz nula', 'recorrente', 10, 50,
+            '{"regras_multinivel": {"b2w": {"niveis": null, "max_niveis": 4}}}'::jsonb)
+    RETURNING id INTO v_rec_sem_matriz;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+    VALUES ('SANDBOX PU matriz nula', 12, v_rec_sem_matriz) RETURNING id INTO v_pu3;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu3) RETURNING id INTO v_usina_matriz;
+    INSERT INTO public.subscribers (status, short_url) VALUES ('ativo', 'sandbox://pu/m4') RETURNING id INTO v_sub;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina_matriz, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb)
+    RETURNING id INTO v_uc;
+    v_regras := public.fn_regras_recompensa_uc(v_uc);
+    IF jsonb_typeof(v_regras #> '{regras_multinivel,b2w,niveis}') = 'object' THEN
+        RAISE EXCEPTION 'FALHA M4: a sobrescrita do plano de usina "consertou" uma matriz sem b2w.niveis: %', v_regras -> 'regras_multinivel';
+    END IF;
+    IF (v_regras ->> 'gestao_pct')::numeric IS DISTINCT FROM 12::numeric THEN
+        RAISE EXCEPTION 'FALHA M4: gestao_pct = %, esperado 12 (do plano de usina)', v_regras ->> 'gestao_pct';
+    END IF;
+
     -- >>> casos novos entram acima desta linha <<<
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
