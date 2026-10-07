@@ -4,11 +4,11 @@
 
 **Goal:** Criar o Plano de Usina (gestão B2W, termos do contrato, plano de recompensas e regra do originador que trouxe a usina), ligá-lo ao motor de split e dar a ele telas de criar/editar/versionar e de vincular usinas.
 
-**Architecture:** Tabela nova `planos_usina` com trava de versão no banco; `usinas` ganha `plano_usina_id` e `originador_id` e perde `plano_assinatura_id`. O motor resolve UC → (plano da UC ou plano de usina) para a matriz e usa `planos_usina.percentual_recorrente` como gestão B2W; o originador da usina vira o papel `originador_usina`, primeiro da ordem de corte. As funções do motor que foram alteradas direto no banco são patchadas sobre o corpo vivo, com trava de md5.
+**Architecture:** Tabela nova `planos_usina` com trava de versão no banco; `usinas` ganha `plano_usina_id` e perde `plano_assinatura_id`; `suppliers` ganha `originator_id` (a usina herda o originador do fornecedor). O motor resolve UC → (plano da UC ou plano de usina) para a matriz e usa `planos_usina.percentual_recorrente` como gestão B2W; o originador da usina vira o papel `originador_usina`, primeiro da ordem de corte. As funções do motor que foram alteradas direto no banco são patchadas sobre o corpo vivo, com trava de md5.
 
 **Tech Stack:** Supabase Postgres (plpgsql, RLS) via MCP `execute_sql`/`apply_migration`; React 18 + Vite; vitest.
 
-**Spec:** `docs/superpowers/specs/2026-10-06-plano-usina-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-06-plano-usina-design.md` (revisada em 07/10/2026: originador no fornecedor, contrato de gestão sugerido pelo plano, cinco campos novos no plano).
 
 ## Global Constraints
 
@@ -21,21 +21,23 @@
   - gestão B2W do plano de usina = os 10% da B2W no split (**mesma cobrança**), igual em todos os níveis;
   - plano de recompensas = `COALESCE(consumer_units.plano_assinatura_id, planos_usina.plano_assinatura_id)` — **o da UC tem precedência**;
   - na fatura do Bônus Start o `b2w` do `start_config` continua mandando;
-  - `originador_usina`: % e bônus definidos **no plano da usina**; sem originador vinculado ou com originador inativo, a parte **fica para a associação** (B2W); recebe em toda fatura paga, inclusive plano `start`; é o **primeiro** da ordem de corte (`originador_usina → assinante_conect → parceiro → lider`); B2W nunca é cortada;
+  - `originador_usina`: % e bônus definidos **no plano da usina**; **quem** é o originador mora no **fornecedor** (`suppliers.originator_id`) e a usina herda pelo `supplier_id`; fornecedor sem originador, originador inativo ou usina sem fornecedor → a parte **fica para a associação** (B2W); recebe em toda fatura paga, inclusive plano `start`; é o **primeiro** da ordem de corte (`originador_usina → assinante_conect → parceiro → lider`); B2W nunca é cortada;
   - plano com usina vinculada não muda número nem plano de recompensas — mudar = nova versão, e a antiga vira `somente_contratos`;
   - usina só entra em plano `ativo` **com** plano de recompensas;
-  - só admin vincula usina a plano de usina ou a originador (`auth.uid()` nulo = service_role/SQL direto, passa).
+  - só admin vincula usina a plano de usina e só admin muda o originador de um fornecedor (`auth.uid()` nulo = service_role/SQL direto, passa);
+  - Contrato de Gestão de Créditos: o plano da usina aberta **sugere** os valores; por campo, gravado em `suppliers.contract_terms` > plano > `DEFAULTS_FORNECEDOR`. O modelo de dados do contrato não muda.
 - Front: `npx vitest run tests/<arquivo>` para testes; lint **só nos arquivos tocados** (`npx eslint <arquivos>` — o lint do repo inteiro estoura memória); checagem de sintaxe com `npx esbuild <arquivo> --loader:.jsx=jsx --outdir=<scratchpad>/esb`.
-- O worktree não tem `node_modules`. Crie um junction **uma vez** (Task 4 Step 1) e, ao final, desfaça com `cmd //c rmdir node_modules` **antes** de qualquer `git worktree remove` — o remove atravessa o junction e apaga o `node_modules` do checkout principal.
+- O worktree não tem `node_modules`. Crie um junction **uma vez** (Task 0 Step 1) e, ao final, desfaça com `cmd //c rmdir node_modules` **antes** de qualquer `git worktree remove` — o remove atravessa o junction e apaga o `node_modules` do checkout principal.
 - Commits terminam com `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. **Não** fazer merge no `main` nem push: a branch `impl/plano-usina` tem merge próprio, quando o dono liberar.
 - **Sequência de merge:** depois da Task 2, `usinas.plano_assinatura_id` não existe mais no banco (que é um só para todas as branches). A `impl/split-pagamentos` **sozinha** grava nessa coluna pelo modal da usina e pela aba Usinas — publicada isolada, salvar uma usina passaria a dar erro. Como `impl/plano-usina` nasceu dela e contém todos os commits do split, o que vai para o `main` é a `impl/plano-usina`; a `impl/split-pagamentos` não é mais mergeada sozinha. Diga isso no relatório final.
 - Mensagens de erro do banco em português sem acento (padrão do repo); textos de tela com acento.
+- Arquivos de front que outras sessões também mexem: `PowerPlantModal.jsx` e `SupplierModal.jsx` (sessão do cadastro de fornecedor) e `ContratoGestaoUsina.jsx` (sessão do contrato de gestão, que se ofereceu para executar a Task 8). Os scripts ancoram em trechos únicos e **param** se a âncora não bater — nunca forçar.
 
 ## File Structure
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `supabase/migrations/20261006e_planos_usina.sql` (novo) | tabela, RLS, colunas novas em `usinas`, trava de versão, regra de vínculo, RPC de nova versão, plano padrão |
+| `supabase/migrations/20261006e_planos_usina.sql` (novo) | tabela, RLS, `usinas.plano_usina_id`, `suppliers.originator_id` (com preenchimento pelo lead), trava de versão, regras de vínculo e de originador, RPC de nova versão, plano padrão |
 | `supabase/migrations/20261006f_plano_usina_motor.sql` (novo) | resolução das regras via plano de usina, gestão do plano, remoção de `usinas.plano_assinatura_id` |
 | `supabase/migrations/20261006g_originador_usina.sql` (novo) | papel `originador_usina` em participantes, motor e gatilho (patch sobre o corpo vivo) |
 | `supabase/tests/plano_usina.test.sql` (novo) | todos os casos desta branch |
@@ -46,7 +48,52 @@
 | `src/pages/settings/components/PlanosUsinaLista.jsx` (novo) | tabela dos planos de usina na aba Usinas |
 | `src/pages/settings/components/UsinasPlanosTab.jsx` | vínculo em lote passa a usar `plano_usina_id` |
 | `src/pages/settings/PlansServicesSettings.jsx` | carrega planos de usina, monta a aba, guarda de exclusão do plano de recompensas |
-| `src/components/PowerPlantModal.jsx` | seletor do plano de usina, originador da usina, termos do contrato vindos do plano |
+| `src/components/PowerPlantModal.jsx` | seletor do plano de usina, originador herdado do fornecedor (só leitura), termos do contrato vindos do plano, plano passado ao contrato de gestão |
+| `src/components/SupplierModal.jsx` | campo "Originador" do fornecedor |
+| `src/components/ContratoGestaoUsina.jsx` | valores iniciais do contrato de gestão vindos do plano da usina aberta |
+
+---
+
+### Task 0: Sincronizar a branch com o `origin/main`
+
+**Files:**
+- Modify: os arquivos que conflitarem no merge
+
+**Interfaces:**
+- Produces: `impl/plano-usina` contendo o `origin/main` de 07/10/2026 — em especial `9c79356` (criou `src/components/ContratoGestaoUsina.jsx` e pôs a opção "Gestão de Créditos" na aba Contratos do `PowerPlantModal`) e o merge da `app-v1.3`. As Tasks 6, 7 e 8 ancoram nessas versões.
+
+- [ ] **Step 1: Ligar o `node_modules` (uma vez)**
+
+```bash
+cmd //c mklink /J node_modules "..\..\..\node_modules"
+```
+
+Rode na raiz do worktree. Esperado: `Junction created for node_modules`. **Ao final da branch, desfaça com `cmd //c rmdir node_modules` antes de qualquer `git worktree remove`.**
+
+- [ ] **Step 2: Mergear**
+
+```bash
+git fetch origin
+git merge origin/main
+```
+
+Conflitos esperados: o plano e a spec do split (adicionados nas duas pontas), `src/pages/settings/components/PlanModal.jsx`, `src/pages/settings/components/EletropostoPlanModal.jsx` e, possivelmente, `src/components/PowerPlantModal.jsx`. Regra: **as duas mudanças ficam** — nunca resolva descartando um lado. Em `PlanModal`/`EletropostoPlanModal`, a mudança desta branch é ler e gravar o piso na coluna `piso_fornecedor_pct` (commit `74f14c8`): reaplique-a sobre a versão do `main`. Em `PowerPlantModal`, o bloco "Plano de Recompensas" da aba Financeiro é desta branch e a opção "Gestão de Créditos" da aba Contratos é do `main`.
+
+- [ ] **Step 3: Verificar**
+
+```bash
+git diff --name-only --diff-filter=U
+npx esbuild src/components/PowerPlantModal.jsx src/pages/settings/components/PlanModal.jsx src/pages/settings/components/EletropostoPlanModal.jsx src/components/ContratoGestaoUsina.jsx --loader:.jsx=jsx --outdir="$TMPDIR/esb"
+npx vitest run tests/plano-matriz.test.js tests/contrato.test.js
+```
+
+Esperado: nenhum arquivo em conflito, esbuild `Done`, vitest PASS.
+
+- [ ] **Step 4: Commit do merge**
+
+```bash
+git commit --no-edit
+```
 
 ---
 
@@ -57,7 +104,7 @@
 - Create: `supabase/tests/plano_usina.test.sql`
 
 **Interfaces:**
-- Produces: tabela `public.planos_usina` (colunas da spec §1); `usinas.plano_usina_id uuid`, `usinas.originador_id uuid`; `public.fn_planos_usina_nova_versao(p_origem uuid, p_dados jsonb) RETURNS uuid`; gatilhos `tr_planos_usina_trava` e `tr_usinas_vinculo_plano_usina`; helpers de teste `pg_temp.fatura_paga(p_usina uuid, p_ppe uuid, p_plano_uc uuid) RETURNS uuid` e `pg_temp.contas(p_inv uuid) RETURNS numeric[]` (`[3.1.1, 2.1.2, 2.1.1, soma]`), criados dentro do arquivo de teste.
+- Produces: tabela `public.planos_usina` (colunas da spec §1, incluindo `desconto_pct`, `dia_corte`, `dia_repasse`, `prazo_transferencia_dias`, `prazo_honorarios_dias`); `usinas.plano_usina_id uuid`; `suppliers.originator_id uuid`; `public.fn_planos_usina_nova_versao(p_origem uuid, p_dados jsonb) RETURNS uuid`; gatilhos `tr_planos_usina_trava` e `tr_usinas_vinculo_plano_usina`; helpers de teste `pg_temp.fatura_paga(p_usina uuid, p_ppe uuid, p_plano_uc uuid) RETURNS uuid` e `pg_temp.contas(p_inv uuid) RETURNS numeric[]` (`[3.1.1, 2.1.2, 2.1.1, soma]`), criados dentro do arquivo de teste.
 
 - [ ] **Step 1: Anotar a impressão digital do razão**
 
@@ -134,6 +181,10 @@ DECLARE
     v_ppe          uuid;
     v_orig_usina   uuid;
     v_orig_inativo uuid;
+
+    -- fornecedores (o originador mora no fornecedor; a usina herda)
+    v_forn_orig    uuid;
+    v_forn_inat    uuid;
 
     v_sub    uuid;
     v_uc     uuid;
@@ -333,6 +384,15 @@ BEGIN
         RAISE EXCEPTION 'FALHA T7: fechamento 0 no bonus foi aceito';
     END IF;
 
+    v_pegou := false;
+    BEGIN
+        INSERT INTO public.planos_usina (nome, dia_corte) VALUES ('SANDBOX PU dia 32', 32);
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN
+        RAISE EXCEPTION 'FALHA T7: dia_corte 32 foi aceito';
+    END IF;
+
     -- ==================================================================
     -- T8 -- so admin vincula. Simula um usuario logado que nao e admin.
     -- ==================================================================
@@ -347,6 +407,27 @@ BEGIN
     IF NOT v_pegou OR v_msg NOT LIKE '%admin%' THEN
         RAISE EXCEPTION 'FALHA T8: usuario nao admin trocou o plano da usina (pegou=%, msg=%)', v_pegou, v_msg;
     END IF;
+
+    -- ==================================================================
+    -- T9 -- o originador mora no fornecedor (decisao 6b): so admin muda.
+    -- ==================================================================
+    INSERT INTO public.suppliers (name) VALUES ('SANDBOX PU fornecedor T9') RETURNING id INTO v_forn_orig;
+    INSERT INTO public.originators_v2 (name, cargo, ativo)
+    VALUES ('SANDBOX PU originador T9', 'ppf', true) RETURNING id INTO v_orig_usina;
+
+    PERFORM set_config('request.jwt.claims',
+        json_build_object('sub', gen_random_uuid()::text, 'role', 'authenticated')::text, true);
+    v_pegou := false;
+    BEGIN
+        UPDATE public.suppliers SET originator_id = v_orig_usina WHERE id = v_forn_orig;
+    EXCEPTION WHEN others THEN v_pegou := true; v_msg := SQLERRM;
+    END;
+    PERFORM set_config('request.jwt.claims', '', true);
+    IF NOT v_pegou OR v_msg NOT LIKE '%admin%' THEN
+        RAISE EXCEPTION 'FALHA T9: usuario nao admin mudou o originador do fornecedor (pegou=%, msg=%)', v_pegou, v_msg;
+    END IF;
+
+    UPDATE public.suppliers SET originator_id = v_orig_usina WHERE id = v_forn_orig;   -- SQL direto: passa
 
     -- >>> casos novos entram acima desta linha <<<
     RAISE EXCEPTION 'SANDBOX_OK';
@@ -385,6 +466,12 @@ CREATE TABLE public.planos_usina (
     multa_atraso_mes_pct         numeric NOT NULL DEFAULT 0.5 CHECK (multa_atraso_mes_pct >= 0),
     multa_atraso_teto_pct        numeric NOT NULL DEFAULT 10  CHECK (multa_atraso_teto_pct >= 0),
     garantia_instalacao_meses    integer NOT NULL DEFAULT 12  CHECK (garantia_instalacao_meses >= 0),
+    -- contrato de gestao de creditos (decisao 11, 07/10/2026): defaults de DEFAULTS_FORNECEDOR
+    desconto_pct                 numeric NOT NULL DEFAULT 20  CHECK (desconto_pct BETWEEN 0 AND 100),
+    dia_corte                    integer NOT NULL DEFAULT 5   CHECK (dia_corte BETWEEN 1 AND 31),
+    dia_repasse                  integer NOT NULL DEFAULT 15  CHECK (dia_repasse BETWEEN 1 AND 31),
+    prazo_transferencia_dias     integer NOT NULL DEFAULT 90  CHECK (prazo_transferencia_dias >= 0),
+    prazo_honorarios_dias        integer NOT NULL DEFAULT 180 CHECK (prazo_honorarios_dias >= 0),
     originador_recorrente_pct    numeric NOT NULL DEFAULT 0   CHECK (originador_recorrente_pct BETWEEN 0 AND 100),
     originador_bonus_fechamentos integer[] NOT NULL DEFAULT '{}'
                                  CHECK (0 < ALL (originador_bonus_fechamentos)
@@ -400,8 +487,10 @@ CREATE INDEX planos_usina_plano_assinatura_id_idx ON public.planos_usina (plano_
 
 COMMENT ON TABLE public.planos_usina IS
   'Plano de Usina (spec 2026-10-06): gestao B2W (percentual_recorrente = clausula (b) do contrato = os 10% da B2W no split), taxas de administracao e recuperacao (cobradas pelo fechamento mensal), termos do contrato de compra e venda, plano de recompensas e a regra do originador que trouxe a usina. Com usina vinculada, numeros e plano de recompensas nao mudam (fn_planos_usina_trava): mudar = fn_planos_usina_nova_versao.';
+COMMENT ON COLUMN public.planos_usina.desconto_pct IS
+  'Desconto ao consumidor declarado no Contrato de Gestao de Creditos (Anexo I). Termo do contrato: o motor do split calcula a base com o desconto do plano de recompensas.';
 COMMENT ON COLUMN public.planos_usina.originador_recorrente_pct IS
-  'Percentual recorrente do originador que trouxe a usina (usinas.originador_id), sobre a base de cada fatura paga das UCs dela. Sem originador ou com originador inativo, fica para a associacao (B2W).';
+  'Percentual recorrente do originador que trouxe a usina (suppliers.originator_id do fornecedor dela), sobre a base de cada fatura paga das UCs dela. Sem originador ou com originador inativo, fica para a associacao (B2W).';
 COMMENT ON COLUMN public.planos_usina.originador_bonus_fechamentos IS
   'Ordinais dos fechamentos COM SALDO POSITIVO da usina cujo saldo vai ao originador em vez do fornecedor (ex.: {2}); sem originador, vai para a associacao. Executado pelo fechamento mensal.';
 
@@ -424,15 +513,29 @@ CREATE POLICY planos_usina_apaga_admin ON public.planos_usina
 -- 3. Usina: plano de usina e originador
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.usinas
-    ADD COLUMN plano_usina_id uuid REFERENCES public.planos_usina(id) ON DELETE RESTRICT,
-    ADD COLUMN originador_id  uuid REFERENCES public.originators_v2(id) ON DELETE SET NULL;
+    ADD COLUMN plano_usina_id uuid REFERENCES public.planos_usina(id) ON DELETE RESTRICT;
 
 CREATE INDEX usinas_plano_usina_id_idx ON public.usinas (plano_usina_id);
 
 COMMENT ON COLUMN public.usinas.plano_usina_id IS
   'Plano de Usina. Liga a gestao B2W do split e o plano de recompensas padrao das UCs sem plano proprio.';
-COMMENT ON COLUMN public.usinas.originador_id IS
-  'Originador que trouxe a usina para o sistema. Recebe o que o plano da usina preve em originador_recorrente_pct e originador_bonus_fechamentos.';
+
+-- O originador mora no FORNECEDOR e a usina herda (decisao do dono, 07/10/2026).
+ALTER TABLE public.suppliers
+    ADD COLUMN originator_id uuid REFERENCES public.originators_v2(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.suppliers.originator_id IS
+  'Originador que trouxe o fornecedor. As usinas dele herdam: recebe o que o plano de cada usina preve em originador_recorrente_pct e originador_bonus_fechamentos.';
+
+-- Ponto de partida: o originador do lead que virou o fornecedor. Em
+-- 07/10/2026 alcanca um fornecedor (Jose Gustavo Sosa Rivero -> Bennaya
+-- Almeida); os demais nao tem lead e o dono preenche no cadastro.
+UPDATE public.suppliers s
+   SET originator_id = l.originator_id
+  FROM public.leads l
+ WHERE l.id = s.lead_id
+   AND l.originator_id IS NOT NULL
+   AND s.originator_id IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- 4. Trava de versao
@@ -446,12 +549,14 @@ AS $function$
 BEGIN
     IF (NEW.percentual_recorrente, NEW.taxa_admin_reais, NEW.taxa_recuperacao_pct,
         NEW.retencao_rescisao_pct, NEW.multa_atraso_mes_pct, NEW.multa_atraso_teto_pct,
-        NEW.garantia_instalacao_meses, NEW.originador_recorrente_pct,
+        NEW.garantia_instalacao_meses, NEW.desconto_pct, NEW.dia_corte, NEW.dia_repasse,
+        NEW.prazo_transferencia_dias, NEW.prazo_honorarios_dias, NEW.originador_recorrente_pct,
         NEW.originador_bonus_fechamentos, NEW.plano_assinatura_id)
        IS DISTINCT FROM
        (OLD.percentual_recorrente, OLD.taxa_admin_reais, OLD.taxa_recuperacao_pct,
         OLD.retencao_rescisao_pct, OLD.multa_atraso_mes_pct, OLD.multa_atraso_teto_pct,
-        OLD.garantia_instalacao_meses, OLD.originador_recorrente_pct,
+        OLD.garantia_instalacao_meses, OLD.desconto_pct, OLD.dia_corte, OLD.dia_repasse,
+        OLD.prazo_transferencia_dias, OLD.prazo_honorarios_dias, OLD.originador_recorrente_pct,
         OLD.originador_bonus_fechamentos, OLD.plano_assinatura_id)
        AND EXISTS (SELECT 1 FROM public.usinas u WHERE u.plano_usina_id = OLD.id)
     THEN
@@ -484,11 +589,10 @@ DECLARE
 BEGIN
     -- Ligar ou trocar o split de uma usina move dinheiro: so admin. auth.uid()
     -- nulo e service_role ou SQL direto (migracao, teste) -- passa.
-    IF (TG_OP = 'INSERT' AND (NEW.plano_usina_id IS NOT NULL OR NEW.originador_id IS NOT NULL))
-       OR (TG_OP = 'UPDATE' AND (NEW.plano_usina_id IS DISTINCT FROM OLD.plano_usina_id
-                                 OR NEW.originador_id IS DISTINCT FROM OLD.originador_id)) THEN
+    IF (TG_OP = 'INSERT' AND NEW.plano_usina_id IS NOT NULL)
+       OR (TG_OP = 'UPDATE' AND NEW.plano_usina_id IS DISTINCT FROM OLD.plano_usina_id) THEN
         IF auth.uid() IS NOT NULL AND NOT public.fn_eh_admin() THEN
-            RAISE EXCEPTION 'So admin vincula usina a plano de usina ou a originador.'
+            RAISE EXCEPTION 'So admin vincula usina a plano de usina.'
                 USING ERRCODE = 'insufficient_privilege';
         END IF;
     END IF;
@@ -516,8 +620,35 @@ ALTER FUNCTION public.fn_usinas_vinculo_plano_usina() OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.fn_usinas_vinculo_plano_usina() FROM PUBLIC, anon, authenticated;
 
 CREATE TRIGGER tr_usinas_vinculo_plano_usina
-    BEFORE INSERT OR UPDATE OF plano_usina_id, originador_id ON public.usinas
+    BEFORE INSERT OR UPDATE OF plano_usina_id ON public.usinas
     FOR EACH ROW EXECUTE FUNCTION public.fn_usinas_vinculo_plano_usina();
+
+-- ---------------------------------------------------------------------------
+-- 5b. Originador do fornecedor: so admin muda
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.fn_suppliers_originador_admin()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+    IF ((TG_OP = 'INSERT' AND NEW.originator_id IS NOT NULL)
+        OR (TG_OP = 'UPDATE' AND NEW.originator_id IS DISTINCT FROM OLD.originator_id))
+       AND auth.uid() IS NOT NULL AND NOT public.fn_eh_admin() THEN
+        RAISE EXCEPTION 'So admin define o originador do fornecedor.'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$function$;
+
+ALTER FUNCTION public.fn_suppliers_originador_admin() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.fn_suppliers_originador_admin() FROM PUBLIC, anon, authenticated;
+
+CREATE TRIGGER tr_suppliers_originador_admin
+    BEFORE INSERT OR UPDATE OF originator_id ON public.suppliers
+    FOR EACH ROW EXECUTE FUNCTION public.fn_suppliers_originador_admin();
 
 -- ---------------------------------------------------------------------------
 -- 6. Nova versao (SECURITY INVOKER: a RLS de admin vale)
@@ -540,7 +671,9 @@ BEGIN
     INSERT INTO public.planos_usina (
         nome, descricao, percentual_recorrente, taxa_admin_reais, taxa_recuperacao_pct,
         retencao_rescisao_pct, multa_atraso_mes_pct, multa_atraso_teto_pct,
-        garantia_instalacao_meses, originador_recorrente_pct, originador_bonus_fechamentos,
+        garantia_instalacao_meses, desconto_pct, dia_corte, dia_repasse,
+        prazo_transferencia_dias, prazo_honorarios_dias,
+        originador_recorrente_pct, originador_bonus_fechamentos,
         plano_assinatura_id, status, substitui_plano_id)
     VALUES (
         COALESCE(NULLIF(btrim(p_dados ->> 'nome'), ''), v_origem.nome || ' (nova versao)'),
@@ -552,6 +685,11 @@ BEGIN
         COALESCE((p_dados ->> 'multa_atraso_mes_pct')::numeric,      v_origem.multa_atraso_mes_pct),
         COALESCE((p_dados ->> 'multa_atraso_teto_pct')::numeric,     v_origem.multa_atraso_teto_pct),
         COALESCE((p_dados ->> 'garantia_instalacao_meses')::integer, v_origem.garantia_instalacao_meses),
+        COALESCE((p_dados ->> 'desconto_pct')::numeric,              v_origem.desconto_pct),
+        COALESCE((p_dados ->> 'dia_corte')::integer,                 v_origem.dia_corte),
+        COALESCE((p_dados ->> 'dia_repasse')::integer,               v_origem.dia_repasse),
+        COALESCE((p_dados ->> 'prazo_transferencia_dias')::integer,  v_origem.prazo_transferencia_dias),
+        COALESCE((p_dados ->> 'prazo_honorarios_dias')::integer,     v_origem.prazo_honorarios_dias),
         COALESCE((p_dados ->> 'originador_recorrente_pct')::numeric, v_origem.originador_recorrente_pct),
         CASE WHEN p_dados ? 'originador_bonus_fechamentos'
              THEN COALESCE((SELECT array_agg(x::integer ORDER BY x::integer)
@@ -597,17 +735,21 @@ Cole `supabase/tests/plano_usina.test.sql` no `execute_sql`. Esperado: `ERROR: P
 ```sql
 SELECT nome, percentual_recorrente, taxa_admin_reais, taxa_recuperacao_pct, retencao_rescisao_pct,
        multa_atraso_mes_pct, multa_atraso_teto_pct, garantia_instalacao_meses,
+       desconto_pct, dia_corte, dia_repasse, prazo_transferencia_dias, prazo_honorarios_dias,
        originador_recorrente_pct, originador_bonus_fechamentos, plano_assinatura_id, status
   FROM public.planos_usina;
+
+SELECT s.name AS fornecedor, o.name AS originador
+  FROM public.suppliers s JOIN public.originators_v2 o ON o.id = s.originator_id;
 ```
 
-Esperado: uma linha, `Plano Usina Padrão | 10 | 10 | 8 | 10 | 0.5 | 10 | 12 | 0 | {} | null | ativo`. Depois rode a consulta do Step 1 e compare.
+Esperado: uma linha, `Plano Usina Padrão | 10 | 10 | 8 | 10 | 0.5 | 10 | 12 | 20 | 5 | 15 | 90 | 180 | 0 | {} | null | ativo`; e uma linha de fornecedor com originador, `José Gustavo Sosa Rivero | Bennaya Almeida` (preenchida pelo lead). Se vier mais de uma ou nenhuma, reporte as linhas. Depois rode a consulta do Step 1 e compare.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add supabase/migrations/20261006e_planos_usina.sql supabase/tests/plano_usina.test.sql
-git commit -m "feat(plano-usina): tabela planos_usina, trava de versao e vinculo da usina
+git commit -m "feat(plano-usina): tabela planos_usina, trava de versao, vinculo da usina e originador do fornecedor
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -951,7 +1093,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `supabase/tests/plano_usina.test.sql` (casos O1–O8)
 
 **Interfaces:**
-- Consumes: `fn_regras_recompensa_uc` (Task 2), `planos_usina.originador_recorrente_pct`, `usinas.originador_id` (Task 1).
+- Consumes: `fn_regras_recompensa_uc` (Task 2), `planos_usina.originador_recorrente_pct`, `suppliers.originator_id` (Task 1), lido via `usinas.supplier_id`.
 - Produces: participante `{"papel": "originador_usina", "id": <uuid|null>, "nivel": 1, "suspenso": bool}` em `fn_participantes_recompensa`; entrada `originador_usina: {niveis: {L1: "<pct>", L2: "0", L3: "0", L4: "0"}, max_niveis: 1}` em `regras_multinivel` quando o plano de usina tem `originador_recorrente_pct > 0`; ordem de corte do motor `['originador_usina','assinante_conect','parceiro','lider']`; lançamento em 2.1.2 com descrição `Recompensa Originador da Usina (nível 1)`; versão gravada `20261006g_originador_usina`.
 
 - [ ] **Step 1: Escrever os casos O1–O8 (RED)**
@@ -967,9 +1109,15 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     INSERT INTO public.originators_v2 (name, cargo, ativo)
     VALUES ('SANDBOX PU originador inativo', 'ppf', false) RETURNING id INTO v_orig_inativo;
 
+    -- o originador mora no FORNECEDOR e a usina herda (decisao 6b)
+    INSERT INTO public.suppliers (name, originator_id)
+    VALUES ('SANDBOX PU fornecedor com originador', v_orig_usina) RETURNING id INTO v_forn_orig;
+    INSERT INTO public.suppliers (name, originator_id)
+    VALUES ('SANDBOX PU fornecedor com originador inativo', v_orig_inativo) RETURNING id INTO v_forn_inat;
+
     INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
     VALUES ('SANDBOX PU 12+3', 12, 3, v_rec_plano) RETURNING id INTO v_pu_orig;
-    INSERT INTO public.usinas (plano_usina_id, originador_id) VALUES (v_pu_orig, v_orig_usina) RETURNING id INTO v_usina4;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_orig) RETURNING id INTO v_usina4;
 
     -- ==================================================================
     -- O1 -- o originador da usina recebe 3% em 2.1.2.
@@ -1009,7 +1157,7 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     RETURNING id INTO v_rec_piso675;
     INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
     VALUES ('SANDBOX PU corte', 12, 3, v_rec_piso675) RETURNING id INTO v_pu_corte;
-    INSERT INTO public.usinas (plano_usina_id, originador_id) VALUES (v_pu_corte, v_orig_usina) RETURNING id INTO v_usina_corte;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_corte, v_forn_orig) RETURNING id INTO v_usina_corte;
 
     v_inv    := pg_temp.fatura_paga(v_usina_corte, v_ppe, NULL);
     v_contas := pg_temp.contas(v_inv);
@@ -1035,7 +1183,7 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     -- O3 -- originador inativo: a parte dele fica para a associacao (B2W).
     --   B2W 120 + 30 = 150 | 2.1.2 60 | fornecedor 790
     -- ==================================================================
-    INSERT INTO public.usinas (plano_usina_id, originador_id) VALUES (v_pu_orig, v_orig_inativo) RETURNING id INTO v_usina_inat;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_inat) RETURNING id INTO v_usina_inat;
     v_inv    := pg_temp.fatura_paga(v_usina_inat, v_ppe, NULL);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-150, -60, -790, 0]::numeric[] THEN
@@ -1043,7 +1191,8 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     END IF;
 
     -- ==================================================================
-    -- O4 -- usina SEM originador: o previsto no plano fica para a associacao.
+    -- O4 -- usina cujo fornecedor nao tem originador (aqui: sem fornecedor):
+    --       o previsto no plano fica para a associacao.
     -- ==================================================================
     INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu_orig) RETURNING id INTO v_usina_sem_orig;
     v_inv    := pg_temp.fatura_paga(v_usina_sem_orig, v_ppe, NULL);
@@ -1063,7 +1212,7 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     RETURNING id INTO v_rec_start;
     INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
     VALUES ('SANDBOX PU start', 12, 3, v_rec_start) RETURNING id INTO v_pu_start;
-    INSERT INTO public.usinas (plano_usina_id, originador_id) VALUES (v_pu_start, v_orig_usina) RETURNING id INTO v_usina_start;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start, v_forn_orig) RETURNING id INTO v_usina_start;
 
     v_inv    := pg_temp.fatura_paga(v_usina_start, v_ppe, NULL);
     v_contas := pg_temp.contas(v_inv);
@@ -1083,7 +1232,7 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     RETURNING id INTO v_rec_start1;
     INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
     VALUES ('SANDBOX PU start 1', 12, 3, v_rec_start1) RETURNING id INTO v_pu_start1;
-    INSERT INTO public.usinas (plano_usina_id, originador_id) VALUES (v_pu_start1, v_orig_usina) RETURNING id INTO v_usina_start1;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start1, v_forn_orig) RETURNING id INTO v_usina_start1;
 
     v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, NULL);
     v_contas := pg_temp.contas(v_inv);
@@ -1119,7 +1268,7 @@ Insira **acima** da linha marcada em `plano_usina.test.sql`:
     -- O8 -- usina sem plano de usina: o originador dela nao entra (nao ha
     --       regra que diga quanto ele recebe).
     -- ==================================================================
-    UPDATE public.usinas SET originador_id = v_orig_usina WHERE id = v_usina3;
+    UPDATE public.usinas SET supplier_id = v_forn_orig WHERE id = v_usina3;
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://pu/o8') RETURNING id INTO v_sub;
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
@@ -1157,7 +1306,8 @@ Crie `supabase/migrations/20261006g_originador_usina.sql`:
 -- originador_usina no split. Spec: docs/superpowers/specs/2026-10-06-plano-usina-design.md (secao 2).
 --
 --  * percentual em planos_usina.originador_recorrente_pct (decisao do dono,
---    06/10/2026: a regra mora no plano da usina);
+--    06/10/2026: a regra mora no plano da usina); QUEM e o originador mora no
+--    fornecedor (suppliers.originator_id, decisao de 07/10/2026);
 --  * sem originador vinculado ou com originador inativo: entra suspenso e a
 --    parte fica para a associacao (B2W), como em toda supressao;
 --  * recebe em toda fatura paga, inclusive em plano start e na fatura do Start;
@@ -1255,16 +1405,18 @@ $de$, $para$DECLARE
   v_ou        record;
 $para$),
         ($de$  RETURN v_res;
-END;$de$, $para$  -- Plano de Usina (spec 2026-10-06 secao 2): quem trouxe a USINA. Entra
-  -- sempre que o plano da usina preve percentual; sem originador vinculado,
-  -- ou com ele inativo, entra suspenso e o motor manda o valor para a B2W
+END;$de$, $para$  -- Plano de Usina (spec 2026-10-06 secao 2): quem trouxe a USINA -- o
+  -- originador do FORNECEDOR dela (decisao 6b). Entra sempre que o plano da
+  -- usina preve percentual; sem originador, com ele inativo ou com a usina
+  -- sem fornecedor, entra suspenso e o motor manda o valor para a B2W
   -- (associacao), como em toda supressao.
-  SELECT u.originador_id, pu.originador_recorrente_pct, o.ativo
+  SELECT s.originator_id AS originador_id, pu.originador_recorrente_pct, o.ativo
     INTO v_ou
     FROM public.consumer_units cu
     JOIN public.usinas u        ON u.id = cu.usina_id
     JOIN public.planos_usina pu ON pu.id = u.plano_usina_id
-    LEFT JOIN public.originators_v2 o ON o.id = u.originador_id
+    LEFT JOIN public.suppliers s      ON s.id = u.supplier_id
+    LEFT JOIN public.originators_v2 o ON o.id = s.originator_id
    WHERE cu.id = p_uc;
 
   IF FOUND AND COALESCE(v_ou.originador_recorrente_pct, 0) > 0 THEN
@@ -1451,20 +1603,17 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `CHAVES_CONTRATO_DO_PLANO: string[]` — chaves de `DEFAULTS_USINA` que vêm do plano
   - `CAMPOS_TRAVADOS: string[]`
   - `PLANO_USINA_VAZIO: object`
-  - `termosContratoDoPlano(plano) => {[chaveContrato]: number}`
+  - `termosContratoDoPlano(plano) => {[chaveContrato]: number}` (contrato de compra e venda)
+  - `CHAVES_GESTAO_DO_PLANO: string[]` e `termosGestaoDoPlano(plano) => {[chaveGestao]: number}` (contrato de gestão de créditos, chaves de `DEFAULTS_FORNECEDOR`)
   - `lerFechamentos(texto) => number[] | null`
   - `validarPlanoUsina(dados) => string[]`
   - `rascunhoNovaVersao(plano) => object`
   - `payloadPlanoUsina(dados) => object`
   - `planoAceitaUsina(plano) => boolean`
 
-- [ ] **Step 1: Ligar o `node_modules` (uma vez)**
+- [ ] **Step 1: Conferir o `node_modules`**
 
-```bash
-cmd //c mklink /J node_modules "..\..\..\node_modules"
-```
-
-Rode na raiz do worktree. Esperado: `Junction created for node_modules`. **Ao final da branch, desfaça com `cmd //c rmdir node_modules` antes de qualquer `git worktree remove`.**
+O junction foi criado na Task 0 Step 1. Confira com `ls node_modules/.bin/vitest`.
 
 - [ ] **Step 2: Escrever o teste (RED)**
 
@@ -1475,9 +1624,11 @@ import { test, expect, describe } from 'vitest';
 import {
     CAMPOS_PLANO_USINA,
     CHAVES_CONTRATO_DO_PLANO,
+    CHAVES_GESTAO_DO_PLANO,
     CAMPOS_TRAVADOS,
     PLANO_USINA_VAZIO,
     termosContratoDoPlano,
+    termosGestaoDoPlano,
     lerFechamentos,
     validarPlanoUsina,
     rascunhoNovaVersao,
@@ -1489,15 +1640,23 @@ const PLANO = {
     id: 'p1', nome: 'Plano A', descricao: 'd', status: 'ativo',
     percentual_recorrente: 12, taxa_admin_reais: 9.5, taxa_recuperacao_pct: 7,
     retencao_rescisao_pct: 11, multa_atraso_mes_pct: 0.4, multa_atraso_teto_pct: 9,
-    garantia_instalacao_meses: 24, originador_recorrente_pct: 3,
-    originador_bonus_fechamentos: [2], plano_assinatura_id: 'rec1'
+    garantia_instalacao_meses: 24,
+    desconto_pct: 18, dia_corte: 6, dia_repasse: 16, prazo_transferencia_dias: 60, prazo_honorarios_dias: 150,
+    originador_recorrente_pct: 3, originador_bonus_fechamentos: [2], plano_assinatura_id: 'rec1'
 };
 
 describe('campos do plano de usina', () => {
-    test('o contrato recebe exatamente os 7 termos comerciais (spec secao 1)', () => {
+    test('o contrato de compra e venda recebe os 7 termos comerciais (spec secao 1)', () => {
         expect(CHAVES_CONTRATO_DO_PLANO).toEqual([
             'percentualRecorrente', 'taxaAdmin', 'taxaRecuperacao', 'retencaoRescisao',
             'multaAtrasoMes', 'multaAtrasoTeto', 'garantiaInstalacaoMeses'
+        ]);
+    });
+
+    test('o contrato de gestao recebe os 8 campos de CAMPOS_CONDICOES (spec decisoes 10 e 11)', () => {
+        expect([...CHAVES_GESTAO_DO_PLANO].sort()).toEqual([
+            'desconto', 'diaCorte', 'diaRepasse', 'percentualRecorrente', 'prazoHonorarios',
+            'prazoTransferencia', 'taxaAdmin', 'taxaRecuperacao'
         ]);
     });
 
@@ -1505,6 +1664,7 @@ describe('campos do plano de usina', () => {
         expect(CAMPOS_TRAVADOS).toEqual([
             'percentual_recorrente', 'taxa_admin_reais', 'taxa_recuperacao_pct', 'retencao_rescisao_pct',
             'multa_atraso_mes_pct', 'multa_atraso_teto_pct', 'garantia_instalacao_meses',
+            'desconto_pct', 'dia_corte', 'dia_repasse', 'prazo_transferencia_dias', 'prazo_honorarios_dias',
             'originador_recorrente_pct', 'originador_bonus_fechamentos', 'plano_assinatura_id'
         ]);
     });
@@ -1513,27 +1673,37 @@ describe('campos do plano de usina', () => {
         expect(PLANO_USINA_VAZIO).toMatchObject({
             percentual_recorrente: 10, taxa_admin_reais: 10, taxa_recuperacao_pct: 8,
             retencao_rescisao_pct: 10, multa_atraso_mes_pct: 0.5, multa_atraso_teto_pct: 10,
-            garantia_instalacao_meses: 12, originador_recorrente_pct: 0,
-            originador_bonus_fechamentos: [], plano_assinatura_id: null
+            garantia_instalacao_meses: 12,
+            desconto_pct: 20, dia_corte: 5, dia_repasse: 15, prazo_transferencia_dias: 90, prazo_honorarios_dias: 180,
+            originador_recorrente_pct: 0, originador_bonus_fechamentos: [], plano_assinatura_id: null
         });
         expect(CAMPOS_PLANO_USINA.every(c => c.chave in PLANO_USINA_VAZIO)).toBe(true);
     });
 });
 
-describe('termosContratoDoPlano', () => {
-    test('traduz as colunas do plano para as chaves do gerador do contrato', () => {
+describe('termos para os contratos', () => {
+    test('compra e venda: colunas do plano viram as chaves do gerador', () => {
         expect(termosContratoDoPlano(PLANO)).toEqual({
             percentualRecorrente: 12, taxaAdmin: 9.5, taxaRecuperacao: 7, retencaoRescisao: 11,
             multaAtrasoMes: 0.4, multaAtrasoTeto: 9, garantiaInstalacaoMeses: 24
         });
     });
 
+    test('gestao de creditos: colunas do plano viram as chaves de DEFAULTS_FORNECEDOR', () => {
+        expect(termosGestaoDoPlano(PLANO)).toEqual({
+            desconto: 18, percentualRecorrente: 12, taxaAdmin: 9.5, taxaRecuperacao: 7,
+            diaCorte: 6, diaRepasse: 16, prazoTransferencia: 60, prazoHonorarios: 150
+        });
+    });
+
     test('numeric do Postgres chega como string e vira numero', () => {
         expect(termosContratoDoPlano({ ...PLANO, percentual_recorrente: '12.50' }).percentualRecorrente).toBe(12.5);
+        expect(termosGestaoDoPlano({ ...PLANO, desconto_pct: '17.5' }).desconto).toBe(17.5);
     });
 
     test('sem plano, nada', () => {
         expect(termosContratoDoPlano(null)).toEqual({});
+        expect(termosGestaoDoPlano(null)).toEqual({});
     });
 });
 
@@ -1561,12 +1731,12 @@ describe('validarPlanoUsina', () => {
         expect(validarPlanoUsina(PLANO)).toEqual([]);
     });
 
-    test('nome vazio, percentual acima de 100, negativo, garantia fracionada e bonus invalido', () => {
+    test('nome vazio, acima do maximo, negativo, fracao, dia 0 e bonus invalido', () => {
         const erros = validarPlanoUsina({
             ...PLANO, nome: '  ', percentual_recorrente: 101, taxa_admin_reais: -1,
-            garantia_instalacao_meses: 1.5, originador_bonus_fechamentos: null
+            garantia_instalacao_meses: 1.5, dia_corte: 0, originador_bonus_fechamentos: null
         });
-        expect(erros).toHaveLength(5);
+        expect(erros).toHaveLength(6);
         expect(erros[0]).toMatch(/nome/i);
     });
 });
@@ -1576,16 +1746,18 @@ describe('versao e gravacao', () => {
         const r = rascunhoNovaVersao(PLANO);
         expect(r.nome).toBe('Plano A (nova versão)');
         expect(r.percentual_recorrente).toBe(12);
+        expect(r.dia_repasse).toBe(16);
         expect(r.plano_assinatura_id).toBe('rec1');
         expect(r).not.toHaveProperty('id');
         expect(r).not.toHaveProperty('status');
     });
 
     test('payload converte numeros e manda null no lugar de string vazia', () => {
-        const p = payloadPlanoUsina({ ...PLANO, nome: ' X ', descricao: '', percentual_recorrente: '12', plano_assinatura_id: '' });
+        const p = payloadPlanoUsina({ ...PLANO, nome: ' X ', descricao: '', percentual_recorrente: '12', dia_corte: '7', plano_assinatura_id: '' });
         expect(p.nome).toBe('X');
         expect(p.descricao).toBeNull();
         expect(p.percentual_recorrente).toBe(12);
+        expect(p.dia_corte).toBe(7);
         expect(p.plano_assinatura_id).toBeNull();
         expect(p).not.toHaveProperty('id');
         expect(p).not.toHaveProperty('status');
@@ -1616,25 +1788,32 @@ Crie `src/lib/planoUsina.js`:
  *
  * O banco é a fonte das regras (trava de versão em fn_planos_usina_trava,
  * vínculo em fn_usinas_vinculo_plano_usina). Este módulo só garante que a
- * tela de planos, o modal da usina e o gerador do contrato usem a mesma
- * lista de campos.
+ * tela de planos, o modal da usina e os dois contratos usem a mesma lista
+ * de campos.
  */
 
 // `contrato` é a chave de DEFAULTS_USINA (src/lib/contratosUsina.js) que o
-// gerador do contrato de compra e venda lê; null = o campo não vai para o
-// contrato.
+// gerador do contrato de compra e venda lê; `gestao` é a chave de
+// DEFAULTS_FORNECEDOR (src/lib/contratoFornecedor.js) que o Contrato de
+// Gestão de Créditos lê. null = o campo não vai para aquele contrato.
 export const CAMPOS_PLANO_USINA = [
-    { chave: 'percentual_recorrente', rotulo: 'Remuneração recorrente — gestão B2W (%)', contrato: 'percentualRecorrente', max: 100 },
-    { chave: 'taxa_admin_reais', rotulo: 'Taxa de administração (R$ por consumidor ativo/mês)', contrato: 'taxaAdmin', max: null },
-    { chave: 'taxa_recuperacao_pct', rotulo: 'Taxa de recuperação de crédito (%)', contrato: 'taxaRecuperacao', max: 100 },
-    { chave: 'retencao_rescisao_pct', rotulo: 'Retenção / multa de rescisão (%)', contrato: 'retencaoRescisao', max: 100 },
-    { chave: 'multa_atraso_mes_pct', rotulo: 'Multa de atraso (% ao mês)', contrato: 'multaAtrasoMes', max: null },
-    { chave: 'multa_atraso_teto_pct', rotulo: 'Teto da multa de atraso (%)', contrato: 'multaAtrasoTeto', max: null },
-    { chave: 'garantia_instalacao_meses', rotulo: 'Garantia da instalação (meses)', contrato: 'garantiaInstalacaoMeses', max: null, inteiro: true },
-    { chave: 'originador_recorrente_pct', rotulo: 'Originador da usina — recorrente (%)', contrato: null, max: 100 }
+    { chave: 'percentual_recorrente', rotulo: 'Remuneração recorrente — gestão B2W (%)', contrato: 'percentualRecorrente', gestao: 'percentualRecorrente', max: 100 },
+    { chave: 'taxa_admin_reais', rotulo: 'Taxa de administração (R$ por consumidor ativo/mês)', contrato: 'taxaAdmin', gestao: 'taxaAdmin', max: null },
+    { chave: 'taxa_recuperacao_pct', rotulo: 'Taxa de recuperação de crédito (%)', contrato: 'taxaRecuperacao', gestao: 'taxaRecuperacao', max: 100 },
+    { chave: 'retencao_rescisao_pct', rotulo: 'Retenção / multa de rescisão (%)', contrato: 'retencaoRescisao', gestao: null, max: 100 },
+    { chave: 'multa_atraso_mes_pct', rotulo: 'Multa de atraso (% ao mês)', contrato: 'multaAtrasoMes', gestao: null, max: null },
+    { chave: 'multa_atraso_teto_pct', rotulo: 'Teto da multa de atraso (%)', contrato: 'multaAtrasoTeto', gestao: null, max: null },
+    { chave: 'garantia_instalacao_meses', rotulo: 'Garantia da instalação (meses)', contrato: 'garantiaInstalacaoMeses', gestao: null, max: null, inteiro: true },
+    { chave: 'desconto_pct', rotulo: 'Desconto ao consumidor (%) — contrato de gestão', contrato: null, gestao: 'desconto', max: 100 },
+    { chave: 'dia_corte', rotulo: 'Dia de corte', contrato: null, gestao: 'diaCorte', min: 1, max: 31, inteiro: true },
+    { chave: 'dia_repasse', rotulo: 'Dia do repasse', contrato: null, gestao: 'diaRepasse', min: 1, max: 31, inteiro: true },
+    { chave: 'prazo_transferencia_dias', rotulo: 'Prazo de transferência (dias)', contrato: null, gestao: 'prazoTransferencia', max: null, inteiro: true },
+    { chave: 'prazo_honorarios_dias', rotulo: 'Prazo de honorários (dias)', contrato: null, gestao: 'prazoHonorarios', max: null, inteiro: true },
+    { chave: 'originador_recorrente_pct', rotulo: 'Originador da usina — recorrente (%)', contrato: null, gestao: null, max: 100 }
 ];
 
 export const CHAVES_CONTRATO_DO_PLANO = CAMPOS_PLANO_USINA.filter(c => c.contrato).map(c => c.contrato);
+export const CHAVES_GESTAO_DO_PLANO = CAMPOS_PLANO_USINA.filter(c => c.gestao).map(c => c.gestao);
 
 // Espelho de fn_planos_usina_trava: o que o banco recusa mudar quando o plano
 // já tem usina vinculada.
@@ -1644,7 +1823,7 @@ export const CAMPOS_TRAVADOS = [
     'plano_assinatura_id'
 ];
 
-// Mesmos defaults da migração 20261006e (que são os de DEFAULTS_USINA).
+// Mesmos defaults da migração 20261006e (DEFAULTS_USINA e DEFAULTS_FORNECEDOR).
 export const PLANO_USINA_VAZIO = {
     nome: '',
     descricao: '',
@@ -1655,6 +1834,11 @@ export const PLANO_USINA_VAZIO = {
     multa_atraso_mes_pct: 0.5,
     multa_atraso_teto_pct: 10,
     garantia_instalacao_meses: 12,
+    desconto_pct: 20,
+    dia_corte: 5,
+    dia_repasse: 15,
+    prazo_transferencia_dias: 90,
+    prazo_honorarios_dias: 180,
     originador_recorrente_pct: 0,
     originador_bonus_fechamentos: [],
     plano_assinatura_id: null
@@ -1662,17 +1846,22 @@ export const PLANO_USINA_VAZIO = {
 
 const vazio = (v) => v === null || v === undefined || v === '';
 
-/** Colunas do plano → chaves que o gerador do contrato lê. */
-export const termosContratoDoPlano = (plano) => {
+const termosPara = (plano, destino) => {
     if (!plano) return {};
     const termos = {};
     for (const c of CAMPOS_PLANO_USINA) {
-        if (!c.contrato || vazio(plano[c.chave])) continue;
+        if (!c[destino] || vazio(plano[c.chave])) continue;
         const n = Number(plano[c.chave]);
-        if (Number.isFinite(n)) termos[c.contrato] = n;
+        if (Number.isFinite(n)) termos[c[destino]] = n;
     }
     return termos;
 };
+
+/** Colunas do plano → chaves que o gerador do contrato de compra e venda lê. */
+export const termosContratoDoPlano = (plano) => termosPara(plano, 'contrato');
+
+/** Colunas do plano → chaves do Contrato de Gestão de Créditos (DEFAULTS_FORNECEDOR). */
+export const termosGestaoDoPlano = (plano) => termosPara(plano, 'gestao');
 
 /** "2" ou "2, 3" → [2, 3]; vazio → []; qualquer coisa que não seja inteiro positivo → null. */
 export const lerFechamentos = (texto) => {
@@ -1689,8 +1878,9 @@ export const validarPlanoUsina = (dados) => {
     for (const c of CAMPOS_PLANO_USINA) {
         const bruto = dados[c.chave];
         const n = Number(bruto);
-        if (vazio(bruto) || !Number.isFinite(n) || n < 0) {
-            erros.push(`${c.rotulo}: informe um número maior ou igual a zero.`);
+        const minimo = c.min ?? 0;
+        if (vazio(bruto) || !Number.isFinite(n) || n < minimo) {
+            erros.push(`${c.rotulo}: informe um número maior ou igual a ${minimo}.`);
         } else if (c.max !== null && n > c.max) {
             erros.push(`${c.rotulo}: no máximo ${c.max}.`);
         } else if (c.inteiro && !Number.isInteger(n)) {
@@ -1733,7 +1923,7 @@ Expected: PASS (todos os testes). Cole a saída.
 ```bash
 npx eslint src/lib/planoUsina.js tests/plano-usina.test.js
 git add src/lib/planoUsina.js tests/plano-usina.test.js
-git commit -m "feat(plano-usina): campos do plano de usina numa lista unica para tela e contrato
+git commit -m "feat(plano-usina): campos do plano de usina numa lista unica para a tela e os dois contratos
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1796,6 +1986,12 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
 
     const travado = modo === 'editar' && usinasVinculadas > 0;
     const definir = (chave, valor) => setDados(prev => ({ ...prev, [chave]: valor }));
+
+    // O desconto do plano de usina e termo do contrato de gestao; a base do
+    // split usa o desconto do plano de recompensas. Divergir e permitido,
+    // mas a tela avisa (spec secao 3, item 5).
+    const recompensasSel = planosRecompensa.find(p => p.id === dados.plano_assinatura_id);
+    const descontoDiverge = !!recompensasSel && Number(recompensasSel.desconto_assinante) !== Number(dados.desconto_pct);
 
     const titulo = modo === 'novo' ? 'Criar Plano de Usina'
         : modo === 'versao' ? `Nova versão de "${plano?.nome}"`
@@ -1891,6 +2087,13 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
                         </div>
                     </div>
 
+                    {descontoDiverge && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#92400e' }}>
+                            O desconto ao consumidor deste plano ({Number(dados.desconto_pct)}%) é diferente do desconto do plano de recompensas "{recompensasSel.nome}" ({Number(recompensasSel.desconto_assinante)}%).
+                            O contrato de gestão sai com o deste plano; o split calcula a base com o do plano de recompensas.
+                        </div>
+                    )}
+
                     <div>
                         <label style={rotulo}>Descrição</label>
                         <textarea value={dados.descricao || ''} onChange={e => definir('descricao', e.target.value)} rows={2} style={{ ...campo(false), resize: 'vertical' }} />
@@ -1927,7 +2130,8 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
                     <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>
                         A gestão B2W é a mesma cobrança dos 10% da B2W no split. O originador da usina recebe o recorrente em toda fatura paga das UCs dela e,
                         no(s) fechamento(s) informado(s) com saldo positivo, o saldo que iria ao investidor. Sem originador vinculado à usina, os dois ficam para a associação.
-                        Taxa de administração e de recuperação são cobradas no fechamento mensal.
+                        Taxa de administração e de recuperação são cobradas no fechamento mensal. Desconto, dias de corte e repasse e prazos de transferência e honorários
+                        sugerem os valores do Contrato de Gestão de Créditos do fornecedor, que continuam editáveis lá.
                     </p>
                 </div>
 
@@ -2328,8 +2532,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `src/components/PowerPlantModal.jsx`
 
 **Interfaces:**
-- Consumes: `termosContratoDoPlano`, `CHAVES_CONTRATO_DO_PLANO`, `planoAceitaUsina` (Task 4); `usinas.plano_usina_id`, `usinas.originador_id` (Task 1).
-- Produces: usina grava `plano_usina_id` e `originador_id`; `contractOpts` recebe os termos do plano; `contract_terms` deixa de gravar cópia deles quando há plano.
+- Consumes: `termosContratoDoPlano`, `CHAVES_CONTRATO_DO_PLANO`, `planoAceitaUsina` (Task 4); `usinas.plano_usina_id`, `suppliers.originator_id` (Task 1); o `PowerPlantModal` já mergeado do `main` (Task 0).
+- Produces: usina grava `plano_usina_id`; o originador aparece só para leitura, herdado do fornecedor; `contractOpts` recebe os termos do plano; `contract_terms` deixa de gravar cópia deles quando há plano; `planoUsinaSel` (objeto do plano de usina selecionado, ou null) fica disponível no componente para a Task 8.
 
 - [ ] **Step 1: Aplicar as trocas**
 
@@ -2355,17 +2559,20 @@ s = s[:m.end()] + "import { termosContratoDoPlano, CHAVES_CONTRATO_DO_PLANO, pla
 
 # 2. estado inicial do formulario
 sub("        plano_assinatura_id: '',\n",
-    "        plano_usina_id: '',\n        originador_id: '',\n", 'estado')
+    "        plano_usina_id: '',\n", 'estado')
 
 # 3. carga
 sub("                plano_assinatura_id: usina.plano_assinatura_id || '',\n",
-    "                plano_usina_id: usina.plano_usina_id || '',\n"
-    "                originador_id: usina.originador_id || '',\n", 'carga')
+    "                plano_usina_id: usina.plano_usina_id || '',\n", 'carga')
 
 # 4. gravacao
 sub("            plano_assinatura_id: formData.plano_assinatura_id || null,\n",
-    "            plano_usina_id: formData.plano_usina_id || null,\n"
-    "            originador_id: formData.originador_id || null,\n", 'gravacao')
+    "            plano_usina_id: formData.plano_usina_id || null,\n", 'gravacao')
+
+# 4b. a lista de fornecedores traz o originador (a usina herda dele)
+sub("            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')\n",
+    "            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf, originator_id')\n",
+    'fetchSuppliers')
 
 # 5. estado das listas
 sub("    const [planosRecompensa, setPlanosRecompensa] = useState([]);\n",
@@ -2465,22 +2672,21 @@ s = s[:ini] + """                            {/* Plano de Usina: liga o split de
                                                     : 'Ao salvar, a gestão B2W volta a sair do plano de cada UC; UC sem plano não lança gestão nem recompensas.'}
                                             </p>
                                         )}
-                                        <div>
-                                            <label style={rotulo}>Originador da usina</label>
-                                            <select
-                                                className="crm-input"
-                                                value={formData.originador_id || ''}
-                                                onChange={e => setFormData({ ...formData, originador_id: e.target.value })}
-                                                style={seletor}
-                                            >
-                                                <option value="">Sem originador (o previsto no plano fica para a associação)</option>
-                                                {originadores.map(o => (
-                                                    <option key={o.id} value={o.id} disabled={!o.ativo && o.id !== formData.originador_id}>
-                                                        {o.name}{o.cargo ? ` · ${o.cargo}` : ''}{o.ativo ? '' : ' (inativo)'}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                        {(() => {
+                                            // O originador mora no fornecedor e a usina herda
+                                            // (spec, decisao 6b): aqui so se mostra.
+                                            const forn = suppliers.find(f => f.id === formData.supplier_id);
+                                            const orig = originadores.find(o => o.id === forn?.originator_id);
+                                            return (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e40af' }}>
+                                                    <strong>Originador da usina:</strong>{' '}
+                                                    {orig
+                                                        ? `${orig.name}${orig.ativo ? '' : ' (inativo — a parte dele fica para a associação)'}`
+                                                        : 'nenhum — o previsto no plano fica para a associação'}
+                                                    {' · '}herdado do fornecedor; altere no cadastro do fornecedor.
+                                                </p>
+                                            );
+                                        })()}
                                     </div>
                                 );
                             })()}
@@ -2519,14 +2725,291 @@ Expected: esbuild `Done`; eslint sem erro **novo** — se aparecer erro, confira
 
 ```bash
 git add src/components/PowerPlantModal.jsx
-git commit -m "feat(plano-usina): usina escolhe plano de usina e originador; contrato le o plano
+git commit -m "feat(plano-usina): usina escolhe plano de usina; originador herdado do fornecedor; contrato le o plano
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 7: Verificação final e revisão
+### Task 7: Fornecedor — campo "Originador"
+
+**Files:**
+- Modify: `src/components/SupplierModal.jsx`
+
+**Interfaces:**
+- Consumes: `suppliers.originator_id` e o gatilho `tr_suppliers_originador_admin` (Task 1).
+- Produces: o cadastro do fornecedor grava `suppliers.originator_id`; só admin altera (o select fica desabilitado para os demais e o banco recusa de qualquer forma).
+
+- [ ] **Step 1: Aplicar as trocas**
+
+Salve no scratchpad `fornecedor_originador.py` e rode na raiz do worktree:
+
+```python
+# -*- coding: utf-8 -*-
+import io
+p = 'src/components/SupplierModal.jsx'
+raw = io.open(p, encoding='utf-8', newline='').read()
+crlf = '\r\n' in raw
+s = raw.replace('\r\n', '\n')
+
+def sub(old, new, nome):
+    global s
+    assert s.count(old) == 1, '%s -> %d ocorrencias' % (nome, s.count(old))
+    s = s.replace(old, new)
+
+# 1. estado inicial
+sub("        pix_key_type: 'cpf', // Default\n",
+    "        pix_key_type: 'cpf', // Default\n        originator_id: '',\n", 'estado')
+
+# 2. carga
+sub("                pix_key_type: supplier.pix_key_type || 'cpf',\n",
+    "                pix_key_type: supplier.pix_key_type || 'cpf',\n"
+    "                originator_id: supplier.originator_id || '',\n", 'carga')
+
+# 3. gravacao (montarPayloadFornecedor)
+sub("        pix_key_type: formData.pix_key_type,\n        address: {\n",
+    "        pix_key_type: formData.pix_key_type,\n"
+    "        originator_id: formData.originator_id || null,\n        address: {\n", 'gravacao')
+
+# 4. lista de originadores
+sub("    const [counterAccounts, setCounterAccounts] = useState([]);\n",
+    """    const [counterAccounts, setCounterAccounts] = useState([]);
+
+    // Originador que trouxe o fornecedor (spec do plano de usina, decisao
+    // 6b): as usinas dele herdam, e o split paga o que o plano de cada uma
+    // preve. So admin altera (fn_suppliers_originador_admin).
+    const [originadores, setOriginadores] = useState([]);
+    useEffect(() => {
+        supabase.from('originators_v2').select('id, name, cargo, ativo').order('name')
+            .then(({ data, error }) => {
+                if (error) console.error('Erro ao carregar originadores:', error);
+                else setOriginadores(data || []);
+            });
+    }, []);
+    const ehAdmin = ['admin', 'super_admin'].includes(profile?.role);
+""", 'lista')
+
+# 5. secao "Originador" antes de "Informacoes de Contato"
+i = s.index('Informações de Contato')
+j = s.rindex('<div style={sectionStyle}>', 0, i)
+j = s.rindex('\n', 0, j) + 1
+s = s[:j] + """                                <div style={sectionStyle}>
+                                    <h4 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
+                                        Originador
+                                    </h4>
+                                    <label style={labelStyle}>Quem trouxe este fornecedor</label>
+                                    <select
+                                        style={inputStyle}
+                                        value={formData.originator_id}
+                                        disabled={!ehAdmin}
+                                        onChange={e => setFormData({ ...formData, originator_id: e.target.value })}
+                                    >
+                                        <option value="">Sem originador</option>
+                                        {originadores.map(o => (
+                                            <option key={o.id} value={o.id} disabled={!o.ativo && o.id !== formData.originator_id}>
+                                                {o.name}{o.cargo ? ` · ${o.cargo}` : ''}{o.ativo ? '' : ' (inativo)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                                        As usinas deste fornecedor herdam o originador. Ele recebe o que o Plano de Usina de cada uma prevê; sem originador, essa parte fica para a associação.
+                                        {!ehAdmin && ' Só admin altera.'}
+                                    </p>
+                                </div>
+
+""" + s[j:]
+
+if crlf:
+    s = s.replace('\n', '\r\n')
+io.open(p, 'w', encoding='utf-8', newline='').write(s)
+print('ok, crlf =', crlf)
+```
+
+Expected: `ok, crlf = ...`. Se uma asserção falhar, **pare**: o `SupplierModal` é mexido pela sessão do cadastro de fornecedor; reporte a âncora.
+
+- [ ] **Step 2: Conferir que `profile` existe antes de `ehAdmin`**
+
+```bash
+grep -n "const { profile } = useAuth()\|const ehAdmin" src/components/SupplierModal.jsx
+```
+
+Expected: `const { profile } = useAuth()` numa linha **anterior** a `const ehAdmin`.
+
+- [ ] **Step 3: Sintaxe, lint e commit**
+
+```bash
+npx esbuild src/components/SupplierModal.jsx --loader:.jsx=jsx --outdir="$TMPDIR/esb"
+npx eslint src/components/SupplierModal.jsx
+git add src/components/SupplierModal.jsx
+git commit -m "feat(plano-usina): originador do fornecedor no cadastro; as usinas herdam
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Expected: esbuild `Done`; eslint sem erro novo (mesmo critério da Task 6 Step 3).
+
+---
+
+### Task 8: Contrato de Gestão de Créditos sugerido pelo plano da usina
+
+**Files:**
+- Modify: `src/lib/planoUsina.js` (função `condicoesIniciaisGestao`)
+- Modify: `tests/plano-usina.test.js`
+- Modify: `src/components/ContratoGestaoUsina.jsx`
+- Modify: `src/components/PowerPlantModal.jsx` (passa o plano para o contrato)
+
+**Interfaces:**
+- Consumes: `termosGestaoDoPlano` (Task 4); `planoUsinaSel` no `PowerPlantModal` (Task 6); `ContratoGestaoUsina({ usina, supplierId, registrarHistorico })` do `main` (Task 0).
+- Produces: `condicoesIniciaisGestao({ plano, gravados, gestaoUsina }) => object` (chaves de `DEFAULTS_FORNECEDOR`); `ContratoGestaoUsina` aceita a prop `planoUsina`.
+
+> A sessão do contrato de gestão se ofereceu para executar esta tarefa, porque o arquivo é dela. Se ela executar, usa exatamente este código e este teste; avise-a antes de começar e não edite o arquivo em paralelo.
+
+- [ ] **Step 1: Teste (RED)**
+
+Acrescente ao fim de `tests/plano-usina.test.js`:
+
+```js
+import { condicoesIniciaisGestao } from '../src/lib/planoUsina.js';
+
+describe('condicoesIniciaisGestao (spec decisao 10)', () => {
+    const plano = { desconto_pct: 18, percentual_recorrente: 12, taxa_admin_reais: 9, taxa_recuperacao_pct: 7,
+                    dia_corte: 6, dia_repasse: 16, prazo_transferencia_dias: 60, prazo_honorarios_dias: 150 };
+
+    test('sem nada gravado no fornecedor, o plano da usina aberta sugere os oito campos', () => {
+        expect(condicoesIniciaisGestao({ plano, gravados: null, gestaoUsina: 10 })).toEqual({
+            desconto: 18, percentualRecorrente: 12, taxaAdmin: 9, taxaRecuperacao: 7,
+            diaCorte: 6, diaRepasse: 16, prazoTransferencia: 60, prazoHonorarios: 150
+        });
+    });
+
+    test('o gravado no fornecedor vence campo a campo; o que falta vem do plano', () => {
+        const r = condicoesIniciaisGestao({ plano, gravados: { desconto: 20, foro: 'Natal/RN', minutas: { gestao: 'x' } }, gestaoUsina: 10 });
+        expect(r.desconto).toBe(20);
+        expect(r.diaRepasse).toBe(16);
+        expect(r.foro).toBe('Natal/RN');
+        expect(r.minutas).toEqual({ gestao: 'x' });
+    });
+
+    test('sem plano, a taxa de gestao da usina sugere a recorrente, como antes', () => {
+        expect(condicoesIniciaisGestao({ plano: null, gravados: {}, gestaoUsina: 10 })).toEqual({ percentualRecorrente: 10 });
+        expect(condicoesIniciaisGestao({ plano: null, gravados: { percentualRecorrente: 9 }, gestaoUsina: 10 })).toEqual({ percentualRecorrente: 9 });
+        expect(condicoesIniciaisGestao({ plano: null, gravados: null, gestaoUsina: 0 })).toEqual({});
+    });
+});
+```
+
+Run: `npx vitest run tests/plano-usina.test.js` — Expected: FAIL, `condicoesIniciaisGestao is not a function` (ou import não resolvido).
+
+- [ ] **Step 2: Implementar a função**
+
+Acrescente ao fim de `src/lib/planoUsina.js`:
+
+```js
+/**
+ * Valores iniciais do Contrato de Gestão de Créditos (spec, decisão 10).
+ * Por campo: o gravado em suppliers.contract_terms > o plano da usina de
+ * onde o contrato foi aberto > nada (a tela completa com DEFAULTS_FORNECEDOR).
+ * Sem plano, a taxa de gestão da usina sugere a Remuneração Recorrente,
+ * como a tela já fazia.
+ */
+export const condicoesIniciaisGestao = ({ plano, gravados, gestaoUsina }) => {
+    const sugestao = plano ? termosGestaoDoPlano(plano) : {};
+    if (!plano && Number(gestaoUsina) > 0) sugestao.percentualRecorrente = Number(gestaoUsina);
+    return { ...sugestao, ...(gravados || {}) };
+};
+```
+
+Run: `npx vitest run tests/plano-usina.test.js` — Expected: PASS.
+
+- [ ] **Step 3: Usar no contrato e passar o plano**
+
+Salve no scratchpad `gestao_plano.py` e rode na raiz do worktree:
+
+```python
+# -*- coding: utf-8 -*-
+import io
+
+def abrir(p):
+    raw = io.open(p, encoding='utf-8', newline='').read()
+    return raw.replace('\r\n', '\n'), ('\r\n' in raw)
+
+def gravar(p, s, crlf):
+    if crlf:
+        s = s.replace('\n', '\r\n')
+    io.open(p, 'w', encoding='utf-8', newline='').write(s)
+
+def sub(s, old, new, nome):
+    assert s.count(old) == 1, '%s -> %d ocorrencias' % (nome, s.count(old))
+    return s.replace(old, new)
+
+# --- ContratoGestaoUsina.jsx
+p = 'src/components/ContratoGestaoUsina.jsx'
+s, crlf = abrir(p)
+s = sub(s, "import { numeroBr, paraNumero } from '../lib/contratoBase';\n",
+        "import { numeroBr, paraNumero } from '../lib/contratoBase';\n"
+        "import { condicoesIniciaisGestao } from '../lib/planoUsina';\n", 'import')
+s = sub(s, "export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico }) {",
+        "export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico, planoUsina }) {", 'props')
+s = sub(s, """                const tela = condicoesParaTela(forn?.contract_terms);
+                const gestao = Number((lista.find(u => u.id === usina?.id) || lista[0])?.gestao_percentual);
+                if (gestao > 0 && forn?.contract_terms?.percentualRecorrente === undefined) {
+                    tela.percentualRecorrente = numeroBr(gestao);
+                }
+""", """                // Por campo (spec do plano de usina, decisao 10): o gravado no
+                // fornecedor > o plano da usina aberta > DEFAULTS_FORNECEDOR. Sem
+                // plano, a taxa de gestao da usina sugere a recorrente, como antes.
+                const tela = condicoesParaTela(condicoesIniciaisGestao({
+                    plano: planoUsina,
+                    gravados: forn?.contract_terms,
+                    gestaoUsina: (lista.find(u => u.id === usina?.id) || lista[0])?.gestao_percentual
+                }));
+""", 'efeito')
+s = sub(s, "    }, [supplierId, usina?.id]);\n", "    }, [supplierId, usina?.id, planoUsina?.id]);\n", 'deps')
+s = sub(s, """                    <FileSignature size={20} color="#3b82f6" /> Condições Comerciais
+                </h4>
+""", """                    <FileSignature size={20} color="#3b82f6" /> Condições Comerciais
+                </h4>
+                {planoUsina && (
+                    <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: '#1e40af' }}>
+                        Valores sugeridos pelo Plano de Usina "{planoUsina.nome}" desta usina. O que já está gravado no fornecedor vale, e todos os campos continuam editáveis.
+                    </p>
+                )}
+""", 'aviso')
+gravar(p, s, crlf)
+
+# --- PowerPlantModal.jsx
+p = 'src/components/PowerPlantModal.jsx'
+s, crlf = abrir(p)
+s = sub(s, """                                            supplierId={formData.supplier_id}
+                                            registrarHistorico={addHistory}
+""", """                                            supplierId={formData.supplier_id}
+                                            registrarHistorico={addHistory}
+                                            planoUsina={planoUsinaSel}
+""", 'prop')
+gravar(p, s, crlf)
+print('ok')
+```
+
+Expected: `ok`. Se o `numeroBr` deixar de ser usado em `ContratoGestaoUsina.jsx`, o eslint aponta no Step 4 — mantenha o import só se ainda houver uso (`grep -n numeroBr src/components/ContratoGestaoUsina.jsx`).
+
+- [ ] **Step 4: Sintaxe, lint, testes e commit**
+
+```bash
+npx esbuild src/components/ContratoGestaoUsina.jsx src/components/PowerPlantModal.jsx --loader:.jsx=jsx --outdir="$TMPDIR/esb"
+npx eslint src/components/ContratoGestaoUsina.jsx src/components/PowerPlantModal.jsx src/lib/planoUsina.js tests/plano-usina.test.js
+npx vitest run tests/plano-usina.test.js
+git add src/lib/planoUsina.js tests/plano-usina.test.js src/components/ContratoGestaoUsina.jsx src/components/PowerPlantModal.jsx
+git commit -m "feat(plano-usina): contrato de gestao sugere os valores do plano da usina aberta
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Expected: esbuild `Done`, eslint sem erro novo, vitest PASS.
+
+---
+
+### Task 9: Verificação final e revisão
 
 **Files:**
 - Modify: `.superpowers/sdd/2026-09-27-split-de-pagamentos/progress.md` (ignorado pelo git — só registro)
@@ -2534,7 +3017,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Rodar tudo de novo, do disco**
 
-As 14 suítes SQL do Task 2 Step 8 (mensagens verbatim), `npx vitest run tests/plano-usina.test.js tests/plano-matriz.test.js tests/contrato.test.js` e a consulta da Task 1 Step 1. Confira também:
+As 14 suítes SQL do Task 2 Step 8 (mensagens verbatim), `npx vitest run tests/plano-usina.test.js tests/plano-matriz.test.js tests/contrato.test.js tests/contrato-paginas.test.js` e a consulta da Task 1 Step 1. Confira também:
 
 ```sql
 SELECT count(*) FROM public.planos_usina WHERE nome LIKE 'SANDBOX%';
@@ -2549,7 +3032,7 @@ Use superpowers:requesting-code-review sobre `git diff impl/split-pagamentos...H
 
 - [ ] **Step 3: Registrar**
 
-Acrescente ao fim de `progress.md` uma linha por task com commit, migração, md5 novos das funções patchadas e o resultado verbatim das suítes. Atualize a memória `crm-indicacao-recorrencia.md` com: plano de usina como fonte da gestão B2W; plano da UC com precedência; papel `originador_usina` (primeiro do corte; sem originador → associação); o fechamento mensal ainda precisa cobrar taxa de administração/recuperação e executar o bônus (spec §5).
+Acrescente ao fim de `progress.md` uma linha por task com commit, migração, md5 novos das funções patchadas e o resultado verbatim das suítes. Atualize a memória `crm-indicacao-recorrencia.md` com: plano de usina como fonte da gestão B2W; plano da UC com precedência; papel `originador_usina` (primeiro do corte; o originador vem do fornecedor; sem originador → associação); contrato de gestão sugerido pelo plano da usina aberta; o fechamento mensal ainda precisa cobrar taxa de administração/recuperação e executar o bônus (spec §5).
 
 - [ ] **Step 4: Desfazer o junction**
 
