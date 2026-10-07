@@ -1,6 +1,6 @@
 # Plano de Usina e recompensa do originador da usina
 
-Data: 06/10/2026 · Branch `impl/plano-usina`, criada a partir de `impl/split-pagamentos` (depende do motor de split novo). Merge próprio, depois do split.
+Data: 06/10/2026 · revisada em 07/10/2026 (originador no fornecedor, contrato de gestão, cinco campos novos) · Branch `impl/plano-usina`, criada a partir de `impl/split-pagamentos` (depende do motor de split novo). Merge próprio, depois do split.
 
 ## Por que
 
@@ -23,9 +23,15 @@ E ninguém registra **quem trouxe a usina** para o sistema: nem `usinas` nem `su
 5. Ponto de partida: um **"Plano Usina Padrão"** com os valores do contrato atual, **sem plano de recompensas e sem nenhuma usina vinculada**. O dono vincula pela tela.
 6. O **originador que trouxe a usina** recebe **bônus de entrada + recorrente**, e **o percentual do recorrente e o bônus são definidos no plano da usina** (revisão do dono, 06/10/2026 — substitui a versão anterior desta linha, que punha a regra no cadastro do originador). Como são números do plano, seguem a trava de versão.
 6a. **Se a usina não tiver originador vinculado, o valor previsto no plano fica para a associação** (papel B2W). Vale para o recorrente e para o bônus. Originador inativo segue a mesma regra.
+6b. **O originador mora no FORNECEDOR, e a usina herda** (revisão do dono, 07/10/2026 — substitui `usinas.originador_id`): `suppliers.originator_id`, lido pela usina via `usinas.supplier_id`. "Usina sem originador" passa a ser "usina cujo fornecedor não tem originador" (ou usina sem fornecedor).
 7. O recorrente do originador da usina é **um novo beneficiário no split**, sujeito ao piso do fornecedor, e é **o primeiro a ser cortado**.
 8. O bônus de entrada é **o saldo de um fechamento da usina redirecionado** do investidor para o originador (ex.: o saldo do 2º mês vai para o originador em vez do fornecedor), contando **só os fechamentos com saldo positivo**.
 9. O recorrente do originador da usina vale **em toda fatura paga, qualquer que seja o tipo do plano de recompensas** (start/recorrente/híbrido). "Start é só bônus" é regra da cadeia que trouxe o assinante, não de quem trouxe a usina.
+
+Revisão do dono, 07/10/2026:
+
+10. **Contrato de Gestão de Créditos.** Desde `9c79356` (`main`, 06/10) ele é gerado no modal da usina, aba Contratos, opção "Gestão de Créditos" (`src/components/ContratoGestaoUsina.jsx`), mas continua sendo do fornecedor (`suppliers.contract_terms`, `signatures.document_type = 'gestao'`, Anexo II com todas as usinas dele). O plano da usina **de onde o contrato foi aberto** sugere os valores iniciais; eles continuam editáveis campo a campo e a edição grava em `suppliers.contract_terms` como hoje. O modelo de dados do contrato não muda.
+11. **Cinco campos do contrato de gestão entram no plano de usina**: desconto ao consumidor, dia de corte, dia do repasse, prazo de transferência e prazo de honorários — com default do contrato atual (`DEFAULTS_FORNECEDOR`, `src/lib/contratoFornecedor.js`) e dentro da trava de versão. O foro continua fora do plano.
 
 ## §1 Dados
 
@@ -43,6 +49,11 @@ E ninguém registra **quem trouxe a usina** para o sistema: nem `usinas` nem `su
 | `multa_atraso_mes_pct` | numeric NOT NULL ≥ 0 | |
 | `multa_atraso_teto_pct` | numeric NOT NULL ≥ 0 | |
 | `garantia_instalacao_meses` | integer NOT NULL ≥ 0 | |
+| `desconto_pct` | numeric NOT NULL default 20, 0–100 | contrato de gestão: desconto ao consumidor (Anexo I, cláusula 5.5 b) — decisão 11 |
+| `dia_corte` | integer NOT NULL default 5, 1–31 | contrato de gestão: data de corte (cláusula 9.1 c) |
+| `dia_repasse` | integer NOT NULL default 15, 1–31 | contrato de gestão: repasse até o dia (cláusula 9.2) |
+| `prazo_transferencia_dias` | integer NOT NULL default 90, ≥ 0 | contrato de gestão: cláusula 13.2 (a) |
+| `prazo_honorarios_dias` | integer NOT NULL default 180, ≥ 0 | contrato de gestão: cláusula 13.2 (b) |
 | `originador_recorrente_pct` | numeric NOT NULL default 0, 0–100 | % recorrente do originador que trouxe a usina, sobre a base de cada fatura paga das UCs dela |
 | `originador_bonus_fechamentos` | integer[] NOT NULL default `{}` | ordinais dos fechamentos **com saldo positivo** da usina cujo saldo é redirecionado do fornecedor para o originador (ex.: `{2}`) |
 | `plano_assinatura_id` | uuid FK `planos_assinatura_energia` ON DELETE RESTRICT, NULL | matriz, piso do fornecedor, desconto e tipo de recompensa |
@@ -65,18 +76,23 @@ Só aceita vincular a plano com `status = 'ativo'` **e** `plano_assinatura_id` p
 ### Na usina
 
 - **Entra** `usinas.plano_usina_id` uuid FK `planos_usina` ON DELETE RESTRICT.
-- **Entra** `usinas.originador_id` uuid FK `originators_v2` ON DELETE SET NULL.
 - **Sai** `usinas.plano_assinatura_id` (criada na branch do split, 0 de 10 preenchidas). Duas fontes para o mesmo vínculo repetiriam o defeito de `crm-comissao-duas-fontes`.
 - `usinas.gestao_percentual` **fica** por ora: o fechamento mensal ainda lê dele (ver §5). Para o razão, deixa de valer quando a usina tem plano.
 - `contract_terms` passa a guardar só os termos do projeto: parcelas 1–3, valor da opção do imóvel, amperagem, quantidade de inversores, prazos de execução e limite de reforço.
 
+### No fornecedor (`suppliers`) — decisão 6b
+
+- **Entra** `suppliers.originator_id` uuid FK `originators_v2` ON DELETE SET NULL. A usina herda pelo `supplier_id`.
+- Só admin muda o originador de um fornecedor (gatilho, mesmo critério do vínculo da usina).
+- A migração preenche a partir de `leads.originator_id` quando `suppliers.lead_id` existe e o fornecedor ainda não tem originador. Em 07/10/2026 isso alcança **um** fornecedor (José Gustavo Sosa Rivero → Bennaya Almeida); os outros seis não têm lead e o dono preenche à mão no cadastro do fornecedor.
+
 ### No originador (`originators_v2`)
 
-Nada muda. A regra mora no plano da usina; o originador só é **apontado** por `usinas.originador_id`.
+Nada muda. A regra mora no plano da usina; o originador só é **apontado** por `suppliers.originator_id`.
 
 ### Plano padrão
 
-A migração cria **"Plano Usina Padrão"** com os valores de `DEFAULTS_USINA` (`src/lib/contratosUsina.js`): recorrente 10%, administração R$ 10, recuperação 8%, rescisão 10%, atraso 0,5%/mês com teto 10%, garantia 12 meses; originador recorrente 0% e bônus `{}` (o dono preenche antes de vincular a primeira usina, enquanto o plano ainda é editável); `plano_assinatura_id` NULL; nenhuma usina vinculada.
+A migração cria **"Plano Usina Padrão"** com os valores de `DEFAULTS_USINA` (`src/lib/contratosUsina.js`): recorrente 10%, administração R$ 10, recuperação 8%, rescisão 10%, atraso 0,5%/mês com teto 10%, garantia 12 meses; desconto 20%, corte dia 5, repasse dia 15, transferência 90 dias, honorários 180 dias (de `DEFAULTS_FORNECEDOR`); originador recorrente 0% e bônus `{}` (o dono preenche antes de vincular a primeira usina, enquanto o plano ainda é editável); `plano_assinatura_id` NULL; nenhuma usina vinculada.
 
 ## §2 Motor do split
 
@@ -95,7 +111,7 @@ Resolução:
 
 ### Novo papel `originador_usina`
 
-- **Quem**: `usinas.originador_id` da usina da UC.
+- **Quem**: `suppliers.originator_id` do fornecedor da usina da UC (`consumer_units.usina_id → usinas.supplier_id → suppliers`).
 - **Percentual**: `planos_usina.originador_recorrente_pct`, injetado na matriz sintética como `originador_usina: {niveis: {L1: pct}, max_niveis: 1}`. Não é multinível; o líder dele não recebe nada por isso.
 - **Base**: a mesma dos demais papéis (kWh compensado × tarifa líquida).
 - **Tipo de plano**: entra em toda fatura paga, inclusive em plano `start` fora da fatura elegível (decisão 9).
@@ -116,10 +132,13 @@ Nenhum outro papel muda. Faturas já lançadas não são recalculadas.
    - O bloqueio de exclusão de plano de assinatura com usinas (feito no split) passa a contar planos de usina que apontam para ele.
 2. **Modal da usina (`PowerPlantModal`), aba Financeiro**
    - O seletor "Plano de Recompensas" vira **"Plano de Usina"**, com o mesmo aviso do efeito no razão.
-   - Campo **"Originador da usina"** (originadores ativos).
+   - **"Originador da usina" só para leitura**, mostrando o herdado do fornecedor (decisão 6b), com a indicação de onde se altera.
    - Os termos que vêm do plano aparecem só para leitura.
+2a. **Cadastro do fornecedor (`SupplierModal`)**: campo **"Originador"** (originadores ativos), que grava `suppliers.originator_id`.
 3. **Gerador do contrato de compra e venda** (`src/lib/contratosUsina.js`): `percentualRecorrente`, `taxaAdmin`, `taxaRecuperacao`, `retencaoRescisao`, `multaAtrasoMes`, `multaAtrasoTeto` e `garantiaInstalacaoMeses` saem do plano de usina quando a usina tem um; sem plano, os valores de hoje (`contract_terms` e `DEFAULTS_USINA`). A minuta editada (`contract_terms.minutas`) continua ganhando do texto automático.
-4. **`PlanoUsinaModal`** ganha o bloco "Originador da usina": recompensa recorrente (%) e bônus de entrada (fechamentos nº), com o aviso de que, sem originador vinculado, os dois ficam para a associação. O cadastro do originador não muda.
+4. **`PlanoUsinaModal`** ganha o bloco "Originador da usina": recompensa recorrente (%) e bônus de entrada (fechamentos nº), com o aviso de que, sem originador no fornecedor, os dois ficam para a associação; e os cinco campos do contrato de gestão (decisão 11). O cadastro do originador não muda.
+5. **Contrato de Gestão de Créditos (`ContratoGestaoUsina`)** — decisão 10: recebe o plano da usina aberta e usa os oito termos que o plano tem (`desconto`, `percentualRecorrente`, `taxaAdmin`, `taxaRecuperacao`, `diaCorte`, `diaRepasse`, `prazoTransferencia`, `prazoHonorarios`) como **valor inicial**. Precedência por campo: o que está gravado em `suppliers.contract_terms` > o plano da usina aberta > `DEFAULTS_FORNECEDOR`. Sem plano, segue a sugestão de hoje (`usinas.gestao_percentual` como recorrente). A tela diz de qual plano vieram os valores sugeridos.
+   - **Ponto de atenção registrado**: o `desconto` do plano de usina é termo do contrato; o motor continua calculando a base com o desconto do plano de recompensas (o da UC, ou o do plano de usina). O `PlanoUsinaModal` avisa quando os dois divergem.
 
 ## §4 Testes
 
@@ -131,7 +150,8 @@ Nenhum outro papel muda. Faturas já lançadas não são recalculadas.
   5. corte: `originador_usina` é o primeiro drenado;
   6. originador inativo: parte vai para a B2W;
   6a. usina sem originador: parte vai para a B2W (3.1.1), nada em 2.1.2;
-  7. usina sem plano de usina: comportamento atual inalterado.
+  7. usina sem plano de usina: comportamento atual inalterado;
+  8. só admin muda `suppliers.originator_id`; o originador da usina é lido pelo fornecedor.
 - As suítes existentes (`split_gatilho`, `split_bonus_start`, `split_base_compensada`, `split_conta_receber`, `split_piso_tarifa_bruta`, `invoice_paid_ledger_definer`) adaptadas ao vínculo via plano de usina e rodadas no banco com a saída colada verbatim.
 - Razão de produção conferido antes e depois de cada migração (hoje 383 lançamentos / 139 transações / soma −10694,8082347826087400).
 
@@ -141,7 +161,7 @@ O fechamento mensal (`impl/fechamento-mensal`, segurada) precisa, quando entrar:
 
 - ler a gestão de `planos_usina.percentual_recorrente` e **não descontar de novo** a gestão que o split já lançou na 3.1.1;
 - cobrar `taxa_admin_reais` (× consumidores ativos) e `taxa_recuperacao_pct` do plano de usina;
-- executar o bônus de entrada: no N-ésimo fechamento **com saldo positivo** da usina, com N em `planos_usina.originador_bonus_fechamentos`, o saldo vai ao originador (`usinas.originador_id`) em vez do fornecedor — **ou à associação, se a usina não tiver originador ou ele estiver inativo**. Mês com saldo zero ou negativo não conta.
+- executar o bônus de entrada: no N-ésimo fechamento **com saldo positivo** da usina, com N em `planos_usina.originador_bonus_fechamentos`, o saldo vai ao originador (`suppliers.originator_id` do fornecedor da usina) em vez do fornecedor — **ou à associação, se a usina não tiver originador ou ele estiver inativo**. Mês com saldo zero ou negativo não conta.
 
 **Risco conhecido**: se `impl/fechamento-mensal` entrar no `main` como está, ele desconta `usinas.gestao_percentual` sobre faturas pagas **e** o split já lançou a mesma gestão — cobrança em dobro. O dobro só se materializa quando se roda um fechamento de usina cujas faturas já passaram pelo motor novo; por isso a correção do fechamento tem de sair no mesmo dia que o split, para a janela ser só o intervalo entre os pushes.
 
@@ -152,6 +172,6 @@ O fechamento mensal (`impl/fechamento-mensal`, segurada) precisa, quando entrar:
 1. Migração de dados: `planos_usina`, travas, colunas novas, plano padrão, saída de `usinas.plano_assinatura_id`.
 2. Motor: resolução via plano de usina, gestão do plano, papel `originador_usina`.
 3. Telas de plano (aba Usinas, `PlanoUsinaModal`, nova versão).
-4. Modal da usina: seletor do plano de usina e campo do originador.
-5. Gerador do contrato.
+4. Modal da usina (seletor do plano de usina, originador herdado) e cadastro do fornecedor (campo do originador).
+5. Gerador do contrato de compra e venda e contrato de gestão sugerido pelo plano.
 6. Revisão final.
