@@ -4,8 +4,112 @@
     {
       "name": "crm-dev",
       "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
-      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
+    },
+    {
+      "name": "saas-mobile-dev",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:/Users/Godoy/Documents/HTML/saas-mobile/node_modules/vite/bin/vite.js",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "app-mobile-web-demo",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:/Users/Godoy/Documents/HTML/saas-mobile/mobile/node_modules/expo/bin/cli",
+        "start",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile/mobile",
+        "--web",
+        "--port",
+        "8081"
+      ],
+      "env": {
+        "EXPO_PUBLIC_DEMO": "1",
+        "CI": "1",
+        "BROWSER": "none"
+      },
+      "port": 8081
+    },
+    {
+      "name": "app-mobile-web",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:/Users/Godoy/Documents/HTML/saas-mobile/mobile/node_modules/expo/bin/cli",
+        "start",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile/mobile",
+        "--web",
+        "--port",
+        "8082"
+      ],
+      "env": {
+        "CI": "1",
+        "BROWSER": "none",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://abbysvxnnhwvvzhftoms.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiYnlzdnhubmh3dnZ6aGZ0b21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NTcwNzcsImV4cCI6MjA4NDIzMzA3N30.omP9h4ZqFbDX4FMO_lkd5Q3Iv99xgbs5bVz6beIpqfo"
+      },
+      "port": 8082
+    },
+    {
+      "name": "app-v13-web",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:/Users/Godoy/Documents/HTML/saas-mobile-indicacao/mobile/node_modules/expo/bin/cli",
+        "start",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile-indicacao/mobile",
+        "--web",
+        "--port",
+        "8085"
+      ],
+      "env": {
+        "CI": "1",
+        "BROWSER": "none",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://abbysvxnnhwvvzhftoms.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiYnlzdnhubmh3dnZ6aGZ0b21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NTcwNzcsImV4cCI6MjA4NDIzMzA3N30.omP9h4ZqFbDX4FMO_lkd5Q3Iv99xgbs5bVz6beIpqfo"
+      },
+      "port": 8085
+    },
+    {
+      "name": "app-v13-web-demo",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:/Users/Godoy/Documents/HTML/saas-mobile-indicacao/mobile/node_modules/expo/bin/cli",
+        "start",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile-indicacao/mobile",
+        "--web",
+        "--port",
+        "8086"
+      ],
+      "env": {
+        "EXPO_PUBLIC_DEMO": "1",
+        "CI": "1",
+        "BROWSER": "none"
+      },
+      "port": 8086
+    },
+    {
+      "name": "app-v13-dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "serve",
+        "-s",
+        "C:/Users/Godoy/Documents/HTML/saas-mobile-indicacao/mobile/dist",
+        "-l",
+        "8090"
+      ],
+      "port": 8090
     }
   ]
 }

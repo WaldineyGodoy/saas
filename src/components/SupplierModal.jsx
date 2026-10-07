@@ -28,6 +28,10 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
     const [loading, setLoading] = useState(false);
     const [searchingCep, setSearchingCep] = useState(false);
     const [activeTab, setActiveTab] = useState('geral');
+    const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [senhaPortal, setSenhaPortal] = useState('');
+    const [temSenhaGuardada, setTemSenhaGuardada] = useState(false);
     const [usinas, setUsinas] = useState([]);
     const [ledgerEntries, setLedgerEntries] = useState([]);
     const [repasseOrigins, setRepasseOrigins] = useState({});
@@ -688,7 +692,8 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
         ...((formData.contrato_assinado_em || '') !== (supplier?.contrato_assinado_em?.slice(0, 10) || '')
             ? { contrato_assinado_em: formData.contrato_assinado_em || null }
             : {}),
-        legal_partner_name: formData.legal_partner_name,
+        portal_credentials: semSenha(formData.portal_credentials),
+          legal_partner_name: formData.legal_partner_name,
         legal_partner_cpf: formData.legal_partner_cpf,
         pix_key: formData.pix_key,
         pix_key_type: formData.pix_key_type,
@@ -731,6 +736,16 @@ export default function SupplierModal({ supplier, onClose, onSave, onDelete }) {
             }
 
             if (result.error) throw result.error;
+
+            if (senhaPortal) {
+                try {
+                    await salvarSenhaPortal('suppliers', result.data.id, senhaPortal);
+                    setSenhaPortal('');
+                    setTemSenhaGuardada(true);
+                } catch (err) {
+                    console.warn('Erro ao salvar senha do portal:', err);
+                }
+            }
 
             if (supplier?.id) {
                 await addHistory('supplier', supplier.id, 'supplier_updated', {
