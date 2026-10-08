@@ -95,10 +95,10 @@ Durante a vigência deste Termo, o ASSOCIADO compromete-se a não participar sim
 CLÁUSULA 5 – DA CONTRIBUIÇÃO ASSOCIATIVA
 5.1. O ASSOCIADO pagará contribuição mensal proporcional à quantidade de energia efetivamente compensada em sua unidade consumidora no ciclo, destinada à manutenção, operação e gestão da geração compartilhada.
 5.2. O valor cheio da contribuição corresponde ao montante que o ASSOCIADO pagaria à distribuidora pela mesma energia, considerando todas as componentes da Tarifa de Aplicação e os tributos incidentes, sem qualquer abatimento.
-5.3. Não havendo compensação no ciclo, nada será cobrado no período.
+5.3. Não havendo compensação no ciclo, será cobrado o valor cheio cobrado pela distribuidora mais Iluminação Pública e bandeiras tarifárias do período.
 
 CLÁUSULA 6 – DO DESCONTO POR PAGAMENTO PONTUAL
-6.1. A ASSOCIAÇÃO concede ao ASSOCIADO desconto de ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento) sobre o valor cheio da contribuição definido na Cláusula 5.2, condicionado ao pagamento até a data de vencimento.
+6.1. A ASSOCIAÇÃO concede ao ASSOCIADO desconto ${opts.descontoTexto || `de ${numeroBr(desconto)}% (${percentualExtenso(desconto)} por cento)`} sobre o valor cheio da contribuição definido na Cláusula 5.2, condicionado ao pagamento até a data de vencimento.
 6.2. O desconto constitui benefício concedido pela pontualidade, e não redução do preço contratado. Efetuado o pagamento após o vencimento, é devido o valor cheio da contribuição, equivalente à tarifa da distribuidora sem abatimento, sem que isso configure penalidade, multa ou sanção.
 6.3. O boleto ou instrumento de cobrança indicará, de forma destacada, o valor cheio, o valor com desconto e a data limite para fruição do desconto, na forma do art. 46 do Código de Defesa do Consumidor.
 6.4. O desconto é restabelecido automaticamente no ciclo seguinte à regularização, sem necessidade de requerimento.
@@ -159,7 +159,7 @@ CLÁUSULA 18 – DA AUSÊNCIA DE INVESTIMENTO
 O ASSOCIADO declara ciência de que não realiza qualquer investimento financeiro em usinas ou ativos, inexistindo expectativa de retorno financeiro além do desconto na fatura.
 
 CLÁUSULA 19 – DOS LIMITES DA OBRIGAÇÃO DA ASSOCIAÇÃO
-19.1. A ASSOCIAÇÃO não garante volume, percentual ou continuidade de compensação, obrigando-se apenas a alocar ao ASSOCIADO participação no rateio da energia efetivamente gerada e injetada pelas centrais geradoras a ela vinculadas.
+19.1. A ASSOCIAÇÃO não garante volume, percentual ou continuidade de compensação, obrigando-se apenas a alocar ao ASSOCIADO participação no rateio da energia efetivamente gerada e injetada pelas centrais geradoras a ela vinculadas e que possui disponibilidade limitada à energia limpa gerada em tempo real pelas usinas B2W. A oferta e os links de convite com planos de recompensas e cashbacks podem ser pausados sem aviso prévio. A suspensão temporária ou definitiva do plano de recompensa não afeta o desconto ofertado ao assinante.
 19.2. A ASSOCIAÇÃO não responde por redução, interrupção ou cessação de geração decorrente de manutenção, sinistro, caso fortuito, força maior, restrição operativa da distribuidora ou desligamento de central geradora, hipóteses em que não haverá compensação e, consequentemente, não haverá contribuição devida no período.
 19.3. Ocorrendo redução relevante e duradoura da geração disponível, a ASSOCIAÇÃO envidará melhores esforços para realocar o ASSOCIADO na forma da Cláusula 15, não sendo devida indenização pelo período sem compensação.
 19.4. A ASSOCIAÇÃO não se responsabiliza por alterações tarifárias, regulatórias ou tributárias impostas por órgãos competentes, nem por falhas da distribuidora.

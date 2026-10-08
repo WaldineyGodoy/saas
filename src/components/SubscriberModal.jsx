@@ -172,7 +172,7 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     const fetchConsumerUnits = useCallback(async (subscriberId) => {
         const { data } = await supabase
             .from('consumer_units')
-            .select('*')
+            .select('*, planos_assinatura_energia(id, nome, desconto_assinante)')
             .eq('subscriber_id', subscriberId);
         setConsumerUnits(data || []);
     }, []);
@@ -397,14 +397,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
      * Mesma armadilha do modal do fornecedor: o rascunho editado à mão vence
      * o gerado, e sem aviso isso se parece com "o cadastro não atualizou".
      */
-    const textoGeradoAssinante = useMemo(() => montarTextoContrato(
-        subscriber,
-        consumerUnits[0]?.concessionaria,
-        {
-            desconto: consumerUnits[0]?.desconto_assinante,
-            diaVencimento: consumerUnits[0]?.dia_vencimento ?? subscriber?.consolidated_due_day
-        }
-    ), [subscriber, consumerUnits]);
+    const textoGeradoAssinante = useMemo(() => {
+        const uc = consumerUnits[0];
+        const desconto = uc?.desconto_assinante ?? uc?.planos_assinatura_energia?.desconto_assinante;
+        return montarTextoContrato(
+            subscriber || formData,
+            uc?.concessionaria,
+            {
+                desconto,
+                diaVencimento: uc?.dia_vencimento ?? subscriber?.consolidated_due_day ?? consolidatedDueDay
+            }
+        );
+    }, [subscriber, formData, consumerUnits, consolidatedDueDay]);
 
     const minutaEditada = contractDraft !== '' && contractDraft !== textoGeradoAssinante;
 
@@ -663,27 +667,18 @@ export default function SubscriberModal({ subscriber, onClose, onSave, onDelete 
     }, [subscriber?.id, activeTab, fetchInvoices]);
 
     useEffect(() => {
-        if (subscriber?.id && activeTab === 'contratos') {
-            fetchSignatures(subscriber.id);
-            // O texto do termo mora em src/lib/contrato.js: o mesmo que a
-            // adesão pública gera sozinha. O admin ainda pode editar o
-            // rascunho antes de enviar.
-            //
-            // A distribuidora vem da UC — `consumerUnits` entra nas
-            // dependências para o rascunho ser refeito quando as unidades
-            // terminam de carregar; sem isso o termo ficaria com o texto
-            // genérico mesmo tendo concessionária cadastrada.
-            // Desconto e dia de vencimento também vêm da UC: a Cláusula 6
-            // nomeia o percentual e a 7.2 nomeia o dia do boleto. Deixar o
-            // padrão aqui faria o rascunho do CRM prometer 20% no dia 10 a
-            // quem está cadastrado com outro desconto ou outro vencimento.
+        if (activeTab === 'contratos') {
+            if (subscriber?.id) {
+                fetchSignatures(subscriber.id);
+            }
             const ucContrato = consumerUnits[0];
-            setContractDraft(montarTextoContrato(subscriber, ucContrato?.concessionaria, {
-                desconto: ucContrato?.desconto_assinante,
-                diaVencimento: ucContrato?.dia_vencimento ?? subscriber?.consolidated_due_day
+            const ucDesconto = ucContrato?.desconto_assinante ?? ucContrato?.planos_assinatura_energia?.desconto_assinante;
+            setContractDraft(montarTextoContrato(subscriber || formData, ucContrato?.concessionaria, {
+                desconto: ucDesconto,
+                diaVencimento: ucContrato?.dia_vencimento ?? subscriber?.consolidated_due_day ?? consolidatedDueDay
             }));
         }
-    }, [subscriber?.id, activeTab, fetchSignatures, subscriber, consumerUnits]);
+    }, [subscriber?.id, activeTab, fetchSignatures, subscriber, consumerUnits, formData, consolidatedDueDay]);
 
 
 
