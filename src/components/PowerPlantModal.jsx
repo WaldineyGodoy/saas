@@ -2688,25 +2688,36 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     `${energiaCompensadaKwh} kWh`
                 ]],
                 theme: 'grid',
+                styles: {
+                    valign: 'middle'
+                },
                 headStyles: {
                     fillColor: [30, 41, 59],
                     textColor: [255, 255, 255],
                     fontStyle: 'bold',
                     fontSize: 8.5,
-                    halign: 'center'
+                    halign: 'center',
+                    valign: 'middle'
                 },
                 bodyStyles: {
                     fontSize: 9,
                     textColor: [15, 23, 42],
                     fontStyle: 'bold',
                     halign: 'center',
+                    valign: 'middle',
                     fillColor: [248, 250, 252]
                 },
                 columnStyles: {
-                    0: { halign: 'left', fontStyle: 'bold' },
-                    4: { textColor: [22, 101, 52] },
-                    5: { textColor: [37, 99, 235] },
-                    6: { textColor: [126, 34, 206] }
+                    0: { halign: 'left', fontStyle: 'bold', valign: 'middle' },
+                    1: { valign: 'middle' },
+                    2: { valign: 'middle' },
+                    3: { valign: 'middle' },
+                    4: { textColor: [22, 101, 52], valign: 'middle' },
+                    5: { textColor: [37, 99, 235], valign: 'middle' },
+                    6: { textColor: [126, 34, 206], valign: 'middle' }
+                },
+                didParseCell: (data) => {
+                    data.cell.styles.valign = 'middle';
                 },
                 margin: { horizontal: 14 }
             });
@@ -2738,33 +2749,39 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 ]],
                 body: tableRows,
                 foot: matchingInvoices.length > 0 ? [[
-                    'TOTAL',
-                    `${matchingInvoices.length} conta(s) compensada(s)`,
-                    '-',
-                    '-',
-                    `${totalKwhConsumido.toLocaleString('pt-BR')} kWh`,
-                    `${totalKwhCompensado.toLocaleString('pt-BR')} kWh`,
-                    formatCurrency(totalVrFatura),
-                    formatCurrency(totalVrContaEnergia),
-                    formatCurrency(totalVrFornecedor)
+                    { content: 'TOTAL', styles: { halign: 'center' } },
+                    { content: `${matchingInvoices.length} conta(s) compensada(s)`, styles: { halign: 'left' } },
+                    { content: '-', styles: { halign: 'center' } },
+                    { content: '-', styles: { halign: 'center' } },
+                    { content: `${totalKwhConsumido.toLocaleString('pt-BR')} kWh`, styles: { halign: 'right' } },
+                    { content: `${totalKwhCompensado.toLocaleString('pt-BR')} kWh`, styles: { halign: 'right', textColor: [126, 34, 206] } },
+                    { content: formatCurrency(totalVrFatura), styles: { halign: 'right' } },
+                    { content: formatCurrency(totalVrContaEnergia), styles: { halign: 'right' } },
+                    { content: formatCurrency(totalVrFornecedor), styles: { halign: 'right', textColor: [22, 101, 52] } }
                 ]] : undefined,
                 theme: 'striped',
+                styles: {
+                    valign: 'middle'
+                },
                 headStyles: {
                     fillColor: [37, 99, 235],
                     textColor: [255, 255, 255],
                     fontStyle: 'bold',
                     fontSize: 8,
-                    halign: 'center'
+                    halign: 'center',
+                    valign: 'middle'
                 },
                 bodyStyles: {
                     fontSize: 8,
-                    textColor: [30, 41, 59]
+                    textColor: [30, 41, 59],
+                    valign: 'middle'
                 },
                 footStyles: {
                     fillColor: [241, 245, 249],
                     textColor: [15, 23, 42],
                     fontStyle: 'bold',
-                    fontSize: 8.5
+                    fontSize: 8.5,
+                    valign: 'middle'
                 },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 28 },
@@ -2776,6 +2793,20 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     6: { halign: 'right', cellWidth: 30, fontStyle: 'bold' },
                     7: { halign: 'right', cellWidth: 31 },
                     8: { halign: 'right', cellWidth: 34, fontStyle: 'bold', textColor: [22, 101, 52] }
+                },
+                didParseCell: (data) => {
+                    data.cell.styles.valign = 'middle';
+                    if (data.section === 'foot') {
+                        if (data.column.index >= 4) {
+                            data.cell.styles.halign = 'right';
+                        } else if (data.column.index === 2 || data.column.index === 3) {
+                            data.cell.styles.halign = 'center';
+                        } else if (data.column.index === 0) {
+                            data.cell.styles.halign = 'center';
+                        } else if (data.column.index === 1) {
+                            data.cell.styles.halign = 'left';
+                        }
+                    }
                 },
                 margin: { horizontal: 14 }
             });
