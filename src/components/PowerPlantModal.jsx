@@ -75,6 +75,16 @@ const modalStyles = `
     }
 `;
 
+const normUG = (u) => String(u || '').replace(/\D/g, '');
+
+const resolveGeradoraUC = (selected = [], available = [], ugNum = '') => {
+    const cleanNum = normUG(ugNum);
+    return (selected || []).find(uc => uc.tipo_unidade === 'geradora') ||
+           (selected || []).find(uc => cleanNum && normUG(uc.numero_uc) === cleanNum) ||
+           (available || []).find(uc => cleanNum && normUG(uc.numero_uc) === cleanNum) ||
+           null;
+};
+
 // Droppable Column Component for Drag and Drop between columns
 const DroppableColumn = ({ id, children, style, className }) => {
     const { setNodeRef, isOver } = useDroppable({ id });
@@ -1106,6 +1116,17 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             .order('prioridade', { ascending: true });
         if (data) {
             setSelectedUCs(data);
+            const ug = data.find(u => u.tipo_unidade === 'geradora');
+            if (ug) {
+                setFormData(prev => {
+                    const currentClean = normUG(prev.unidade_geradora);
+                    const ugClean = normUG(ug.numero_uc);
+                    if (!prev.unidade_geradora || (currentClean && ugClean && currentClean !== ugClean)) {
+                        return { ...prev, unidade_geradora: ug.numero_uc, cnpj_cpf: prev.cnpj_cpf || ug.cpf_cnpj_fatura || '' };
+                    }
+                    return prev;
+                });
+            }
         }
     };
 
@@ -1142,7 +1163,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         if (activeTab === 'financeiro' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeTab, activeFinanceTab, referenceMonth, usina?.id]);
+    }, [activeTab, activeFinanceTab, referenceMonth, usina?.id, selectedUCs.length]);
 
     useEffect(() => {
         if (activeTab === 'ucs' && usina?.id) {
@@ -1256,7 +1277,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             if (selectedUCs.length > 0) {
                 const ucIds = selectedUCs.map(uc => uc.id);
 
-                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                const mainUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                 const diaLeitura = mainUG?.dia_leitura;
                 
                 let startD, endD;
@@ -1338,23 +1359,36 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             }
 
             // 1.1. Buscar a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês
-            let ugId = null;
-            if (formData.unidade_geradora) {
-                const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || 
-                               availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
-                ugId = mainUG?.id;
-                
-                if (!ugId) {
-                    try {
-                        const { data: ugData } = await supabase
-                            .from('consumer_units')
-                            .select('id')
-                            .eq('numero_uc', formData.unidade_geradora)
-                            .maybeSingle();
-                        ugId = ugData?.id;
-                    } catch (ugErr) {
-                        console.error('Erro ao buscar ID da UG:', ugErr);
+            const resolvedUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
+            let ugId = resolvedUG?.id;
+            
+            if (!ugId && usina?.id) {
+                try {
+                    const { data: ugDb } = await supabase
+                        .from('consumer_units')
+                        .select('id, numero_uc')
+                        .eq('usina_id', usina.id)
+                        .eq('tipo_unidade', 'geradora')
+                        .maybeSingle();
+                    ugId = ugDb?.id;
+                } catch (ugErr) {
+                    console.error('Erro ao buscar ID da UG vinculada no banco:', ugErr);
+                }
+            }
+
+            if (!ugId && formData.unidade_geradora) {
+                try {
+                    const cleanNum = normUG(formData.unidade_geradora);
+                    let query = supabase.from('consumer_units').select('id');
+                    if (cleanNum && cleanNum !== formData.unidade_geradora) {
+                        query = query.or(`numero_uc.eq.${formData.unidade_geradora},numero_uc.eq.${cleanNum}`);
+                    } else {
+                        query = query.eq('numero_uc', formData.unidade_geradora);
                     }
+                    const { data: ugData } = await query.maybeSingle();
+                    ugId = ugData?.id;
+                } catch (ugErr) {
+                    console.error('Erro ao buscar ID da UG por número:', ugErr);
                 }
             }
 
@@ -1514,7 +1548,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
         const periodString = (() => {
             const baseDate = parseISO(`${referenceMonth}-01`);
-            const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+            const mainUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
             const diaLeitura = mainUG?.dia_leitura;
             
             if (!diaLeitura) {
@@ -1742,7 +1776,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         const isOverAvailable = filteredAvailable.some(uc => uc.id === overId) || overId === 'available-column';
 
         // 3. Prevent dragging the Unidade Geradora principal if it's currently selected
-        if (isActiveLinked && activeItemLinked?.numero_uc === formData.unidade_geradora) {
+        if (isActiveLinked && (activeItemLinked?.tipo_unidade === 'geradora' || (formData.unidade_geradora && normUG(activeItemLinked?.numero_uc) === normUG(formData.unidade_geradora)))) {
             // Unidade geradora must be at index 0 of Linked column and cannot be removed
             if (isOverAvailable) {
                 showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Geral.', 'warning');
@@ -1764,7 +1798,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     const newIndex = items.findIndex(i => i.id === overId);
 
                     // Re-enforce Unidade Geradora principal constraint at index 0
-                    const isGeradoraAt0 = items[0]?.numero_uc === formData.unidade_geradora;
+                    const isGeradoraAt0 = items[0]?.tipo_unidade === 'geradora' || (formData.unidade_geradora && normUG(items[0]?.numero_uc) === normUG(formData.unidade_geradora));
                     if (isGeradoraAt0 && (oldIndex === 0 || newIndex === 0)) {
                         return items;
                     }
@@ -1786,7 +1820,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             if (activeUc) {
                 // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
                 if (formData.modalidade === 'auto_consumo_remoto') {
-                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                    const geradoraUC = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                     if (geradoraUC && activeUc.titular_fatura_id !== geradoraUC.titular_fatura_id) {
                         showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
                         return;
@@ -2446,14 +2480,14 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             isAvailable={false}
                                             geracaoEstimada={formData.geracao_estimada_kwh}
                                             subscribers={subscribers}
-                                            isFixed={index === 0 && uc.numero_uc === formData.unidade_geradora}
+                                            isFixed={uc.tipo_unidade === 'geradora' || (formData.unidade_geradora && normUG(uc.numero_uc) === normUG(formData.unidade_geradora))}
                                             onPreview={async () => {
                                                 const { data } = await supabase.from('consumer_units').select('*, subscribers:subscribers!consumer_units_subscriber_id_fkey(name, phone)').eq('id', uc.id).single();
                                                 setPreviewUC(data || uc);
                                                 setShowPreviewModal(true);
                                             }}
                                             onToggle={async (checked) => {
-                                                if (index === 0 && uc.numero_uc === formData.unidade_geradora) {
+                                                if (uc.tipo_unidade === 'geradora' || (formData.unidade_geradora && normUG(uc.numero_uc) === normUG(formData.unidade_geradora))) {
                                                     showAlert('A Unidade Geradora principal não pode ser removida por aqui. Altere na seção Geral.', 'warning');
                                                     return;
                                                 }
@@ -2526,7 +2560,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             onToggle={async (checked) => {
                                                 // Block linking in Auto Consumo Remoto if subscriber does not match generator unit's subscriber
                                                 if (formData.modalidade === 'auto_consumo_remoto') {
-                                                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                                                    const geradoraUC = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                                                     if (geradoraUC && uc.titular_fatura_id !== geradoraUC.titular_fatura_id) {
                                                         showAlert('Bloqueio: No Auto Consumo Remoto, as UCs vinculadas devem pertencer ao mesmo titular da Unidade Geradora.', 'warning');
                                                         return;
@@ -3211,7 +3245,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         </div>
                                                     ) : (
                                                         geradoras.map(uc => {
-                                                            const isSelected = formData.unidade_geradora === uc.numero_uc;
+                                                            const isSelected = formData.unidade_geradora ? normUG(formData.unidade_geradora) === normUG(uc.numero_uc) : (geradoras.length === 1);
                                                             const subscriber = subscribers.find(s => s.id === uc.titular_fatura_id);
 
                                                             return (
@@ -3721,7 +3755,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
                                                                     {(() => {
                                                                         const baseDate = parseISO(`${referenceMonth}-01`);
-                                                                        const mainUG = selectedUCs.find(uc => uc.numero_uc === formData.unidade_geradora) || availableUCs.find(uc => uc.numero_uc === formData.unidade_geradora);
+                                                                        const mainUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                                                                         const diaLeitura = formData.dia_leitura || mainUG?.dia_leitura;
 
                                                                         if (!diaLeitura) {
@@ -4164,7 +4198,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                     if (formData.modalidade === 'auto_consumo_remoto') return;
                                                     
                                                     // Validate UCs titularity before changing
-                                                    const geradoraUC = selectedUCs.find(u => u.numero_uc === formData.unidade_geradora) || availableUCs.find(u => u.numero_uc === formData.unidade_geradora);
+                                                    const geradoraUC = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                                                     if (geradoraUC) {
                                                         const hasDifferentTitular = selectedUCs.some(uc => uc.titular_fatura_id !== geradoraUC.titular_fatura_id);
                                                         if (hasDifferentTitular) {
