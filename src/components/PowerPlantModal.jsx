@@ -2442,7 +2442,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             if (beneficiariaIds.length > 0) {
                 let invQuery = supabase
                     .from('invoices')
-                    .select('id, uc_id, mes_referencia, data_leitura_anterior, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status')
+                    .select('id, uc_id, mes_referencia, data_leitura_anterior, data_leitura, consumo_kwh, consumo_compensado, valor_concessionaria, valor_a_pagar, status, desconto_aplicado')
                     .in('uc_id', beneficiariaIds)
                     .gt('consumo_compensado', 0)
                     .neq('status', 'cancelado');
@@ -2497,10 +2497,88 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
+            // Tarifas da concessionária para cálculo do valor do fornecedor
+            let currentTarifas = concessionariaTarifas;
+            const concNome = formData.concessionaria || resolvedUG?.concessionaria;
+            if (!currentTarifas && concNome) {
+                try {
+                    const { data: cData } = await supabase
+                        .from('Concessionaria')
+                        .select('*')
+                        .eq('Concessionaria', concNome)
+                        .limit(1)
+                        .maybeSingle();
+                    currentTarifas = cData;
+                } catch (tErr) {
+                    console.error('Erro ao buscar tarifas para PDF:', tErr);
+                }
+            }
+
+            const baseTariffs = getTariffValues();
+
+            const calculateTarifaLiquida = (ucObj, inv) => {
+                const grupo = ucObj?.grupo_tarifario || formData.grupo_tarifario || 'B1 Residencial';
+                let tarifa = Number(ucObj?.tarifa_concessionaria) || 0;
+                let descontoPercent = Number(inv?.desconto_aplicado ?? ucObj?.desconto_assinante) || 0;
+                let fioB = 0;
+
+                if (currentTarifas) {
+                    if (grupo === 'B1 Residencial') {
+                        if (!tarifa) tarifa = Number(currentTarifas['Tarifa Concessionaria']) || 0;
+                        if (!descontoPercent) descontoPercent = Number(currentTarifas['Desconto Assinante']) || 0;
+                        fioB = Number(currentTarifas['Fio B']) || 0;
+                    } else if (grupo === 'B2 Rural') {
+                        if (!tarifa) tarifa = Number(currentTarifas['Tarifa Concessionaria_B2']) || 0;
+                        if (!descontoPercent) descontoPercent = Number(currentTarifas['Desconto Assinante_B2']) || 0;
+                        fioB = Number(currentTarifas['Fio B_B2']) || 0;
+                    } else if (grupo === 'B3 Comercial') {
+                        if (!tarifa) tarifa = Number(currentTarifas['Tarifa Concessionaria_B3']) || 0;
+                        if (!descontoPercent) descontoPercent = Number(currentTarifas['Desconto Assinante_B3']) || 0;
+                        fioB = Number(currentTarifas['Fio B_B3']) || 0;
+                    } else if (grupo === 'Grupo A') {
+                        if (!tarifa) tarifa = Number(currentTarifas['Tarifa Concessionaria_A']) || 0;
+                        if (!descontoPercent) descontoPercent = Number(currentTarifas['Desconto Assinante_A']) || 0;
+                        fioB = Number(currentTarifas['Fio B_A']) || 0;
+                    }
+                }
+
+                if (!tarifa && baseTariffs?.tarifa) tarifa = baseTariffs.tarifa;
+                if (!descontoPercent && baseTariffs?.descontoPercent) descontoPercent = baseTariffs.descontoPercent;
+                if (!fioB && baseTariffs?.fioB) fioB = baseTariffs.fioB;
+
+                const descontoReais = tarifa * (descontoPercent / 100);
+                const gestaoPercent = Number(formData.gestao_percentual) || baseTariffs?.gestaoPercent || 0;
+
+                const isGD1 = formData.modalidade_gd === 'GD1';
+                const fioBefetivo = isGD1 ? 0 : fioB;
+
+                const isCompartilhada = formData.modalidade === 'geracao_compartilhada';
+                let tributosReais = 0;
+                if (isCompartilhada && currentTarifas) {
+                    const icmsPercent = currentTarifas['ICMS'];
+                    const pisPercent = currentTarifas['PIS'];
+                    const cofinsPercent = currentTarifas['COFINS'];
+                    if ([icmsPercent, pisPercent, cofinsPercent].every(v => v !== null && v !== undefined && v !== '')) {
+                        const baseTributavel = tarifa - fioBefetivo;
+                        const icmsReais = baseTributavel * (Number(icmsPercent) / 100);
+                        const pisCofinsReais = (baseTributavel - icmsReais) * ((Number(pisPercent) + Number(cofinsPercent)) / 100);
+                        tributosReais = icmsReais + pisCofinsReais;
+                    }
+                }
+
+                const baseGestao = tarifa - descontoReais - fioBefetivo - tributosReais;
+                const gestaoReais = baseGestao * (gestaoPercent / 100);
+                const tarifaLiquida = baseGestao - gestaoReais;
+
+                return tarifaLiquida > 0 ? tarifaLiquida : (baseTariffs?.tarifaLiquida || 0);
+            };
+
             // Preparar dados das UCs beneficiárias compensadas no período
+            let totalKwhConsumido = 0;
             let totalKwhCompensado = 0;
             let totalVrContaEnergia = 0;
             let totalVrFatura = 0;
+            let totalVrFornecedor = 0;
 
             const tableRows = matchingInvoices.map(inv => {
                 const ucObj = selectedUCs.find(u => u.id === inv.uc_id) || availableUCs.find(u => u.id === inv.uc_id);
@@ -2511,22 +2589,33 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 const mesRefInv = inv.mes_referencia ? format(parseISO(inv.mes_referencia), 'MM/yyyy') : '-';
                 const dataLeituraUC = inv.data_leitura ? formatDateBR(inv.data_leitura) : '-';
 
+                const kwhCons = Number(inv.consumo_kwh) || 0;
                 const kwhComp = Number(inv.consumo_compensado) || 0;
-                const vrConc = Number(inv.valor_concessionaria) || 0;
                 const vrFat = Number(inv.valor_a_pagar) || 0;
+                const vrConc = Number(inv.valor_concessionaria) || 0;
 
+                const tLiq = calculateTarifaLiquida(ucObj, inv);
+                const gestaoPct = Number(formData.gestao_percentual) || 10;
+                const vrFornecedor = tLiq > 0 
+                    ? (kwhComp * tLiq) 
+                    : Math.max(0, (vrFat - vrConc) * (1 - (gestaoPct / 100)));
+
+                totalKwhConsumido += kwhCons;
                 totalKwhCompensado += kwhComp;
-                totalVrContaEnergia += vrConc;
                 totalVrFatura += vrFat;
+                totalVrContaEnergia += vrConc;
+                totalVrFornecedor += vrFornecedor;
 
                 return [
                     ucNum,
                     assinante,
                     mesRefInv,
                     dataLeituraUC,
+                    kwhCons > 0 ? `${kwhCons.toLocaleString('pt-BR')} kWh` : '-',
                     `${kwhComp.toLocaleString('pt-BR')} kWh`,
+                    formatCurrency(vrFat),
                     formatCurrency(vrConc),
-                    formatCurrency(vrFat)
+                    formatCurrency(vrFornecedor)
                 ];
             });
 
@@ -2537,6 +2626,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     '-',
                     '-',
                     '0 kWh',
+                    '0 kWh',
+                    'R$ 0,00',
                     'R$ 0,00',
                     'R$ 0,00'
                 ]);
@@ -2639,9 +2730,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     'Assinante',
                     'Mês de Ref.',
                     'Data de Leitura',
+                    'Energia Consumida',
                     'Energia Compensada',
+                    'Vr. da Fatura',
                     'Vr. Conta de Energia',
-                    'Vr. da Fatura'
+                    'Valor do Fornecedor'
                 ]],
                 body: tableRows,
                 foot: matchingInvoices.length > 0 ? [[
@@ -2649,35 +2742,40 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     `${matchingInvoices.length} conta(s) compensada(s)`,
                     '-',
                     '-',
+                    `${totalKwhConsumido.toLocaleString('pt-BR')} kWh`,
                     `${totalKwhCompensado.toLocaleString('pt-BR')} kWh`,
+                    formatCurrency(totalVrFatura),
                     formatCurrency(totalVrContaEnergia),
-                    formatCurrency(totalVrFatura)
+                    formatCurrency(totalVrFornecedor)
                 ]] : undefined,
                 theme: 'striped',
                 headStyles: {
                     fillColor: [37, 99, 235],
                     textColor: [255, 255, 255],
                     fontStyle: 'bold',
-                    fontSize: 8.5
+                    fontSize: 8,
+                    halign: 'center'
                 },
                 bodyStyles: {
-                    fontSize: 8.5,
+                    fontSize: 8,
                     textColor: [30, 41, 59]
                 },
                 footStyles: {
                     fillColor: [241, 245, 249],
                     textColor: [15, 23, 42],
                     fontStyle: 'bold',
-                    fontSize: 9
+                    fontSize: 8.5
                 },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 32 },
+                    0: { halign: 'center', cellWidth: 28 },
                     1: { halign: 'left' },
-                    2: { halign: 'center', cellWidth: 24 },
-                    3: { halign: 'center', cellWidth: 32 },
-                    4: { halign: 'right', cellWidth: 38, fontStyle: 'bold' },
-                    5: { halign: 'right', cellWidth: 38 },
-                    6: { halign: 'right', cellWidth: 38, fontStyle: 'bold' }
+                    2: { halign: 'center', cellWidth: 20 },
+                    3: { halign: 'center', cellWidth: 22 },
+                    4: { halign: 'right', cellWidth: 28 },
+                    5: { halign: 'right', cellWidth: 28, fontStyle: 'bold', textColor: [126, 34, 206] },
+                    6: { halign: 'right', cellWidth: 30, fontStyle: 'bold' },
+                    7: { halign: 'right', cellWidth: 31 },
+                    8: { halign: 'right', cellWidth: 34, fontStyle: 'bold', textColor: [22, 101, 52] }
                 },
                 margin: { horizontal: 14 }
             });
