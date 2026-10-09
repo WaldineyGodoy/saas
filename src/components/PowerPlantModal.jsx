@@ -1138,6 +1138,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     const [showPassword, setShowPassword] = useState(false);
     const [activeFinanceTab, setActiveFinanceTab] = useState('lancamentos');
     const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [periodType, setPeriodType] = useState('month'); // 'month' | 'year'
+    const [referenceYear, setReferenceYear] = useState(new Date().getFullYear().toString());
+    const [isGeneratingPerformancePDF, setIsGeneratingPerformancePDF] = useState(false);
     const [monthlyDetails, setMonthlyDetails] = useState(null);
     const [loadingMonthly, setLoadingMonthly] = useState(false);
     const [monthlyEstimates, setMonthlyEstimates] = useState([]);
@@ -1163,7 +1166,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         if (activeTab === 'financeiro' && usina?.id) {
             fetchMonthlyDetails();
         }
-    }, [activeTab, activeFinanceTab, referenceMonth, usina?.id, selectedUCs.length]);
+    }, [activeTab, activeFinanceTab, referenceMonth, referenceYear, periodType, usina?.id, selectedUCs.length]);
 
     useEffect(() => {
         if (activeTab === 'ucs' && usina?.id) {
@@ -1240,28 +1243,44 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
     // Update only the predicted generation when chart estimates arrive
     useEffect(() => {
         if (monthlyEstimates.length > 0 && monthlyDetails) {
-            const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
-            const estimateObj = monthlyEstimates[monthIdx] || {};
-            const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
+            let prediction = 0;
+            if (periodType === 'year') {
+                prediction = monthlyEstimates.reduce((acc, curr) => acc + (Number(curr.geracao || curr.estimativa || 0)), 0);
+            } else {
+                const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
+                const estimateObj = monthlyEstimates[monthIdx] || {};
+                prediction = estimateObj.geracao || estimateObj.estimativa || 0;
+            }
             
             if (prediction !== monthlyDetails.geracao_prevista) {
                 setMonthlyDetails(prev => prev ? { ...prev, geracao_prevista: prediction } : prev);
             }
         }
-    }, [monthlyEstimates, referenceMonth]);
+    }, [monthlyEstimates, referenceMonth, referenceYear, periodType]);
 
     const fetchMonthlyDetails = async () => {
         setLoadingMonthly(true);
         try {
-            const firstDay = `${referenceMonth}-01`;
-            const [year, month] = referenceMonth.split('-');
-            let y = parseInt(year);
-            let m = parseInt(month) + 1;
-            if (m > 12) {
-                m = 1;
-                y++;
+            const isYear = periodType === 'year';
+            const yearStr = referenceYear || referenceMonth.slice(0, 4);
+
+            let firstDay, nextMonthStr;
+            let startYearStr, endYearStr;
+
+            if (isYear) {
+                startYearStr = `${yearStr}-01-01`;
+                endYearStr = `${parseInt(yearStr) + 1}-01-01`;
+            } else {
+                firstDay = `${referenceMonth}-01`;
+                const [year, month] = referenceMonth.split('-');
+                let y = parseInt(year);
+                let m = parseInt(month) + 1;
+                if (m > 12) {
+                    m = 1;
+                    y++;
+                }
+                nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
             }
-            const nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
             
             // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
             let totalCompensada = 0;
@@ -1277,46 +1296,6 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             if (selectedUCs.length > 0) {
                 const ucIds = selectedUCs.map(uc => uc.id);
 
-                const mainUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
-                const diaLeitura = mainUG?.dia_leitura;
-                
-                let startD, endD;
-                if (!diaLeitura) {
-                    const [year, month] = referenceMonth.split('-');
-                    let y = parseInt(year);
-                    let m = parseInt(month) + 1;
-                    if (m > 12) {
-                        m = 1;
-                        y++;
-                    }
-                    startD = firstDay;
-                    endD = `${y}-${String(m).padStart(2, '0')}-01`;
-                } else {
-                    const baseDate = parseISO(firstDay);
-                    const day = parseInt(diaLeitura);
-                    const startDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
-                    const endDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
-                    // Add 1 day to end date to make it exclusive like lt() requires if using time
-                    const nextDayObj = new Date(endDateObj);
-                    nextDayObj.setDate(nextDayObj.getDate() + 1);
-                    
-                    startD = format(startDateObj, 'yyyy-MM-dd');
-                    endD = format(nextDayObj, 'yyyy-MM-dd');
-                }
-
-                const [energyRes, faturamentoRes, prodRes] = await Promise.all([
-                    supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                    supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
-                    supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
-                ]);
-
-                if (energyRes.error) console.error('Energy Fetch Error:', energyRes.error);
-                if (faturamentoRes.error) console.error('Faturamento Fetch Error:', faturamentoRes.error);
-                if (prodRes.error) console.error('Production Fetch Error:', prodRes.error);
-
-                totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
-                totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
-
                 // A conta da UG já entra no fechamento como serviço 'Energia'
                 // (ugInvoiceValue, abaixo). Somá-la também em custo_disponibilidade
                 // contaria a mesma despesa duas vezes em fn_totais_fechamento, que
@@ -1330,35 +1309,81 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         .map(u => u.id)
                 );
 
-                if (faturamentoRes.data) {
-                    faturamentoRes.data.forEach(inv => {
-                        const val = Number(inv.valor_a_pagar) || 0;
-                        const concessionariaVal = Number(inv.valor_concessionaria) || 0;
-                        if (!geradoraIds.has(inv.uc_id)) {
-                            totalContasEnergia += concessionariaVal;
-                        }
+                if (isYear) {
+                    const [energyRes, faturamentoRes] = await Promise.all([
+                        supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).gte('mes_referencia', startYearStr).lt('mes_referencia', endYearStr).neq('status', 'cancelado'),
+                        supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', startYearStr).lt('vencimento', endYearStr).neq('status', 'cancelado')
+                    ]);
 
-                        if (inv.status === 'pago') {
-                            faturamentoPago += val;
-                        } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
-                            faturamentoAVencer += val;
-                        } else if (inv.status === 'sem_faturamento') {
-                            faturamentoSemFaturamento += val;
-                        } else if (inv.status === 'atrasado') {
-                            faturamentoAtrasado += val;
-                        }
-                    });
+                    if (energyRes.error) console.error('Energy Fetch Error (Year):', energyRes.error);
+                    if (faturamentoRes.error) console.error('Faturamento Fetch Error (Year):', faturamentoRes.error);
+
+                    totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
+                    totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
+
+                    if (faturamentoRes.data) {
+                        faturamentoRes.data.forEach(inv => {
+                            const val = Number(inv.valor_a_pagar) || 0;
+                            const concessionariaVal = Number(inv.valor_concessionaria) || 0;
+                            if (!geradoraIds.has(inv.uc_id)) {
+                                totalContasEnergia += concessionariaVal;
+                            }
+
+                            if (inv.status === 'pago') {
+                                faturamentoPago += val;
+                            } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
+                                faturamentoAVencer += val;
+                            } else if (inv.status === 'sem_faturamento') {
+                                faturamentoSemFaturamento += val;
+                            } else if (inv.status === 'atrasado') {
+                                faturamentoAtrasado += val;
+                            }
+                        });
+                    }
+                } else {
+                    const [energyRes, faturamentoRes, prodRes] = await Promise.all([
+                        supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
+                        supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
+                        supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
+                    ]);
+
+                    if (energyRes.error) console.error('Energy Fetch Error:', energyRes.error);
+                    if (faturamentoRes.error) console.error('Faturamento Fetch Error:', faturamentoRes.error);
+                    if (prodRes.error) console.error('Production Fetch Error:', prodRes.error);
+
+                    totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
+                    totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
+
+                    if (faturamentoRes.data) {
+                        faturamentoRes.data.forEach(inv => {
+                            const val = Number(inv.valor_a_pagar) || 0;
+                            const concessionariaVal = Number(inv.valor_concessionaria) || 0;
+                            if (!geradoraIds.has(inv.uc_id)) {
+                                totalContasEnergia += concessionariaVal;
+                            }
+
+                            if (inv.status === 'pago') {
+                                faturamentoPago += val;
+                            } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
+                                faturamentoAVencer += val;
+                            } else if (inv.status === 'sem_faturamento') {
+                                faturamentoSemFaturamento += val;
+                            } else if (inv.status === 'atrasado') {
+                                faturamentoAtrasado += val;
+                            }
+                        });
+                    }
+
+                    prodData = prodRes.data;
+                    prodError = prodRes.error;
                 }
-
-                prodData = prodRes.data;
-                prodError = prodRes.error;
-            } else {
+            } else if (!isYear) {
                 const prodRes = await supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle();
                 prodData = prodRes.data;
                 prodError = prodRes.error;
             }
 
-            // 1.1. Buscar a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês
+            // 1.1. Buscar a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês/ano
             const resolvedUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
             let ugId = resolvedUG?.id;
             
@@ -1394,42 +1419,77 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
             let injectedEnergy = 0;
             let ugInvoiceValue = 0;
+            let ugDataIni = null;
+            let ugDataFim = null;
+
             if (ugId) {
                 try {
-                    // Sem filtro de status: a fatura da UG é cancelada de propósito
-                    // (não se cobra do assinante), mas é dela que saem a energia
-                    // injetada e a conta a pagar à concessionária.
-                    const { data: ugInvoice } = await supabase
-                        .from('invoices')
-                        .select('energia_injetada, valor_concessionaria')
-                        .eq('uc_id', ugId)
-                        .eq('mes_referencia', firstDay)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    
-                    if (ugInvoice?.energia_injetada) {
-                        injectedEnergy = Number(ugInvoice.energia_injetada);
-                        console.log(`Energia injetada encontrada para a UG (${formData.unidade_geradora}):`, injectedEnergy);
-                    }
-                    // A energia injetada vem da UG em qualquer caso — é a leitura do
-                    // medidor. Já o VALOR só é despesa da usina quando a UG não
-                    // abriga consumo de terceiro; em telhado arrendado a conta é
-                    // cobrada de quem consumiu.
-                    const ugFaturaTerceiro = !!(selectedUCs.find(u => u.id === ugId)
-                        || availableUCs.find(u => u.id === ugId))?.fatura_consumo_terceiro;
+                    if (isYear) {
+                        const { data: ugInvoices } = await supabase
+                            .from('invoices')
+                            .select('energia_injetada, valor_concessionaria')
+                            .eq('uc_id', ugId)
+                            .gte('mes_referencia', startYearStr)
+                            .lt('mes_referencia', endYearStr);
 
-                    if (ugInvoice?.valor_concessionaria && !ugFaturaTerceiro) {
-                        ugInvoiceValue = Number(ugInvoice.valor_concessionaria);
-                        console.log(`Valor da fatura (Energia) encontrado para a UG (${formData.unidade_geradora}):`, ugInvoiceValue);
+                        if (ugInvoices) {
+                            injectedEnergy = ugInvoices.reduce((acc, curr) => acc + (Number(curr.energia_injetada) || 0), 0);
+                            const ugFaturaTerceiro = !!(selectedUCs.find(u => u.id === ugId)
+                                || availableUCs.find(u => u.id === ugId))?.fatura_consumo_terceiro;
+                            if (!ugFaturaTerceiro) {
+                                ugInvoiceValue = ugInvoices.reduce((acc, curr) => acc + (Number(curr.valor_concessionaria) || 0), 0);
+                            }
+                        }
+                        ugDataIni = `${yearStr}-01-01`;
+                        ugDataFim = `${yearStr}-12-31`;
+                    } else {
+                        const { data: ugInvoice } = await supabase
+                            .from('invoices')
+                            .select('energia_injetada, valor_concessionaria, data_leitura, data_leitura_anterior')
+                            .eq('uc_id', ugId)
+                            .eq('mes_referencia', firstDay)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        if (ugInvoice?.energia_injetada) {
+                            injectedEnergy = Number(ugInvoice.energia_injetada);
+                            console.log(`Energia injetada encontrada para a UG (${formData.unidade_geradora}):`, injectedEnergy);
+                        }
+                        if (ugInvoice?.data_leitura && ugInvoice?.data_leitura_anterior) {
+                            ugDataIni = ugInvoice.data_leitura_anterior;
+                            ugDataFim = ugInvoice.data_leitura;
+                        }
+                        const ugFaturaTerceiro = !!(selectedUCs.find(u => u.id === ugId)
+                            || availableUCs.find(u => u.id === ugId))?.fatura_consumo_terceiro;
+
+                        if (ugInvoice?.valor_concessionaria && !ugFaturaTerceiro) {
+                            ugInvoiceValue = Number(ugInvoice.valor_concessionaria);
+                            console.log(`Valor da fatura (Energia) encontrado para a UG (${formData.unidade_geradora}):`, ugInvoiceValue);
+                        }
                     }
                 } catch (invoiceErr) {
                     console.error('Erro ao buscar fatura da UG:', invoiceErr);
                 }
             }
 
+            if (!isYear && (!ugDataIni || !ugDataFim)) {
+                const baseDate = parseISO(firstDay);
+                const diaLeitura = formData.dia_leitura || resolvedUG?.dia_leitura;
+                if (diaLeitura) {
+                    const day = parseInt(diaLeitura);
+                    const endDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                    const startDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                    ugDataIni = format(startDateObj, 'yyyy-MM-dd');
+                    ugDataFim = format(endDateObj, 'yyyy-MM-dd');
+                } else {
+                    ugDataIni = firstDay;
+                    ugDataFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+                }
+            }
+
             // Automatically update global service_values for 'Energia' if it is selected as a service
-            if (formData.servicos_contratados?.includes('Energia') && ugInvoiceValue > 0) {
+            if (!isYear && formData.servicos_contratados?.includes('Energia') && ugInvoiceValue > 0) {
                 setFormData(prev => ({
                     ...prev,
                     service_values: {
@@ -1439,17 +1499,62 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }));
             }
 
-            // 2. Get prediction for the specific month from chart data
-            const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
-            const estimateObj = monthlyEstimates[monthIdx] || {};
-            const prediction = estimateObj.geracao || estimateObj.estimativa || 0;
+            // 2. Previsão dinâmica (Mês ou Ano)
+            let prediction = 0;
+            if (isYear) {
+                prediction = monthlyEstimates.reduce((acc, curr) => acc + (Number(curr.geracao || curr.estimativa || 0)), 0);
+            } else {
+                const monthIdx = parseInt(referenceMonth.split('-')[1]) - 1;
+                const estimateObj = monthlyEstimates[monthIdx] || {};
+                prediction = estimateObj.geracao || estimateObj.estimativa || 0;
+            }
 
             // Don't throw if only the production record is missing, but log it
             if (prodError && prodError.code !== 'PGRST116') {
                 console.warn('Non-critical production fetch error:', prodError);
             }
             
-            if (prodData) {
+            if (isYear) {
+                const getValYear = (key) => {
+                    if (key === 'Energia' && ugInvoiceValue > 0) return ugInvoiceValue;
+                    const val = formData.service_values?.[key];
+                    const num = typeof val === 'number' ? val : parseCurrency(val);
+                    return num * 12;
+                };
+
+                const defaultDetailsYear = {};
+                (formData.servicos_contratados || []).forEach(s => {
+                    if (!['Gestão', 'Manutenção', 'Arrendamento'].includes(s)) {
+                        defaultDetailsYear[s] = getValYear(s);
+                    }
+                });
+
+                const totalServicosAno = Object.values(defaultDetailsYear).reduce((acc, curr) => acc + curr, 0);
+
+                setMonthlyDetails({
+                    usina_id: usina.id,
+                    mes_referencia: startYearStr,
+                    is_year_mode: true,
+                    reference_year: yearStr,
+                    manutencao: getValYear('Manutenção'),
+                    arrendamento: getValYear('Arrendamento'),
+                    gestao_reais: (formData.servicos_contratados.includes('Gestão') ? getValYear('Gestão') : 0),
+                    details: defaultDetailsYear,
+                    servicos: totalServicosAno,
+                    status: 'em_producao',
+                    geracao_mensal_kwh: injectedEnergy,
+                    geracao_prevista: prediction,
+                    energia_compensada: totalCompensada,
+                    faturamento_mensal: totalFaturamento,
+                    faturamento_pago: faturamentoPago,
+                    faturamento_a_vencer: faturamentoAVencer,
+                    faturamento_sem_faturamento: faturamentoSemFaturamento,
+                    faturamento_atrasado: faturamentoAtrasado,
+                    custo_disponibilidade: totalContasEnergia,
+                    ug_data_ini: ugDataIni,
+                    ug_data_fim: ugDataFim
+                });
+            } else if (prodData) {
                 const existingDetails = prodData.service_details || {};
                 const finalDetails = { ...existingDetails };
                 
@@ -1470,6 +1575,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
                 setMonthlyDetails({
                     ...prodData,
+                    is_year_mode: false,
                     details: finalDetails,
                     geracao_mensal_kwh: injectedEnergy || Number(prodData.geracao_mensal_kwh) || 0,
                     energia_compensada: totalCompensada || Number(prodData.energia_compensada) || 0,
@@ -1480,7 +1586,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     faturamento_atrasado: faturamentoAtrasado,
                     custo_disponibilidade: totalContasEnergia,
                     servicos: Object.values(finalDetails).reduce((acc, curr) => acc + curr, 0),
-                    geracao_prevista: prediction // Sempre usar a previsão dinâmica do gráfico
+                    geracao_prevista: prediction,
+                    ug_data_ini: ugDataIni,
+                    ug_data_fim: ugDataFim
                 });
             } else {
                 // Initialize placeholder from defaults
@@ -1503,6 +1611,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 setMonthlyDetails({
                     usina_id: usina.id,
                     mes_referencia: firstDay,
+                    is_year_mode: false,
                     manutencao: getVal('Manutenção'),
                     arrendamento: getVal('Arrendamento'),
                     gestao_reais: (formData.servicos_contratados.includes('Gestão') ? getVal('Gestão') : 0),
@@ -1517,7 +1626,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     faturamento_a_vencer: faturamentoAVencer,
                     faturamento_sem_faturamento: faturamentoSemFaturamento,
                     faturamento_atrasado: faturamentoAtrasado,
-                    custo_disponibilidade: totalContasEnergia
+                    custo_disponibilidade: totalContasEnergia,
+                    ug_data_ini: ugDataIni,
+                    ug_data_fim: ugDataFim
                 });
             }
         } catch (err) {
@@ -2189,6 +2300,379 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         }
     };
 
+    const formatDateBR = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            if (typeof dateStr === 'string' && dateStr.length >= 10) {
+                const parts = dateStr.slice(0, 10).split('-');
+                if (parts.length === 3) {
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            return format(parseISO(dateStr), 'dd/MM/yyyy');
+        } catch {
+            return String(dateStr);
+        }
+    };
+
+    const handleGeneratePerformancePDF = async () => {
+        setIsGeneratingPerformancePDF(true);
+        try {
+            const resolvedUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
+            let ugId = resolvedUG?.id;
+            if (!ugId && usina?.id) {
+                try {
+                    const { data: ugDb } = await supabase
+                        .from('consumer_units')
+                        .select('id, numero_uc, dia_leitura, titular_conta, concessionaria')
+                        .eq('usina_id', usina.id)
+                        .eq('tipo_unidade', 'geradora')
+                        .maybeSingle();
+                    if (ugDb) {
+                        ugId = ugDb.id;
+                    }
+                } catch (err) {
+                    console.error('Erro ao buscar UG:', err);
+                }
+            }
+            if (!ugId && formData.unidade_geradora) {
+                try {
+                    const cleanNum = normUG(formData.unidade_geradora);
+                    let query = supabase.from('consumer_units').select('id, numero_uc, dia_leitura, titular_conta, concessionaria');
+                    if (cleanNum && cleanNum !== formData.unidade_geradora) {
+                        query = query.or(`numero_uc.eq.${formData.unidade_geradora},numero_uc.eq.${cleanNum}`);
+                    } else {
+                        query = query.eq('numero_uc', formData.unidade_geradora);
+                    }
+                    const { data: ugData } = await query.maybeSingle();
+                    if (ugData) {
+                        ugId = ugData.id;
+                    }
+                } catch (err) {
+                    console.error('Erro ao buscar UG por numero:', err);
+                }
+            }
+
+            const isYear = periodType === 'year';
+            const curYear = referenceYear || referenceMonth.slice(0, 4);
+
+            let ugDataIni = null;
+            let ugDataFim = null;
+            let ugInvoice = null;
+
+            if (!isYear) {
+                const firstDay = `${referenceMonth}-01`;
+                if (ugId) {
+                    const { data } = await supabase
+                        .from('invoices')
+                        .select('energia_injetada, valor_concessionaria, data_leitura, data_leitura_anterior')
+                        .eq('uc_id', ugId)
+                        .eq('mes_referencia', firstDay)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    ugInvoice = data;
+                }
+
+                if (ugInvoice?.data_leitura && ugInvoice?.data_leitura_anterior) {
+                    ugDataIni = ugInvoice.data_leitura_anterior;
+                    ugDataFim = ugInvoice.data_leitura;
+                } else if (monthlyDetails?.ug_data_ini && monthlyDetails?.ug_data_fim) {
+                    ugDataIni = monthlyDetails.ug_data_ini;
+                    ugDataFim = monthlyDetails.ug_data_fim;
+                } else {
+                    const baseDate = parseISO(firstDay);
+                    const diaLeitura = formData.dia_leitura || resolvedUG?.dia_leitura;
+                    if (diaLeitura) {
+                        const day = parseInt(diaLeitura);
+                        const endDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
+                        const startDateObj = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
+                        ugDataIni = format(startDateObj, 'yyyy-MM-dd');
+                        ugDataFim = format(endDateObj, 'yyyy-MM-dd');
+                    } else {
+                        ugDataIni = firstDay;
+                        ugDataFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+                    }
+                }
+            } else {
+                ugDataIni = `${curYear}-01-01`;
+                ugDataFim = `${curYear}-12-31`;
+            }
+
+            // Beneficiary UCs linked
+            const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
+            const beneficiariaIds = beneficiarias.map(u => u.id);
+
+            let matchingInvoices = [];
+            if (beneficiariaIds.length > 0) {
+                let invQuery = supabase
+                    .from('invoices')
+                    .select('id, uc_id, mes_referencia, data_leitura_anterior, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status')
+                    .in('uc_id', beneficiariaIds)
+                    .gt('consumo_compensado', 0)
+                    .neq('status', 'cancelado');
+
+                if (!isYear) {
+                    const [yStr, mStr] = referenceMonth.split('-');
+                    let y = parseInt(yStr);
+                    let m = parseInt(mStr);
+                    const prevM = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+                    const nextM = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+                    invQuery = invQuery.gte('mes_referencia', prevM).lte('mes_referencia', nextM);
+
+                    const { data: invs, error: invErr } = await invQuery;
+                    if (invErr) console.error('Erro ao buscar faturas das beneficiárias:', invErr);
+
+                    if (invs && invs.length > 0) {
+                        // Filtrar as faturas que tiveram leitura atual dentro do período da UG
+                        matchingInvoices = invs.filter(inv => {
+                            if (inv.data_leitura && ugDataIni && ugDataFim) {
+                                return inv.data_leitura >= ugDataIni && inv.data_leitura <= ugDataFim;
+                            }
+                            return inv.mes_referencia === `${referenceMonth}-01`;
+                        });
+
+                        // Se nenhuma fatura bateu pela data de leitura exata, fallback para o mês de referência
+                        if (matchingInvoices.length === 0) {
+                            matchingInvoices = invs.filter(inv => inv.mes_referencia === `${referenceMonth}-01`);
+                        }
+                    }
+                } else {
+                    invQuery = invQuery.gte('mes_referencia', `${curYear}-01-01`).lte('mes_referencia', `${curYear}-12-31`).order('mes_referencia', { ascending: true });
+                    const { data: invs, error: invErr } = await invQuery;
+                    if (invErr) console.error('Erro ao buscar faturas das beneficiárias no ano:', invErr);
+                    matchingInvoices = invs || [];
+                }
+            }
+
+            // Ordenar faturas
+            matchingInvoices.sort((a, b) => {
+                const dateA = a.data_leitura || a.mes_referencia || '';
+                const dateB = b.data_leitura || b.mes_referencia || '';
+                return dateA.localeCompare(dateB);
+            });
+
+            let currentSubscribers = subscribers;
+            if (!currentSubscribers || currentSubscribers.length === 0) {
+                try {
+                    const { data: subData } = await supabase.from('subscribers').select('id, name, cpf_cnpj');
+                    currentSubscribers = subData || [];
+                } catch {
+                    currentSubscribers = [];
+                }
+            }
+
+            // Criar PDF em formato A4 Paisagem
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Cabeçalho do Documento
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(15, 23, 42);
+            doc.text('EXTRATO DE OPERAÇÃO E PERFORMANCE', 14, 18);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9.5);
+            doc.setTextColor(100, 116, 139);
+            const usinaNomeDoc = (formData.name || usina?.name || 'Usina').toUpperCase();
+            doc.text(`Usina: ${usinaNomeDoc}   |   Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 24);
+
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.4);
+            doc.line(14, 27, pageWidth - 14, 27);
+
+            // Linha superior: dados da UG
+            const ugNumero = formData.unidade_geradora || resolvedUG?.numero_uc || '-';
+            const ugTitular = resolvedUG?.titular_conta || formData.name || 'Unidade Geradora';
+            const concessionariaNome = formData.concessionaria || resolvedUG?.concessionaria || '-';
+            const mesRefTexto = isYear ? `Ano ${curYear}` : format(parseISO(`${referenceMonth}-01`), 'MM/yyyy');
+            const periodoLeituraUG = `${formatDateBR(ugDataIni)} a ${formatDateBR(ugDataFim)}`;
+            const energiaPrevistaKwh = Number(monthlyDetails?.geracao_prevista || 0).toLocaleString('pt-BR');
+            const energiaInjetadaKwh = Number(monthlyDetails?.geracao_mensal_kwh || 0).toLocaleString('pt-BR');
+            const energiaCompensadaKwh = Number(monthlyDetails?.energia_compensada || 0).toLocaleString('pt-BR');
+
+            autoTable(doc, {
+                startY: 31,
+                head: [[
+                    'Unidade Geradora (UG)',
+                    'Concessionária',
+                    'Mês de Ref.',
+                    'Período Leitura UG (Data Ini - Data Fim)',
+                    'Energia Prevista',
+                    'Energia Injetada',
+                    'Energia Compensada'
+                ]],
+                body: [[
+                    `${ugNumero}\n${ugTitular}`,
+                    concessionariaNome,
+                    mesRefTexto,
+                    periodoLeituraUG,
+                    `${energiaPrevistaKwh} kWh`,
+                    `${energiaInjetadaKwh} kWh`,
+                    `${energiaCompensadaKwh} kWh`
+                ]],
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [30, 41, 59],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 8.5,
+                    halign: 'center'
+                },
+                bodyStyles: {
+                    fontSize: 9,
+                    textColor: [15, 23, 42],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    fillColor: [248, 250, 252]
+                },
+                columnStyles: {
+                    0: { halign: 'left', fontStyle: 'bold' },
+                    4: { textColor: [22, 101, 52] },
+                    5: { textColor: [37, 99, 235] },
+                    6: { textColor: [126, 34, 206] }
+                },
+                margin: { horizontal: 14 }
+            });
+
+            // Seção Inferior: UCs beneficiárias
+            const ucsStartY = doc.lastAutoTable.finalY + 8;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(30, 41, 59);
+            doc.text('UNIDADES CONSUMIDORAS BENEFICIÁRIAS COMPENSADAS NO PERÍODO', 14, ucsStartY);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`Unidades com compensação apurada no ciclo da UG (${periodoLeituraUG})`, 14, ucsStartY + 4);
+
+            let totalKwhCompensado = 0;
+            let totalVrContaEnergia = 0;
+            let totalVrFatura = 0;
+
+            const tableRows = matchingInvoices.map(inv => {
+                const ucObj = selectedUCs.find(u => u.id === inv.uc_id) || availableUCs.find(u => u.id === inv.uc_id);
+                const sub = (ucObj?.titular_fatura_id ? currentSubscribers?.find(s => s.id === ucObj.titular_fatura_id) : null) || currentSubscribers?.find(s => s.id === ucObj?.subscriber_id);
+                const assinante = sub?.name || ucObj?.titular_conta || 'Não Identificado';
+                const ucNum = ucObj?.numero_uc || '-';
+                const mesRefInv = inv.mes_referencia ? format(parseISO(inv.mes_referencia), 'MM/yyyy') : '-';
+                
+                let periodoLeituraUC = '-';
+                if (inv.data_leitura_anterior && inv.data_leitura) {
+                    periodoLeituraUC = `${formatDateBR(inv.data_leitura_anterior)} a ${formatDateBR(inv.data_leitura)}`;
+                } else if (inv.data_leitura) {
+                    periodoLeituraUC = `Leitura: ${formatDateBR(inv.data_leitura)}`;
+                } else {
+                    periodoLeituraUC = mesRefInv;
+                }
+
+                const kwhComp = Number(inv.consumo_compensado) || 0;
+                const vrConc = Number(inv.valor_concessionaria) || 0;
+                const vrFat = Number(inv.valor_a_pagar) || 0;
+
+                totalKwhCompensado += kwhComp;
+                totalVrContaEnergia += vrConc;
+                totalVrFatura += vrFat;
+
+                return [
+                    ucNum,
+                    assinante,
+                    mesRefInv,
+                    periodoLeituraUC,
+                    `${kwhComp.toLocaleString('pt-BR')} kWh`,
+                    formatCurrency(vrConc),
+                    formatCurrency(vrFat)
+                ];
+            });
+
+            if (tableRows.length === 0) {
+                tableRows.push([
+                    '-',
+                    'Nenhuma unidade com compensação identificada para este período',
+                    '-',
+                    '-',
+                    '0 kWh',
+                    'R$ 0,00',
+                    'R$ 0,00'
+                ]);
+            }
+
+            autoTable(doc, {
+                startY: ucsStartY + 7,
+                head: [[
+                    'Nº da UC',
+                    'Assinante / Titular',
+                    'Mês de Ref.',
+                    'Período de Leitura (Data Ini - Data Fim)',
+                    'Energia Compensada',
+                    'Vr. Conta de Energia',
+                    'Vr. da Fatura'
+                ]],
+                body: tableRows,
+                foot: matchingInvoices.length > 0 ? [[
+                    'TOTAL',
+                    `${matchingInvoices.length} conta(s) compensada(s)`,
+                    '-',
+                    '-',
+                    `${totalKwhCompensado.toLocaleString('pt-BR')} kWh`,
+                    formatCurrency(totalVrContaEnergia),
+                    formatCurrency(totalVrFatura)
+                ]] : undefined,
+                theme: 'striped',
+                headStyles: {
+                    fillColor: [37, 99, 235],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 8.5
+                },
+                bodyStyles: {
+                    fontSize: 8.5,
+                    textColor: [30, 41, 59]
+                },
+                footStyles: {
+                    fillColor: [241, 245, 249],
+                    textColor: [15, 23, 42],
+                    fontStyle: 'bold',
+                    fontSize: 9
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 32 },
+                    1: { halign: 'left' },
+                    2: { halign: 'center', cellWidth: 24 },
+                    3: { halign: 'center', cellWidth: 48 },
+                    4: { halign: 'right', cellWidth: 36, fontStyle: 'bold' },
+                    5: { halign: 'right', cellWidth: 38 },
+                    6: { halign: 'right', cellWidth: 38, fontStyle: 'bold' }
+                },
+                margin: { horizontal: 14 }
+            });
+
+            // Numeração de páginas no rodapé
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(148, 163, 184);
+                doc.text(`Página ${i} de ${pageCount} — B2W Energia`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+                doc.text(`Sistema de Gestão de Usinas — Extrato de Operação e Performance`, 14, pageHeight - 8);
+            }
+
+            const safeUsinaName = (formData.name || 'usina').toLowerCase().replace(/\s+/g, '_');
+            const filePeriod = isYear ? curYear : referenceMonth;
+            doc.save(`extrato_performance_${safeUsinaName}_${filePeriod}.pdf`);
+            showAlert('Extrato de Performance em PDF gerado com sucesso!', 'success');
+        } catch (err) {
+            console.error('Erro ao gerar extrato de performance em PDF:', err);
+            showAlert('Erro ao gerar extrato de performance em PDF: ' + (err.message || err), 'error');
+        } finally {
+            setIsGeneratingPerformancePDF(false);
+        }
+    };
+
     const fileInputDemonstrativoRef = useRef(null);
     const [isExtractingDemonstrativo, setIsExtractingDemonstrativo] = useState(false);
 
@@ -2709,8 +3193,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 });
                 if (vinculosError) throw vinculosError;
 
-                // If monthly details are populated, save them to generation_production
-                if (monthlyDetails) {
+                // If monthly details are populated, save them to generation_production (only in month mode)
+                if (monthlyDetails && !monthlyDetails.is_year_mode) {
                     const { 
                         details, 
                         id: prodId, 
@@ -2721,6 +3205,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                         faturamento_a_vencer,
                         faturamento_sem_faturamento,
                         faturamento_atrasado,
+                        is_year_mode,
+                        reference_year,
+                        ug_data_ini,
+                        ug_data_fim,
                         ...mainData 
                     } = monthlyDetails;
                     const upsertData = {
@@ -3732,28 +4220,81 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
                                             return (
                                                 <>
-                                                    {/* Header Row (Mês de Referência + Saldo a Receber) */}
+                                                    {/* Header Row (Mês/Ano de Referência + Saldo a Receber) */}
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                            {/* Toggle Filtro Mês / Ano */}
+                                                            <div style={{ display: 'flex', background: '#e2e8f0', padding: '3px', borderRadius: '10px', marginRight: '0.25rem' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPeriodType('month')}
+                                                                    style={{
+                                                                        padding: '0.35rem 0.75rem',
+                                                                        border: 'none',
+                                                                        borderRadius: '7px',
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: 700,
+                                                                        cursor: 'pointer',
+                                                                        background: periodType === 'month' ? 'white' : 'transparent',
+                                                                        color: periodType === 'month' ? '#1e293b' : '#64748b',
+                                                                        boxShadow: periodType === 'month' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                >
+                                                                    Mês
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPeriodType('year')}
+                                                                    style={{
+                                                                        padding: '0.35rem 0.75rem',
+                                                                        border: 'none',
+                                                                        borderRadius: '7px',
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: 700,
+                                                                        cursor: 'pointer',
+                                                                        background: periodType === 'year' ? 'white' : 'transparent',
+                                                                        color: periodType === 'year' ? '#1e293b' : '#64748b',
+                                                                        boxShadow: periodType === 'year' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                                        transition: 'all 0.2s'
+                                                                    }}
+                                                                >
+                                                                    Ano
+                                                                </button>
+                                                            </div>
+
                                                             <button 
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    const [year, month] = referenceMonth.split('-').map(Number);
-                                                                    const date = new Date(year, month - 2, 1);
-                                                                    setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                    if (periodType === 'month') {
+                                                                        const [year, month] = referenceMonth.split('-').map(Number);
+                                                                        const date = new Date(year, month - 2, 1);
+                                                                        setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                    } else {
+                                                                        const currentY = parseInt(referenceYear || referenceMonth.slice(0, 4));
+                                                                        setReferenceYear(String(currentY - 1));
+                                                                    }
                                                                 }}
                                                                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                                title={periodType === 'month' ? 'Mês Anterior' : 'Ano Anterior'}
                                                             >
                                                                 <ChevronUp style={{ transform: 'rotate(-90deg)' }} size={18} />
                                                             </button>
                                                             
-                                                            <div style={{ textAlign: 'center', minWidth: '180px' }}>
-                                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Mês de Referência</label>
+                                                            <div style={{ textAlign: 'center', minWidth: '190px' }}>
+                                                                <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
+                                                                    {periodType === 'month' ? 'Mês de Referência' : 'Ano de Referência'}
+                                                                </label>
                                                                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', textTransform: 'capitalize' }}>
-                                                                    {new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                                    {periodType === 'month' 
+                                                                        ? new Date(referenceMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
+                                                                        : `Ano ${referenceYear || referenceMonth.slice(0, 4)}`}
                                                                 </div>
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem', fontWeight: 600 }}>
-                                                                    {(() => {
+                                                                    {periodType === 'month' ? (() => {
+                                                                        if (monthlyDetails?.ug_data_ini && monthlyDetails?.ug_data_fim) {
+                                                                            return `${formatDateBR(monthlyDetails.ug_data_ini)} a ${formatDateBR(monthlyDetails.ug_data_fim)}`;
+                                                                        }
                                                                         const baseDate = parseISO(`${referenceMonth}-01`);
                                                                         const mainUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
                                                                         const diaLeitura = formData.dia_leitura || mainUG?.dia_leitura;
@@ -3765,18 +4306,24 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         const endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), day);
                                                                         const startD = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, day + 1);
                                                                         return `${format(startD, 'dd/MM/yyyy')} a ${format(endD, 'dd/MM/yyyy')}`;
-                                                                    })()}
+                                                                    })() : `Consolidado Anual (Jan - Dez ${referenceYear || referenceMonth.slice(0, 4)})`}
                                                                 </div>
                                                             </div>
 
                                                             <button 
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    const [year, month] = referenceMonth.split('-').map(Number);
-                                                                    const date = new Date(year, month, 1);
-                                                                    setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                    if (periodType === 'month') {
+                                                                        const [year, month] = referenceMonth.split('-').map(Number);
+                                                                        const date = new Date(year, month, 1);
+                                                                        setReferenceMonth(date.toISOString().slice(0, 7));
+                                                                    } else {
+                                                                        const currentY = parseInt(referenceYear || referenceMonth.slice(0, 4));
+                                                                        setReferenceYear(String(currentY + 1));
+                                                                    }
                                                                 }}
                                                                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer', color: '#64748b', transition: '0.2s' }}
+                                                                title={periodType === 'month' ? 'Próximo Mês' : 'Próximo Ano'}
                                                             >
                                                                 <ChevronUp style={{ transform: 'rotate(90deg)' }} size={18} />
                                                             </button>
@@ -3796,16 +4343,54 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                                             {/* Card: Dados de Operação e Performance */}
                                                             <div style={{ background: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                                                                <h4 style={{ margin: '0 0 1.25rem 0', fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                                    <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a' }}>
-                                                                        <Activity size={20} />
-                                                                    </div>
-                                                                    Dados de Operação e Performance
-                                                                </h4>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                                    <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                                        <div style={{ padding: '0.5rem', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a' }}>
+                                                                            <Activity size={20} />
+                                                                        </div>
+                                                                        Dados de Operação e Performance
+                                                                    </h4>
+
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={handleGeneratePerformancePDF}
+                                                                        disabled={isGeneratingPerformancePDF}
+                                                                        title="Gerar Extrato em PDF com dados da UG e UCs compensadas no período"
+                                                                        style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '0.45rem',
+                                                                            background: isGeneratingPerformancePDF ? '#94a3b8' : '#2563eb',
+                                                                            color: 'white',
+                                                                            border: 'none',
+                                                                            borderRadius: '10px',
+                                                                            padding: '0.45rem 0.85rem',
+                                                                            fontSize: '0.78rem',
+                                                                            fontWeight: 700,
+                                                                            cursor: isGeneratingPerformancePDF ? 'not-allowed' : 'pointer',
+                                                                            transition: 'all 0.2s',
+                                                                            boxShadow: '0 2px 4px rgba(37,99,235,0.18)'
+                                                                        }}
+                                                                    >
+                                                                        {isGeneratingPerformancePDF ? (
+                                                                            <>
+                                                                                <Loader2 size={14} className="animate-spin" />
+                                                                                Gerando...
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <Download size={14} />
+                                                                                Extrato de Performance (PDF)
+                                                                            </>
+                                                                        )}
+                                                                    </button>
+                                                                </div>
                                                                 
                                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                                                     <div>
-                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Mensal - Energia Injetada (kWh)</label>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                                                                            {periodType === 'year' ? 'Geração Anual - Energia Injetada (kWh)' : 'Geração Mensal - Energia Injetada (kWh)'}
+                                                                        </label>
                                                                         <input 
                                                                             type="number"
                                                                             value={monthlyDetails?.geracao_mensal_kwh || ''}
@@ -3815,7 +4400,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         />
                                                                     </div>
                                                                     <div>
-                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Geração Prevista (kWh)</label>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                                                                            {periodType === 'year' ? 'Geração Prevista Anual (kWh)' : 'Geração Prevista (kWh)'}
+                                                                        </label>
                                                                         <input 
                                                                             type="number"
                                                                             value={monthlyDetails?.geracao_prevista || ''}
@@ -3825,7 +4412,9 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                         />
                                                                     </div>
                                                                     <div style={{ gridColumn: 'span 2' }}>
-                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Energia Compensada nas UCs (kWh)</label>
+                                                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                                                                            {periodType === 'year' ? 'Energia Compensada nas UCs no Ano (kWh)' : 'Energia Compensada nas UCs (kWh)'}
+                                                                        </label>
                                                                         <input 
                                                                             type="number"
                                                                             value={monthlyDetails?.energia_compensada || ''}
@@ -3989,9 +4578,11 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                                     </div>
                                                                 </div>
 
-                                                                {/* Footer: Total de Serviços do Mês */}
+                                                                {/* Footer: Total de Serviços do Mês/Ano */}
                                                                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total de Serviços do Mês</span>
+                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                                                                        {periodType === 'year' ? 'Total de Serviços do Ano' : 'Total de Serviços do Mês'}
+                                                                    </span>
                                                                     <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#166534' }}>
                                                                         {formatCurrency(totalServicos)}
                                                                     </span>
@@ -4000,28 +4591,57 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                                         </div>
                                                     </div>
 
-                                                    {/* Action button centered at the bottom of the page */}
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginTop: '2rem', width: '100%' }}>
+                                                    {/* Action buttons centered at the bottom of the page */}
+                                                    <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', gap: '1.25rem', marginTop: '2rem', width: '100%', flexWrap: 'wrap' }}>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={handleGeneratePerformancePDF}
+                                                            disabled={isGeneratingPerformancePDF}
+                                                            style={{ 
+                                                                flex: '1 1 280px',
+                                                                maxWidth: '360px',
+                                                                display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.15rem 1.75rem', 
+                                                                background: isGeneratingPerformancePDF ? '#64748b' : '#2563eb', 
+                                                                color: 'white', borderRadius: '18px', border: 'none', 
+                                                                cursor: isGeneratingPerformancePDF ? 'not-allowed' : 'pointer', 
+                                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                boxShadow: '0 8px 18px -4px rgba(37, 99, 235, 0.35)'
+                                                            }}>
+                                                            {isGeneratingPerformancePDF ? (
+                                                                <Loader2 size={26} className="animate-spin" />
+                                                            ) : (
+                                                                <Download size={26} />
+                                                            )}
+                                                            <div style={{ textAlign: 'left' }}>
+                                                                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>
+                                                                    Extrato de Performance (PDF)
+                                                                </div>
+                                                                <div style={{ fontSize: '0.73rem', opacity: 0.9, marginTop: '0.1rem' }}>
+                                                                    UG e UCs compensadas no período
+                                                                </div>
+                                                            </div>
+                                                        </button>
+
                                                         <button 
                                                             type="button"
                                                             onClick={handlePrintRelatorio}
                                                             style={{ 
-                                                                width: '100%',
-                                                                maxWidth: '600px',
-                                                                display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.25rem 2rem', 
+                                                                flex: '1 1 280px',
+                                                                maxWidth: '360px',
+                                                                display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.15rem 1.75rem', 
                                                                 background: '#1e293b', 
-                                                                color: 'white', borderRadius: '20px', border: 'none', 
+                                                                color: 'white', borderRadius: '18px', border: 'none', 
                                                                 cursor: 'pointer', 
                                                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                                                boxShadow: '0 8px 18px -4px rgba(0, 0, 0, 0.15)'
                                                             }}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                                                             <div style={{ textAlign: 'left' }}>
-                                                                <div style={{ fontWeight: 800, fontSize: '1.15rem' }}>
-                                                                    Gerar Relatório em PDF
+                                                                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>
+                                                                    Relatório de Lançamentos
                                                                 </div>
-                                                                <div style={{ fontSize: '0.75rem', opacity: 0.9, marginTop: '0.1rem' }}>
-                                                                    Imprimir relatório de operação deste mês
+                                                                <div style={{ fontSize: '0.73rem', opacity: 0.9, marginTop: '0.1rem' }}>
+                                                                    Imprimir extrato financeiro geral
                                                                 </div>
                                                             </div>
                                                         </button>
