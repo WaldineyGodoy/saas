@@ -358,12 +358,12 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
             const ucB = b.consumer_units?.numero_uc || '';
             primaryResult = ucB.localeCompare(ucA);
         } else if (sortBy === 'valor_desc') {
-            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
-            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
+            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima || a.tarifa_minima_excedentes) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0) + (Number(a.parcelamento) || 0));
+            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima || b.tarifa_minima_excedentes) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0) + (Number(b.parcelamento) || 0));
             primaryResult = valB - valA;
         } else if (sortBy === 'valor_asc') {
-            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0));
-            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0));
+            const valA = Number(a.valor_concessionaria) || ((Number(a.tarifa_minima || a.tarifa_minima_excedentes) || 0) + (Number(a.iluminacao_publica) || 0) + (Number(a.outros_lancamentos) || 0) + (Number(a.parcelamento) || 0));
+            const valB = Number(b.valor_concessionaria) || ((Number(b.tarifa_minima || b.tarifa_minima_excedentes) || 0) + (Number(b.iluminacao_publica) || 0) + (Number(b.outros_lancamentos) || 0) + (Number(b.parcelamento) || 0));
             primaryResult = valA - valB;
         } else if (sortBy === 'assinante_asc') {
             const nameA = a.consumer_units?.subscribers?.name || '';
@@ -474,7 +474,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
         // Mapear dados para a tabela
         const tableBody = sortedInvoices.map(inv => {
             const factValue = Number(inv.valor_a_pagar) || 0;
-            const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
+            const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0));
             const statusLabel = 
                 inv.status === 'sem_faturamento' ? 'Sem Faturamento' : 
                 inv.status === 'pago' ? 'Pago' : 
@@ -1300,7 +1300,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
 
                                         // Valores da Concessionária
                                         const ip = Number(inv.iluminacao_publica) || 0;
-                                        const outros = (Number(inv.tarifa_minima) || 0) + (Number(inv.outros_lancamentos) || 0);
+                                        const outros = (Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0);
                                         const valorConcessionaria = Number(inv.valor_concessionaria) || (ip + outros + (Number(inv.consumo_reais) || 0));
 
                                         return (
@@ -2112,7 +2112,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                         }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '0.5rem' }}>Totais:</span>
                             <span style={{ fontSize: '1rem', fontWeight: '950', color: '#0f172a' }}>
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0))), 0))}
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeTab === 'faturas' ? sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0) : sortedInvoices.reduce((sum, inv) => sum + (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0))), 0))}
                             </span>
                         </div>
                     </div>
@@ -2198,7 +2198,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                     {viewMode === 'list' ? (
                         (() => {
                             const totalFactValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_a_pagar) || 0)), 0);
-                            const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0)))), 0);
+                            const totalEnergyBillValue = sortedInvoices.reduce((sum, inv) => sum + (inv.parent_invoice_id ? 0 : (Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0)))), 0);
                                             const totalBalance = totalFactValue - totalEnergyBillValue;
 
                             return (
@@ -2220,7 +2220,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                         <tbody>
                                             {sortedInvoices.map(inv => {
                                                 const factValue = Number(inv.valor_a_pagar) || 0;
-                                                const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.consumo_reais) || 0));
+                                                const energyBillValue = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0) + (Number(inv.consumo_reais) || 0));
 
                                                 return (
                                                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -2484,7 +2484,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                 </thead>
                                 <tbody>
                                     {sortedInvoices.map(inv => {
-                                        const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
+                                        const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0));
                                         const today = new Date();
                                         today.setHours(0,0,0,0);
                                         const dueDate = (inv.vencimento_concessionaria || inv.vencimento) ? new Date(inv.vencimento_concessionaria || inv.vencimento) : null;
@@ -2657,7 +2657,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                     const s = colMap[col];
                                     
                                     const totalAmount = invoicesInCol.reduce((acc, curr) => {
-                                        const cost = Number(curr.valor_concessionaria) || ((Number(curr.tarifa_minima) || 0) + (Number(curr.iluminacao_publica) || 0) + (Number(curr.outros_lancamentos) || 0));
+                                        const cost = Number(curr.valor_concessionaria) || ((Number(curr.tarifa_minima || curr.tarifa_minima_excedentes) || 0) + (Number(curr.iluminacao_publica) || 0) + (Number(curr.outros_lancamentos) || 0) + (Number(curr.parcelamento) || 0));
                                         return acc + cost;
                                     }, 0);
 
@@ -2684,7 +2684,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                                             </div>
                                             <div className="kanban-column-content">
                                                 {invoicesInCol.map(inv => {
-                                                    const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0));
+                                                    const cost = Number(inv.valor_concessionaria) || ((Number(inv.tarifa_minima || inv.tarifa_minima_excedentes) || 0) + (Number(inv.iluminacao_publica) || 0) + (Number(inv.outros_lancamentos) || 0) + (Number(inv.parcelamento) || 0));
                                                     return (
                                                         <div 
                                                             key={inv.id} 
