@@ -1488,6 +1488,41 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
+            // Recalcular energia compensada com base nas leituras das beneficiárias no período da UG
+            const beneficiariaIds = selectedUCs.filter(u => u.tipo_unidade !== 'geradora').map(u => u.id);
+            if (!isYear && ugDataIni && ugDataFim && beneficiariaIds.length > 0) {
+                try {
+                    const [yStr, mStr] = referenceMonth.split('-');
+                    let y = parseInt(yStr);
+                    let m = parseInt(mStr);
+                    const prevM = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+                    const nextM = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
+                    const { data: cycleInvs } = await supabase
+                        .from('invoices')
+                        .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado')
+                        .in('uc_id', beneficiariaIds)
+                        .gt('consumo_compensado', 0)
+                        .gte('mes_referencia', prevM)
+                        .lte('mes_referencia', nextM)
+                        .neq('status', 'cancelado');
+
+                    if (cycleInvs && cycleInvs.length > 0) {
+                        const matched = cycleInvs.filter(inv => {
+                            if (inv.data_leitura && ugDataIni && ugDataFim) {
+                                return inv.data_leitura >= ugDataIni && inv.data_leitura <= ugDataFim;
+                            }
+                            return inv.mes_referencia === firstDay;
+                        });
+                        if (matched.length > 0) {
+                            totalCompensada = matched.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0);
+                        }
+                    }
+                } catch (cycleErr) {
+                    console.error('Erro ao calcular totalCompensada pelo ciclo da UG:', cycleErr);
+                }
+            }
+
             // Automatically update global service_values for 'Energia' if it is selected as a service
             if (!isYear && formData.servicos_contratados?.includes('Energia') && ugInvoiceValue > 0) {
                 setFormData(prev => ({
@@ -2462,6 +2497,51 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
+            // Preparar dados das UCs beneficiárias compensadas no período
+            let totalKwhCompensado = 0;
+            let totalVrContaEnergia = 0;
+            let totalVrFatura = 0;
+
+            const tableRows = matchingInvoices.map(inv => {
+                const ucObj = selectedUCs.find(u => u.id === inv.uc_id) || availableUCs.find(u => u.id === inv.uc_id);
+                const sub = (ucObj?.subscriber_id ? currentSubscribers?.find(s => s.id === ucObj.subscriber_id) : null) 
+                    || (ucObj?.titular_fatura_id ? currentSubscribers?.find(s => s.id === ucObj.titular_fatura_id) : null);
+                const assinante = sub?.name || ucObj?.titular_conta || 'Não Identificado';
+                const ucNum = ucObj?.numero_uc || '-';
+                const mesRefInv = inv.mes_referencia ? format(parseISO(inv.mes_referencia), 'MM/yyyy') : '-';
+                const dataLeituraUC = inv.data_leitura ? formatDateBR(inv.data_leitura) : '-';
+
+                const kwhComp = Number(inv.consumo_compensado) || 0;
+                const vrConc = Number(inv.valor_concessionaria) || 0;
+                const vrFat = Number(inv.valor_a_pagar) || 0;
+
+                totalKwhCompensado += kwhComp;
+                totalVrContaEnergia += vrConc;
+                totalVrFatura += vrFat;
+
+                return [
+                    ucNum,
+                    assinante,
+                    mesRefInv,
+                    dataLeituraUC,
+                    `${kwhComp.toLocaleString('pt-BR')} kWh`,
+                    formatCurrency(vrConc),
+                    formatCurrency(vrFat)
+                ];
+            });
+
+            if (tableRows.length === 0) {
+                tableRows.push([
+                    '-',
+                    'Nenhuma unidade com compensação identificada para este período',
+                    '-',
+                    '-',
+                    '0 kWh',
+                    'R$ 0,00',
+                    'R$ 0,00'
+                ]);
+            }
+
             // Criar PDF em formato A4 Paisagem
             const doc = new jsPDF('l', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.getWidth();
@@ -2491,7 +2571,10 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             const periodoLeituraUG = `${formatDateBR(ugDataIni)} a ${formatDateBR(ugDataFim)}`;
             const energiaPrevistaKwh = Number(monthlyDetails?.geracao_prevista || 0).toLocaleString('pt-BR');
             const energiaInjetadaKwh = Number(monthlyDetails?.geracao_mensal_kwh || 0).toLocaleString('pt-BR');
-            const energiaCompensadaKwh = Number(monthlyDetails?.energia_compensada || 0).toLocaleString('pt-BR');
+            const finalCompensada = (matchingInvoices.length > 0 || totalKwhCompensado > 0)
+                ? totalKwhCompensado
+                : Number(monthlyDetails?.energia_compensada || 0);
+            const energiaCompensadaKwh = finalCompensada.toLocaleString('pt-BR');
 
             autoTable(doc, {
                 startY: 31,
@@ -2549,64 +2632,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             doc.setTextColor(100, 116, 139);
             doc.text(`Unidades com compensação apurada no ciclo da UG (${periodoLeituraUG})`, 14, ucsStartY + 4);
 
-            let totalKwhCompensado = 0;
-            let totalVrContaEnergia = 0;
-            let totalVrFatura = 0;
-
-            const tableRows = matchingInvoices.map(inv => {
-                const ucObj = selectedUCs.find(u => u.id === inv.uc_id) || availableUCs.find(u => u.id === inv.uc_id);
-                const sub = (ucObj?.titular_fatura_id ? currentSubscribers?.find(s => s.id === ucObj.titular_fatura_id) : null) || currentSubscribers?.find(s => s.id === ucObj?.subscriber_id);
-                const assinante = sub?.name || ucObj?.titular_conta || 'Não Identificado';
-                const ucNum = ucObj?.numero_uc || '-';
-                const mesRefInv = inv.mes_referencia ? format(parseISO(inv.mes_referencia), 'MM/yyyy') : '-';
-                
-                let periodoLeituraUC = '-';
-                if (inv.data_leitura_anterior && inv.data_leitura) {
-                    periodoLeituraUC = `${formatDateBR(inv.data_leitura_anterior)} a ${formatDateBR(inv.data_leitura)}`;
-                } else if (inv.data_leitura) {
-                    periodoLeituraUC = `Leitura: ${formatDateBR(inv.data_leitura)}`;
-                } else {
-                    periodoLeituraUC = mesRefInv;
-                }
-
-                const kwhComp = Number(inv.consumo_compensado) || 0;
-                const vrConc = Number(inv.valor_concessionaria) || 0;
-                const vrFat = Number(inv.valor_a_pagar) || 0;
-
-                totalKwhCompensado += kwhComp;
-                totalVrContaEnergia += vrConc;
-                totalVrFatura += vrFat;
-
-                return [
-                    ucNum,
-                    assinante,
-                    mesRefInv,
-                    periodoLeituraUC,
-                    `${kwhComp.toLocaleString('pt-BR')} kWh`,
-                    formatCurrency(vrConc),
-                    formatCurrency(vrFat)
-                ];
-            });
-
-            if (tableRows.length === 0) {
-                tableRows.push([
-                    '-',
-                    'Nenhuma unidade com compensação identificada para este período',
-                    '-',
-                    '-',
-                    '0 kWh',
-                    'R$ 0,00',
-                    'R$ 0,00'
-                ]);
-            }
-
             autoTable(doc, {
                 startY: ucsStartY + 7,
                 head: [[
                     'Nº da UC',
-                    'Assinante / Titular',
+                    'Assinante',
                     'Mês de Ref.',
-                    'Período de Leitura (Data Ini - Data Fim)',
+                    'Data de Leitura',
                     'Energia Compensada',
                     'Vr. Conta de Energia',
                     'Vr. da Fatura'
@@ -2642,8 +2674,8 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     0: { halign: 'center', cellWidth: 32 },
                     1: { halign: 'left' },
                     2: { halign: 'center', cellWidth: 24 },
-                    3: { halign: 'center', cellWidth: 48 },
-                    4: { halign: 'right', cellWidth: 36, fontStyle: 'bold' },
+                    3: { halign: 'center', cellWidth: 32 },
+                    4: { halign: 'right', cellWidth: 38, fontStyle: 'bold' },
                     5: { halign: 'right', cellWidth: 38 },
                     6: { halign: 'right', cellWidth: 38, fontStyle: 'bold' }
                 },
