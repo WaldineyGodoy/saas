@@ -109,6 +109,17 @@ export const contasStatuses = [
     { key: 'pago', label: 'Paga', color: '#166534', bg: '#dcfce7' }
 ];
 
+
+// Helper adicionado para lidar com nomes de unidades geradoras
+const getDisplayName = (inv) => {
+    const cu = inv.consumer_units || inv; 
+    if (!cu) return '-';
+    if (cu.tipo_unidade === 'geradora') {
+        return cu.usinas?.name || cu.suppliers?.name || 'USINA/FORNECEDOR';
+    }
+    return cu.subscribers?.name || '-';
+};
+
 export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = false }) {
     const { showAlert, showConfirm } = useUI();
     const { profile } = useAuth();
