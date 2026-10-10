@@ -1282,108 +1282,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 nextMonthStr = `${y}-${String(m).padStart(2, '0')}-01`;
             }
             
-            // 1. Fetch sum of "Energia Compensada" and "Faturamento" from invoices for linked UCs
-            let totalCompensada = 0;
-            let totalFaturamento = 0;
-            let faturamentoPago = 0;
-            let faturamentoAVencer = 0;
-            let faturamentoSemFaturamento = 0;
-            let faturamentoAtrasado = 0;
-            let totalContasEnergia = 0;
-            let prodData = null;
-            let prodError = null;
-
-            if (selectedUCs.length > 0) {
-                const ucIds = selectedUCs.map(uc => uc.id);
-
-                // A conta da UG já entra no fechamento como serviço 'Energia'
-                // (ugInvoiceValue, abaixo). Somá-la também em custo_disponibilidade
-                // contaria a mesma despesa duas vezes em fn_totais_fechamento, que
-                // faz custo_disponibilidade + manutencao + arrendamento + servicos.
-                // A UG de telhado arrendado é exceção: quem paga a conta dela é o
-                // terceiro que consome, então ela entra em custo_disponibilidade
-                // como qualquer beneficiária e NÃO vira despesa da usina.
-                const geradoraIds = new Set(
-                    selectedUCs
-                        .filter(u => u.tipo_unidade === 'geradora' && !u.fatura_consumo_terceiro)
-                        .map(u => u.id)
-                );
-
-                if (isYear) {
-                    const [energyRes, faturamentoRes] = await Promise.all([
-                        supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).gte('mes_referencia', startYearStr).lt('mes_referencia', endYearStr).neq('status', 'cancelado'),
-                        supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', startYearStr).lt('vencimento', endYearStr).neq('status', 'cancelado')
-                    ]);
-
-                    if (energyRes.error) console.error('Energy Fetch Error (Year):', energyRes.error);
-                    if (faturamentoRes.error) console.error('Faturamento Fetch Error (Year):', faturamentoRes.error);
-
-                    totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
-                    totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
-
-                    if (faturamentoRes.data) {
-                        faturamentoRes.data.forEach(inv => {
-                            const val = Number(inv.valor_a_pagar) || 0;
-                            const concessionariaVal = Number(inv.valor_concessionaria) || 0;
-                            if (!geradoraIds.has(inv.uc_id)) {
-                                totalContasEnergia += concessionariaVal;
-                            }
-
-                            if (inv.status === 'pago') {
-                                faturamentoPago += val;
-                            } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
-                                faturamentoAVencer += val;
-                            } else if (inv.status === 'sem_faturamento') {
-                                faturamentoSemFaturamento += val;
-                            } else if (inv.status === 'atrasado') {
-                                faturamentoAtrasado += val;
-                            }
-                        });
-                    }
-                } else {
-                    const [energyRes, faturamentoRes, prodRes] = await Promise.all([
-                        supabase.from('invoices').select('consumo_compensado').in('uc_id', ucIds).eq('mes_referencia', firstDay).neq('status', 'cancelado'),
-                        supabase.from('invoices').select('uc_id, valor_a_pagar, status, valor_concessionaria').in('uc_id', ucIds).gte('vencimento', firstDay).lt('vencimento', nextMonthStr).neq('status', 'cancelado'),
-                        supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle()
-                    ]);
-
-                    if (energyRes.error) console.error('Energy Fetch Error:', energyRes.error);
-                    if (faturamentoRes.error) console.error('Faturamento Fetch Error:', faturamentoRes.error);
-                    if (prodRes.error) console.error('Production Fetch Error:', prodRes.error);
-
-                    totalCompensada = energyRes.data?.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0) || 0;
-                    totalFaturamento = faturamentoRes.data?.reduce((acc, curr) => acc + (Number(curr.valor_a_pagar) || 0), 0) || 0;
-
-                    if (faturamentoRes.data) {
-                        faturamentoRes.data.forEach(inv => {
-                            const val = Number(inv.valor_a_pagar) || 0;
-                            const concessionariaVal = Number(inv.valor_concessionaria) || 0;
-                            if (!geradoraIds.has(inv.uc_id)) {
-                                totalContasEnergia += concessionariaVal;
-                            }
-
-                            if (inv.status === 'pago') {
-                                faturamentoPago += val;
-                            } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
-                                faturamentoAVencer += val;
-                            } else if (inv.status === 'sem_faturamento') {
-                                faturamentoSemFaturamento += val;
-                            } else if (inv.status === 'atrasado') {
-                                faturamentoAtrasado += val;
-                            }
-                        });
-                    }
-
-                    prodData = prodRes.data;
-                    prodError = prodRes.error;
-                }
-            } else if (!isYear) {
-                const prodRes = await supabase.from('generation_production').select('*').eq('usina_id', usina.id).eq('mes_referencia', firstDay).order('created_at', { ascending: false }).limit(1).maybeSingle();
-                prodData = prodRes.data;
-                prodError = prodRes.error;
-            }
-
-            // 1.1. Buscar a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês/ano
+            // 1. Resolver a Unidade Geradora (UG) correspondente e sua energia injetada na fatura do mês/ano
             const resolvedUG = resolveGeradoraUC(selectedUCs, availableUCs, formData.unidade_geradora);
             let ugId = resolvedUG?.id;
             
@@ -1488,39 +1387,101 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 }
             }
 
-            // Recalcular energia compensada com base nas leituras das beneficiárias no período da UG
-            const beneficiariaIds = selectedUCs.filter(u => u.tipo_unidade !== 'geradora').map(u => u.id);
-            if (!isYear && ugDataIni && ugDataFim && beneficiariaIds.length > 0) {
-                try {
-                    const [yStr, mStr] = referenceMonth.split('-');
-                    let y = parseInt(yStr);
-                    let m = parseInt(mStr);
-                    const prevM = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
-                    const nextM = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+            // 2. Definir o período civil para apuração das UCs beneficiárias (dia 01 ao último dia do mês ou ano)
+            let ucPeriodoIni = null;
+            let ucPeriodoFim = null;
+            if (!isYear) {
+                const baseDate = parseISO(firstDay);
+                ucPeriodoIni = firstDay;
+                ucPeriodoFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+            } else {
+                ucPeriodoIni = `${yearStr}-01-01`;
+                ucPeriodoFim = `${yearStr}-12-31`;
+            }
 
-                    const { data: cycleInvs } = await supabase
+            // 3. Apuração das UCs Beneficiárias (Compensação, Faturamento e Contas de Energia)
+            let totalCompensada = 0;
+            let totalFaturamento = 0;
+            let faturamentoPago = 0;
+            let faturamentoAVencer = 0;
+            let faturamentoSemFaturamento = 0;
+            let faturamentoAtrasado = 0;
+            let totalContasEnergia = 0;
+
+            const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
+            const beneficiariaIds = beneficiarias.map(u => u.id);
+
+            if (beneficiariaIds.length > 0) {
+                try {
+                    let invQuery = supabase
                         .from('invoices')
-                        .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado')
+                        .select('id, uc_id, mes_referencia, data_leitura, consumo_compensado, valor_concessionaria, valor_a_pagar, status')
                         .in('uc_id', beneficiariaIds)
                         .gt('consumo_compensado', 0)
-                        .gte('mes_referencia', prevM)
-                        .lte('mes_referencia', nextM)
                         .neq('status', 'cancelado');
 
-                    if (cycleInvs && cycleInvs.length > 0) {
-                        const matched = cycleInvs.filter(inv => {
-                            if (inv.data_leitura && ugDataIni && ugDataFim) {
-                                return inv.data_leitura >= ugDataIni && inv.data_leitura <= ugDataFim;
-                            }
-                            return inv.mes_referencia === firstDay;
-                        });
-                        if (matched.length > 0) {
-                            totalCompensada = matched.reduce((acc, curr) => acc + (Number(curr.consumo_compensado) || 0), 0);
-                        }
+                    if (!isYear) {
+                        const [yStr, mStr] = referenceMonth.split('-');
+                        let y = parseInt(yStr);
+                        let m = parseInt(mStr);
+                        const prevM = m === 1 ? `${y - 1}-11-01` : (m === 2 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`);
+                        const nextM = m === 12 ? `${y + 1}-02-01` : (m === 11 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`);
+                        invQuery = invQuery.gte('mes_referencia', prevM).lte('mes_referencia', nextM);
+                    } else {
+                        invQuery = invQuery.gte('mes_referencia', `${yearStr}-01-01`).lte('mes_referencia', `${yearStr}-12-31`);
                     }
-                } catch (cycleErr) {
-                    console.error('Erro ao calcular totalCompensada pelo ciclo da UG:', cycleErr);
+
+                    const { data: rawBeneficiariaInvs, error: invErr } = await invQuery;
+                    if (invErr) console.error('Erro ao buscar faturas das beneficiárias:', invErr);
+
+                    const matchingBeneficiariaInvs = (rawBeneficiariaInvs || []).filter(inv => {
+                        if (inv.data_leitura) {
+                            return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
+                        }
+                        if (isYear) {
+                            return inv.mes_referencia >= ucPeriodoIni && inv.mes_referencia <= ucPeriodoFim;
+                        }
+                        return inv.mes_referencia === firstDay;
+                    });
+
+                    matchingBeneficiariaInvs.forEach(inv => {
+                        const comp = Number(inv.consumo_compensado) || 0;
+                        const val = Number(inv.valor_a_pagar) || 0;
+                        const concVal = Number(inv.valor_concessionaria) || 0;
+
+                        totalCompensada += comp;
+                        totalFaturamento += val;
+                        totalContasEnergia += concVal;
+
+                        if (inv.status === 'pago') {
+                            faturamentoPago += val;
+                        } else if (inv.status === 'a_vencer' || inv.status === 'ag_emissao_boleto' || inv.status === 'confirmado') {
+                            faturamentoAVencer += val;
+                        } else if (inv.status === 'sem_faturamento') {
+                            faturamentoSemFaturamento += val;
+                        } else if (inv.status === 'atrasado') {
+                            faturamentoAtrasado += val;
+                        }
+                    });
+                } catch (benefErr) {
+                    console.error('Erro ao processar faturas das beneficiárias:', benefErr);
                 }
+            }
+
+            // 4. Buscar registro de produção existente (generation_production)
+            let prodData = null;
+            let prodError = null;
+            if (!isYear) {
+                const prodRes = await supabase
+                    .from('generation_production')
+                    .select('*')
+                    .eq('usina_id', usina.id)
+                    .eq('mes_referencia', firstDay)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                prodData = prodRes.data;
+                prodError = prodRes.error;
             }
 
             // Automatically update global service_values for 'Energia' if it is selected as a service
@@ -2434,6 +2395,18 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 ugDataFim = `${curYear}-12-31`;
             }
 
+            // Período de leitura civil para as UCs Beneficiárias (dia 01 ao último dia do mês ou ano)
+            let ucPeriodoIni = null;
+            let ucPeriodoFim = null;
+            if (!isYear) {
+                const baseDate = parseISO(`${referenceMonth}-01`);
+                ucPeriodoIni = `${referenceMonth}-01`;
+                ucPeriodoFim = format(endOfMonth(baseDate), 'yyyy-MM-dd');
+            } else {
+                ucPeriodoIni = `${curYear}-01-01`;
+                ucPeriodoFim = `${curYear}-12-31`;
+            }
+
             // Beneficiary UCs linked
             const beneficiarias = selectedUCs.filter(u => u.tipo_unidade !== 'geradora');
             const beneficiariaIds = beneficiarias.map(u => u.id);
@@ -2451,18 +2424,18 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     const [yStr, mStr] = referenceMonth.split('-');
                     let y = parseInt(yStr);
                     let m = parseInt(mStr);
-                    const prevM = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
-                    const nextM = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+                    const prevM = m === 1 ? `${y - 1}-11-01` : (m === 2 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`);
+                    const nextM = m === 12 ? `${y + 1}-02-01` : (m === 11 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`);
                     invQuery = invQuery.gte('mes_referencia', prevM).lte('mes_referencia', nextM);
 
                     const { data: invs, error: invErr } = await invQuery;
                     if (invErr) console.error('Erro ao buscar faturas das beneficiárias:', invErr);
 
                     if (invs && invs.length > 0) {
-                        // Filtrar as faturas que tiveram leitura atual dentro do período da UG
+                        // Filtrar as faturas que tiveram leitura atual dentro do período civil do mês
                         matchingInvoices = invs.filter(inv => {
-                            if (inv.data_leitura && ugDataIni && ugDataFim) {
-                                return inv.data_leitura >= ugDataIni && inv.data_leitura <= ugDataFim;
+                            if (inv.data_leitura) {
+                                return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
                             }
                             return inv.mes_referencia === `${referenceMonth}-01`;
                         });
@@ -2476,7 +2449,12 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                     invQuery = invQuery.gte('mes_referencia', `${curYear}-01-01`).lte('mes_referencia', `${curYear}-12-31`).order('mes_referencia', { ascending: true });
                     const { data: invs, error: invErr } = await invQuery;
                     if (invErr) console.error('Erro ao buscar faturas das beneficiárias no ano:', invErr);
-                    matchingInvoices = invs || [];
+                    matchingInvoices = (invs || []).filter(inv => {
+                        if (inv.data_leitura) {
+                            return inv.data_leitura >= ucPeriodoIni && inv.data_leitura <= ucPeriodoFim;
+                        }
+                        return inv.mes_referencia >= ucPeriodoIni && inv.mes_referencia <= ucPeriodoFim;
+                    });
                 }
             }
 
@@ -2732,7 +2710,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8.5);
             doc.setTextColor(100, 116, 139);
-            doc.text(`Unidades com compensação apurada no ciclo da UG (${periodoLeituraUG})`, 14, ucsStartY + 4);
+            doc.text(`Unidades com compensação apurada com leitura no período (${formatDateBR(ucPeriodoIni)} a ${formatDateBR(ucPeriodoFim)})`, 14, ucsStartY + 4);
 
             autoTable(doc, {
                 startY: ucsStartY + 7,
