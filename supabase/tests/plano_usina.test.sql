@@ -383,6 +383,185 @@ BEGIN
         RAISE EXCEPTION 'FALHA M4: gestao_pct = %, esperado 12 (do plano de usina)', v_regras ->> 'gestao_pct';
     END IF;
 
+    -- ==================================================================
+    -- fixture do originador da usina: plano de usina 12% + originador 3%
+    -- ==================================================================
+    INSERT INTO public.originators_v2 (name, cargo, ativo)
+    VALUES ('SANDBOX PU quem trouxe a usina', 'ppf', true) RETURNING id INTO v_orig_usina;
+    INSERT INTO public.originators_v2 (name, cargo, ativo)
+    VALUES ('SANDBOX PU originador inativo', 'ppf', false) RETURNING id INTO v_orig_inativo;
+
+    -- o originador mora no FORNECEDOR e a usina herda (decisao 6b)
+    INSERT INTO public.suppliers (name, originator_id)
+    VALUES ('SANDBOX PU fornecedor com originador', v_orig_usina) RETURNING id INTO v_forn_orig;
+    INSERT INTO public.suppliers (name, originator_id)
+    VALUES ('SANDBOX PU fornecedor com originador inativo', v_orig_inativo) RETURNING id INTO v_forn_inat;
+
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
+    VALUES ('SANDBOX PU 12+3', 12, 3, v_rec_plano) RETURNING id INTO v_pu_orig;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_orig) RETURNING id INTO v_usina4;
+
+    -- ==================================================================
+    -- O1 -- o originador da usina recebe 3% em 2.1.2.
+    --   B2W 120 | 2.1.2 = PPE 50 + Lider 10 + originador 30 = 90
+    --   fornecedor = 1000 - 210 = 790
+    -- ==================================================================
+    v_inv    := pg_temp.fatura_paga(v_usina4, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-120, -90, -790, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O1: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-90,-790,0}', v_contas;
+    END IF;
+    SELECT count(*) INTO v_n
+      FROM public.ledger_entries e JOIN public.ledger_accounts a ON a.id = e.account_id
+     WHERE a.code = '2.1.2' AND e.reference_type = 'originator' AND e.reference_id = v_orig_usina
+       AND e.amount = -30 AND e.description = 'Recompensa Originador da Usina (nível 1)'
+       AND e.transaction_id = (SELECT transaction_id FROM public.ledger_entries
+                                WHERE reference_id = v_inv AND reference_type = 'invoice' LIMIT 1);
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA O1: esperado 1 lancamento de -30 em 2.1.2 para o originador da usina, achei %', v_n;
+    END IF;
+    -- o congelamento passa a dizer de qual plano de usina veio a gestao
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF (v_rec ->> 'plano_usina_id')::uuid IS DISTINCT FROM v_pu_orig
+       OR (v_rec ->> 'percentual_recorrente')::numeric IS DISTINCT FROM 12::numeric THEN
+        RAISE EXCEPTION 'FALHA O1: congelamento sem plano_usina_id/percentual_recorrente certos: % / %',
+            v_rec ->> 'plano_usina_id', v_rec ->> 'percentual_recorrente';
+    END IF;
+
+    -- ==================================================================
+    -- O2 -- corte: o originador da usina e o PRIMEIRO a perder.
+    --   piso 67,5: piso em R$ = 1000 x 1,20 x 67,5% = 810 -> teto 190
+    --   bruto 210, excesso 20: originador 30 -> 10 (cortado 20); PPE 50 e
+    --   Lider 10 intactos. fornecedor = 1000 - 190 = 810.
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+    VALUES ('SANDBOX PU rec piso67.5', 'recorrente', 10, 67.5, jsonb_build_object('regras_multinivel', c_matriz))
+    RETURNING id INTO v_rec_piso675;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
+    VALUES ('SANDBOX PU corte', 12, 3, v_rec_piso675) RETURNING id INTO v_pu_corte;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_corte, v_forn_orig) RETURNING id INTO v_usina_corte;
+
+    v_inv    := pg_temp.fatura_paga(v_usina_corte, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-120, -70, -810, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O2: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-70,-810,0}', v_contas;
+    END IF;
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    SELECT b INTO v_ben FROM jsonb_array_elements(v_rec -> 'resultado' -> 'beneficiarios') b
+     WHERE b ->> 'papel' = 'originador_usina';
+    IF (v_ben ->> 'cortado')::numeric IS DISTINCT FROM 20::numeric OR (v_ben ->> 'valor')::numeric IS DISTINCT FROM 10::numeric THEN
+        RAISE EXCEPTION 'FALHA O2: originador da usina devia ser o 1o cortado (cortado 20, valor 10), veio %', v_ben;
+    END IF;
+    SELECT b INTO v_ben FROM jsonb_array_elements(v_rec -> 'resultado' -> 'beneficiarios') b
+     WHERE b ->> 'papel' = 'ppe';
+    IF COALESCE((v_ben ->> 'cortado')::numeric, 0) <> 0 OR (v_ben ->> 'valor')::numeric <> 50 THEN
+        RAISE EXCEPTION 'FALHA O2: o PPE vem depois do originador da usina e devia ficar intacto (50), veio %', v_ben;
+    END IF;
+    IF (v_rec -> 'resultado' ->> 'teto_estourado')::boolean IS DISTINCT FROM false THEN
+        RAISE EXCEPTION 'FALHA O2: teto_estourado = %, esperado false', v_rec -> 'resultado' ->> 'teto_estourado';
+    END IF;
+
+    -- ==================================================================
+    -- O3 -- originador inativo: a parte dele fica para a associacao (B2W).
+    --   B2W 120 + 30 = 150 | 2.1.2 60 | fornecedor 790
+    -- ==================================================================
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_inat) RETURNING id INTO v_usina_inat;
+    v_inv    := pg_temp.fatura_paga(v_usina_inat, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-150, -60, -790, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O3: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-150,-60,-790,0}', v_contas;
+    END IF;
+
+    -- ==================================================================
+    -- O4 -- usina cujo fornecedor nao tem originador (aqui: sem fornecedor):
+    --       o previsto no plano fica para a associacao.
+    -- ==================================================================
+    INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu_orig) RETURNING id INTO v_usina_sem_orig;
+    v_inv    := pg_temp.fatura_paga(v_usina_sem_orig, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-150, -60, -790, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O4: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-150,-60,-790,0}', v_contas;
+    END IF;
+
+    -- ==================================================================
+    -- O5 -- plano start FORA da janela: parceiro e lider nao recebem, o
+    --       originador da usina recebe (decisao 9).
+    --   B2W 120 | 2.1.2 = so o originador, 30 | fornecedor 850
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config, start_config)
+    VALUES ('SANDBOX PU start janela 2', 'start', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
+            '{"faturas_elegiveis": [2], "regras": {"2": {"b2w": 0, "ppe": 20, "lider": 10, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb)
+    RETURNING id INTO v_rec_start;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
+    VALUES ('SANDBOX PU start', 12, 3, v_rec_start) RETURNING id INTO v_pu_start;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start, v_forn_orig) RETURNING id INTO v_usina_start;
+
+    v_inv    := pg_temp.fatura_paga(v_usina_start, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[-120, -30, -850, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O5: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-30,-850,0}', v_contas;
+    END IF;
+
+    -- ==================================================================
+    -- O6 -- fatura DO Start: b2w do start_config (0), PPE 20% = 200, Lider
+    --       10% = 100, originador da usina 3% = 30 -- e o lancamento dele NAO
+    --       se chama "Bonus Start". Teto isento = base.
+    --   3.1.1 0 | 2.1.2 330 | fornecedor 670
+    -- ==================================================================
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config, start_config)
+    VALUES ('SANDBOX PU start janela 1', 'start', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
+            '{"faturas_elegiveis": [1], "regras": {"1": {"b2w": 0, "ppe": 20, "lider": 10, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb)
+    RETURNING id INTO v_rec_start1;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
+    VALUES ('SANDBOX PU start 1', 12, 3, v_rec_start1) RETURNING id INTO v_pu_start1;
+    INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start1, v_forn_orig) RETURNING id INTO v_usina_start1;
+
+    v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, NULL);
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas IS DISTINCT FROM ARRAY[0, -330, -670, 0]::numeric[] THEN
+        RAISE EXCEPTION 'FALHA O6: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {0,-330,-670,0}', v_contas;
+    END IF;
+    SELECT count(*) INTO v_n FROM public.ledger_entries
+     WHERE reference_id = v_orig_usina AND amount = -30
+       AND description = 'Recompensa Originador da Usina (nível 1)'
+       AND transaction_id = (SELECT transaction_id FROM public.ledger_entries
+                              WHERE reference_id = v_inv AND reference_type = 'invoice' LIMIT 1);
+    IF v_n <> 1 THEN
+        RAISE EXCEPTION 'FALHA O6: o lancamento do originador da usina na fatura do Start nao saiu como Recompensa (achei %)', v_n;
+    END IF;
+
+    -- ==================================================================
+    -- O7 -- motor: dois originador_usina no mesmo pagamento e bug -> estoura.
+    -- ==================================================================
+    v_pegou := false;
+    BEGIN
+        PERFORM public.fn_calcular_split_recompensa(1000, 1000,
+            '{"b2w": {"niveis": {"L1": "10"}, "max_niveis": 4},
+              "originador_usina": {"niveis": {"L1": "3"}, "max_niveis": 1}}'::jsonb,
+            '[{"papel": "originador_usina", "id": null, "nivel": 1},
+              {"papel": "originador_usina", "id": null, "nivel": 1}]'::jsonb);
+    EXCEPTION WHEN others THEN v_pegou := true; v_msg := SQLERRM;
+    END;
+    IF NOT v_pegou OR v_msg NOT LIKE '%originador_usina%' THEN
+        RAISE EXCEPTION 'FALHA O7: dois originador_usina deviam estourar no motor (pegou=%, msg=%)', v_pegou, v_msg;
+    END IF;
+
+    -- ==================================================================
+    -- O8 -- usina sem plano de usina: o originador dela nao entra (nao ha
+    --       regra que diga quanto ele recebe).
+    -- ==================================================================
+    UPDATE public.usinas SET supplier_id = v_forn_orig WHERE id = v_usina3;
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://pu/o8') RETURNING id INTO v_sub;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina3, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb, v_rec_plano_uc)
+    RETURNING id INTO v_uc;
+    SELECT count(*) INTO v_n FROM jsonb_array_elements(public.fn_participantes_recompensa(v_uc)) b
+     WHERE b ->> 'papel' = 'originador_usina';
+    IF v_n <> 0 THEN
+        RAISE EXCEPTION 'FALHA O8: usina sem plano de usina pos o originador dela entre os participantes';
+    END IF;
+
     -- >>> casos novos entram acima desta linha <<<
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
