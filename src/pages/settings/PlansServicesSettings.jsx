@@ -21,6 +21,7 @@ import { useUI } from '../../contexts/UIContext';
 import PlanModal from './components/PlanModal';
 import EletropostoPlanModal, { extractSubscriptionPlanLastro } from './components/EletropostoPlanModal';
 import UsinasPlanosTab from './components/UsinasPlanosTab';
+import PlanosUsinaLista from './components/PlanosUsinaLista';
 
 export default function PlansServicesSettings() {
     const { showAlert } = useUI();
@@ -61,6 +62,32 @@ export default function PlansServicesSettings() {
     useEffect(() => {
         fetchPlanos();
     }, [fetchPlanos]);
+
+    // Planos de Usina (spec 2026-10-06), com o numero de usinas de cada um.
+    const [planosUsina, setPlanosUsina] = useState([]);
+    const [loadingUsina, setLoadingUsina] = useState(false);
+
+    const fetchPlanosUsina = useCallback(async () => {
+        setLoadingUsina(true);
+        try {
+            const { data, error } = await supabase
+                .from('planos_usina')
+                .select('*, usinas(count)')
+                .order('status')
+                .order('nome');
+            if (error) throw error;
+            setPlanosUsina(data || []);
+        } catch (err) {
+            console.error('Erro ao buscar planos de usina:', err);
+            showAlert('Erro ao carregar planos de usina: ' + (err.message || 'Erro de conexão'), 'error');
+        } finally {
+            setLoadingUsina(false);
+        }
+    }, [showAlert]);
+
+    useEffect(() => {
+        fetchPlanosUsina();
+    }, [fetchPlanosUsina]);
 
     // Separação por categoria (Assinatura vs Eletropostos)
     const planosAssinatura = useMemo(
@@ -115,18 +142,19 @@ export default function PlansServicesSettings() {
 
     // Excluir plano
     const handleDelete = async (plano) => {
-        // A FK de usinas.plano_assinatura_id e ON DELETE SET NULL: apagar o
-        // plano desligaria em silencio o split das usinas dele.
-        const { count, error: errCount } = await supabase
-            .from('usinas')
-            .select('id', { count: 'exact', head: true })
-            .eq('plano_assinatura_id', plano.id);
-        if (errCount) {
-            showAlert('Erro ao conferir usinas do plano: ' + errCount.message, 'error');
+        // Plano de recompensas em uso nao pode sumir: planos de usina (FK
+        // RESTRICT) e UCs apontam para ele, e apagar desligaria o split delas.
+        const [porPlanoUsina, porUc] = await Promise.all([
+            supabase.from('planos_usina').select('id', { count: 'exact', head: true }).eq('plano_assinatura_id', plano.id),
+            supabase.from('consumer_units').select('id', { count: 'exact', head: true }).eq('plano_assinatura_id', plano.id)
+        ]);
+        const errUso = porPlanoUsina.error || porUc.error;
+        if (errUso) {
+            showAlert('Erro ao conferir o uso do plano: ' + errUso.message, 'error');
             return;
         }
-        if (count > 0) {
-            showAlert(`O plano "${plano.nome}" está vinculado a ${count} usina(s). Mova-as para outro plano na aba Usinas antes de excluir — ou desative o plano.`, 'warning');
+        if (porPlanoUsina.count > 0 || porUc.count > 0) {
+            showAlert(`O plano "${plano.nome}" está em uso por ${porPlanoUsina.count} plano(s) de usina e ${porUc.count} UC(s). Desative-o em vez de excluir.`, 'warning');
             return;
         }
 
@@ -683,7 +711,20 @@ export default function PlansServicesSettings() {
 
             {/* CONTEÚDO DA ABA 3: USINAS — qual plano de recompensas cada usina usa */}
             {activeTab === 'usinas' && (
-                <UsinasPlanosTab planosAssinatura={planosAssinatura} showAlert={showAlert} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+                    <PlanosUsinaLista
+                        planosUsina={planosUsina}
+                        planosRecompensa={planosAssinatura}
+                        loading={loadingUsina}
+                        onRefresh={fetchPlanosUsina}
+                        showAlert={showAlert}
+                    />
+                    <UsinasPlanosTab
+                        planosUsina={planosUsina}
+                        showAlert={showAlert}
+                        onVinculosMudaram={fetchPlanosUsina}
+                    />
+                </div>
             )}
 
             {/* Modal de Criação / Edição — Planos de Assinatura (Lastro Concessionária) */}

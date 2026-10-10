@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, RefreshCw, SunMedium, Link2, Unlink } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import { planoAceitaUsina } from '../../../lib/planoUsina';
 
 /**
- * Aba Usinas de Planos e Serviços: quais usinas usam cada plano de assinatura.
+ * Aba Usinas de Planos e Serviços: qual plano de usina cada usina usa.
  *
- * usinas.plano_assinatura_id é o que liga o motor de split
- * (handle_invoice_paid_ledger): sem ele a fatura paga não lança gestão B2W nem
- * recompensas e o fornecedor fica com o caixa inteiro. Por isso toda troca
+ * usinas.plano_usina_id aponta para o plano de usina, de onde saem a gestão
+ * B2W, o originador da usina e o plano de recompensas do split
+ * (handle_invoice_paid_ledger): sem plano a fatura paga não lança gestão B2W
+ * nem recompensas e o fornecedor fica com o caixa inteiro. Por isso toda troca
  * pede confirmação dizendo o efeito no razão.
  */
-export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
+export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMudaram }) {
     const [usinas, setUsinas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [salvando, setSalvando] = useState(false);
@@ -24,7 +26,7 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
         try {
             const { data, error } = await supabase
                 .from('usinas')
-                .select('id, name, status, concessionaria, plano_assinatura_id, supplier:supplier_id (name)')
+                .select('id, name, status, concessionaria, plano_usina_id, supplier:supplier_id (name)')
                 .order('name');
             if (error) throw error;
             setUsinas(data || []);
@@ -39,14 +41,14 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
     useEffect(() => { fetchUsinas(); }, [fetchUsinas]);
 
     const planoPorId = useMemo(
-        () => Object.fromEntries(planosAssinatura.map(p => [p.id, p])),
-        [planosAssinatura]
+        () => Object.fromEntries(planosUsina.map(p => [p.id, p])),
+        [planosUsina]
     );
 
     const contagem = useMemo(() => {
         const c = { sem: 0 };
         usinas.forEach(u => {
-            const k = u.plano_assinatura_id || 'sem';
+            const k = u.plano_usina_id || 'sem';
             c[k] = (c[k] || 0) + 1;
         });
         return c;
@@ -58,7 +60,7 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
             || u.name?.toLowerCase().includes(termo)
             || u.supplier?.name?.toLowerCase().includes(termo);
         const casaPlano = filtroPlano === 'todos'
-            || (filtroPlano === 'sem' ? !u.plano_assinatura_id : u.plano_assinatura_id === filtroPlano);
+            || (filtroPlano === 'sem' ? !u.plano_usina_id : u.plano_usina_id === filtroPlano);
         return casaBusca && casaPlano;
     });
 
@@ -73,7 +75,7 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
     };
 
     const aplicar = async (ids, planoId) => {
-        const mudam = ids.filter(id => (usinas.find(u => u.id === id)?.plano_assinatura_id || '') !== (planoId || ''));
+        const mudam = ids.filter(id => (usinas.find(u => u.id === id)?.plano_usina_id || '') !== (planoId || ''));
         if (mudam.length === 0) {
             showAlert('Nada a mudar: as usinas já estão nesse plano.', 'info');
             return;
@@ -84,11 +86,12 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
         try {
             const { error } = await supabase
                 .from('usinas')
-                .update({ plano_assinatura_id: planoId || null })
+                .update({ plano_usina_id: planoId || null })
                 .in('id', mudam);
             if (error) throw error;
-            setUsinas(prev => prev.map(u => (mudam.includes(u.id) ? { ...u, plano_assinatura_id: planoId || null } : u)));
+            setUsinas(prev => prev.map(u => (mudam.includes(u.id) ? { ...u, plano_usina_id: planoId || null } : u)));
             setSelecionadas(new Set());
+            onVinculosMudaram?.();
             showAlert(
                 planoId
                     ? `${mudam.length} usina(s) vinculada(s) ao plano "${nomePlano(planoId)}".`
@@ -129,10 +132,11 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
 
     const opcoesPlano = (
         <>
-            <option value="">Sem plano</option>
-            {planosAssinatura.map(p => (
-                <option key={p.id} value={p.id} disabled={!p.ativo}>
-                    {p.nome}{p.ativo ? '' : ' (inativo)'}
+            <option value="">Sem plano de usina</option>
+            {planosUsina.map(p => (
+                <option key={p.id} value={p.id} disabled={!planoAceitaUsina(p)}>
+                    {p.nome}
+                    {p.status === 'somente_contratos' ? ' (somente contratos)' : !p.plano_assinatura_id ? ' (sem plano de recompensas)' : ''}
                 </option>
             ))}
         </>
@@ -176,12 +180,12 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {chip('todos', 'Todas', usinas.length)}
                 {chip('sem', 'Sem plano', contagem.sem)}
-                {planosAssinatura.map(p => chip(p.id, p.nome, contagem[p.id] || 0))}
+                {planosUsina.map(p => chip(p.id, p.nome, contagem[p.id] || 0))}
             </div>
 
             {contagem.sem > 0 && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '0.85rem 1.1rem', fontSize: '0.82rem', color: '#92400e' }}>
-                    Usina sem plano não lança gestão B2W nem recompensas no razão: em cada fatura paga o fornecedor fica com o caixa inteiro.
+                    Usina sem plano de usina: a gestão B2W sai do plano escolhido em cada UC, e UC sem plano não lança gestão nem recompensas — o fornecedor fica com o caixa inteiro.
                 </div>
             )}
 
@@ -263,13 +267,13 @@ export default function UsinasPlanosTab({ planosAssinatura, showAlert }) {
                                         <td style={{ padding: '0.8rem 1rem' }}>
                                             <select
                                                 disabled={salvando}
-                                                value={u.plano_assinatura_id || ''}
+                                                value={u.plano_usina_id || ''}
                                                 onChange={e => aplicar([u.id], e.target.value)}
                                                 style={{
                                                     padding: '0.45rem 0.6rem', borderRadius: '8px', fontSize: '0.84rem', fontWeight: 600,
-                                                    border: u.plano_assinatura_id ? '1px solid #bfdbfe' : '1px solid #fde68a',
-                                                    background: u.plano_assinatura_id ? '#eff6ff' : '#fffbeb',
-                                                    color: u.plano_assinatura_id ? '#1e40af' : '#92400e'
+                                                    border: u.plano_usina_id ? '1px solid #bfdbfe' : '1px solid #fde68a',
+                                                    background: u.plano_usina_id ? '#eff6ff' : '#fffbeb',
+                                                    color: u.plano_usina_id ? '#1e40af' : '#92400e'
                                                 }}
                                             >
                                                 {opcoesPlano}
