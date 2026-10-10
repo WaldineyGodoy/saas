@@ -18,13 +18,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
-import {
-    MATRIZ_PADRAO,
-    MAX_NIVEIS,
-    normalizarRecorrenteConfig,
-    nivelPermitidoParaCargo,
-    semChavesLegadas
-} from '../../../lib/planoRecompensas';
 import DistribuidorasDoPlano from './DistribuidorasDoPlano';
 
 // Formatadores numéricos padrão PT-BR
@@ -44,22 +37,40 @@ const formatPct = (val, decimals = 2) => {
     });
 };
 
-// Estrutura padrão de níveis por cargo (Marketing Multinível B2W).
-// Fonte única: src/lib/planoRecompensas.js (matriz acordada com o dono,
-// decisão de 28/09/2026) — nenhum default divergente aqui.
-const DEFAULT_MULTILEVEL_RULES = Object.fromEntries(
-    Object.keys(MATRIZ_PADRAO).map(cargo => [
-        cargo,
-        { max_niveis: MAX_NIVEIS[cargo], niveis: { ...MATRIZ_PADRAO[cargo] } }
-    ])
-);
+// Estrutura padrão de níveis por cargo (Marketing Multinível B2W)
+const DEFAULT_MULTILEVEL_RULES = {
+    b2w: {
+        max_niveis: 4, // Recebe em L1, L2, L3 e L4+
+        niveis: { L1: '10', L2: '10', L3: '10', L4: '10' }
+    },
+    lider: {
+        max_niveis: 4,
+        niveis: { L1: '1', L2: '1', L3: '1', L4: '0' }
+    },
+    ppe: {
+        max_niveis: 4,
+        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
+    },
+    ppp: {
+        max_niveis: 4,
+        niveis: { L1: '4', L2: '2', L3: '0', L4: '0' }
+    },
+    ppf: {
+        max_niveis: 4,
+        niveis: { L1: '2', L2: '0', L3: '0', L4: '0' }
+    },
+    assinante_conect: {
+        max_niveis: 4,
+        niveis: { L1: '0', L2: '2', L3: '0', L4: '0' }
+    }
+};
 
 const LEVEL_KEYS = ['L1', 'L2', 'L3', 'L4'];
 const LEVEL_LABELS = {
-    L1: { short: 'Nível L1', desc: 'Venda Direta (Parceiro Power)' },
-    L2: { short: 'Nível L2', desc: '1ª Indicação (Assinante Connect)' },
-    L3: { short: 'Nível L3', desc: '2ª Indicação (Corte Parceiro Power)' },
-    L4: { short: 'Nível L4+', desc: 'Expansão Profunda (Corte Líder)' }
+    L1: { short: 'Nível L1', desc: 'Venda Direta / L1' },
+    L2: { short: 'Nível L2', desc: '1ª Indicação / L2' },
+    L3: { short: 'Nível L3', desc: '2ª Indicação / L3' },
+    L4: { short: 'Nível L4+', desc: 'Expansão Profunda / L4+' }
 };
 
 export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
@@ -168,11 +179,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
 
                 setRegrasMultinivel({
                     b2w: { max_niveis: 4, niveis: { L1: b2wVal, L2: b2wVal, L3: b2wVal, L4: b2wVal } },
-                    lider: { max_niveis: 3, niveis: { L1: liderVal, L2: liderVal, L3: liderVal, L4: '0' } },
-                    ppe: { max_niveis: 2, niveis: { L1: ppeVal, L2: String(Math.max(0, Number(ppeVal) / 2)), L3: '0', L4: '0' } },
-                    ppp: { max_niveis: 2, niveis: { L1: pppVal, L2: String(Math.max(0, Number(pppVal) / 2)), L3: '0', L4: '0' } },
-                    ppf: { max_niveis: 1, niveis: { L1: ppfVal, L2: '0', L3: '0', L4: '0' } },
-                    assinante_conect: { max_niveis: 1, niveis: { L1: '0', L2: conectVal || '2', L3: conectVal || '2', L4: conectVal || '2' } }
+                    lider: { max_niveis: 4, niveis: { L1: liderVal, L2: liderVal, L3: liderVal, L4: '0' } },
+                    ppe: { max_niveis: 4, niveis: { L1: ppeVal, L2: String(Math.max(0, Number(ppeVal) / 2)), L3: '0', L4: '0' } },
+                    ppp: { max_niveis: 4, niveis: { L1: pppVal, L2: String(Math.max(0, Number(pppVal) / 2)), L3: '0', L4: '0' } },
+                    ppf: { max_niveis: 4, niveis: { L1: ppfVal, L2: '0', L3: '0', L4: '0' } },
+                    assinante_conect: { max_niveis: 4, niveis: { L1: String(rRec.assinante_conect_l1 ?? '0'), L2: conectVal || '2', L3: '0', L4: '0' } }
                 });
             }
 
@@ -263,12 +274,8 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }
     };
 
-    // Verifica se determinado nível (L1..L4) está habilitado para o cargo de
-    // acordo com max_niveis -- fonte única em src/lib/planoRecompensas.js
-    // (fix round 1, F2: aqui havia um deslocamento hardcoded para
-    // assinante_conect que não batia com a matriz acordada, que paga em L1).
-    const isLevelAllowedForRole = (roleKey, levelKey, maxNiveis) =>
-        nivelPermitidoParaCargo(roleKey, levelKey, maxNiveis);
+    // Todos os níveis L1 a L4+ são livres para edição; o corte é determinado exclusivamente pelo percentual zero (0%)
+    const isLevelAllowedForRole = () => true;
 
     // Alterar percentual fixo da B2W (aplica igualmente em todos os níveis de assinante)
     const handleFixedB2WPctChange = (val) => {
@@ -281,24 +288,29 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         }));
     };
 
-    // Alterar quantidade de níveis que uma função tem direito a receber.
-    // newMax nunca passa do teto acordado para o cargo (fix round 1, F1) --
-    // e assinante_conect segue a mesma regra genérica dos demais cargos
-    // (fix round 1, F2: nada de deslocar o L1 para zero/forçar L2).
+    // Alterar quantidade de níveis que uma função tem direito a receber
     const handleRoleMaxLevelsChange = (roleKey, newMaxStr) => {
-        const newMax = Math.min(parseInt(newMaxStr, 10) || 0, MAX_NIVEIS[roleKey] ?? 0);
+        const newMax = parseInt(newMaxStr, 10);
         setRegrasMultinivel(prev => {
             const currentRole = prev[roleKey];
             const updatedNiveis = { ...currentRole.niveis };
 
             LEVEL_KEYS.forEach((lk, idx) => {
                 const lvNum = idx + 1;
-                if (lvNum > newMax) {
-                    updatedNiveis[lk] = '0';
-                } else if (Number(updatedNiveis[lk]) === 0) {
-                    // Sugere valor padrão se estava zerado
-                    const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
-                    updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
+                if (roleKey === 'assinante_conect') {
+                    if (newMax === 0 || lvNum === 1) {
+                        updatedNiveis[lk] = '0';
+                    } else if (Number(updatedNiveis[lk]) === 0) {
+                        updatedNiveis[lk] = '2';
+                    }
+                } else {
+                    if (lvNum > newMax) {
+                        updatedNiveis[lk] = '0';
+                    } else if (Number(updatedNiveis[lk]) === 0) {
+                        // Sugere valor padrão se estava zerado
+                        const defVal = DEFAULT_MULTILEVEL_RULES[roleKey]?.niveis?.[lk] || '1';
+                        updatedNiveis[lk] = defVal === '0' ? '1' : defVal;
+                    }
                 }
             });
 
@@ -358,7 +370,6 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             const getPct = (roleKey) => {
                 const roleCfg = regrasMultinivel[roleKey];
                 if (!roleCfg) return 0;
-                if (!isLevelAllowedForRole(roleKey, lk, roleCfg.max_niveis)) return 0;
                 return Math.max(0, parseFloat(roleCfg.niveis?.[lk]) || 0);
             };
 
@@ -506,16 +517,30 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
         setLoading(true);
 
         const l1View = calc.byLevel.L1;
+        const numRec = {
+            b2w: l1View.pctB2W,
+            lider: l1View.pctLider,
+            ppe: l1View.pctPPE,
+            ppp: l1View.pctPPP,
+            ppf: l1View.pctPPF,
+            assinante_conect: l1View.pctAssinanteConect || calc.byLevel.L2.pctAssinanteConect,
+            associacao: l1View.pctB2W,
+            coordenador: l1View.pctLider,
+            embaixador: Math.max(l1View.pctPPE, l1View.pctPPP),
+            assinante: l1View.pctAssinanteConect || calc.byLevel.L2.pctAssinanteConect
+        };
 
-        // Sem chaves legadas (associacao/embaixador/coordenador/assinante):
-        // a tela grava só o vocabulário moderno (global-constraints.md).
-        const formatStartRulesPayload = (r = {}) => semChavesLegadas({
+        const formatStartRulesPayload = (r = {}) => ({
             b2w: parseFloat(r.b2w) || 0,
             lider: parseFloat(r.lider) || 0,
             ppe: parseFloat(r.ppe) || 0,
             ppp: parseFloat(r.ppp) || 0,
             ppf: parseFloat(r.ppf) || 0,
-            assinante_conect: parseFloat(r.assinante_conect) || 0
+            assinante_conect: parseFloat(r.assinante_conect) || 0,
+            associacao: parseFloat(r.b2w) || 0,
+            coordenador: parseFloat(r.lider) || 0,
+            embaixador: Math.max(parseFloat(r.ppe) || 0, parseFloat(r.ppp) || 0),
+            assinante: parseFloat(r.assinante_conect) || 0
         });
 
         const payload = {
@@ -536,10 +561,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     3: formatStartRulesPayload(regrasStart[3])
                 }
             },
-            // normalizarRecorrenteConfig recalcula regras_multinivel (matriz
-            // acordada, respeitando o que já estava dentro do max_niveis) e
-            // deriva regras (flat) do nível 1 -- sem nenhuma chave legada.
-            recorrente_config: normalizarRecorrenteConfig({
+            recorrente_config: {
                 vigencia_tipo: 'status_ativo_entidade',
                 meses: null,
                 lastro_tarifario: {
@@ -559,8 +581,9 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         L4: Number(calc.byLevel.L4.margemLivre.toFixed(6))
                     }
                 },
+                regras: numRec,
                 regras_multinivel: regrasMultinivel
-            }),
+            },
             updated_at: new Date().toISOString()
         };
 
@@ -614,38 +637,32 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
     };
 
     // Renderizador auxiliar da coluna central (Níveis de Direito + Inputs L1..L4)
-    const renderMultilevelCenterControl = (roleKey, optionsList) => {
-        const cfg = regrasMultinivel[roleKey];
+    // O corte de repasse é determinado exclusivamente pelo percentual zero (0%) em cada nível
+    const renderMultilevelCenterControl = (roleKey) => {
+        const cfg = regrasMultinivel[roleKey] || { niveis: {} };
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%' }}>
-                {/* Seletor de quantos níveis tem direito */}
-                <select
-                    className="crm-input"
-                    value={cfg.max_niveis}
-                    onChange={e => handleRoleMaxLevelsChange(roleKey, e.target.value)}
-                    style={{
-                        padding: '0.32rem 0.45rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        background: '#f8fafc',
-                        fontSize: '0.73rem',
-                        fontWeight: 700,
-                        color: '#334155',
-                        cursor: 'pointer',
-                        minWidth: '112px'
-                    }}
-                >
-                    {optionsList.map(opt => (
-                        <option key={opt.val} value={opt.val}>{opt.label}</option>
-                    ))}
-                </select>
+                {/* Indicador visual de Recorrência Multinível */}
+                <span style={{
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                    background: '#f1f5f9',
+                    color: '#475569',
+                    padding: '0.2rem 0.45rem',
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0',
+                    whiteSpace: 'nowrap'
+                }}>
+                    Recorrência Multinível
+                </span>
 
-                {/* Mini-inputs para L1, L2, L3 e L4+ */}
+                {/* Inputs para L1, L2, L3 e L4+ */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.3rem', flex: 1 }}>
                     {LEVEL_KEYS.map(lk => {
-                        const allowed = isLevelAllowedForRole(roleKey, lk, cfg.max_niveis);
                         const isFocusedLevel = activeLevelView === lk;
-                        const val = allowed ? (cfg.niveis?.[lk] ?? '0') : '0';
+                        const rawVal = cfg.niveis?.[lk] ?? '0';
+                        const numVal = parseFloat(rawVal) || 0;
+                        const isZero = numVal === 0;
 
                         return (
                             <div
@@ -655,66 +672,60 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    background: !allowed
-                                        ? '#f1f5f9'
-                                        : isFocusedLevel
-                                            ? '#eff6ff'
+                                    background: isFocusedLevel
+                                        ? '#eff6ff'
+                                        : isZero
+                                            ? '#f8fafc'
                                             : '#ffffff',
                                     border: `1px solid ${
                                         isFocusedLevel
                                             ? '#3b82f6'
-                                            : allowed
-                                                ? '#cbd5e1'
-                                                : '#e2e8f0'
+                                            : isZero
+                                                ? '#e2e8f0'
+                                                : '#93c5fd'
                                     }`,
                                     borderRadius: '7px',
                                     padding: '0.18rem 0.25rem',
                                     cursor: 'pointer',
                                     transition: 'all 0.15s'
                                 }}
-                                title={allowed ? `Percentual no ${lk} (% sobre Base Líquida)` : `Corte automático no ${lk}`}
+                                title={isZero ? `Corte no ${lk === 'L4' ? 'L4+' : lk} (0% = sem repasse)` : `Repasse no ${lk === 'L4' ? 'L4+' : lk}: ${rawVal}% sobre Base Líquida`}
                             >
                                 <span style={{
                                     fontSize: '0.62rem',
                                     fontWeight: 800,
-                                    color: isFocusedLevel ? '#1d4ed8' : allowed ? '#64748b' : '#94a3b8',
+                                    color: isFocusedLevel ? '#1d4ed8' : isZero ? '#94a3b8' : '#0284c7',
                                     lineHeight: 1.1
                                 }}>
                                     {lk === 'L4' ? 'L4+' : lk}
                                 </span>
-                                {allowed ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1px' }}>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            max="100"
-                                            value={val}
-                                            onChange={e => handleRoleLevelPctChange(roleKey, lk, e.target.value)}
-                                            style={{
-                                                width: '38px',
-                                                border: 'none',
-                                                background: 'transparent',
-                                                fontSize: '0.76rem',
-                                                fontWeight: 800,
-                                                color: '#0f172a',
-                                                textAlign: 'center',
-                                                outline: 'none',
-                                                padding: 0
-                                            }}
-                                        />
-                                        <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 700 }}>%</span>
-                                    </div>
-                                ) : (
-                                    <span style={{
-                                        fontSize: '0.66rem',
-                                        fontWeight: 700,
-                                        color: '#94a3b8',
-                                        padding: '0.08rem 0'
-                                    }}>
-                                        Corte
-                                    </span>
-                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1px' }}>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        value={rawVal}
+                                        onChange={e => handleRoleLevelPctChange(roleKey, lk, e.target.value)}
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            setActiveLevelView(lk);
+                                        }}
+                                        placeholder="0"
+                                        style={{
+                                            width: '38px',
+                                            border: 'none',
+                                            background: 'transparent',
+                                            fontSize: '0.76rem',
+                                            fontWeight: 800,
+                                            color: isZero ? '#94a3b8' : '#0f172a',
+                                            textAlign: 'center',
+                                            outline: 'none',
+                                            padding: 0
+                                        }}
+                                    />
+                                    <span style={{ fontSize: '0.64rem', color: isZero ? '#cbd5e1' : '#64748b', fontWeight: 700 }}>%</span>
+                                </div>
                             </div>
                         );
                     })}
@@ -1290,12 +1301,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     (-) Líder / Coordenador
                                                 </div>
                                                 <div>
-                                                    {renderMultilevelCenterControl('lider', [
-                                                        { val: 3, label: '3 Níveis (L1-L3)' },
-                                                        { val: 2, label: '2 Níveis (L1-L2)' },
-                                                        { val: 1, label: '1 Nível (L1)' },
-                                                        { val: 0, label: 'Sem Recorrência' }
-                                                    ])}
+                                                    {renderMultilevelCenterControl('lider')}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: cv.pctLider > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 700 }}>
                                                     {cv.pctLider > 0 ? `- R$ ${formatCurrencyUnit(cv.vLider, 6)}` : 'R$ 0,0000 (Corte)'}
@@ -1341,11 +1347,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         <span>Parceiro Power Embaixador</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppe', [
-                                                            { val: 2, label: '2 Níveis (L1-L2)' },
-                                                            { val: 1, label: '1 Nível (L1)' },
-                                                            { val: 0, label: 'Desativado' }
-                                                        ])}
+                                                        {renderMultilevelCenterControl('ppe')}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPE > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPE > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPE, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1365,14 +1367,10 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         }}>
                                                             PPP
                                                         </span>
-                                                        <span>Parceiro Power Pro</span>
+                                                        <span>Parceiro Power Premium</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppp', [
-                                                            { val: 2, label: '2 Níveis (L1-L2)' },
-                                                            { val: 1, label: '1 Nível (L1)' },
-                                                            { val: 0, label: 'Desativado' }
-                                                        ])}
+                                                        {renderMultilevelCenterControl('ppp')}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPP > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPP > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPP, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1395,11 +1393,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                         <span>Parceiro Power Free</span>
                                                     </div>
                                                     <div>
-                                                        {renderMultilevelCenterControl('ppf', [
-                                                            { val: 1, label: '1 Nível (L1)' },
-                                                            { val: 2, label: '2 Níveis (L1-L2)' },
-                                                            { val: 0, label: 'Desativado' }
-                                                        ])}
+                                                        {renderMultilevelCenterControl('ppf')}
                                                     </div>
                                                     <div style={{ textAlign: 'right', color: cv.pctPPF > 0 ? '#334155' : '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                                                         {cv.pctPPF > 0 ? `- R$ ${formatCurrencyUnit(cv.vPPF, 5)}` : 'R$ 0,0000 (Corte)'}
@@ -1417,10 +1411,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                                                     <span>(-) Assinante Connect</span>
                                                 </div>
                                                 <div>
-                                                    {renderMultilevelCenterControl('assinante_conect', [
-                                                        { val: 1, label: '1 Nível Direto (L1)' },
-                                                        { val: 0, label: 'Sem MGM (0%)' }
-                                                    ])}
+                                                    {renderMultilevelCenterControl('assinante_conect')}
                                                 </div>
                                                 <div style={{ textAlign: 'right', color: cv.pctAssinanteConect > 0 ? '#334155' : '#94a3b8', fontSize: '0.86rem', fontWeight: 600 }}>
                                                     {cv.pctAssinanteConect > 0 ? `- R$ ${formatCurrencyUnit(cv.vAssinanteConect, 5)}` : 'R$ 0,0000 (Corte)'}

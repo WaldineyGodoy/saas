@@ -23,6 +23,7 @@ import { useBranding } from '../contexts/BrandingContext';
 import ContratoTransferencia from './ContratoTransferencia';
 import { dividirEmPaginasTransferencia, gerarPdfTransferenciaBase64, montarTermoTransferencia } from '../lib/contratoTransferencia';
 import SubscriberModal from './SubscriberModal';
+import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
@@ -63,6 +64,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     const [invoiceToEdit, setInvoiceToEdit] = useState(null);
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
     const [showZeroInvoiceModal, setShowZeroInvoiceModal] = useState(false);
+    const [showNewUsinaModal, setShowNewUsinaModal] = useState(false);
     const [zeroInvoiceMonth, setZeroInvoiceMonth] = useState(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
     const [subscriberSearchTerm, setSubscriberSearchTerm] = useState('');
     const [showSubscriberDropdown, setShowSubscriberDropdown] = useState(false);
@@ -200,6 +202,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
         numero_uc: '',
         titular_conta: '',
         titular_fatura_id: '',
+        titular_fornecedor_id: '',
         cpf_cnpj_fatura: '',
         tipo_unidade: 'beneficiaria',
         // null = ainda nao decidido. Vira escolha obrigatoria quando o tipo
@@ -340,7 +343,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // O titular da conta na distribuidora (`titular_fatura_id`) autoriza o
     // assinante (`subscriber_id`) a levar a UC para o próprio nome. O titular
     // assina; o assinante reconhece como ciente. Cada um recebe o seu link.
-    const titularTermo = subscribers.find(sub => sub.id === formData.titular_fatura_id) || null;
+    const titularTermo = subscribers.find(sub => sub.id === formData.titular_fatura_id) || suppliers.find(sup => sup.id === formData.titular_fornecedor_id) || null;
     const assinanteTermo = subscribers.find(sub => sub.id === formData.subscriber_id) || null;
     const ucTermo = { ...consumerUnit, ...formData };
 
@@ -635,6 +638,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 numero_uc: consumerUnit.numero_uc || '',
                 titular_conta: consumerUnit.titular_conta || '',
                 titular_fatura_id: consumerUnit.titular_fatura_id || '',
+                titular_fornecedor_id: consumerUnit.titular_fornecedor_id || null,
                 cpf_cnpj_fatura: consumerUnit.cpf_cnpj_fatura || '',
                 tipo_unidade: consumerUnit.tipo_unidade || 'beneficiaria',
                 // ?? e nao ||: false gravado no banco e uma decisao tomada, nao
@@ -755,7 +759,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
     };
 
     const openTitularCredentials = () => {
-        const titular = subscribers.find(s => s.id === formData.titular_fatura_id);
+        const titular = (subscribers.find(s => s.id === formData.titular_fatura_id) || suppliers.find(s => s.id === formData.titular_fornecedor_id));
         setTempCredentials(semSenha(titular?.portal_credentials) || { url: '', login: '' });
         setTempSenha('');
         setEditingCredentialsType('titular');
@@ -773,7 +777,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
     // Sync portal_credentials with titular when subscribers or titular changes
     useEffect(() => {
         if (formData.titular_fatura_id && subscribers.length > 0) {
-            const titular = subscribers.find(s => s.id === formData.titular_fatura_id);
+            const titular = (subscribers.find(s => s.id === formData.titular_fatura_id) || suppliers.find(s => s.id === formData.titular_fornecedor_id));
             if (titular && titular.portal_credentials) {
                 setFormData(prev => ({
                     ...prev,
@@ -925,6 +929,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                 numero_uc: formData.numero_uc,
                 titular_conta: formData.titular_conta,
                 titular_fatura_id: formData.titular_fatura_id || null,
+                  titular_fornecedor_id: formData.titular_fornecedor_id || null,
                 cpf_cnpj_fatura: formData.cpf_cnpj_fatura,
                 tipo_unidade: formData.tipo_unidade,
                 // O CHECK no banco só aceita true em unidade geradora; trocar o
@@ -1834,7 +1839,78 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     return null;
                                                 })()}
 
-                                                {/* Titular da Fatura Field */}
+                                                <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+<div style={{ flex: 1 }}>
+<div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Unidade</label>
+                                            <select
+                                                value={formData.tipo_unidade}
+                                                onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
+                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                                            >
+                                                {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                            {/* Telhado arrendado: a UC geradora mede a injeção da usina,
+                                                mas quem consome nela é o dono do telhado. Nesse caso a
+                                                conta da concessionária é cobrada dele, não abatida da usina.
+
+                                                Sim/Não em vez de caixa de marcar, e sem valor inicial:
+                                                a partir do cancelamento automático de fatura de UG, este
+                                                campo é o único ponto que decide se alguém será cobrado.
+                                                Uma caixa desmarcada por inércia significaria "não cobrar",
+                                                sem que ninguém tivesse decidido isso. */}
+                                            {formData.tipo_unidade === 'geradora' && (
+                                                <div style={{ marginTop: '0.6rem', padding: '0.7rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
+                                                    <div style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.35, marginBottom: '0.5rem' }}>
+                                                        <strong>Fatura consumo de terceiro?</strong> (telhado arrendado)
+                                                        <br />
+                                                        <span style={{ color: '#92400e' }}>
+                                                            <strong>Sim</strong>: a conta da concessionária é cobrada do assinante vinculado (exige assinante).
+                                                            <br />
+                                                            <strong>Não</strong>: a fatura ao assinante é cancelada automaticamente e a conta vira despesa da usina.
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        {[{ v: true, l: 'Sim' }, { v: false, l: 'Não' }].map(opt => {
+                                                            const ativo = formData.fatura_consumo_terceiro === opt.v;
+                                                            return (
+                                                                <button
+                                                                    key={opt.l}
+                                                                    type="button"
+                                                                    onClick={() => setFormData({ ...formData, fatura_consumo_terceiro: opt.v })}
+                                                                    style={{
+                                                                        flex: 1, padding: '0.5rem', borderRadius: '6px', cursor: 'pointer',
+                                                                        fontWeight: 700, fontSize: '0.85rem',
+                                                                        border: ativo ? '2px solid #d97706' : '1px solid #e2e8f0',
+                                                                        background: ativo ? '#d97706' : 'white',
+                                                                        color: ativo ? 'white' : '#64748b'
+                                                                    }}
+                                                                >
+                                                                    {opt.l}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {formData.fatura_consumo_terceiro === null && (
+                                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600 }}>
+                                                            Escolha obrigatória para unidade geradora.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+</div>
+</div>
+
+{/* Titular da Fatura Field */}
+                                                  {(() => {
+                                                      const subscribersAndSuppliers = formData.tipo_unidade === 'geradora'
+                                                            ? suppliers.map(s => ({ ...s, isSupplier: true, cpf_cnpj: s.cnpj }))
+                                                            : formData.tipo_unidade === 'beneficiaria'
+                                                                ? subscribers
+                                                                : [...subscribers, ...suppliers.map(s => ({ ...s, isSupplier: true, cpf_cnpj: s.cnpj }))];
+                                                      return (
+                                                          <>
                                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
                                                     <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Titular da Conta de Energia ( concessionária )</label>
                                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1850,7 +1926,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                                 }}
                                                                 placeholder={
                                                                     formData.titular_fatura_id 
-                                                                        ? subscribers.find(s => s.id === formData.titular_fatura_id)?.name || "Buscar para trocar titular..." 
+                                                                        ? (subscribers.find(s => s.id === formData.titular_fatura_id) || suppliers.find(s => s.id === formData.titular_fornecedor_id))?.name || "Buscar para trocar titular..." 
                                                                         : "Buscar titular por nome, CPF/CNPJ..."
                                                                 }
                                                                 style={{ 
@@ -1868,11 +1944,11 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                                 <FileSearch size={18} />
                                                             </div>
                                                         </div>
-                                                        {formData.titular_fatura_id && (
+                                                        {(formData.titular_fatura_id || formData.titular_fornecedor_id) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setFormData(prev => ({ ...prev, titular_fatura_id: '' }));
+                                                                    setFormData(prev => ({ ...prev, titular_fatura_id: '', titular_fornecedor_id: '' }));
                                                                     setTitularSearchTerm('');
                                                                 }}
                                                                 style={{
@@ -1953,7 +2029,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                                     </div>
                                                                 ))
                                                             }
-                                                            {subscribers.filter(s => {
+                                                            {subscribersAndSuppliers.filter(s => {
                                                                 const term = titularSearchTerm.toLowerCase().trim();
                                                                 if (!term) return true;
                                                                 return (
@@ -1971,9 +2047,12 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     )}
                                                 </div>
 
-                                                {/* Card do Titular da Fatura */}
+                                                </>
+                                                      );
+                                                  })()}
+                                                  {/* Card do Titular da Fatura */}
                                                 {(() => {
-                                                    const sub = subscribers.find(s => s.id === formData.titular_fatura_id);
+                                                    const sub = (subscribers.find(s => s.id === formData.titular_fatura_id) || suppliers.find(s => s.id === formData.titular_fornecedor_id));
                                                     if (!sub) return null;
                                                     return (
                                                         <div 
@@ -2182,7 +2261,21 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                     )}
                                                 </div>
 
-                                                {/* Card da Usina Vinculada */}
+                                                <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => setShowNewUsinaModal(true)}
+                                                          style={{
+                                                              background: 'none', border: 'none', color: 'var(--color-blue)', 
+                                                              fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                                              display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
+                                                          }}
+                                                      >
+                                                          <PlusCircle size={14} /> Nova Usina
+                                                      </button>
+                                                  </div>
+
+                                                  {/* Card da Usina Vinculada */}
                                                 {(() => {
                                                     const usina = usinas.find(u => u.id === formData.usina_id);
                                                     if (!usina) return null;
@@ -2384,64 +2477,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                 style={{ width: '100%', padding: '0.62rem 0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', color: '#0f172a' }}
                                             />
                                         </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: '#64748b', fontWeight: 500 }}>Tipo de Unidade</label>
-                                            <select
-                                                value={formData.tipo_unidade}
-                                                onChange={e => setFormData({ ...formData, tipo_unidade: e.target.value })}
-                                                style={{ width: '100%', padding: '0.7rem', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                                            >
-                                                {tipoUnidadeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                            </select>
-                                            {/* Telhado arrendado: a UC geradora mede a injeção da usina,
-                                                mas quem consome nela é o dono do telhado. Nesse caso a
-                                                conta da concessionária é cobrada dele, não abatida da usina.
-
-                                                Sim/Não em vez de caixa de marcar, e sem valor inicial:
-                                                a partir do cancelamento automático de fatura de UG, este
-                                                campo é o único ponto que decide se alguém será cobrado.
-                                                Uma caixa desmarcada por inércia significaria "não cobrar",
-                                                sem que ninguém tivesse decidido isso. */}
-                                            {formData.tipo_unidade === 'geradora' && (
-                                                <div style={{ marginTop: '0.6rem', padding: '0.7rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
-                                                    <div style={{ fontSize: '0.8rem', color: '#475569', lineHeight: 1.35, marginBottom: '0.5rem' }}>
-                                                        <strong>Fatura consumo de terceiro?</strong> (telhado arrendado)
-                                                        <br />
-                                                        <span style={{ color: '#92400e' }}>
-                                                            <strong>Sim</strong>: a conta da concessionária é cobrada do assinante vinculado (exige assinante).
-                                                            <br />
-                                                            <strong>Não</strong>: a fatura ao assinante é cancelada automaticamente e a conta vira despesa da usina.
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        {[{ v: true, l: 'Sim' }, { v: false, l: 'Não' }].map(opt => {
-                                                            const ativo = formData.fatura_consumo_terceiro === opt.v;
-                                                            return (
-                                                                <button
-                                                                    key={opt.l}
-                                                                    type="button"
-                                                                    onClick={() => setFormData({ ...formData, fatura_consumo_terceiro: opt.v })}
-                                                                    style={{
-                                                                        flex: 1, padding: '0.5rem', borderRadius: '6px', cursor: 'pointer',
-                                                                        fontWeight: 700, fontSize: '0.85rem',
-                                                                        border: ativo ? '2px solid #d97706' : '1px solid #e2e8f0',
-                                                                        background: ativo ? '#d97706' : 'white',
-                                                                        color: ativo ? 'white' : '#64748b'
-                                                                    }}
-                                                                >
-                                                                    {opt.l}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    {formData.fatura_consumo_terceiro === null && (
-                                                        <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600 }}>
-                                                            Escolha obrigatória para unidade geradora.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
+                                        
                                         {/* UC que nunca gera cobranca ao assinante -- caso da
                                             conta saldo da propria associacao, onde emitir boleto
                                             seria a B2W cobrando de si mesma. Vira bloqueio em
@@ -3212,7 +3248,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                             <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
                                 {editingCredentialsType === 'usina' 
                                     ? (usinas.find(u => u.id === formData.usina_id)?.name || 'Portal da Usina')
-                                    : (subscribers.find(s => s.id === formData.titular_fatura_id)?.name || 'Portal da concessionária')
+                                    : ((subscribers.find(s => s.id === formData.titular_fatura_id) || suppliers.find(s => s.id === formData.titular_fornecedor_id))?.name || 'Portal da concessionária')
                                 }
                             </p>
                         </div>
@@ -3270,7 +3306,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                     setLoading(true);
                                     try {
                                         if (editingCredentialsType === 'titular') {
-                                            if (!formData.titular_fatura_id) return;
+                                            if (!formData.titular_fatura_id && !formData.titular_fornecedor_id) return;
                                             const { error } = await supabase
                                                 .from('subscribers')
                                                 .update({ portal_credentials: semSenha(tempCredentials) })
@@ -3280,7 +3316,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
 
                                             // A senha vai cifrada, por fora da linha.
                                             if (tempSenha) {
-                                                await salvarSenhaPortal('subscribers', formData.titular_fatura_id, tempSenha);
+                                                await salvarSenhaPortal(formData.titular_fornecedor_id ? 'suppliers' : 'subscribers', formData.titular_fornecedor_id || formData.titular_fatura_id, tempSenha);
                                                 setTempSenha('');
                                             }
 
@@ -3430,6 +3466,24 @@ Qualquer dúvida, é só responder esta mensagem.`;
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showNewUsinaModal && (
+                <PowerPlantModal
+                    usina={{
+                        supplier_id: formData.titular_fornecedor_id || '',
+                        concessionaria: formData.concessionaria || '',
+                        unidade_geradora: formData.numero_uc || '',
+                        name: `Usina ${formData.numero_uc || ''}`.trim()
+                    }}
+                    onClose={() => setShowNewUsinaModal(false)}
+                    onSave={(novaUsina) => {
+                        setUsinas(prev => [...prev, novaUsina]);
+                        setFormData(prev => ({ ...prev, usina_id: novaUsina.id }));
+                        setShowNewUsinaModal(false);
+                        showAlert('Usina criada com sucesso e já vinculada à UC.', 'success');
+                    }}
+                />
             )}
 
             {activeSubscriberForModal && (

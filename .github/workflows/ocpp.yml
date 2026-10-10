@@ -1,0 +1,95 @@
+name: OCPP (CSMS + emulador)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    paths:
+      - 'services/ocpp-csms/**'
+      - 'tools/ocpp-emulator/**'
+      - 'supabase/**'
+      - 'scripts/ocpp-local/**'
+      - 'scripts/ocpp-local-bootstrap.sql'
+      - 'scripts/ocpp-seed.sql'
+      - 'docker-compose.ocpp.yml'
+      - '.github/workflows/ocpp.yml'
+  # L3b (Docker + Supabase local, ~10 min): so sob demanda
+  workflow_dispatch:
+    inputs:
+      l3b:
+        description: 'Rodar tambem a L3b (catalogo ponta a ponta com Supabase local)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  rapidos:
+    name: L1 + L3a (CSMS) e unitarios do emulador
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: services/ocpp-csms/package-lock.json
+
+      - name: CSMS - dependencias
+        working-directory: services/ocpp-csms
+        run: npm ci
+
+      - name: CSMS - typecheck
+        working-directory: services/ocpp-csms
+        run: npm run typecheck
+
+      - name: CSMS - L1 + L3a (vitest; o contrato Supabase pula sem SUPABASE_URL local)
+        working-directory: services/ocpp-csms
+        run: npm test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Emulador - unitarios
+        working-directory: tools/ocpp-emulator
+        run: |
+          python -m pip install -e '.[dev]'
+          python -m pytest tests/unit -v
+
+  l3b:
+    name: L3b - catalogo de cenarios (emulador + CSMS + Supabase local)
+    if: github.event_name == 'workflow_dispatch' && inputs.l3b
+    needs: rapidos
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Dependencias da raiz (Supabase CLI)
+        run: npm ci
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Emulador
+        working-directory: tools/ocpp-emulator
+        run: python -m pip install -e '.[dev]'
+
+      - name: npm run test:ocpp
+        env:
+          OCPP_PYTHON: python
+        run: npm run test:ocpp -- --down
+
+      - name: Supabase - parar
+        if: always()
+        run: npx supabase stop --no-backup || true
