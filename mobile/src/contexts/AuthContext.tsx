@@ -130,7 +130,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         if (DEMO) return;
-        await supabase.auth.signOut();
+        // Sem rede ou com a sessão já expirada no servidor, o signOut global
+        // falha; sair do aparelho tem que funcionar mesmo assim.
+        const { error } = await supabase.auth.signOut().catch((e) => ({ error: e }));
+        if (error) await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         qc.clear();
       },
     }),
