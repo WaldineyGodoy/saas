@@ -3,8 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /**
  * Indicação no app (docs/plano-indicacao-app.md).
  *
- * O link de indicação chega em três formas:
- *   - o link longo: `https://b2wenergia.com.br/?indicador=<uuid>&name=...`;
+ * O link de indicação chega em três formas (o id pode ser de um assinante
+ * que indica ou de um originador; o banco decide qual em fn_indicador_publico):
+ *   - o link longo: `https://b2wenergia.com.br/?indicador=<uuid>&name=...`,
+ *     ou o convite do originador `https://b2wenergia.com.br/convite/?name=...&id=<uuid>`;
  *   - a rota do webapp: `https://apps.b2wenergia.com.br/i/<uuid>`;
  *   - o link curto do encurtador (`link.b2wenergia.com.br/<palavra>`), que é
  *     o que vai no QR do assinante. Esse precisa ser resolvido no servidor
@@ -31,7 +33,9 @@ export function extrairIndicador(raw: string | null | undefined): LeituraIndicac
     return null;
   }
 
-  const param = url.searchParams.get('indicador');
+  // Assinante: ?indicador=<id>. Originador: /convite/?name=..&id=<id>.
+  const param = url.searchParams.get('indicador')
+    ?? (/^\/convite\/?$/i.test(url.pathname) ? url.searchParams.get('id') : null);
   if (param && SO_UUID.test(param)) return { id: param.toLowerCase() };
 
   const rota = url.pathname.match(new RegExp(`/i/(${UUID.source})`, 'i'));

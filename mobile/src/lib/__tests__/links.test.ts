@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../env', () => ({ CRM_URL: 'https://crm.b2wenergia.com.br' }));
-const { linkIndicacao, parseQrRecarga, textoIndicacao, urlCheckoutRecarga } = await import('../links');
+const { linkIndicacao, linkSiteConvite, parseQrRecarga, textoIndicacao, urlCheckoutRecarga } = await import('../links');
 
 const ID = '3f2b9c1e-8a4d-4e2f-9b1a-0c5d6e7f8a9b';
 
@@ -35,5 +35,11 @@ describe('link de indicacao', () => {
   it('sem link nao ha mensagem', () => {
     expect(textoIndicacao('Maria', '')).toBe('');
     expect(textoIndicacao('Maria Silva', 'L')).toContain('Oi! Aqui é Maria.');
+  });
+});
+
+describe('linkSiteConvite', () => {
+  it('monta o convite do originador como o CRM', () => {
+    expect(linkSiteConvite(ID, ' Carlos  Silva ')).toBe(`https://b2wenergia.com.br/convite/?name=Carlos&id=${ID}`);
   });
 });
