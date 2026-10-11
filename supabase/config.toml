@@ -87,6 +87,21 @@ verify_jwt = true
 [functions.lead-mensagem]
 verify_jwt = true
 
+# Estorno de recarga (B2W Charge). So o CSMS chama, com a service role.
+# `verify_jwt` sozinho nao protege (a chave anon e JWT valido e publico): a
+# funcao exige que o Bearer seja IGUAL a SUPABASE_SERVICE_ROLE_KEY.
+[functions.refund-charging]
+verify_jwt = true
+
+# Parar recarga pelo app. Motorista avulso nao tem login; a prova de posse
+# (usuario dono ou client_secret do PaymentIntent) e checada dentro da funcao.
+[functions.stop-charging]
+verify_jwt = true
+
+# Webhook da Stripe (B2W Charge). A Stripe chama sem JWT do Supabase; a
+# autenticidade vem da assinatura Stripe verificada dentro da funcao.
+[functions.stripe-charging-webhook]
+verify_jwt = false
 # Convite para o app (WhatsApp com link de senha). So admin: o portao
 # requireAdmin fica dentro da funcao, verify_jwt sozinho nao basta.
 [functions.convidar-app]

@@ -2,10 +2,9 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import ChargingCheckout, { StripePaymentForm } from '../src/pages/public/ChargingCheckout';
+import ChargingCheckout, { StripePaymentForm, mensagemPagamentoRecusado } from '../src/pages/public/ChargingCheckout';
 import * as stripeService from '../src/services/stripeChargingService';
 import * as authContext from '../src/contexts/AuthContext';
-import { supabase } from '../src/lib/supabase';
 
 // Mocks
 vi.mock('@stripe/react-stripe-js', () => ({
@@ -19,14 +18,10 @@ vi.mock('@stripe/stripe-js', () => ({
   loadStripe: vi.fn(() => Promise.resolve({})),
 }));
 
+// A tela não fala mais com o Supabase direto: o andamento vem de
+// acompanharRecarga (polling de fn_recarga_publica).
 vi.mock('../src/lib/supabase', () => ({
-  supabase: {
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn().mockReturnThis(),
-    })),
-    removeChannel: vi.fn(),
-  },
+  supabase: {},
 }));
 
 vi.mock('../src/services/stripeChargingService', () => ({
@@ -34,6 +29,9 @@ vi.mock('../src/services/stripeChargingService', () => ({
   fetchEletroposto: vi.fn(),
   listEletropostos: vi.fn(),
   createChargingCheckoutSession: vi.fn(),
+  tarifaDoPosto: vi.fn((p) => (Number(p?.tarifa_motorista_kwh) > 0 ? Number(p.tarifa_motorista_kwh) : null)),
+  acompanharRecarga: vi.fn(() => () => {}),
+  statusPagamentoDaRecarga: vi.fn(() => null),
 }));
 
 vi.mock('../src/contexts/AuthContext', () => ({
@@ -51,7 +49,7 @@ describe('ChargingCheckout Component', () => {
         id: 'posto-teste-1',
         nome: 'Posto B2W Shopping Sul',
         endereco: 'Av. das Américas, 5000',
-        tarifa_investidor_kwh: 2.15,
+        tarifa_motorista_kwh: 2.15,
         potencia_kw: 60,
         tipo_recarga: 'DC Rápida',
         qtd_carregadores: 2,
@@ -62,7 +60,7 @@ describe('ChargingCheckout Component', () => {
       id: 'posto-teste-1',
       nome: 'Posto B2W Shopping Sul',
       endereco: 'Av. das Américas, 5000',
-      tarifa_investidor_kwh: 2.15,
+      tarifa_motorista_kwh: 2.15,
       potencia_kw: 60,
       tipo_recarga: 'DC Rápida',
       qtd_carregadores: 2,
@@ -132,6 +130,18 @@ describe('ChargingCheckout Component', () => {
     expect(html).toContain('autonomia para o seu veículo');
   });
 
+  it('sem tarifa carregada não mostra preço padrão (sem R$ 2,15 de reserva)', () => {
+    authContext.useAuth.mockReturnValue({ user: null, profile: null, loading: false });
+
+    const html = render(
+      <MemoryRouter initialEntries={['/recarga']}>
+        <ChargingCheckout />
+      </MemoryRouter>
+    );
+
+    expect(html).not.toContain('2,15');
+  });
+
   it('renderiza o subcomponente StripePaymentForm com o botão de pagamento seguro', () => {
     const html = render(
       <StripePaymentForm 
@@ -157,5 +167,22 @@ describe('ChargingCheckout Component', () => {
     );
 
     expect(html).toContain('data-testid="pay-submit-button"');
+  });
+});
+
+describe('mensagemPagamentoRecusado (C1: cartao recusado nao encerra a recarga)', () => {
+  it('cartao recusado: diz que nada foi cobrado e o que fazer, sem prometer estorno', () => {
+    const m = mensagemPagamentoRecusado({ type: 'card_error', message: 'Your card was declined.' });
+    expect(m).toContain('Your card was declined.');
+    expect(m).toContain('Nenhum valor foi cobrado');
+    expect(m).toMatch(/outro cartão|Pix/);
+    expect(m).not.toMatch(/estorn/i);
+  });
+  it('dados invalidos no formulario: so a mensagem da Stripe', () => {
+    expect(mensagemPagamentoRecusado({ type: 'validation_error', message: 'Número do cartão incompleto.' })).toBe('Número do cartão incompleto.');
+  });
+  it('erro sem mensagem: texto padrao', () => {
+    expect(mensagemPagamentoRecusado({})).toBe('Erro ao processar pagamento.');
+    expect(mensagemPagamentoRecusado(null)).toBe('Erro ao processar pagamento.');
   });
 });
