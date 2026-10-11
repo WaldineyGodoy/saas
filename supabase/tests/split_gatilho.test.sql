@@ -156,12 +156,11 @@ BEGIN
     -- nenhum numero esperado deste arquivo mudar. Some no rollback.
     EXECUTE $pu$
       CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
-        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        INSERT INTO public.planos_usina (nome, percentual_recorrente)
         SELECT 'SANDBOX pu ' || p.nome,
                COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
                              THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
-                        p.gestao_percentual, 0),
-               p.id
+                        p.gestao_percentual, 0)
           FROM public.planos_assinatura_energia p
          WHERE p.id = p_plano
         RETURNING id
@@ -324,8 +323,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c1') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -435,8 +434,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe2, 'ativo', 'sandbox://task6/c2', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -477,8 +476,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppp, 'ativo', 'sandbox://task6/c3') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -518,7 +517,7 @@ BEGIN
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c4') RETURNING id INTO v_sub;
 
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativacao', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -594,8 +593,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c5', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_p73, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_p73, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano_p73) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -679,8 +678,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url, indicador_assinante_id)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c5b', v_sub_ref) RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_p95, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_p95, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano_p95) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -758,8 +757,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c7') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, asaas_payment_id, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 300, CURRENT_DATE + 5, 'pay_sandbox_task6', 700) RETURNING id INTO v_inv;
@@ -824,8 +823,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c8') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_start, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_start, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano_start) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -899,8 +898,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c9') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 fio maior', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 fio maior', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 100, 300, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -950,8 +949,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c10') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -989,8 +988,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c11') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', NULL, 0, CURRENT_DATE + 5, NULL) RETURNING id INTO v_inv;
@@ -1023,8 +1022,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c12') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -1060,8 +1059,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c13') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_nula, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_nula, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano_nula) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -1113,8 +1112,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c15') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 371.36480000000006, 196.62, CURRENT_DATE + 5, 174.7448) RETURNING id INTO v_inv;
@@ -1220,8 +1219,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c16') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, NULL, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
@@ -1315,8 +1314,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://task6/c14') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_orfao, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb) RETURNING id INTO v_uc;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_orfao, 'consumidora', 'ativo', 'SANDBOX Task6 conc', '{"uf": "RN"}'::jsonb, v_plano_orfao) RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
     VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;

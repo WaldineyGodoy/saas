@@ -136,11 +136,11 @@ BEGIN
     END IF;
 
     -- ==================================================================
-    -- T3 -- trava de versao: sem usina edita tudo; com usina, numero e plano
-    --       de recompensas sao recusados e nome/descricao passam.
+    -- T3 -- trava de versao: sem usina edita tudo; com usina, numero e %
+    --       do Lider do originador sao recusados e nome/descricao passam.
     -- ==================================================================
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
-    VALUES ('SANDBOX PU trava', 10, v_rec_plano) RETURNING id INTO v_pu;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente)
+    VALUES ('SANDBOX PU trava', 10) RETURNING id INTO v_pu;
 
     UPDATE public.planos_usina SET percentual_recorrente = 11 WHERE id = v_pu;   -- sem usina: passa
 
@@ -166,11 +166,11 @@ BEGIN
 
     v_pegou := false;
     BEGIN
-        UPDATE public.planos_usina SET plano_assinatura_id = NULL WHERE id = v_pu;
+        UPDATE public.planos_usina SET originador_lider_recorrente_pct = 1 WHERE id = v_pu;
     EXCEPTION WHEN others THEN v_pegou := true;
     END;
     IF NOT v_pegou THEN
-        RAISE EXCEPTION 'FALHA T3: com usina, trocar o plano de recompensas devia ser recusado';
+        RAISE EXCEPTION 'FALHA T3: com usina, mudar originador_lider_recorrente_pct devia ser recusado';
     END IF;
 
     UPDATE public.planos_usina SET nome = 'SANDBOX PU trava renomeado', descricao = 'outra' WHERE id = v_pu;  -- passa
@@ -188,18 +188,10 @@ BEGIN
     END IF;
 
     -- ==================================================================
-    -- T5 -- plano sem plano de recompensas nao recebe usina.
+    -- T5 -- decisao 16: plano de usina sem plano de recompensas recebe usina.
     -- ==================================================================
     INSERT INTO public.planos_usina (nome) VALUES ('SANDBOX PU sem recompensas') RETURNING id INTO v_pu_sem_rec;
-
-    v_pegou := false;
-    BEGIN
-        INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu_sem_rec);
-    EXCEPTION WHEN others THEN v_pegou := true; v_msg := SQLERRM;
-    END;
-    IF NOT v_pegou OR v_msg NOT LIKE '%plano de recompensas%' THEN
-        RAISE EXCEPTION 'FALHA T5: plano sem plano de recompensas recebeu usina (pegou=%, msg=%)', v_pegou, v_msg;
-    END IF;
+    INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu_sem_rec);   -- passa: plano de usina so precisa estar ativo
 
     -- ==================================================================
     -- T6 -- nova versao: nasce ativo com substitui_plano_id, herda o que
@@ -211,7 +203,7 @@ BEGIN
 
     SELECT * INTO v_row FROM public.planos_usina WHERE id = v_pu_novo;
     IF v_row.percentual_recorrente <> 12 OR v_row.substitui_plano_id IS DISTINCT FROM v_pu
-       OR v_row.status <> 'ativo' OR v_row.plano_assinatura_id IS DISTINCT FROM v_rec_plano
+       OR v_row.status <> 'ativo'
        OR v_row.taxa_admin_reais <> 10 OR v_row.nome <> 'SANDBOX PU trava v2' THEN
         RAISE EXCEPTION 'FALHA T6: nova versao errada: %', row_to_json(v_row);
     END IF;
@@ -316,22 +308,42 @@ BEGIN
     VALUES ('SANDBOX PU rec da UC', 'recorrente', 10, 50, jsonb_build_object('regras_multinivel', c_matriz))
     RETURNING id INTO v_rec_plano_uc;
 
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
-    VALUES ('SANDBOX PU 12', 12, v_rec_plano) RETURNING id INTO v_pu2;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente)
+    VALUES ('SANDBOX PU 12', 12) RETURNING id INTO v_pu2;
     INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu2) RETURNING id INTO v_usina2;
 
     -- ==================================================================
-    -- M1 -- gestao vem do plano de usina (12%), UC sem plano proprio.
+    -- M1 -- gestao vem do plano de usina (12%), UC com o plano de recompensas.
     --   B2W 120 | PPE 5% 50 + Lider 1% 10 | fornecedor 1000 - 180 = 820
     -- ==================================================================
-    v_inv    := pg_temp.fatura_paga(v_usina2, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina2, v_ppe, v_rec_plano);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-120, -60, -820, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA M1: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-60,-820,0}', v_contas;
     END IF;
     SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
     IF (v_rec ->> 'plano_id')::uuid IS DISTINCT FROM v_rec_plano THEN
-        RAISE EXCEPTION 'FALHA M1: plano_id congelado = %, esperado o plano de recompensas do plano de usina %', v_rec ->> 'plano_id', v_rec_plano;
+        RAISE EXCEPTION 'FALHA M1: plano_id congelado = %, esperado o plano de recompensas da UC %', v_rec ->> 'plano_id', v_rec_plano;
+    END IF;
+
+    -- M1b -- UC sem plano proprio NAO herda mais o plano da usina (decisao 16):
+    --        fatura cai em uc_sem_plano, sem gestao nem recompensa.
+    --        A UC fica em 'ativacao' porque UC ativa sem plano e recusada.
+    INSERT INTO public.subscribers (originator_id, status, short_url)
+    VALUES (v_ppe, 'ativo', 'sandbox://pu/m1b') RETURNING id INTO v_sub;
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
+    VALUES (v_sub, v_usina2, 'consumidora', 'ativacao', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb)
+    RETURNING id INTO v_uc;
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento, consumo_compensado)
+    VALUES (v_uc, 'a_vencer', 1000, 0, CURRENT_DATE + 5, 1000) RETURNING id INTO v_inv;
+    UPDATE public.invoices SET status = 'pago' WHERE id = v_inv;
+    v_contas := pg_temp.contas(v_inv);
+    IF v_contas[1] <> 0 OR v_contas[2] <> 0 OR v_contas[4] <> 0 THEN
+        RAISE EXCEPTION 'FALHA M1b: UC sem plano em usina com plano de usina lancou gestao/recompensa: %', v_contas;
+    END IF;
+    SELECT recompensas_aplicadas INTO v_rec FROM public.invoices WHERE id = v_inv;
+    IF v_rec ->> 'motivo' IS DISTINCT FROM 'uc_sem_plano' THEN
+        RAISE EXCEPTION 'FALHA M1b: motivo = %, esperado uc_sem_plano', v_rec ->> 'motivo';
     END IF;
 
     -- ==================================================================
@@ -368,12 +380,12 @@ BEGIN
     VALUES ('SANDBOX PU matriz nula', 'recorrente', 10, 50,
             '{"regras_multinivel": {"b2w": {"niveis": null, "max_niveis": 4}}}'::jsonb)
     RETURNING id INTO v_rec_sem_matriz;
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
-    VALUES ('SANDBOX PU matriz nula', 12, v_rec_sem_matriz) RETURNING id INTO v_pu3;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente)
+    VALUES ('SANDBOX PU matriz nula', 12) RETURNING id INTO v_pu3;
     INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu3) RETURNING id INTO v_usina_matriz;
     INSERT INTO public.subscribers (status, short_url) VALUES ('ativo', 'sandbox://pu/m4') RETURNING id INTO v_sub;
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_matriz, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb)
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina_matriz, 'consumidora', 'ativo', 'SANDBOX PU conc', '{"uf": "RN"}'::jsonb, v_rec_sem_matriz)
     RETURNING id INTO v_uc;
     v_regras := public.fn_regras_recompensa_uc(v_uc);
     IF jsonb_typeof(v_regras #> '{regras_multinivel,b2w,niveis}') = 'object' THEN
@@ -397,8 +409,8 @@ BEGIN
     INSERT INTO public.suppliers (name, originator_id)
     VALUES ('SANDBOX PU fornecedor com originador inativo', v_orig_inativo) RETURNING id INTO v_forn_inat;
 
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
-    VALUES ('SANDBOX PU 12+3', 12, 3, v_rec_plano) RETURNING id INTO v_pu_orig;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct)
+    VALUES ('SANDBOX PU 12+3', 12, 3) RETURNING id INTO v_pu_orig;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_orig) RETURNING id INTO v_usina4;
 
     -- ==================================================================
@@ -406,7 +418,7 @@ BEGIN
     --   B2W 120 | 2.1.2 = PPE 50 + Lider 10 + originador 30 = 90
     --   fornecedor = 1000 - 210 = 790
     -- ==================================================================
-    v_inv    := pg_temp.fatura_paga(v_usina4, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina4, v_ppe, v_rec_plano);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-120, -90, -790, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O1: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-90,-790,0}', v_contas;
@@ -437,11 +449,11 @@ BEGIN
     INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
     VALUES ('SANDBOX PU rec piso67.5', 'recorrente', 10, 67.5, jsonb_build_object('regras_multinivel', c_matriz))
     RETURNING id INTO v_rec_piso675;
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
-    VALUES ('SANDBOX PU corte', 12, 3, v_rec_piso675) RETURNING id INTO v_pu_corte;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct)
+    VALUES ('SANDBOX PU corte', 12, 3) RETURNING id INTO v_pu_corte;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_corte, v_forn_orig) RETURNING id INTO v_usina_corte;
 
-    v_inv    := pg_temp.fatura_paga(v_usina_corte, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina_corte, v_ppe, v_rec_piso675);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-120, -70, -810, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O2: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-70,-810,0}', v_contas;
@@ -466,7 +478,7 @@ BEGIN
     --   B2W 120 + 30 = 150 | 2.1.2 60 | fornecedor 790
     -- ==================================================================
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_orig, v_forn_inat) RETURNING id INTO v_usina_inat;
-    v_inv    := pg_temp.fatura_paga(v_usina_inat, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina_inat, v_ppe, v_rec_plano);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-150, -60, -790, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O3: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-150,-60,-790,0}', v_contas;
@@ -477,7 +489,7 @@ BEGIN
     --       o previsto no plano fica para a associacao.
     -- ==================================================================
     INSERT INTO public.usinas (plano_usina_id) VALUES (v_pu_orig) RETURNING id INTO v_usina_sem_orig;
-    v_inv    := pg_temp.fatura_paga(v_usina_sem_orig, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina_sem_orig, v_ppe, v_rec_plano);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-150, -60, -790, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O4: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-150,-60,-790,0}', v_contas;
@@ -492,11 +504,11 @@ BEGIN
     VALUES ('SANDBOX PU start janela 2', 'start', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
             '{"faturas_elegiveis": [2], "regras": {"2": {"b2w": 0, "ppe": 20, "lider": 10, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb)
     RETURNING id INTO v_rec_start;
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
-    VALUES ('SANDBOX PU start', 12, 3, v_rec_start) RETURNING id INTO v_pu_start;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct)
+    VALUES ('SANDBOX PU start', 12, 3) RETURNING id INTO v_pu_start;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start, v_forn_orig) RETURNING id INTO v_usina_start;
 
-    v_inv    := pg_temp.fatura_paga(v_usina_start, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina_start, v_ppe, v_rec_start);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[-120, -30, -850, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O5: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-30,-850,0}', v_contas;
@@ -512,11 +524,11 @@ BEGIN
     VALUES ('SANDBOX PU start janela 1', 'start', 10, 50, jsonb_build_object('regras_multinivel', c_matriz),
             '{"faturas_elegiveis": [1], "regras": {"1": {"b2w": 0, "ppe": 20, "lider": 10, "ppp": 0, "ppf": 0, "assinante_conect": 0}}}'::jsonb)
     RETURNING id INTO v_rec_start1;
-    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct, plano_assinatura_id)
-    VALUES ('SANDBOX PU start 1', 12, 3, v_rec_start1) RETURNING id INTO v_pu_start1;
+    INSERT INTO public.planos_usina (nome, percentual_recorrente, originador_recorrente_pct)
+    VALUES ('SANDBOX PU start 1', 12, 3) RETURNING id INTO v_pu_start1;
     INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_start1, v_forn_orig) RETURNING id INTO v_usina_start1;
 
-    v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, NULL);
+    v_inv    := pg_temp.fatura_paga(v_usina_start1, v_ppe, v_rec_start1);
     v_contas := pg_temp.contas(v_inv);
     IF v_contas IS DISTINCT FROM ARRAY[0, -330, -670, 0]::numeric[] THEN
         RAISE EXCEPTION 'FALHA O6: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {0,-330,-670,0}', v_contas;
@@ -560,6 +572,63 @@ BEGIN
      WHERE b ->> 'papel' = 'originador_usina';
     IF v_n <> 0 THEN
         RAISE EXCEPTION 'FALHA O8: usina sem plano de usina pos o originador dela entre os participantes';
+    END IF;
+
+    -- ==================================================================
+    -- U1 -- UC ativa sem plano de assinatura e recusada (escrita direta).
+    -- ==================================================================
+    INSERT INTO public.subscribers (status, short_url) VALUES ('ativo', 'sandbox://pu/u1') RETURNING id INTO v_sub;
+    v_pegou := false;
+    BEGIN
+        INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status) VALUES (v_sub, 'beneficiaria', 'ativo');
+    EXCEPTION WHEN check_violation THEN v_pegou := true; v_msg := SQLERRM;
+    END;
+    IF NOT v_pegou OR v_msg NOT LIKE '%plano de assinatura%' THEN
+        RAISE EXCEPTION 'FALHA U1: UC ativa sem plano foi aceita (pegou=%, msg=%)', v_pegou, v_msg;
+    END IF;
+
+    -- U2 -- em ativacao sem plano passa (onboarding publico); ativar sem plano e recusado.
+    INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status)
+    VALUES (v_sub, 'beneficiaria', 'ativacao') RETURNING id INTO v_uc;
+    v_pegou := false;
+    BEGIN
+        UPDATE public.consumer_units SET status = 'ativo' WHERE id = v_uc;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN
+        RAISE EXCEPTION 'FALHA U2: ativar UC sem plano devia ser recusado';
+    END IF;
+
+    -- U3 -- geradora nao precisa de plano.
+    INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status) VALUES (v_sub, 'geradora', 'ativo');
+
+    -- U4 -- tirar o plano de UC ativa e recusado.
+    INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status, plano_assinatura_id)
+    VALUES (v_sub, 'beneficiaria', 'ativo', v_rec_plano) RETURNING id INTO v_uc;
+    v_pegou := false;
+    BEGIN
+        UPDATE public.consumer_units SET plano_assinatura_id = NULL WHERE id = v_uc;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN
+        RAISE EXCEPTION 'FALHA U4: tirar o plano de UC ativa devia ser recusado';
+    END IF;
+
+    -- U5 -- cascata (gatilho de outro gatilho) NAO e barrada: simulada por
+    --       um gatilho de teste em invoices que ativa a UC. Funcao e gatilho
+    --       sao DDL dentro da transacao: somem no rollback do SANDBOX_OK.
+    INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status)
+    VALUES (v_sub, 'beneficiaria', 'ativacao') RETURNING id INTO v_uc;
+    EXECUTE $t$
+      CREATE FUNCTION public.fn_sandbox_ativa_uc() RETURNS trigger LANGUAGE plpgsql AS $f$
+      BEGIN UPDATE public.consumer_units SET status = 'ativo' WHERE id = NEW.uc_id; RETURN NEW; END $f$
+    $t$;
+    EXECUTE 'CREATE TRIGGER tr_sandbox_ativa_uc AFTER INSERT ON public.invoices FOR EACH ROW EXECUTE FUNCTION public.fn_sandbox_ativa_uc()';
+    INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, vencimento)
+    VALUES (v_uc, 'a_vencer', 10, 0, CURRENT_DATE + 5);
+    EXECUTE 'DROP TRIGGER tr_sandbox_ativa_uc ON public.invoices';
+    IF (SELECT status::text FROM public.consumer_units WHERE id = v_uc) <> 'ativo' THEN
+        RAISE EXCEPTION 'FALHA U5: a cascata devia ativar a UC mesmo sem plano';
     END IF;
 
     -- >>> casos novos entram acima desta linha <<<

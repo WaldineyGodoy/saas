@@ -29,12 +29,11 @@ BEGIN
     -- nenhum numero esperado deste arquivo mudar. Some no rollback.
     EXECUTE $pu$
       CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
-        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        INSERT INTO public.planos_usina (nome, percentual_recorrente)
         SELECT 'SANDBOX pu ' || p.nome,
                COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
                              THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
-                        p.gestao_percentual, 0),
-               p.id
+                        p.gestao_percentual, 0)
           FROM public.planos_assinatura_energia p
          WHERE p.id = p_plano
         RETURNING id
@@ -63,12 +62,12 @@ BEGIN
 
   -- UC sem plano proprio, mas da usina com plano
   INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status, usina_id)
-  VALUES (v_sub, 'beneficiaria', 'ativo', v_usina1)
+  VALUES (v_sub, 'beneficiaria', 'ativacao', v_usina1)
   RETURNING id INTO v_uc_so_usina;
 
   -- UC sem plano proprio e usina tambem sem plano
   INSERT INTO public.consumer_units (subscriber_id, tipo_unidade, status, usina_id)
-  VALUES (v_sub, 'beneficiaria', 'ativo', v_usina2)
+  VALUES (v_sub, 'beneficiaria', 'ativacao', v_usina2)
   RETURNING id INTO v_uc_sem_nenhum;
 
   -- ======================================================================
@@ -80,11 +79,11 @@ BEGIN
   END IF;
 
   -- ======================================================================
-  -- 2) fn_plano_da_uc: UC sem plano, cai para o plano da usina
+  -- 2) fn_plano_da_uc: UC sem plano proprio -> NULL (sem fallback ao plano da usina)
   -- ======================================================================
   v_plano_row := public.fn_plano_da_uc(v_uc_so_usina);
-  IF v_plano_row.id IS DISTINCT FROM v_plano_usina THEN
-    RAISE EXCEPTION 'FALHOU 2: UC sem plano proprio devolveu % (esperado %, o plano da usina)', v_plano_row.id, v_plano_usina;
+  IF v_plano_row.id IS NOT NULL THEN
+    RAISE EXCEPTION 'FALHA 2: UC sem plano proprio devolveu % (esperado NULL: o plano de usina nao da mais plano de recompensas)', v_plano_row.id;
   END IF;
 
   -- ======================================================================

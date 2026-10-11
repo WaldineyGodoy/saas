@@ -108,12 +108,11 @@ BEGIN
     -- nenhum numero esperado deste arquivo mudar. Some no rollback.
     EXECUTE $pu$
       CREATE FUNCTION pg_temp.pu(p_plano uuid) RETURNS uuid LANGUAGE sql AS $f$
-        INSERT INTO public.planos_usina (nome, percentual_recorrente, plano_assinatura_id)
+        INSERT INTO public.planos_usina (nome, percentual_recorrente)
         SELECT 'SANDBOX pu ' || p.nome,
                COALESCE(CASE WHEN jsonb_typeof(p.recorrente_config #> '{regras_multinivel,b2w,niveis}') = 'object'
                              THEN (p.recorrente_config #>> '{regras_multinivel,b2w,niveis,L1}')::numeric END,
-                        p.gestao_percentual, 0),
-               p.id
+                        p.gestao_percentual, 0)
           FROM public.planos_assinatura_energia p
          WHERE p.id = p_plano
         RETURNING id
@@ -205,8 +204,8 @@ BEGIN
     INSERT INTO public.subscribers (originator_id, status, short_url)
     VALUES (v_ppe, 'ativo', 'sandbox://i1/c1') RETURNING id INTO v_sub;
 
-    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX I1 Cosern', '{"uf": "RN"}'::jsonb)
+    INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address, plano_assinatura_id)
+    VALUES (v_sub, v_usina, 'consumidora', 'ativo', 'SANDBOX I1 Cosern', '{"uf": "RN"}'::jsonb, v_plano)
     RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, consumo_compensado, vencimento)
@@ -375,7 +374,7 @@ BEGIN
     VALUES (v_ppe, 'ativo', 'sandbox://i1/c2') RETURNING id INTO v_sub;
 
     INSERT INTO public.consumer_units (subscriber_id, usina_id, tipo_unidade, status, concessionaria, address)
-    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativo', 'SANDBOX I1 Cosern', '{"uf": "RN"}'::jsonb)
+    VALUES (v_sub, v_usina_sem_plano, 'consumidora', 'ativacao', 'SANDBOX I1 Cosern', '{"uf": "RN"}'::jsonb)
     RETURNING id INTO v_uc;
 
     INSERT INTO public.invoices (uc_id, status, valor_a_pagar, valor_concessionaria, consumo_compensado, vencimento)

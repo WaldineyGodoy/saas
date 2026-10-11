@@ -13,6 +13,7 @@ DECLARE
   v_ind uuid; v_uc_ind uuid; v_uc_ind2 uuid;
   v_outro uuid; v_novo uuid; v_lead uuid; v_orig uuid;
   v_ret jsonb; v_tmp uuid; v_ucs jsonb;
+  v_plano_sbx uuid;
 BEGIN
   -- ---------------- 0. colunas e gatilhos existem ----------------
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns
@@ -42,16 +43,19 @@ BEGIN
           'https://link.b2wenergia.com.br/teste-cind')
   RETURNING id INTO v_ind;
 
+  INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, recorrente_config)
+  VALUES ('SANDBOX assinante_conect', 'recorrente', 10, 50, '{"regras_multinivel": {"b2w": {"niveis": {"L1": "10", "L2": "10", "L3": "10", "L4": "10"}, "max_niveis": 4}}}'::jsonb)
+  RETURNING id INTO v_plano_sbx;
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento, created_at)
+    status, modalidade, desconto_assinante, dia_vencimento, created_at, plano_assinatura_id)
   VALUES (v_ind, 'TST-CONECT-0001', 'Teste Conect Indicador', '52998224725', 'monofasico',
-    'ativo', 'geracao_compartilhada', 0.20, 10, now() - interval '2 years')
+    'ativo', 'geracao_compartilhada', 0.20, 10, now() - interval '2 years', v_plano_sbx)
   RETURNING id INTO v_uc_ind;
 
   INSERT INTO public.consumer_units (subscriber_id, numero_uc, titular_conta, cpf_cnpj_fatura, tipo_ligacao,
-    status, modalidade, desconto_assinante, dia_vencimento, created_at)
+    status, modalidade, desconto_assinante, dia_vencimento, created_at, plano_assinatura_id)
   VALUES (v_ind, 'TST-CONECT-0002', 'Teste Conect Indicador', '52998224725', 'monofasico',
-    'ativo', 'geracao_compartilhada', 0.20, 10, now())
+    'ativo', 'geracao_compartilhada', 0.20, 10, now(), v_plano_sbx)
   RETURNING id INTO v_uc_ind2;
 
   -- ---------------- 1. guarda: ninguem indica a si mesmo ----------------
