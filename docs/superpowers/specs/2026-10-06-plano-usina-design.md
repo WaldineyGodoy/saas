@@ -175,3 +175,53 @@ O fechamento mensal (`impl/fechamento-mensal`, segurada) precisa, quando entrar:
 4. Modal da usina (seletor do plano de usina, originador herdado) e cadastro do fornecedor (campo do originador).
 5. Gerador do contrato de compra e venda e contrato de gestão sugerido pelo plano.
 6. Revisão final.
+
+---
+
+## §6 Adendo de 10/10/2026 — decisões do dono após a revisão final
+
+Este adendo **substitui** o que contradiz nas seções acima. Onde ele cala, vale o texto original.
+
+### Decisões
+
+12. **Cota de usina sem dono só vai à B2W se couber no teto** (resposta ao achado I1 da revisão final). A cota do originador da usina (e a do Líder dele, decisão 13) que fica sem dono — fornecedor sem originador, originador/Líder inativo ou ausente — deixa de engordar a B2W **antes** do corte. Ela entra como parcela da B2W **cortável e primeira da fila**; o que sobrar depois do corte vai à B2W. Assim o PPE/Líder do assinante nunca pagam por uma cota órfã. As demais supressões (PPP com licença vencida, Conect inativo, parceiro/Líder do assinante inativos) **continuam** indo inteiras à B2W, como hoje — substitui a "consequência" escrita em §2 › Novo papel.
+13. **O Líder do originador da usina também recebe.** Novo papel `lider_originador_usina`: o `lider_id` do originador do fornecedor, desde que tenha cargo `lider` (mesma regra F3 do assinante). Percentual em `planos_usina.originador_lider_recorrente_pct` (default **0**; o dono configura depois). Só recorrência — o bônus de fechamento continua só do originador. Sem originador, sem Líder, Líder inativo ou Líder sem cargo `lider`: cota sem dono, decisão 12. Não é multinível. Substitui "o líder dele não recebe nada por isso" em §2.
+14. **Fatura do Start**: o originador da usina e o Líder dele ficam **isentos do piso**, como o Start (teto = base). Confirmado — nada muda no motor.
+15. **Originador copiado do lead, no servidor.** Fornecedor criado (ou atualizado) com `lead_id` e sem `originator_id` recebe `leads.originator_id` pelo próprio gatilho do fornecedor. A trava "só admin altera" aceita esse valor por vir do lead. O modal do fornecedor aberto a partir do lead já mostra o originador.
+16. **Plano de assinatura só na UC, obrigatório.** O plano de assinatura (matriz PPE/PPP/PPF/Líder/Conect) é a única fonte das recompensas pagas a quem está ligado ao **assinante**; o plano de usina tem a sua própria regra, paga a quem está ligado ao **fornecedor** (originador e Líder). Portanto:
+    - sai `planos_usina.plano_assinatura_id`; plano de usina aceita usina só por estar `ativo`;
+    - plano de recompensas da UC = `consumer_units.plano_assinatura_id`, **sem fallback** (substitui o `COALESCE` de §2);
+    - UC sem plano cai em `uc_sem_plano` como hoje (recebimento, concessionária e fornecedor lançados; nenhuma recompensa nem gestão);
+    - obrigatoriedade: no banco, UC `beneficiaria` só entra ou fica em `ativo`, `em_atraso` ou `em_transf_titularidade` com plano; na tela da UC o campo é obrigatório. O onboarding público (`fn_criar_assinante_publico`, que cria a UC em ativação sem plano) não muda — o plano é exigido na ativação. Em 10/10/2026 as 18 UCs beneficiárias em operação já têm plano.
+17. **Trava de versão no plano de assinatura**, igual à do plano de usina:
+    - plano com ao menos uma UC ou eletroposto vinculado não muda `desconto_assinante`, `tipo_recompensa`, `start_config`, `recorrente_config`, `gestao_percentual`, `piso_fornecedor_pct`, `modalidade`, `tarifa_motorista_kwh`, `recompensas_ativo`; nome e `ativo` continuam editáveis (hoje isso já vale para o Plano Premium, 22 UCs);
+    - mudar número = **nova versão** (RPC no padrão de `fn_planos_usina_nova_versao`): nasce `ativo` com `substitui_plano_id`; a antiga vira `somente_contratos` e **mantém as UCs dela**;
+    - UC ou eletroposto novo (ou troca de plano) só aponta para plano `ativo`; manter o plano atual numa edição da UC sempre passa;
+    - mover UCs existentes para a versão nova é ato do admin, em lote, na tela de planos;
+    - `planos_distribuidoras` (só diz em quais distribuidoras o plano é oferecido) e `leads.plano_id` ficam fora da trava.
+
+### Dados (migração nova)
+
+- `planos_usina`: **sai** `plano_assinatura_id`; **entra** `originador_lider_recorrente_pct numeric NOT NULL DEFAULT 0` (0–100), dentro da trava de versão.
+- `planos_assinatura_energia`: **entram** `status text NOT NULL DEFAULT 'ativo'` (`ativo` | `somente_contratos`) e `substitui_plano_id uuid` (FK para a própria tabela).
+- Gatilhos: trava do plano de assinatura; vínculo de UC/eletroposto a plano `ativo`; obrigatoriedade do plano na UC (decisão 16); cópia do originador do lead dentro de `fn_suppliers_originador_admin`. Ajustes em `fn_planos_usina_trava`, `fn_usinas_vinculo_plano_usina` e `fn_planos_usina_nova_versao` pela saída da coluna.
+
+### Motor
+
+- `fn_plano_da_uc`: só a UC.
+- `fn_regras_recompensa_uc`: a gestão continua vindo do plano de usina (`percentual_recorrente`, todos os níveis, só sobre matriz válida); injeta `originador_usina` e `lider_originador_usina` na matriz quando os percentuais forem > 0.
+- `fn_participantes_recompensa`: emite `lider_originador_usina` (nível 1) quando o plano de usina tem o percentual > 0, com `suspenso = true` e `id` nulo quando não houver Líder válido e ativo.
+- `fn_calcular_split_recompensa`: participante suspenso dos papéis de usina (`originador_usina`, `lider_originador_usina`) não soma à B2W na 1ª passada; fica na fila de corte como parcela "a absorver pela B2W". Ordem de corte: `originador_usina` → `lider_originador_usina` → `assinante_conect` → parceiro → `lider`. Depois do corte, o que sobrou das parcelas a absorver entra em `b2w.valor` e `b2w.valor_absorvido`; o beneficiário suspenso continua saindo com `valor = 0`. No máximo um participante de cada papel de usina por pagamento.
+- `handle_invoice_paid_ledger`: `lider_originador_usina` em 2.1.2, `reference_type = 'originator'`, descrição "Recompensa Líder do Originador da Usina (nível 1)"; nunca "Bônus Start". Versão gravada nova.
+
+### Telas
+
+- `PlanoUsinaModal` e lista: sai o seletor/coluna de plano de recompensas; entra "Líder do originador (%)". Vínculo em lote e `PowerPlantModal` deixam de exigir plano de recompensas no plano de usina.
+- `ConsumerUnitModal`: plano de assinatura obrigatório; oferece só planos `ativo` (mantém o atual se for `somente_contratos`).
+- Telas de plano de assinatura (`PlanModal`, `EletropostoPlanModal`, versão do `main`): plano com UC/eletroposto abre com os números travados e o botão **"Criar nova versão"**; lista mostra status e nº de UCs; ação **"Mover UCs para a versão nova"** (admin, em lote).
+- `LeadsList`: ao converter lead em fornecedor, o modal já leva `originator_id` do lead.
+
+### Testes
+
+- `plano_usina.test.sql` ganha: cota órfã cortada antes do PPE sob teto apertado (números do Premium/Cosern: B2W 61,48, PPE 29,78, Líder 6,15, fornecedor 517,35); `lider_originador_usina` recebe; Líder inativo/ausente → cota órfã; cópia do originador do lead; trava e nova versão do plano de assinatura; vínculo de UC só a plano `ativo`; UC ativa sem plano recusada.
+- As suítes existentes passam a dar plano de assinatura à UC nos fixtures (sem fallback da usina). Os casos de `uc_sem_plano` e o caso 1 do `split_gatilho` (que altera o plano depois de vinculado para provar o congelamento) se adaptam às travas novas sem mudar nenhum número esperado.
