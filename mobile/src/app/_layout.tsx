@@ -18,11 +18,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootStack() {
   const { session, loading } = useAuth();
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Manrope_700Bold, Manrope_800ExtraBold, Inter_400Regular, Inter_500Medium, Inter_600SemiBold,
     JetBrainsMono_500Medium, JetBrainsMono_600SemiBold,
   });
-  const ready = fontsLoaded && !loading;
+  // Fonte que falha não pode travar o app em tela branca: segue com a do sistema.
+  const ready = (fontsLoaded || !!fontError) && !loading;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
