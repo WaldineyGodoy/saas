@@ -76,6 +76,14 @@ export default function Inicio() {
           <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/comecar')} />
         </Card>
       ) : null}
+      {perfil.data?.subscriber?.status === 'ativacao' ? (
+        // Adesão gravada, contrato ainda não assinado: retoma de onde parou.
+        <Card style={{ gap: 8, borderColor: colors.secondary }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Conclua sua adesão</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Faltam os documentos ou a assinatura do contrato.</Text>
+          <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/adesao')} />
+        </Card>
+      ) : null}
       {investindo ? (
         <Card style={{ gap: 8, borderColor: colors.secondary }}>
           <Text style={[type.headlineSm, { color: colors.onSurface }]}>Interesse em investir recebido</Text>

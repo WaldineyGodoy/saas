@@ -27,7 +27,7 @@ export default function Comecar() {
   const { data: perfil } = usePerfil();
   // Adesão de energia já começada: retoma de onde parou, sem perguntar a
   // indicação de novo.
-  const aderindo = Boolean(perfil?.lead);
+  const aderindo = Boolean(perfil?.lead) || perfil?.subscriber?.status === 'ativacao';
   const opcoes = OPCOES.map((o) => (o.objetivo === 'energia' && aderindo
     ? { ...o, texto: 'Sua adesão está em andamento. Continue de onde parou.', destino: '/adesao' as Href }
     : o));

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { bytesDoBase64 } from './captura';
 import { DEMO, demoRpc } from './demo';
 import { supabase } from './supabase';
 import type {
@@ -169,3 +170,78 @@ export const registrarInteresseInvestimento = (dados: {
   name?: string; phone: string; interesses: CodigoInvestimento[]; faixa?: string | null;
   cidade?: string; uf?: string; mensagem?: string;
 }) => rpc<string>('app_registrar_interesse_investimento', { p_dados: dados });
+
+// ---------------------------------------------------------------------------
+// Adesão pelo app, etapa 3 (migração 20261011d). Conta -> plano -> dados ->
+// documentos no app; o contrato abre no site já no passo final.
+// ---------------------------------------------------------------------------
+
+/** Planos da distribuidora para quem ainda não é assinante. */
+export const usePlanosAdesao = (concessionaria?: string) =>
+  useQuery({
+    queryKey: ['planos-adesao', concessionaria],
+    queryFn: () => rpc<PlanoUc[]>('app_planos_adesao', { p_concessionaria: concessionaria }),
+    enabled: Boolean(concessionaria),
+  });
+
+export type FaltaDocumento = { tipo: 'identidade' | 'contrato_social' | 'conta_energia'; consumer_unit_id: string | null; numero_uc: string | null };
+
+export type MinhaAdesao = {
+  etapa: 'documentos' | 'contrato' | 'enviado' | 'assinado';
+  token?: string;
+  status?: string;
+  faltantes?: FaltaDocumento[];
+  ucs?: { id: string; numero_uc: string; desconto_assinante: number | null }[];
+  signature_link?: string | null;
+} | null;
+
+/** Adesão da conta em andamento (ou null). O token é o do link de retomada do site. */
+export const useMinhaAdesao = () =>
+  useQuery({ queryKey: ['minha-adesao'], queryFn: () => rpc<MinhaAdesao>('app_minha_adesao') });
+
+export type DadosAdesao = {
+  name: string; cpf_cnpj: string; phone: string;
+  cep: string; rua: string; numero: string; complemento?: string; bairro: string; cidade: string; uf: string; ibge?: string;
+  dia_vencimento: number; aceite_versao: string;
+  representante_nome?: string; representante_cpf?: string;
+  ucs: {
+    numero_uc: string; titular_conta?: string; cpf_cnpj_fatura: string; tipo_ligacao: string; concessionaria?: string;
+    franquia?: number; plano_assinatura_id?: string | null;
+    cep: string; rua: string; numero: string; complemento?: string; bairro: string; cidade: string; uf: string; ibge?: string;
+  }[];
+};
+
+export const criarAdesao = (dados: DadosAdesao, visita: string | null) =>
+  rpc<{ subscriber_id: string; onboarding_token: string }>('app_criar_adesao', { p_dados: dados, p_visita: visita });
+
+/** Id da UC recém-criada, pelo estado da adesão (a criação não devolve). */
+export async function idDaUcAdesao(token: string, numeroUc: string): Promise<string | null> {
+  const estado = await rpc<{ ucs?: { id: string; numero_uc: string }[] } | null>('fn_onboarding_estado', { p_token: token });
+  return estado?.ucs?.find((u) => u.numero_uc === numeroUc)?.id ?? null;
+}
+
+/** Documento da adesão: URL assinada de upload, envio direto ao Storage e
+ *  registro (Edge Function onboarding-documentos, a mesma do site). */
+export async function enviarDocumentoAdesao(
+  token: string, tipo: FaltaDocumento['tipo'], arquivo: { base64: string; tipo: string }, consumerUnitId?: string | null,
+) {
+  if (DEMO) return;
+  const bytes = bytesDoBase64(arquivo.base64);
+  const base = { token, tipo, mime: arquivo.tipo, tamanho: bytes.length, consumer_unit_id: consumerUnitId ?? null };
+  const chamar = async (corpo: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke('onboarding-documentos', { body: corpo });
+    if (error || data?.error) {
+      let msg: string | undefined = data?.error;
+      const ctx = (error as { context?: Response } | null)?.context;
+      if (!msg && ctx?.json) {
+        try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+      }
+      throw new Error(msg || 'Não foi possível enviar o documento. Tente de novo.');
+    }
+    return data;
+  };
+  const { path, token_upload } = await chamar({ ...base, acao: 'url' });
+  const { error } = await supabase.storage.from('documentos-assinante').uploadToSignedUrl(path, token_upload, bytes, { contentType: arquivo.tipo });
+  if (error) throw new Error('Não foi possível enviar o arquivo. Confira a internet e tente de novo.');
+  await chamar({ ...base, acao: 'registrar', path });
+}

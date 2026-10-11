@@ -29,5 +29,5 @@ export function BotaoConvite({ label, icon = 'trending-up', destino = '/investir
 /** "Assinar energia": retoma a adesão já começada ou começa pela indicação. */
 export function useDestinoAssinarEnergia(): Href {
   const { data } = usePerfil();
-  return data?.lead ? '/adesao' : '/indicacao';
+  return data?.lead || data?.subscriber?.status === 'ativacao' ? '/adesao' : '/indicacao';
 }
