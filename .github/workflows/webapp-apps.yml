@@ -50,6 +50,7 @@ jobs:
       - name: Conferir o pacote
         run: |
           test -f dist/index.html
+          ls dist/assets/node_modules/@expo-google-fonts >/dev/null
           test -f dist/.htaccess
           grep -q 'manifest.json' dist/index.html
 
@@ -62,3 +63,8 @@ jobs:
           local-dir: mobile/dist/
           server-dir: ${{ secrets.HOSTINGER_FTP_DIR || 'domains/b2wenergia.com.br/public_html/apps/' }}
           protocol: ftps
+          # O padrão da action pula qualquer pasta node_modules, e o Expo põe
+          # as fontes em dist/assets/node_modules/: sem isto o app fica branco.
+          exclude: |
+            **/.git*
+            **/.git*/**
