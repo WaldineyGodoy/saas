@@ -53,6 +53,7 @@ jobs:
           ls dist/assets/node_modules/@expo-google-fonts >/dev/null
           test -f dist/.htaccess
           grep -q 'manifest.json' dist/index.html
+          grep -q 'viewport-fit=cover' dist/index.html
 
       - name: Enviar para a Hostinger (FTP)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

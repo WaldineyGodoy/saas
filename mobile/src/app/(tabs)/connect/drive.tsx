@@ -1,12 +1,12 @@
 import { Text } from 'react-native';
-import { BotaoConvite, ConviteRodape } from '../../components/Convites';
-import { LinkIndicacao } from '../../components/LinkIndicacao';
-import { Badge, Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
-import { useMeusEletropostos, usePerfil } from '../../lib/api';
-import { enderecoCurto, fmtBRL, fmtKwh, fmtPct } from '../../lib/format';
-import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../lib/links';
-import { eletropostoStatus } from '../../lib/status';
-import { colors, type } from '../../theme/tokens';
+import { BotaoConvite, ConviteRodape } from '../../../components/Convites';
+import { LinkIndicacao } from '../../../components/LinkIndicacao';
+import { Badge, Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../../components/ui';
+import { useMeusEletropostos, usePerfil } from '../../../lib/api';
+import { enderecoCurto, fmtBRL, fmtKwh, fmtPct } from '../../../lib/format';
+import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../../lib/links';
+import { eletropostoStatus } from '../../../lib/status';
+import { colors, type } from '../../../theme/tokens';
 
 export default function DriveConnect() {
   const perfil = usePerfil();

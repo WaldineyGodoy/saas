@@ -46,9 +46,9 @@ export default function Eletroposto() {
       {postos.isLoading ? <Loading /> : postos.error ? <ErrorState error={postos.error} onRetry={refresh} /> : lista.length === 0 ? (
         <Empty
           icon="ev-station"
-          title={q ? 'Nenhum eletroposto encontrado' : perto ? 'Nenhum eletroposto perto de você' : 'Nenhum eletroposto operando ainda'}
+          title={q ? 'Nenhum eletroposto encontrado' : 'Sem eletroposto nas proximidades'}
           text={q ? 'Confira o nome ou o bairro digitado.' : 'Que tal ter o seu? Ganhe com cada recarga e leve a rede B2W para a sua região.'}
-          action={q ? undefined : <BotaoConvite label="Ter renda com usinas e eletropostos" icon="ev-station" />}
+          action={q ? undefined : <BotaoConvite label="Oportunidade para ter rendimentos" icon="ev-station" />}
         />
       ) : lista.map(({ item: p, km }) => {
         const [label, tone] = eletropostoStatus(p.status);
