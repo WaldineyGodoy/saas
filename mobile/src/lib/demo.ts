@@ -93,6 +93,8 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
     case 'app_minhas_recargas': return [
       { id: 'c1', eletroposto_id: null, eletroposto_nome: 'Hub Jardins', valor: 50, kwh_estimado: 26.4, status: 'paid', created_at: '2025-03-28T14:00:00Z' },
     ];
+    case 'fn_indicador_publico': return { valido: true, id: args?.p_id, primeiro_nome: 'Maria' };
+    case 'app_registrar_interesse': return '00000000-0000-4000-8000-0000000000aa';
     default: return null;
   }
 };

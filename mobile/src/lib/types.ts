@@ -6,6 +6,10 @@ export type Perfil = {
   subscriber: { id: string; name: string; status: string; short_url: string | null } | null;
   supplier: { id: string; name: string } | null;
   originator: boolean;
+  /** Login sem nenhum produto (D, 06/10/2026): o app pergunta a indicação. */
+  sem_produto?: boolean;
+  /** Lead do app em andamento (adesão começada), com quem indicou. */
+  lead?: { id: string; status: string; indicador_nome: string | null } | null;
 };
 
 export type UcResumo = {
