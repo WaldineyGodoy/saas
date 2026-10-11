@@ -406,6 +406,10 @@ BEGIN
     END IF;
 
     -- congelamento de verdade: mexer no plano DEPOIS nao pode reescrever a fatura
+    -- a trava de versao (20261010c) recusaria mexer no plano com UC; aqui o
+    -- ponto e provar o congelamento, entao ela e desligada SO nesta transacao
+    -- (some no rollback do SANDBOX_OK).
+    ALTER TABLE public.planos_assinatura_energia DISABLE TRIGGER tr_planos_assinatura_trava;
     UPDATE public.planos_assinatura_energia
        SET gestao_percentual = 30,
            recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,b2w,niveis,L1}', '"30"')
@@ -421,6 +425,7 @@ BEGIN
        SET gestao_percentual = 10,
            recorrente_config = jsonb_set(recorrente_config, '{regras_multinivel,b2w,niveis,L1}', '"10"')
      WHERE id = v_plano;
+    ALTER TABLE public.planos_assinatura_energia ENABLE TRIGGER tr_planos_assinatura_trava;
 
     -- ==================================================================
     -- CASO 2 -- indicacao: parceiro no nivel 2 (PPE L2 = 2%) + Conect (2%)
