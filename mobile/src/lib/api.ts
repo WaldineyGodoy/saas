@@ -245,3 +245,20 @@ export async function enviarDocumentoAdesao(
   if (error) throw new Error('Não foi possível enviar o arquivo. Confira a internet e tente de novo.');
   await chamar({ ...base, acao: 'registrar', path });
 }
+
+/** Gera o termo no servidor (mesmo texto do site), manda para a Autentique e
+ *  devolve o link de assinatura. Também envia o link por WhatsApp e e-mail. */
+export async function gerarContratoAdesao(token: string): Promise<string> {
+  if (DEMO) return 'https://www.autentique.com.br/';
+  const { data, error } = await supabase.functions.invoke('onboarding-finalizar', { body: { token, gerar_no_servidor: true } });
+  if (error || !data?.signature_link) {
+    let msg: string | undefined = data?.error;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx?.json) {
+      try { msg = (await ctx.json())?.error; } catch { /* corpo nao-JSON */ }
+    }
+    if (msg === 'contrato_indisponivel') msg = 'A assinatura digital está indisponível agora. A equipe B2W foi avisada; tente de novo em alguns minutos.';
+    throw new Error(msg || 'Não foi possível gerar o contrato. Tente de novo.');
+  }
+  return data.signature_link as string;
+}
