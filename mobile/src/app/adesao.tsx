@@ -7,10 +7,10 @@ import { Campo } from '../components/Campo';
 import { Button, Card, Chip, Hero, Icon, Loading, Row, Screen, type IconName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  criarAdesao, enviarDocumentoAdesao, idDaUcAdesao, lerConta, useMinhaAdesao, usePerfil, usePlanosAdesao,
+  criarAdesao, enviarDocumentoAdesao, gerarContratoAdesao, idDaUcAdesao, lerConta, useMinhaAdesao, usePerfil, usePlanosAdesao,
   type FaltaDocumento, type MinhaAdesao, type PlanoUc,
 } from '../lib/api';
-import { DIAS_VENCIMENTO, lerVisitaAdesao, URL_TERMOS_USO, urlContratoRetomar, VERSAO_TERMOS } from '../lib/adesao';
+import { DIAS_VENCIMENTO, lerVisitaAdesao, URL_TERMOS_USO, VERSAO_TERMOS } from '../lib/adesao';
 import { escolherFoto, escolherPdf, fotografar, type Arquivo } from '../lib/captura';
 import { contaParaPedido, LIGACAO, mensagemDeErro, type ContaLida } from '../lib/conta';
 import { buscarCep, documentoValido, soDigitos, tipoDocumento } from '../lib/documento';
@@ -20,11 +20,11 @@ import { PRIVACIDADE_URL } from '../lib/links';
 import { colors, radius, space, type } from '../theme/tokens';
 
 /**
- * Adesão de energia pelo app, etapa 3 (decisão do dono, 11/10/2026):
- * conta de luz -> plano -> dados -> documentos são telas do app; só o
- * contrato abre o site, pelo link de retomada, já no passo de gerar e
- * assinar (o PDF do termo ainda é montado lá). Quem para no meio volta de
- * onde parou: o cadastro fica no banco e app_minha_adesao diz a etapa.
+ * Adesão de energia pelo app (decisão do dono, 11/10/2026): conta de luz ->
+ * plano -> dados -> documentos -> contrato, tudo no app. O termo é gerado
+ * no servidor (onboarding-finalizar, mesmo texto do site) e a assinatura
+ * abre no navegador do app, na Autentique. Quem para no meio volta de onde
+ * parou: o cadastro fica no banco e app_minha_adesao diz a etapa.
  */
 export default function Adesao() {
   const adesao = useMinhaAdesao();
@@ -398,9 +398,23 @@ function Andamento({ adesao, onAtualizar }: { adesao: NonNullable<MinhaAdesao>; 
     }
   };
 
-  const abrirContrato = async (url: string) => {
-    await WebBrowser.openBrowserAsync(url);
+  const [gerando, setGerando] = useState(false);
+  const assinar = async (link: string) => {
+    await WebBrowser.openBrowserAsync(link);
     await onAtualizar();
+  };
+  const gerarEAssinar = async () => {
+    setErro('');
+    setGerando(true);
+    try {
+      const link = await gerarContratoAdesao(token);
+      await assinar(link);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+      await onAtualizar();
+    } finally {
+      setGerando(false);
+    }
   };
 
   if (adesao.etapa === 'documentos') {
@@ -425,20 +439,23 @@ function Andamento({ adesao, onAtualizar }: { adesao: NonNullable<MinhaAdesao>; 
     );
   }
 
-  const url = urlContratoRetomar(token);
+  if (gerando) return <Loading label="Gerando seu contrato… pode levar uns 30 segundos" />;
+
   if (adesao.etapa === 'enviado') {
     return (
       <Screen>
         <Passo n={5} titulo="Contrato" />
         <Card style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
           <Icon name="draw" size={44} color={colors.primary} />
-          <Text style={[type.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>Contrato enviado para assinatura</Text>
+          <Text style={[type.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>Contrato pronto para assinar</Text>
           <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
             O link também foi para o seu WhatsApp e e-mail. Depois de assinado, sua adesão segue para ativação.
           </Text>
-          <Button label="Assinar contrato" icon="draw" onPress={() => abrirContrato(adesao.signature_link || url)} style={{ marginTop: 8, alignSelf: 'stretch' }} />
+          {/* Sem o link guardado, pedir de novo devolve o mesmo documento (não cria outro). */}
+          <Button label="Assinar contrato" icon="draw" onPress={() => (adesao.signature_link ? assinar(adesao.signature_link) : gerarEAssinar())} style={{ marginTop: 8, alignSelf: 'stretch' }} />
           <Button label="Já assinei" icon="refresh" variant="ghost" onPress={onAtualizar} style={{ alignSelf: 'stretch' }} />
         </Card>
+        <Erro texto={erro} />
       </Screen>
     );
   }
@@ -450,11 +467,11 @@ function Andamento({ adesao, onAtualizar }: { adesao: NonNullable<MinhaAdesao>; 
         <Icon name="task-alt" size={44} color={colors.secondary} />
         <Text style={[type.headlineMd, { color: colors.onSurface, textAlign: 'center' }]}>Tudo certo! Agora é o contrato</Text>
         <Text style={[type.body, { color: colors.inkSecondary, textAlign: 'center' }]}>
-          Abrimos a página do contrato da B2W: confira e toque em gerar. Em seguida você assina pelo celular.
+          Geramos o termo de adesão com os seus dados e abrimos a assinatura digital aqui mesmo. Você assina com o dedo, na tela.
         </Text>
-        <Button label="Gerar e assinar contrato" icon="draw" onPress={() => abrirContrato(url)} style={{ marginTop: 8, alignSelf: 'stretch' }} />
-        <Button label="Já assinei" icon="refresh" variant="ghost" onPress={onAtualizar} style={{ alignSelf: 'stretch' }} />
+        <Button label="Gerar e assinar contrato" icon="draw" onPress={gerarEAssinar} style={{ marginTop: 8, alignSelf: 'stretch' }} />
       </Card>
+      <Erro texto={erro} />
     </Screen>
   );
 }
