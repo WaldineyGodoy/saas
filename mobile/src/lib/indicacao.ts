@@ -43,6 +43,11 @@ export function extrairIndicador(raw: string | null | undefined): LeituraIndicac
   return null;
 }
 
+/** Computador (decisão A de 06/10/2026: no computador o site continua sendo o
+ *  caminho). Tablet e celular seguem no app. */
+export const ehComputador = (ua: string | null | undefined) =>
+  !!ua && !/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini|IEMobile/i.test(ua);
+
 // Indicação que chegou antes do login (link aberto, QR lido na tela de
 // entrada): fica guardada até a pessoa entrar e ser registrada.
 const CHAVE = 'b2w.indicacaoPendente';

@@ -9,10 +9,15 @@ export const PRIVACIDADE_URL = 'https://b2wenergia.com.br/politica-de-privacidad
 
 const primeiro = (nome?: string | null) => (nome || '').trim().replace(/\s+/g, ' ').split(' ')[0] || '';
 
+/** Link longo do site. Sempre o site, nunca o link curto: o curto passa a
+ *  apontar para o webapp, e a opção "continuar pelo site" voltaria para ele. */
+export const linkSiteIndicacao = (id: string, nome?: string | null) =>
+  `${LANDING_RAIZ}?indicador=${id}&name=${encodeURIComponent(primeiro(nome))}`;
+
 export const linkIndicacao = (sub?: { id: string; name: string; short_url: string | null } | null) => {
   if (!sub?.id) return '';
   if (sub.short_url) return sub.short_url;
-  return `${LANDING_RAIZ}?indicador=${sub.id}&name=${encodeURIComponent(primeiro(sub.name))}`;
+  return linkSiteIndicacao(sub.id, sub.name);
 };
 
 export const STATUS_PODE_INDICAR = ['contrato_assinado', 'ativo', 'ativo_inadimplente'];
