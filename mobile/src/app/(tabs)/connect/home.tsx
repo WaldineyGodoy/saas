@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
-import { BotaoConvite, ConviteRodape, useDestinoAssinarEnergia } from '../../components/Convites';
-import { LinkIndicacao } from '../../components/LinkIndicacao';
-import { RedeIndicados } from '../../components/RedeIndicados';
-import { Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
-import { useMinhaRede, usePerfil } from '../../lib/api';
-import { fmtBRL, fmtKwh } from '../../lib/format';
-import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../lib/links';
-import { grupoRede } from '../../lib/status';
-import { colors } from '../../theme/tokens';
+import { BotaoConvite, ConviteRodape, useDestinoAssinarEnergia } from '../../../components/Convites';
+import { LinkIndicacao } from '../../../components/LinkIndicacao';
+import { RedeIndicados } from '../../../components/RedeIndicados';
+import { Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../../components/ui';
+import { useMinhaRede, usePerfil } from '../../../lib/api';
+import { fmtBRL, fmtKwh } from '../../../lib/format';
+import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../../lib/links';
+import { grupoRede } from '../../../lib/status';
+import { colors } from '../../../theme/tokens';
 
 export default function HomeConnect() {
   const perfil = usePerfil();

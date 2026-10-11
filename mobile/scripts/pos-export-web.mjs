@@ -23,7 +23,12 @@ const cabecalho = [
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
 ].join('\n    ');
 
+// viewport-fit=cover: no iPhone (Safari e app na tela de início) as áreas
+// seguras só chegam ao app com isto; sem elas o menu de baixo ficava atrás
+// da barra de gestos e os rótulos cortados.
+if (!/<meta name="viewport"[^>]*>/.test(html)) throw new Error('dist/index.html sem meta viewport');
 html = html
+  .replace(/<meta name="viewport"[^>]*>/, '<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />')
   .replace(/<html lang="[^"]*"/, '<html lang="pt-BR"')
   .replace('</head>', `    ${cabecalho}\n  </head>`);
 
