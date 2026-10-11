@@ -1,8 +1,11 @@
 import { Redirect, router, type Href } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import { Button, Card, Empty, ErrorState, Hero, ListItem, Loading, Metric, Row, Screen, SearchInput, SectionLabel, type IconName } from '../../components/ui';
+import { useAuth } from '../../contexts/AuthContext';
 import { useMinhasUcs, useMinhasUsinas, usePerfil } from '../../lib/api';
+import { lerIndicacaoPendente } from '../../lib/indicacao';
+import { lerObjetivo } from '../../lib/objetivo';
 import { fmtBRL, primeiroNome } from '../../lib/format';
 import { colors, type } from '../../theme/tokens';
 
@@ -21,6 +24,19 @@ export default function Inicio() {
   const ucs = useMinhasUcs();
   const usinas = useMinhasUsinas();
   const [busca, setBusca] = useState('');
+  const { session } = useAuth();
+  const uid = session?.user?.id;
+
+  // Conta nova, sem nada começado: primeiro a pergunta do que a pessoa quer
+  // fazer (11/10/2026). Veio por link de indicação: direto para a indicação.
+  const novo = Boolean(perfil.data?.sem_produto && !perfil.data?.lead && !perfil.data?.interesse_investimento);
+  const [destino, setDestino] = useState<Href | null | undefined>(undefined);
+  useEffect(() => {
+    if (!novo) { setDestino(null); return; }
+    Promise.all([lerIndicacaoPendente(), lerObjetivo(uid)])
+      .then(([pendente, objetivo]) => setDestino(pendente ? '/indicacao' : objetivo ? null : '/comecar'))
+      .catch(() => setDestino('/comecar'));
+  }, [novo, uid]);
 
   const economia = useMemo(() => (ucs.data ?? []).reduce((a, u) => a + (Number(u.economia_reais) || 0), 0), [ucs.data]);
   const receita = useMemo(() => (usinas.data ?? []).reduce((a, u) => a + (Number(u.receita_mes) || 0), 0), [usinas.data]);
@@ -35,9 +51,10 @@ export default function Inicio() {
 
   if (perfil.isLoading) return <Loading />;
   if (perfil.error) return <Screen><ErrorState error={perfil.error} onRetry={refresh} /></Screen>;
-  // Login novo, sem produto e sem adesão começada: primeiro a indicação.
-  if (perfil.data?.sem_produto && !perfil.data?.lead) return <Redirect href="/indicacao" />;
+  if (novo && destino === undefined) return <Loading />;
+  if (destino) return <Redirect href={destino} />;
   const aderindo = Boolean(perfil.data?.sem_produto && perfil.data?.lead);
+  const investindo = Boolean(perfil.data?.sem_produto && perfil.data?.interesse_investimento);
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
@@ -53,6 +70,19 @@ export default function Inicio() {
             {perfil.data?.lead?.indicador_nome ? `Indicação de ${perfil.data.lead.indicador_nome} registrada. ` : ''}Falta pouco para economizar na conta de luz.
           </Text>
           <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/adesao')} />
+        </Card>
+      ) : null}
+      {investindo ? (
+        <Card style={{ gap: 8, borderColor: colors.secondary }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Interesse em investir recebido</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Um especialista da B2W vai falar com você pelo WhatsApp.</Text>
+        </Card>
+      ) : null}
+      {novo ? (
+        <Card style={{ gap: 8 }}>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>O que você quer fazer?</Text>
+          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Assinar energia, recarregar, ser parceiro ou investir.</Text>
+          <Button label="Ver opções" icon="apps" variant="secondary" onPress={() => router.push('/comecar')} />
         </Card>
       ) : null}
       <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar solução (ex: Solar, Recarga, Indicar…)" />

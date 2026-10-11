@@ -10,6 +10,8 @@ export type Perfil = {
   sem_produto?: boolean;
   /** Lead do app em andamento (adesão começada), com quem indicou. */
   lead?: { id: string; status: string; indicador_nome: string | null } | null;
+  /** Quando pediu contato para investir (lead com #Investidor), se pediu. */
+  interesse_investimento?: string | null;
 };
 
 export type UcResumo = {

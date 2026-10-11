@@ -95,6 +95,8 @@ export const demoRpc = (fn: string, args?: Record<string, unknown>): unknown => 
     ];
     case 'fn_indicador_publico': return { valido: true, id: args?.p_id, primeiro_nome: 'Maria' };
     case 'app_registrar_interesse': return '00000000-0000-4000-8000-0000000000aa';
+    case 'app_cadastrar_parceiro': return perfil.id;
+    case 'app_registrar_interesse_investimento': return '00000000-0000-4000-8000-0000000000bb';
     default: return null;
   }
 };

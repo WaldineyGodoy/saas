@@ -145,3 +145,27 @@ export async function resolverLinkCurto(url: string): Promise<string> {
  *  segue para a adesão: é ele que decide a indicação no contrato. */
 export const registrarInteresse = (dados: { name: string; phone: string }, indicador: string | null, meio: 'qr' | 'app' | 'link') =>
   rpc<string>('app_registrar_interesse', { p_dados: dados, p_indicador: indicador, p_meio: meio === 'qr' ? 'qr' : 'app' });
+
+// ---------------------------------------------------------------------------
+// Opções da conta nova: parceiro e investidor (migração 20261011b)
+// ---------------------------------------------------------------------------
+
+export type DadosParceiro = {
+  name: string; phone: string; cpf_cnpj: string;
+  pix_key_type: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria'; pix_key: string;
+  profession?: string;
+  address: { cep: string; rua: string; numero: string; complemento?: string; bairro: string; cidade: string; uf: string };
+};
+
+/** Cadastro de parceiro (originador) feito pela própria conta: o id e o
+ *  e-mail são os do login. O link de indicação sai pelo gatilho do banco. */
+export const cadastrarParceiro = (dados: DadosParceiro) => rpc<string>('app_cadastrar_parceiro', { p_dados: dados });
+
+export type CodigoInvestimento = 'usinas' | 'eletropostos' | 'cotas' | 'consorcio' | 'financiamento' | 'arrendamento' | 'vagas';
+
+/** Interesse em investir: vira lead com as etiquetas do interesse e a
+ *  qualificação, para a equipe comercial seguir a jornada no CRM. */
+export const registrarInteresseInvestimento = (dados: {
+  name?: string; phone: string; interesses: CodigoInvestimento[]; faixa?: string | null;
+  cidade?: string; uf?: string; mensagem?: string;
+}) => rpc<string>('app_registrar_interesse_investimento', { p_dados: dados });
