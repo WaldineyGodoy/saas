@@ -103,6 +103,9 @@ export const montarPayloadEletroposto = (form) => ({
     endereco: {
         cep: form.cep, rua: form.rua, numero: form.numero, bairro: form.bairro,
         cidade: form.cidade, uf: form.uf, ibge: form.ibge,
+        // Coordenadas: o app mostra os eletropostos a ate 30 km de quem esta
+        // nele (11/10/2026). So vao quando a geocodificacao achou o endereco.
+        ...(Number.isFinite(form.lat) && Number.isFinite(form.lng) ? { lat: form.lat, lng: form.lng } : {}),
     },
     qtd_carregadores: numeroOuNulo(form.qtd_carregadores),
     potencia_kw: numeroOuNulo(form.potencia_kw),
@@ -119,3 +122,33 @@ export const mensagemErroEletroposto = (error) => {
     }
     return error.message || 'Erro desconhecido.';
 };
+
+/** Endereço em uma linha, para a geocodificação. */
+export const enderecoEmLinha = (f) => [
+    [f.rua, f.numero].filter(Boolean).join(', '),
+    f.bairro,
+    [f.cidade, f.uf].filter(Boolean).join(' - '),
+    f.cep,
+    'Brasil',
+].filter(Boolean).join(', ');
+
+/**
+ * Coordenadas do endereço do eletroposto pela Mapbox (mesmo token do mapa da
+ * rede). Sem token, sem cidade ou sem resposta: null, e o eletroposto é salvo
+ * sem coordenadas (no app ele só não entra no filtro de 30 km).
+ */
+export async function geocodificarEndereco(form, token, fetchFn = fetch) {
+    if (!token || !String(form?.cidade || '').trim()) return null;
+    try {
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoEmLinha(form))}.json`
+            + `?access_token=${token}&country=br&limit=1&language=pt`;
+        const res = await fetchFn(url);
+        if (!res.ok) return null;
+        const centro = (await res.json())?.features?.[0]?.center;
+        if (!Array.isArray(centro) || centro.length < 2) return null;
+        const [lng, lat] = centro.map(Number);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    } catch {
+        return null;
+    }
+}
