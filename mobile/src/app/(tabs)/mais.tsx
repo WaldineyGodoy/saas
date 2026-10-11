@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePerfil } from '../../lib/api';
 import { avisar, confirmar } from '../../lib/dialogo';
 import { PRIVACIDADE_URL } from '../../lib/links';
+import { NOVIDADES_DA_VERSAO } from '../../lib/versao';
 import { colors, type } from '../../theme/tokens';
 
 const PAPEL: Record<string, string> = {
@@ -57,6 +58,7 @@ export default function Mais() {
       <Button label="Sair" icon="logout" variant="ghost" onPress={sair} style={{ marginTop: 8 }} />
       <Button label="Excluir conta" icon="delete-forever" variant="ghost" onPress={confirmarExclusao} loading={excluindo} />
       <Text style={[type.labelSm, { color: colors.inkMuted, textAlign: 'center' }]}>Versão {Constants.expoConfig?.version ?? '—'}</Text>
+      <Text style={[type.bodySm, { color: colors.inkMuted, textAlign: 'center' }]}>{NOVIDADES_DA_VERSAO}</Text>
     </Screen>
   );
 }

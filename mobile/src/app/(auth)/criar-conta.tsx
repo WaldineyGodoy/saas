@@ -1,15 +1,16 @@
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Campo } from '../../components/Campo';
 import { Button, Card, Icon } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { confirmarIndicador } from '../../lib/api';
 import { celularBR, lerIndicacaoPendente } from '../../lib/indicacao';
 import { PRIVACIDADE_URL } from '../../lib/links';
-import { colors, esquemaAtual, radius, space, type } from '../../theme/tokens';
+import { colors, esquemaAtual, space, type } from '../../theme/tokens';
 
 const SENHA_MINIMA = 8;
 
@@ -125,20 +126,5 @@ export default function CriarConta() {
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function Campo({ label, ...props }: { label: string } & React.ComponentProps<typeof TextInput>) {
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={[type.labelSm, { color: colors.onSurfaceVariant, textTransform: 'uppercase' }]}>{label}</Text>
-      <TextInput
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholderTextColor={colors.inkMuted}
-        style={[type.body, { height: 48, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, color: colors.onSurface, paddingHorizontal: 14 }]}
-        {...props}
-      />
-    </View>
   );
 }

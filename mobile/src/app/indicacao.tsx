@@ -180,6 +180,10 @@ export default function Indicacao() {
         </Pressable>
       ) : null}
 
+      <Pressable onPress={() => router.replace('/comecar')} style={{ alignSelf: 'center', padding: 10 }} accessibilityRole="button">
+        <Text style={[type.bodySm, { color: colors.primaryLight }]}>Quero fazer outra coisa</Text>
+      </Pressable>
+
       {/* Conta nova cai direto aqui, sem as abas: sem isto não havia como sair. */}
       <Pressable onPress={() => confirmar('Sair da conta', `Sair de ${session?.user?.email ?? 'sua conta'}?`, 'Sair', signOut)} style={{ alignSelf: 'center', padding: 10 }} accessibilityRole="button">
         <Text style={[type.bodySm, { color: colors.inkMuted }]}>Entrar com outra conta</Text>

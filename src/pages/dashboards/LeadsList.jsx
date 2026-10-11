@@ -197,7 +197,11 @@ export default function LeadsList() {
             if (!lead.tags || lead.tags.length === 0) {
                 matchesTags = false;
             } else {
-                matchesTags = selectedTags.some(t => lead.tags.includes(t));
+                // O filtro lista os nomes sem '#', e o lead guarda '#Investidor':
+                // compara sem o '#' e sem caixa, senão nenhum lead aparece.
+                const semCerquilha = (t) => String(t).replace(/^#/, '').trim().toLowerCase();
+                const doLead = lead.tags.map(semCerquilha);
+                matchesTags = selectedTags.some(t => doLead.includes(semCerquilha(t)));
             }
         }
         
