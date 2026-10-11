@@ -15,6 +15,7 @@ import HistoryTimeline from './HistoryTimeline';
 import ContratoUsina from './ContratoUsina';
 import ContratoGestaoUsina from './ContratoGestaoUsina';
 import { baixarPdfContratoUsina, CONTRATOS_USINA, DEFAULTS_USINA, gerarPdfContratoUsinaBase64 } from '../lib/contratosUsina';
+import { termosContratoDoPlano, CHAVES_CONTRATO_DO_PLANO, planoAceitaUsina } from '../lib/planoUsina';
 import { paraNumero } from '../lib/contratoBase';
 import { useAuth } from '../contexts/AuthContext';
 import { useBranding } from '../contexts/BrandingContext';
@@ -403,7 +404,7 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         servicos_contratados: [],
         service_values: {}, // JSONB for values
         gestao_percentual: '',
-        plano_assinatura_id: '',
+        plano_usina_id: '',
         leased_area_id: '',
         cep: '',
         rua: '',
@@ -447,7 +448,8 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     const [areasDisponiveis, setAreasDisponiveis] = useState([]);
     const [assinaturas, setAssinaturas] = useState([]);
     const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
-    const [planosRecompensa, setPlanosRecompensa] = useState([]);
+    const [planosUsina, setPlanosUsina] = useState([]);
+    const [originadores, setOriginadores] = useState([]);
     const [enviandoContrato, setEnviandoContrato] = useState(false);
     const [gerandoMinuta, setGerandoMinuta] = useState(false);
     const [cancelandoAssinatura, setCancelandoAssinatura] = useState(null);
@@ -485,19 +487,22 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
         }
     }, []);
 
-    // Planos que o motor de recompensas pode usar nesta usina. Os de
-    // eletroposto ficam de fora: a base deles e outra (projeto 2).
+    // Planos de usina e originadores para a aba Financeiro (spec
+    // 2026-10-06). O plano de recompensas vem embutido pela FK.
     useEffect(() => {
         (async () => {
-            const { data, error } = await supabase
-                .from('planos_assinatura_energia')
-                .select('id, nome, ativo, tipo_recompensa, desconto_assinante, gestao_percentual, piso_fornecedor_pct, recorrente_config')
-                .order('nome');
-            if (error) {
-                console.error('Erro ao carregar planos de recompensa:', error);
-                return;
-            }
-            setPlanosRecompensa((data || []).filter(pl => pl.recorrente_config?.categoria_plano !== 'eletroposto'));
+            const [planos, origs] = await Promise.all([
+                supabase.from('planos_usina')
+                    .select('*, planos_assinatura_energia(nome, tipo_recompensa, desconto_assinante)')
+                    .order('nome'),
+                supabase.from('originators_v2')
+                    .select('id, name, cargo, ativo')
+                    .order('name')
+            ]);
+            if (planos.error) console.error('Erro ao carregar planos de usina:', planos.error);
+            else setPlanosUsina(planos.data || []);
+            if (origs.error) console.error('Erro ao carregar originadores:', origs.error);
+            else setOriginadores(origs.data || []);
         })();
     }, []);
 
@@ -516,6 +521,18 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             setContractOpts({ ...DEFAULTS_USINA, ...usina.contract_terms });
         }
     }, [usina?.id, usina?.contract_terms]);
+
+    // Termos do Plano de Usina mandam no contrato (spec 2026-10-06, secao 3):
+    // com plano, recorrente, taxas, multas e garantia saem dele; sem plano,
+    // voltam ao que a usina tinha gravado ou ao padrao do contrato.
+    const planoUsinaSel = planosUsina.find(pl => pl.id === formData.plano_usina_id) || null;
+    useEffect(() => {
+        const base = { ...DEFAULTS_USINA, ...(usina?.contract_terms || {}) };
+        const termos = planoUsinaSel
+            ? termosContratoDoPlano(planoUsinaSel)
+            : Object.fromEntries(CHAVES_CONTRATO_DO_PLANO.map(k => [k, base[k]]));
+        setContractOpts(prev => ({ ...prev, ...termos }));
+    }, [planoUsinaSel, usina?.contract_terms]);
 
     const contextoContrato = () => ({
         usina: { ...usina, ...formData, address: { rua: formData.rua, numero: formData.numero, bairro: formData.bairro, cidade: formData.cidade, uf: formData.uf, cep: formData.cep } },
@@ -562,6 +579,9 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
             // criaria uma cópia que envelhece sozinha assim que alguém
             // corrigir o valor investido na aba Dados.
             if (chave === 'valorTotal') continue;
+            // Com Plano de Usina, recorrente, taxas, multas e garantia sao do
+            // plano: gravar copia na usina faria duas verdades.
+            if (formData.plano_usina_id && CHAVES_CONTRATO_DO_PLANO.includes(chave)) continue;
             const bruto = contractOpts[chave];
             if (typeof padrao === 'number') {
                 const n = paraNumero(bruto);
@@ -1099,7 +1119,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                 servicos_contratados: usina.servicos_contratados || [],
                 service_values: usina.service_values || {},
                 gestao_percentual: usina.gestao_percentual || '',
-                plano_assinatura_id: usina.plano_assinatura_id || '',
+                plano_usina_id: usina.plano_usina_id || '',
                 leased_area_id: usina.leased_area_id || '',
                 cep: usina.address?.cep || '',
                 rua: usina.address?.rua || '',
@@ -1784,7 +1804,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
         // dados que já estão no cadastro do fornecedor.
         const { data } = await supabase
             .from('suppliers')
-            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf')
+            .select('id, name, phone, cnpj, email, address, legal_partner_name, legal_partner_cpf, originator_id')
             .order('name');
         setSuppliers(data || []);
     };
@@ -3282,7 +3302,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
             service_values: formData.service_values,
             gestao_percentual: Number(formData.gestao_percentual),
             // String vazia num campo uuid e erro do Postgres, nao "sem plano".
-            plano_assinatura_id: formData.plano_assinatura_id || null,
+            plano_usina_id: formData.plano_usina_id || null,
             // String vazia num campo uuid é erro do Postgres, não "sem valor".
             leased_area_id: formData.leased_area_id || null,
             // Parcelas, prazos e demais condições da aba Contratos. Antes só
@@ -4290,42 +4310,62 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                 )}
                             </div>
 
-                            {/* Plano de Recompensas: e o que liga o motor de split nesta usina */}
+                            {/* Plano de Usina: liga o split desta usina (spec 2026-10-06) */}
                             {(() => {
-                                const planoSel = planosRecompensa.find(pl => pl.id === formData.plano_assinatura_id);
-                                const ativoNoBanco = !!usina?.plano_assinatura_id;
+                                const recompensas = planoUsinaSel?.planos_assinatura_energia;
+                                const mudouPlano = (formData.plano_usina_id || '') !== (usina?.plano_usina_id || '');
+                                const seletor = { width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', fontWeight: 600, color: '#1e3a8a' };
                                 return (
                                     <div style={{ marginTop: '1.5rem', background: '#eff6ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                         <div>
-                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e40af', fontWeight: 700 }}>Plano de Recompensas</h4>
-                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Define o split de cada fatura paga das UCs desta usina</p>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e40af', fontWeight: 700 }}>Plano de Usina</h4>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Gestão B2W, termos do contrato e plano de recompensas desta usina</p>
                                         </div>
                                         <select
                                             className="crm-input"
-                                            value={formData.plano_assinatura_id || ''}
-                                            onChange={e => setFormData({ ...formData, plano_assinatura_id: e.target.value })}
-                                            style={{ padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', fontWeight: 600, color: '#1e3a8a' }}
+                                            value={formData.plano_usina_id || ''}
+                                            onChange={e => setFormData({ ...formData, plano_usina_id: e.target.value })}
+                                            style={seletor}
                                         >
-                                            <option value="">Sem plano (o razão não lança gestão B2W nem recompensas; fornecedor fica com o caixa)</option>
-                                            {planosRecompensa.map(pl => (
-                                                <option key={pl.id} value={pl.id} disabled={!pl.ativo && pl.id !== formData.plano_assinatura_id}>
-                                                    {pl.nome} · {pl.tipo_recompensa} · desconto {Number(pl.desconto_assinante)}%{pl.ativo ? '' : ' (inativo)'}
+                                            <option value="">Sem plano de usina</option>
+                                            {planosUsina.map(pl => (
+                                                <option key={pl.id} value={pl.id} disabled={!planoAceitaUsina(pl) && pl.id !== formData.plano_usina_id}>
+                                                    {pl.nome} · gestão {Number(pl.percentual_recorrente)}%
+                                                    {pl.status === 'somente_contratos' ? ' (somente contratos)' : !pl.plano_assinatura_id ? ' (sem plano de recompensas)' : ''}
                                                 </option>
                                             ))}
                                         </select>
-                                        {planoSel && (
-                                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af' }}>
-                                                Gestão B2W {Number(planoSel.gestao_percentual)}% e piso do fornecedor {Number(planoSel.piso_fornecedor_pct)}% da tarifa bruta, ambos do plano.
-                                                Com plano, o razão usa a gestão do plano, não a "Taxa Percentual" acima.
+                                        {planoUsinaSel && (
+                                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af', lineHeight: 1.5 }}>
+                                                Gestão B2W {Number(planoUsinaSel.percentual_recorrente)}% · administração R$ {Number(planoUsinaSel.taxa_admin_reais).toFixed(2).replace('.', ',')} por consumidor/mês · recuperação {Number(planoUsinaSel.taxa_recuperacao_pct)}%
+                                                {recompensas ? ` · recompensas: ${recompensas.nome} (${recompensas.tipo_recompensa}, desconto ${Number(recompensas.desconto_assinante)}%)` : ''}
+                                                {` · originador da usina: ${Number(planoUsinaSel.originador_recorrente_pct)}% recorrente`}
+                                                {(planoUsinaSel.originador_bonus_fechamentos || []).length > 0 ? `, bônus no(s) fechamento(s) ${planoUsinaSel.originador_bonus_fechamentos.join(', ')}` : ''}.
+                                                {' '}Com plano, o razão usa a gestão do plano, não a "Taxa Percentual" acima, e o contrato de compra e venda sai com os termos do plano.
                                             </p>
                                         )}
-                                        {(formData.plano_assinatura_id || '') !== (usina?.plano_assinatura_id || '') && (
+                                        {mudouPlano && (
                                             <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
-                                                {formData.plano_assinatura_id
-                                                    ? 'Ao salvar, toda fatura paga a partir de agora das UCs desta usina passa a lançar gestão, recompensas e repasse pelo plano. Faturas já lançadas não mudam.'
-                                                    : (ativoNoBanco ? 'Ao salvar, as próximas faturas pagas deixam de lançar gestão B2W e recompensas: o fornecedor fica com o caixa inteiro.' : '')}
+                                                {formData.plano_usina_id
+                                                    ? 'Ao salvar, toda fatura paga a partir de agora das UCs desta usina passa a lançar a gestão B2W pelo plano de usina. Faturas já lançadas não mudam.'
+                                                    : 'Ao salvar, a gestão B2W volta a sair do plano de cada UC; UC sem plano não lança gestão nem recompensas.'}
                                             </p>
                                         )}
+                                        {(() => {
+                                            // O originador mora no fornecedor e a usina herda
+                                            // (spec, decisao 6b): aqui so se mostra.
+                                            const forn = suppliers.find(f => f.id === formData.supplier_id);
+                                            const orig = originadores.find(o => o.id === forn?.originator_id);
+                                            return (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e40af' }}>
+                                                    <strong>Originador da usina:</strong>{' '}
+                                                    {orig
+                                                        ? `${orig.name}${orig.ativo ? '' : ' (inativo — a parte dele fica para a associação)'}`
+                                                        : 'nenhum — o previsto no plano fica para a associação'}
+                                                    {' · '}herdado do fornecedor; altere no cadastro do fornecedor.
+                                                </p>
+                                            );
+                                        })()}
                                     </div>
                                 );
                             })()}
