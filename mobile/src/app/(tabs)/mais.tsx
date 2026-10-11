@@ -2,10 +2,11 @@ import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Linking, Text } from 'react-native';
+import { Linking, Text } from 'react-native';
 import { Button, Card, ListItem, Screen, SectionLabel } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePerfil } from '../../lib/api';
+import { avisar, confirmar } from '../../lib/dialogo';
 import { PRIVACIDADE_URL } from '../../lib/links';
 import { colors, type } from '../../theme/tokens';
 
@@ -18,30 +19,23 @@ export default function Mais() {
   const { signOut, session, excluirConta } = useAuth();
   const [excluindo, setExcluindo] = useState(false);
   const { data: perfil } = usePerfil();
-  const sair = () => Alert.alert('Sair da conta', 'Deseja sair do app?', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Sair', style: 'destructive', onPress: signOut },
-  ]);
+  const sair = () => confirmar('Sair da conta', 'Deseja sair do app?', 'Sair', signOut);
 
   // Decisao do dono (05/10/2026): apaga o login e abre pedido de cancelamento
   // da assinatura para a equipe; contrato, UCs e faturas seguem o contrato.
-  const confirmarExclusao = () => Alert.alert(
+  const confirmarExclusao = () => confirmar(
     'Excluir conta',
     'Seu login no app será apagado e a equipe B2W receberá um pedido de cancelamento da sua assinatura, '
       + 'que segue as regras do contrato (aviso prévio e faturas em aberto). Seus dados de contrato e faturas '
       + 'continuam guardados pelo prazo exigido por lei. Deseja continuar?',
-    [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir conta', style: 'destructive', onPress: async () => {
-          setExcluindo(true);
-          const erro = await excluirConta();
-          setExcluindo(false);
-          if (erro) Alert.alert('Não foi possível excluir', erro);
-          else Alert.alert('Conta excluída', 'Recebemos seu pedido. A equipe B2W vai entrar em contato para concluir o cancelamento.');
-        },
-      },
-    ],
+    'Excluir conta',
+    async () => {
+      setExcluindo(true);
+      const erro = await excluirConta();
+      setExcluindo(false);
+      if (erro) avisar('Não foi possível excluir', erro);
+      else avisar('Conta excluída', 'Recebemos seu pedido. A equipe B2W vai entrar em contato para concluir o cancelamento.');
+    },
   );
 
   return (

@@ -6,10 +6,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Divider, Empty, Icon, KeyValue, Loading, Screen, SectionLabel } from '../../components/ui';
 import { gerarTermoAditivo, lerConta, usePlanosParaUc, type PlanoUc } from '../../lib/api';
 import { contaParaPedido, LIGACAO, mensagemDeErro, PDF_MAXIMO_BYTES, tamanhoReduzido, type ContaLida } from '../../lib/conta';
+import { avisar } from '../../lib/dialogo';
 import { fmtPct } from '../../lib/format';
 import { colors, radius, type } from '../../theme/tokens';
 
@@ -61,7 +62,7 @@ export default function NovaUc() {
   const fotografar = () => ler(async () => {
     const permissao = await ImagePicker.requestCameraPermissionsAsync();
     if (!permissao.granted) {
-      Alert.alert('Câmera bloqueada', 'Libere o acesso à câmera nas configurações do celular, ou escolha uma foto da galeria.');
+      avisar('Câmera bloqueada', 'Libere o acesso à câmera nas configurações do celular, ou escolha uma foto da galeria.');
       return null;
     }
     const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });

@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { confirmarIndicador, registrarInteresse, resolverLinkCurto } from '../lib/api';
 import { celularBR, extrairIndicador, guardarIndicacaoPendente, lerIndicacaoPendente, limparIndicacaoPendente } from '../lib/indicacao';
 import { guardarVisitaAdesao } from '../lib/adesao';
+import { confirmar } from '../lib/dialogo';
 import { colors, radius, space, type } from '../theme/tokens';
 
 type Meio = 'link' | 'qr' | 'app';
@@ -21,7 +22,7 @@ type Indicador = { id: string; nome: string; meio: Meio };
  * trava o cadastro exigindo convite).
  */
 export default function Indicacao() {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
   const qc = useQueryClient();
   const meta = (session?.user?.user_metadata ?? {}) as { name?: string; phone?: string };
   const [indicador, setIndicador] = useState<Indicador | null>(null);
@@ -178,6 +179,11 @@ export default function Indicacao() {
           </Text>
         </Pressable>
       ) : null}
+
+      {/* Conta nova cai direto aqui, sem as abas: sem isto não havia como sair. */}
+      <Pressable onPress={() => confirmar('Sair da conta', `Sair de ${session?.user?.email ?? 'sua conta'}?`, 'Sair', signOut)} style={{ alignSelf: 'center', padding: 10 }} accessibilityRole="button">
+        <Text style={[type.bodySm, { color: colors.inkMuted }]}>Entrar com outra conta</Text>
+      </Pressable>
     </Screen>
   );
 }
