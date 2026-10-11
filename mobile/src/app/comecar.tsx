@@ -2,6 +2,7 @@ import { router, type Href } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { Card, Hero, Icon, Screen, type IconName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
+import { usePerfil } from '../lib/api';
 import { confirmar } from '../lib/dialogo';
 import { guardarObjetivo, type Objetivo } from '../lib/objetivo';
 import { colors, space, type } from '../theme/tokens';
@@ -23,6 +24,13 @@ const OPCOES: Opcao[] = [
  */
 export default function Comecar() {
   const { session, signOut } = useAuth();
+  const { data: perfil } = usePerfil();
+  // Adesão de energia já começada: retoma de onde parou, sem perguntar a
+  // indicação de novo.
+  const aderindo = Boolean(perfil?.lead);
+  const opcoes = OPCOES.map((o) => (o.objetivo === 'energia' && aderindo
+    ? { ...o, texto: 'Sua adesão está em andamento. Continue de onde parou.', destino: '/adesao' as Href }
+    : o));
 
   const escolher = async (o: Opcao) => {
     await guardarObjetivo(session?.user?.id, o.objetivo);
@@ -33,7 +41,7 @@ export default function Comecar() {
   return (
     <Screen>
       <Hero kicker="Bem-vindo à B2W" title="O que você quer fazer?" subtitle="Escolha por onde começar. Depois você pode explorar as outras opções pelo início." />
-      {OPCOES.map((o) => (
+      {opcoes.map((o) => (
         <Card key={o.objetivo} onPress={() => escolher(o)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${colors.primary}1F`, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name={o.icon} color={colors.primary} size={24} />

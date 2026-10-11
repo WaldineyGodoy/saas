@@ -63,26 +63,23 @@ export default function Inicio() {
         title="Ecossistema B2W"
         subtitle="Acompanhe sua economia, seus investimentos e sua rede de indicações em poucos toques."
       />
-      {aderindo ? (
+      {perfil.data?.sem_produto ? (
+        // Cadastro nao concluido (11/10/2026): o botao leva as opcoes, onde
+        // "Assinar energia" retoma a adesao ja comecada.
         <Card style={{ gap: 8, borderColor: colors.secondary }}>
-          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Continue sua adesão</Text>
+          <Text style={[type.headlineSm, { color: colors.onSurface }]}>Continue seu cadastro</Text>
           <Text style={[type.bodySm, { color: colors.inkSecondary }]}>
-            {perfil.data?.lead?.indicador_nome ? `Indicação de ${perfil.data.lead.indicador_nome} registrada. ` : ''}Falta pouco para economizar na conta de luz.
+            {aderindo
+              ? `${perfil.data?.lead?.indicador_nome ? `Indicação de ${perfil.data.lead.indicador_nome} registrada. ` : ''}Sua adesão de energia está em andamento.`
+              : 'Assinar energia, recarregar, ser parceiro ou investir.'}
           </Text>
-          <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/adesao')} />
+          <Button label="Continuar" icon="arrow-forward" onPress={() => router.push('/comecar')} />
         </Card>
       ) : null}
       {investindo ? (
         <Card style={{ gap: 8, borderColor: colors.secondary }}>
           <Text style={[type.headlineSm, { color: colors.onSurface }]}>Interesse em investir recebido</Text>
           <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Um especialista da B2W vai falar com você pelo WhatsApp.</Text>
-        </Card>
-      ) : null}
-      {novo ? (
-        <Card style={{ gap: 8 }}>
-          <Text style={[type.headlineSm, { color: colors.onSurface }]}>O que você quer fazer?</Text>
-          <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Assinar energia, recarregar, ser parceiro ou investir.</Text>
-          <Button label="Ver opções" icon="apps" variant="secondary" onPress={() => router.push('/comecar')} />
         </Card>
       ) : null}
       <SearchInput value={busca} onChangeText={setBusca} placeholder="Buscar solução (ex: Solar, Recarga, Indicar…)" />
