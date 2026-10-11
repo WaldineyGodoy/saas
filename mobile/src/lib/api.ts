@@ -120,7 +120,7 @@ export async function gerarTermoAditivo(conta: unknown, planoId: string): Promis
 // Indicação e cadastro pelo app (migração 20261006d)
 // ---------------------------------------------------------------------------
 
-export type IndicadorPublico = { valido: boolean; id?: string; primeiro_nome?: string; motivo?: string };
+export type IndicadorPublico = { valido: boolean; id?: string; tipo?: 'assinante' | 'originador'; primeiro_nome?: string; motivo?: string };
 
 /** Confere o código do link/QR e devolve só o primeiro nome de quem indicou. */
 export const confirmarIndicador = (id: string) =>

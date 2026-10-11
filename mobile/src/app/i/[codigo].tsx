@@ -5,7 +5,7 @@ import { Button, Card, Icon, Loading } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { confirmarIndicador } from '../../lib/api';
 import { ehComputador, extrairIndicador, guardarIndicacaoPendente } from '../../lib/indicacao';
-import { linkSiteIndicacao } from '../../lib/links';
+import { linkSiteConvite, linkSiteIndicacao } from '../../lib/links';
 import { colors, space, type } from '../../theme/tokens';
 
 /**
@@ -15,7 +15,8 @@ import { colors, space, type } from '../../theme/tokens';
  * pessoa já estiver logada.
  *
  * No computador (webapp) oferece antes o site, que continua sendo o caminho
- * por lá (decisão A de 06/10/2026), com a mesma indicação.
+ * por lá (decisão A de 06/10/2026), com a mesma indicação. O id pode ser de
+ * um assinante (?indicador=) ou de um originador (/convite/, comissão).
  */
 const computador = () =>
   Platform.OS === 'web' && typeof navigator !== 'undefined'
@@ -28,6 +29,7 @@ export default function LinkIndicacao() {
   const [pronto, setPronto] = useState(false);
   const [id, setId] = useState<string | null>(null);
   const [nome, setNome] = useState<string | null>(null);
+  const [originador, setOriginador] = useState(false);
   const [ficarNoApp, setFicarNoApp] = useState(false);
 
   useEffect(() => {
@@ -35,7 +37,11 @@ export default function LinkIndicacao() {
     const valido = lido && 'id' in lido ? lido.id : null;
     setId(valido);
     if (valido && computador()) {
-      confirmarIndicador(valido).then((r) => { if (r?.valido && r.primeiro_nome) setNome(r.primeiro_nome); }).catch(() => {});
+      confirmarIndicador(valido).then((r) => {
+        if (!r?.valido) return;
+        if (r.primeiro_nome) setNome(r.primeiro_nome);
+        setOriginador(r.tipo === 'originador');
+      }).catch(() => {});
     }
     (valido ? guardarIndicacaoPendente(valido, 'link') : Promise.resolve()).finally(() => setPronto(true));
   }, [codigo]);
@@ -60,7 +66,7 @@ export default function LinkIndicacao() {
             <Icon name="computer" color={colors.secondary} />
             <Text style={[type.body, { color: colors.onSurface, flex: 1 }]}>Pelo site, aqui no computador. A indicação vai junto.</Text>
           </View>
-          <Button label="Continuar pelo site" icon="open-in-new" onPress={() => Linking.openURL(linkSiteIndicacao(id, nome))} />
+          <Button label="Continuar pelo site" icon="open-in-new" onPress={() => Linking.openURL((originador ? linkSiteConvite : linkSiteIndicacao)(id, nome))} />
         </Card>
         <Card style={{ gap: space.md }}>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>

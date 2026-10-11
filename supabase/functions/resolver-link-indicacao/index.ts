@@ -3,10 +3,10 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { requireUser } from '../_shared/auth.ts'
 
 /**
- * Resolve o link CURTO de indicação (o que vai no QR do assinante) para o id
- * de quem indicou. O app não consegue fazer isso sozinho: o destino só aparece
- * seguindo o redirecionamento do encurtador, e no webapp o navegador bloqueia
- * essa leitura (CORS).
+ * Resolve o link CURTO de indicação (o que vai no QR do assinante ou no
+ * convite do originador) para o id de quem indicou. O app não consegue fazer
+ * isso sozinho: o destino só aparece seguindo o redirecionamento do
+ * encurtador, e no webapp o navegador bloqueia essa leitura (CORS).
  *
  * POST { url }   (sessão do app)
  *   200 { id } | 404 { error } link sem indicação | 400 entrada | 401 sessão
@@ -26,7 +26,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 export function indicadorDaUrl(destino: string): string | null {
     try {
         const u = new URL(destino)
+        // Assinante: ?indicador=<id>. Originador: /convite/?name=..&id=<id>.
         const p = u.searchParams.get('indicador')
+            ?? (/^\/convite\/?$/i.test(u.pathname) ? u.searchParams.get('id') : null)
         if (p && new RegExp(`^${UUID.source}$`, 'i').test(p)) return p.toLowerCase()
         const rota = u.pathname.match(new RegExp(`/i/(${UUID.source})`, 'i'))
         return rota ? rota[1].toLowerCase() : null

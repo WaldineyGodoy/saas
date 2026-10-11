@@ -9,6 +9,13 @@ describe('extrairIndicador', () => {
   it('le o link longo da raiz', () => {
     expect(extrairIndicador(`https://b2wenergia.com.br/?indicador=${ID}&name=Maria`)).toEqual({ id: ID });
   });
+  it('le o convite do originador', () => {
+    expect(extrairIndicador(`https://b2wenergia.com.br/convite/?name=Carlos&id=${ID}`)).toEqual({ id: ID });
+    expect(extrairIndicador(`b2wenergia.com.br/convite?id=${ID.toUpperCase()}`)).toEqual({ id: ID });
+  });
+  it('id solto fora do convite nao vale', () => {
+    expect(extrairIndicador(`https://b2wenergia.com.br/outra/?id=${ID}`)).toBeNull();
+  });
   it('le a rota do webapp', () => {
     expect(extrairIndicador(`https://apps.b2wenergia.com.br/i/${ID.toUpperCase()}`)).toEqual({ id: ID });
   });
