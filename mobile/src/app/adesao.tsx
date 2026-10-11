@@ -66,10 +66,18 @@ function Erro({ texto }: { texto: string }) {
 }
 
 /** Foto, galeria ou PDF: os três caminhos de enviar um arquivo. */
-function EscolherArquivo({ onArquivo, ocupado, pdf = true }: { onArquivo: (a: Arquivo) => void; ocupado?: boolean; pdf?: boolean }) {
+function EscolherArquivo({ onArquivo, onErro, ocupado, pdf = true }: {
+  onArquivo: (a: Arquivo) => void; onErro: (mensagem: string) => void; ocupado?: boolean; pdf?: boolean;
+}) {
+  // Falha ao ler o arquivo aparece na tela: antes ficava muda ("nada aconteceu").
   const usar = (obter: () => Promise<Arquivo | null>) => async () => {
-    const a = await obter();
-    if (a) onArquivo(a);
+    onErro('');
+    try {
+      const a = await obter();
+      if (a) onArquivo(a);
+    } catch (e) {
+      onErro(e instanceof Error ? e.message : String(e));
+    }
   };
   return (
     <View style={{ gap: 8 }}>
@@ -193,7 +201,7 @@ function Nova({ onCriada }: { onCriada: () => Promise<void> }) {
       <Card style={{ gap: space.md }}>
         <Passo n={1} titulo="Conta de energia" />
         <Text style={[type.body, { color: colors.onSurface }]}>Fotografe a conta inteira, com boa luz, ou envie o PDF da distribuidora.</Text>
-        <EscolherArquivo onArquivo={ler} />
+        <EscolherArquivo onArquivo={ler} onErro={setErro} />
       </Card>
     </Screen>
   );
@@ -430,7 +438,7 @@ function Andamento({ adesao, onAtualizar }: { adesao: NonNullable<MinhaAdesao>; 
                 {f.tipo === 'conta_energia' && f.numero_uc ? `${NOME_DOCUMENTO[f.tipo]} da UC ${f.numero_uc}` : NOME_DOCUMENTO[f.tipo]}
               </Text>
               {f.tipo === 'identidade' ? <Text style={[type.bodySm, { color: colors.inkSecondary }]}>Frente e verso legíveis. Pode ser foto ou PDF.</Text> : null}
-              <EscolherArquivo onArquivo={enviar(f)} ocupado={enviando === chave} />
+              <EscolherArquivo onArquivo={enviar(f)} onErro={setErro} ocupado={enviando === chave} />
             </Card>
           );
         })}
