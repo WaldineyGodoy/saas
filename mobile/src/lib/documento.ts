@@ -36,7 +36,7 @@ export function documentoValido(v: string) {
 
 export const tipoDocumento = (v: string): 'cpf' | 'cnpj' => (soDigitos(v).length > 11 ? 'cnpj' : 'cpf');
 
-export type EnderecoCep = { rua: string; bairro: string; cidade: string; uf: string };
+export type EnderecoCep = { rua: string; bairro: string; cidade: string; uf: string; ibge: string };
 
 /** ViaCEP. Sem resposta, a pessoa preenche o endereço à mão. */
 export async function buscarCep(cep: string): Promise<EnderecoCep | null> {
@@ -46,7 +46,7 @@ export async function buscarCep(cep: string): Promise<EnderecoCep | null> {
     const r = await fetch(`https://viacep.com.br/ws/${c}/json/`);
     const j = await r.json();
     if (!r.ok || j?.erro) return null;
-    return { rua: j.logradouro ?? '', bairro: j.bairro ?? '', cidade: j.localidade ?? '', uf: j.uf ?? '' };
+    return { rua: j.logradouro ?? '', bairro: j.bairro ?? '', cidade: j.localidade ?? '', uf: j.uf ?? '', ibge: j.ibge ?? '' };
   } catch {
     return null;
   }
