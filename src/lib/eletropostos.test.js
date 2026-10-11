@@ -11,6 +11,8 @@ import {
     montarPayloadEletroposto,
     mensagemErroEletroposto,
     casaBusca,
+    geocodificarEndereco,
+    enderecoEmLinha,
 } from './eletropostos.js';
 
 const E1 = {
@@ -123,4 +125,22 @@ test('busca: numero da UC casa com ou sem pontuacao', () => {
     assert.equal(casaBusca('', ['qualquer']), true);
     // dois digitos soltos nao casam por digito (evita "12" achar metade da base)
     assert.equal(casaBusca('12', ['1.2']), false);
+});
+
+test('payload leva as coordenadas so quando existem', () => {
+    const base = { nome: 'P', status: 'operando', cep: '', rua: '', numero: '', bairro: '', cidade: 'Natal', uf: 'RN', ibge: '' };
+    assert.deepEqual(montarPayloadEletroposto({ ...base, lat: -5.79, lng: -35.21 }).endereco.lat, -5.79);
+    assert.equal('lat' in montarPayloadEletroposto({ ...base, lat: null, lng: null }).endereco, false);
+});
+
+test('geocodificacao: monta a busca e le o centro da Mapbox', async () => {
+    const form = { rua: 'Rua A', numero: '10', bairro: 'Centro', cidade: 'Natal', uf: 'RN', cep: '59000-000' };
+    assert.equal(enderecoEmLinha(form), 'Rua A, 10, Centro, Natal - RN, 59000-000, Brasil');
+    let pedida = '';
+    const fetchFalso = async (url) => { pedida = url; return { ok: true, json: async () => ({ features: [{ center: [-35.21, -5.79] }] }) }; };
+    assert.deepEqual(await geocodificarEndereco(form, 'tok', fetchFalso), { lat: -5.79, lng: -35.21 });
+    assert.ok(pedida.includes('country=br') && pedida.includes('access_token=tok'));
+    assert.equal(await geocodificarEndereco(form, '', fetchFalso), null);
+    assert.equal(await geocodificarEndereco({ ...form, cidade: '' }, 'tok', fetchFalso), null);
+    assert.equal(await geocodificarEndereco(form, 'tok', async () => { throw new Error('rede'); }), null);
 });

@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
 import { Text } from 'react-native';
+import { BotaoConvite, ConviteRodape } from '../../components/Convites';
 import { LinkIndicacao } from '../../components/LinkIndicacao';
-import { Badge, Button, Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
+import { Badge, Card, Empty, ErrorState, Hero, Loading, Metric, Row, Screen, SectionLabel } from '../../components/ui';
 import { useMeusEletropostos, usePerfil } from '../../lib/api';
 import { enderecoCurto, fmtBRL, fmtKwh, fmtPct } from '../../lib/format';
 import { linkIndicacao, STATUS_PODE_INDICAR, textoIndicacao } from '../../lib/links';
@@ -24,7 +24,7 @@ export default function DriveConnect() {
       <SectionLabel title="Meu eletroposto" aside={postos.data?.length ? `${postos.data.length} hub(s)` : undefined} />
       {postos.isLoading ? <Loading /> : postos.error ? <ErrorState error={postos.error} onRetry={() => postos.refetch()} /> : (postos.data ?? []).length === 0 ? (
         <Empty icon="ev-station" title="Você ainda não tem cotas de eletroposto" text="Quando você investir em um hub B2W, a operação dele aparece aqui."
-          action={<Button label="Ver eletropostos" icon="ev-station" variant="secondary" onPress={() => router.navigate('/eletroposto')} style={{ marginTop: 8 }} />} />
+          action={<BotaoConvite label="Ter renda com usinas e eletropostos" icon="ev-station" />} />
       ) : postos.data!.map((p) => {
         const [label, tone] = eletropostoStatus(p.status);
         return (
@@ -55,6 +55,9 @@ export default function DriveConnect() {
       ) : (
         <Empty icon="person-add" title="Link de indicação indisponível" text="O link é liberado para assinantes com contrato assinado." />
       )}
+      {(postos.data ?? []).length > 0 ? (
+        <ConviteRodape titulo="Amplie sua rede de recarga" texto="Adquira mais um eletroposto e aumente sua renda com cada recarga." botao="Quero mais um eletroposto" icon="ev-station" />
+      ) : null}
     </Screen>
   );
 }
