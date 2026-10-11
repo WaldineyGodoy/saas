@@ -13,6 +13,7 @@ import {
     gerarPdfContratoFornecedorBase64, montarTextoContratoFornecedor
 } from '../lib/contratoFornecedor';
 import { numeroBr, paraNumero } from '../lib/contratoBase';
+import { condicoesIniciaisGestao } from '../lib/planoUsina';
 
 /**
  * Contrato de Administração e Gestão de Créditos Energéticos, na aba
@@ -72,7 +73,7 @@ const resumoEnvio = (envio) => `WhatsApp: ${envio.whatsapp} · E-mail: ${envio.e
 const algumCanalFalhou = (envio) =>
     String(envio.whatsapp).startsWith('falhou') || String(envio.email).startsWith('falhou');
 
-export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico }) {
+export default function ContratoGestaoUsina({ usina, supplierId, registrarHistorico, planoUsina }) {
     const { showAlert, showConfirm } = useUI();
     const { branding } = useBranding();
 
@@ -140,11 +141,14 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                 // na usina, e digitá-la de novo é como o contrato e o
                 // fechamento mensal acabam divergindo — mas só como
                 // sugestão: valor já gravado no fornecedor vence.
-                const tela = condicoesParaTela(forn?.contract_terms);
-                const gestao = Number((lista.find(u => u.id === usina?.id) || lista[0])?.gestao_percentual);
-                if (gestao > 0 && forn?.contract_terms?.percentualRecorrente === undefined) {
-                    tela.percentualRecorrente = numeroBr(gestao);
-                }
+                // Por campo (spec do plano de usina, decisao 10): o gravado no
+                // fornecedor > o plano da usina aberta > DEFAULTS_FORNECEDOR. Sem
+                // plano, a taxa de gestao da usina sugere a recorrente, como antes.
+                const tela = condicoesParaTela(condicoesIniciaisGestao({
+                    plano: planoUsina,
+                    gravados: forn?.contract_terms,
+                    gestaoUsina: (lista.find(u => u.id === usina?.id) || lista[0])?.gestao_percentual
+                }));
                 setOpts(tela);
                 setDraft('');
             } catch (e) {
@@ -156,7 +160,7 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
         })();
         return () => { cancelado = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [supplierId, usina?.id]);
+    }, [supplierId, usina?.id, planoUsina?.id]);
 
     // Memoizado porque cada tecla digitada chega aqui, e remontar 16 mil
     // caracteres a cada uma não tem por quê.
@@ -528,6 +532,11 @@ export default function ContratoGestaoUsina({ usina, supplierId, registrarHistor
                 <h4 style={{ margin: '0 0 1.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#1e293b' }}>
                     <FileSignature size={20} color="#3b82f6" /> Condições Comerciais
                 </h4>
+                {planoUsina && (
+                    <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: '#1e40af' }}>
+                        Valores sugeridos pelo Plano de Usina "{planoUsina.nome}" desta usina. O que já está gravado no fornecedor vale, e todos os campos continuam editáveis.
+                    </p>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
                     {CAMPOS_CONDICOES.map(campo => (

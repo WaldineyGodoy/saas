@@ -11,7 +11,8 @@ import {
     validarPlanoUsina,
     rascunhoNovaVersao,
     payloadPlanoUsina,
-    planoAceitaUsina
+    planoAceitaUsina,
+    condicoesIniciaisGestao
 } from '../src/lib/planoUsina.js';
 
 const PLANO = {
@@ -146,5 +147,31 @@ describe('versao e gravacao', () => {
         expect(planoAceitaUsina({ ...PLANO, status: 'somente_contratos' })).toBe(false);
         expect(planoAceitaUsina({ ...PLANO, plano_assinatura_id: null })).toBe(false);
         expect(planoAceitaUsina(null)).toBe(false);
+    });
+});
+
+describe('condicoesIniciaisGestao (spec decisao 10)', () => {
+    const plano = { desconto_pct: 18, percentual_recorrente: 12, taxa_admin_reais: 9, taxa_recuperacao_pct: 7,
+                    dia_corte: 6, dia_repasse: 16, prazo_transferencia_dias: 60, prazo_honorarios_dias: 150 };
+
+    test('sem nada gravado no fornecedor, o plano da usina aberta sugere os oito campos', () => {
+        expect(condicoesIniciaisGestao({ plano, gravados: null, gestaoUsina: 10 })).toEqual({
+            desconto: 18, percentualRecorrente: 12, taxaAdmin: 9, taxaRecuperacao: 7,
+            diaCorte: 6, diaRepasse: 16, prazoTransferencia: 60, prazoHonorarios: 150
+        });
+    });
+
+    test('o gravado no fornecedor vence campo a campo; o que falta vem do plano', () => {
+        const r = condicoesIniciaisGestao({ plano, gravados: { desconto: 20, foro: 'Natal/RN', minutas: { gestao: 'x' } }, gestaoUsina: 10 });
+        expect(r.desconto).toBe(20);
+        expect(r.diaRepasse).toBe(16);
+        expect(r.foro).toBe('Natal/RN');
+        expect(r.minutas).toEqual({ gestao: 'x' });
+    });
+
+    test('sem plano, a taxa de gestao da usina sugere a recorrente, como antes', () => {
+        expect(condicoesIniciaisGestao({ plano: null, gravados: {}, gestaoUsina: 10 })).toEqual({ percentualRecorrente: 10 });
+        expect(condicoesIniciaisGestao({ plano: null, gravados: { percentualRecorrente: 9 }, gestaoUsina: 10 })).toEqual({ percentualRecorrente: 9 });
+        expect(condicoesIniciaisGestao({ plano: null, gravados: null, gestaoUsina: 0 })).toEqual({});
     });
 });

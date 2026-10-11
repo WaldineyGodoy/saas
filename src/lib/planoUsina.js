@@ -127,3 +127,16 @@ export const payloadPlanoUsina = (dados) => ({
 /** Mesma regra de fn_usinas_vinculo_plano_usina. */
 export const planoAceitaUsina = (plano) =>
     !!plano && plano.status === 'ativo' && !!plano.plano_assinatura_id;
+
+/**
+ * Valores iniciais do Contrato de Gestão de Créditos (spec, decisão 10).
+ * Por campo: o gravado em suppliers.contract_terms > o plano da usina de
+ * onde o contrato foi aberto > nada (a tela completa com DEFAULTS_FORNECEDOR).
+ * Sem plano, a taxa de gestão da usina sugere a Remuneração Recorrente,
+ * como a tela já fazia.
+ */
+export const condicoesIniciaisGestao = ({ plano, gravados, gestaoUsina }) => {
+    const sugestao = plano ? termosGestaoDoPlano(plano) : {};
+    if (!plano && Number(gestaoUsina) > 0) sugestao.percentualRecorrente = Number(gestaoUsina);
+    return { ...sugestao, ...(gravados || {}) };
+};

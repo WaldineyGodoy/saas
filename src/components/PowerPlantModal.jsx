@@ -5652,6 +5652,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             usina={usina}
                                             supplierId={formData.supplier_id}
                                             registrarHistorico={addHistory}
+                                            planoUsina={planoUsinaSel}
                                         />
                                     ) : (
                                     <>
