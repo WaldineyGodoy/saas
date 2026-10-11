@@ -755,6 +755,44 @@ BEGIN
         IF v_contas IS DISTINCT FROM ARRAY[-120, -40, -840, 0]::numeric[] THEN
             RAISE EXCEPTION 'FALHA C2: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-40,-840,0}', v_contas;
         END IF;
+
+        -- L5 -- a cota de Lider sem dono e a PRIMEIRA da fila: uma pessoa real
+        --   (o originador) nunca paga para ela ir a B2W (decisao 12).
+        --   plano 12+3+1, originador ativo SEM Lider, UC piso 67,5 -> teto 190.
+        --   bruto 220 (B2W 120 + originador 30 + Lider sem dono 10 + PPE 50 + Lider 10),
+        --   excesso 30: Lider sem dono 10 -> 0 (nada vai a B2W), originador 30 -> 10.
+        --   B2W 120 | 2.1.2 = 10 + 50 + 10 = 70 | fornecedor 810
+        INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_lider, v_forn_s_lider) RETURNING id INTO v_usina;
+        v_inv    := pg_temp.fatura_paga(v_usina, v_ppe, v_rec_piso675);
+        v_contas := pg_temp.contas(v_inv);
+        IF v_contas IS DISTINCT FROM ARRAY[-120, -70, -810, 0]::numeric[] THEN
+            RAISE EXCEPTION 'FALHA L5: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-120,-70,-810,0}', v_contas;
+        END IF;
+
+        -- L6 -- originador cujo lider_id aponta para ele mesmo: nao ha Lider
+        --   valido, a cota vai a B2W (cabe no teto 400) e ele nao recebe duas vezes.
+        --   B2W 130 | 2.1.2 = 90 | fornecedor 780, e nenhum lancamento de Lider do originador.
+        DECLARE
+            v_orig_auto uuid;
+            v_forn_auto uuid;
+        BEGIN
+            INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SANDBOX PU lider de si mesmo', 'lider', true) RETURNING id INTO v_orig_auto;
+            UPDATE public.originators_v2 SET lider_id = v_orig_auto WHERE id = v_orig_auto;
+            INSERT INTO public.suppliers (name, originator_id) VALUES ('SANDBOX PU forn lider de si mesmo', v_orig_auto) RETURNING id INTO v_forn_auto;
+            INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_lider, v_forn_auto) RETURNING id INTO v_usina;
+            v_inv    := pg_temp.fatura_paga(v_usina, v_ppe, v_rec_plano);
+            v_contas := pg_temp.contas(v_inv);
+            IF v_contas IS DISTINCT FROM ARRAY[-130, -90, -780, 0]::numeric[] THEN
+                RAISE EXCEPTION 'FALHA L6: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-130,-90,-780,0}', v_contas;
+            END IF;
+            SELECT count(*) INTO v_n FROM public.ledger_entries
+             WHERE description = 'Recompensa Líder do Originador da Usina (nível 1)'
+               AND transaction_id = (SELECT transaction_id FROM public.ledger_entries
+                                      WHERE reference_id = v_inv AND reference_type = 'invoice' LIMIT 1);
+            IF v_n <> 0 THEN
+                RAISE EXCEPTION 'FALHA L6: originador que e Lider de si mesmo recebeu a cota de Lider (% lancamento)', v_n;
+            END IF;
+        END;
     END;
 
     -- >>> casos novos entram acima desta linha <<<
