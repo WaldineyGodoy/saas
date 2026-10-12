@@ -199,6 +199,7 @@ Este adendo **substitui** o que contradiz nas seções acima. Onde ele cala, val
     - UC ou eletroposto novo (ou troca de plano) só aponta para plano `ativo`; manter o plano atual numa edição da UC sempre passa;
     - mover UCs existentes para a versão nova é ato do admin, em lote, na tela de planos;
     - `planos_distribuidoras` (só diz em quais distribuidoras o plano é oferecido) e `leads.plano_id` ficam fora da trava.
+18. **Líder de originador inativo não recebe** (dono, 12/10/2026: "o líder deve incentivar o originador a ficar ativo"). Originador do fornecedor ausente ou inativo → a cota de `lider_originador_usina` também fica sem dono (decisão 12). Migração `20261012d`.
 
 ### Dados (migração nova)
 

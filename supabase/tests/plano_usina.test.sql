@@ -793,6 +793,31 @@ BEGIN
                 RAISE EXCEPTION 'FALHA L6: originador que e Lider de si mesmo recebeu a cota de Lider (% lancamento)', v_n;
             END IF;
         END;
+
+        -- L7 -- originador INATIVO com Lider ativo: o Lider tambem nao recebe
+        --   (dono, 12/10/2026: o Lider deve incentivar o originador a ficar ativo).
+        --   As duas cotas ficam sem dono e cabem no teto 400: vao a B2W.
+        --   B2W 160 (120 + 30 + 10) | 2.1.2 = PPE 50 + Lider 10 = 60 | fornecedor 780
+        DECLARE
+            v_orig_inat uuid;
+            v_forn_inat uuid;
+        BEGIN
+            INSERT INTO public.originators_v2 (name, cargo, ativo, lider_id) VALUES ('SANDBOX PU orig inativo c/ lider', 'ppf', false, v_lider_usina) RETURNING id INTO v_orig_inat;
+            INSERT INTO public.suppliers (name, originator_id) VALUES ('SANDBOX PU forn orig inativo', v_orig_inat) RETURNING id INTO v_forn_inat;
+            INSERT INTO public.usinas (plano_usina_id, supplier_id) VALUES (v_pu_lider, v_forn_inat) RETURNING id INTO v_usina;
+            v_inv    := pg_temp.fatura_paga(v_usina, v_ppe, v_rec_plano);
+            v_contas := pg_temp.contas(v_inv);
+            IF v_contas IS DISTINCT FROM ARRAY[-160, -60, -780, 0]::numeric[] THEN
+                RAISE EXCEPTION 'FALHA L7: [3.1.1, 2.1.2, 2.1.1, soma] = %, esperado {-160,-60,-780,0}', v_contas;
+            END IF;
+            SELECT count(*) INTO v_n FROM public.ledger_entries
+             WHERE description = 'Recompensa Líder do Originador da Usina (nível 1)'
+               AND transaction_id = (SELECT transaction_id FROM public.ledger_entries
+                                      WHERE reference_id = v_inv AND reference_type = 'invoice' LIMIT 1);
+            IF v_n <> 0 THEN
+                RAISE EXCEPTION 'FALHA L7: Lider de originador inativo recebeu (% lancamento)', v_n;
+            END IF;
+        END;
     END;
 
     -- ==================================================================
