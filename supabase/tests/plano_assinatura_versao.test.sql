@@ -296,5 +296,64 @@ BEGIN
     PERFORM set_config('request.jwt.claims', '', true);
     IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V16: usuario nao admin criou versao de plano'; END IF;
 
+    -- V17 -- fix round 2: o motor trata b2w ausente/'' diferente de 0 (cai na matriz);
+    --        tirar a chave, trocar por '' ou por texto nao numerico muda dinheiro.
+    v_pegou := false;
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET start_config = jsonb_set(start_config, '{regras,1}', (start_config #> '{regras,1}') - 'b2w')
+         WHERE id = v_p8;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V17: tirar b2w de uma fatura do Start devia ser recusado'; END IF;
+
+    -- V18 -- b2w 0 -> '' e 0 -> 'abc' sao recusados
+    v_pegou := false;
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET start_config = jsonb_set(start_config, '{regras,1,b2w}', '""'::jsonb)
+         WHERE id = v_p8;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: b2w trocado por vazio devia ser recusado'; END IF;
+
+    v_pegou := false;
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET start_config = jsonb_set(start_config, '{regras,1,b2w}', '"abc"'::jsonb)
+         WHERE id = v_p8;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: b2w trocado por texto nao numerico devia ser recusado'; END IF;
+
+    v_pegou := false;
+    BEGIN
+        UPDATE public.planos_assinatura_energia
+           SET start_config = jsonb_set(start_config, '{regras,3,ppf}', 'null'::jsonb)
+         WHERE id = v_p8;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V18: ppf 0 -> null devia ser recusado'; END IF;
+
+    -- V19 -- o shape numerico da tela passa: mesmos numeros (texto com espacos, ".5",
+    --        20.0), chaves legadas extras e novo nome. (O V8 acima cobre o mesmo
+    --        caminho com 10 chaves; aqui entram os formatos que o ::numeric aceita.)
+    UPDATE public.planos_assinatura_energia
+       SET nome = 'SANDBOX PV8 renomeado 2',
+           start_config = '{"faturas_elegiveis": [2], "regras": {
+              "1": {"b2w": " 0 ", "lider": "50", "ppe": 50.0, "ppp": 40, "ppf": 20, "assinante_conect": 0,
+                    "associacao": 0, "coordenador": 50, "embaixador": 50, "assinante": 0},
+              "2": {"b2w": "60.", "lider": 20, "ppe": 20, "ppp": 0, "ppf": 0, "assinante_conect": 0,
+                    "associacao": 60, "coordenador": 20, "embaixador": 20, "assinante": 0},
+              "3": {"b2w": 0, "lider": 0, "ppe": 0, "ppp": 0, "ppf": 0, "assinante_conect": 0,
+                    "associacao": 0, "coordenador": 0, "embaixador": 0, "assinante": 0}}}'::jsonb
+     WHERE id = v_p8;   -- passa
+    IF public.fn_start_regra_valor('".5"'::jsonb) IS DISTINCT FROM '0.5'::jsonb
+       OR public.fn_start_regra_valor(NULL) IS DISTINCT FROM 'null'::jsonb
+       OR public.fn_start_regra_valor('""'::jsonb) IS DISTINCT FROM '""'::jsonb
+       OR public.fn_start_regra_valor('"NaN"'::jsonb) IS DISTINCT FROM '"NaN"'::jsonb THEN
+        RAISE EXCEPTION 'FALHA V19: fn_start_regra_valor devolveu valor inesperado';
+    END IF;
+
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
