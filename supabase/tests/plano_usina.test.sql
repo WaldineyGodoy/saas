@@ -795,6 +795,48 @@ BEGIN
         END;
     END;
 
+    -- ==================================================================
+    -- F1-F3 -- originador copiado do lead (20261010d): fornecedor criado com
+    -- lead_id e sem originador herda o do lead; nao admin so passa com o MESMO.
+    -- ==================================================================
+    DECLARE
+        v_mgr   uuid := gen_random_uuid();
+        v_lead  uuid;
+        v_orig1 uuid;
+        v_orig2 uuid;
+        v_forn  uuid;
+    BEGIN
+        INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role)
+        VALUES (v_mgr, 'mgr.pu.lead@teste.invalid', '{"name":"Mgr"}', 'authenticated', 'authenticated');
+        UPDATE public.profiles SET role = 'manager' WHERE id = v_mgr;
+
+        INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SANDBOX PU orig do lead', 'ppf', true) RETURNING id INTO v_orig1;
+        INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SANDBOX PU outro orig', 'ppf', true) RETURNING id INTO v_orig2;
+        INSERT INTO public.leads (name, originator_id) VALUES ('SANDBOX PU lead', v_orig1) RETURNING id INTO v_lead;
+
+        PERFORM set_config('request.jwt.claims', json_build_object('sub', v_mgr, 'role', 'authenticated')::text, true);
+
+        -- F1 -- fornecedor nasce do lead sem originador: o banco copia o do lead
+        INSERT INTO public.suppliers (name, lead_id) VALUES ('SANDBOX PU forn do lead', v_lead) RETURNING id INTO v_forn;
+        IF (SELECT originator_id FROM public.suppliers WHERE id = v_forn) IS DISTINCT FROM v_orig1 THEN
+            RAISE EXCEPTION 'FALHA F1: originador do lead nao foi copiado';
+        END IF;
+
+        -- F2 -- nao admin mandando o MESMO originador do lead: passa
+        INSERT INTO public.suppliers (name, lead_id, originator_id) VALUES ('SANDBOX PU forn do lead 2', v_lead, v_orig1);
+
+        -- F3 -- nao admin mandando OUTRO originador: recusado
+        v_pegou := false;
+        BEGIN
+            INSERT INTO public.suppliers (name, lead_id, originator_id) VALUES ('SANDBOX PU forn do lead 3', v_lead, v_orig2);
+        EXCEPTION WHEN insufficient_privilege THEN v_pegou := true;
+        END;
+        PERFORM set_config('request.jwt.claims', '', true);
+        IF NOT v_pegou THEN
+            RAISE EXCEPTION 'FALHA F3: nao admin gravou originador diferente do lead';
+        END IF;
+    END;
+
     -- >>> casos novos entram acima desta linha <<<
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;
