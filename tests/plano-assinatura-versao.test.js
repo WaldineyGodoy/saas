@@ -25,4 +25,20 @@ describe('versao do plano de assinatura', () => {
         expect(versaoSucessora(planos, planos[0])?.id).toBe('c');
         expect(versaoSucessora(planos, planos[2])).toBeNull();
     });
+
+    test('ciclo na cadeia devolve null sem travar', () => {
+        const planos = [
+            { id: 'a', status: 'somente_contratos', substitui_plano_id: 'b' },
+            { id: 'b', status: 'ativo', substitui_plano_id: 'a' }
+        ];
+        expect(versaoSucessora(planos, planos[0])).toBeNull();
+    });
+
+    test('cadeia que termina em plano nao ativo devolve null', () => {
+        const planos = [
+            { id: 'a', status: 'somente_contratos', substitui_plano_id: null },
+            { id: 'b', status: 'somente_contratos', substitui_plano_id: 'a' }
+        ];
+        expect(versaoSucessora(planos, planos[0])).toBeNull();
+    });
 });

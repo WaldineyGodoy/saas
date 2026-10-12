@@ -189,7 +189,7 @@ export default function PlansServicesSettings() {
         if (nUc) partes.push(`${nUc} UC(s)`);
         if (nEle) partes.push(`${nEle} eletroposto(s)`);
         const desconto = Number(sucessor.desconto_assinante);
-        const textoDesconto = Number.isFinite(desconto) ? `, inclusive o desconto de ${desconto.toFixed(2)}%` : '';
+        const textoDesconto = Number.isFinite(desconto) ? `, e o desconto de cada UC passa a ser ${desconto.toFixed(2)}%` : '';
         if (!window.confirm(
             `Mover ${partes.join(' e ')} de "${plano.nome}" para "${sucessor.nome}"? ` +
             `A próxima fatura paga delas já usa a versão nova${textoDesconto}.`

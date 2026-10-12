@@ -19,7 +19,7 @@ import {
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
 import DistribuidorasDoPlano from './DistribuidorasDoPlano';
-import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao } from '../../../lib/planoAssinaturaVersao';
+import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao, AVISO_VERSAO_ANTIGA } from '../../../lib/planoAssinaturaVersao';
 
 // Formatadores numéricos padrão PT-BR
 const formatCurrencyUnit = (val, decimals = 4) => {
@@ -588,6 +588,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             updated_at: new Date().toISOString()
         };
 
+        let versaoCriada = false;
         try {
             let planoId = planToEdit?.id;
             if (planoId) {
@@ -599,11 +600,17 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 if (error) {
                     // Plano com UC/eletroposto: o banco recusa mudar número e
                     // pede nova versão (20261010c). A antiga mantém as UCs.
+                    // Versão antiga (somente contratos) não gera versão: orienta e para.
+                    if (ehRecusaDeNovaVersao(error) && planToEdit.status === 'somente_contratos') {
+                        showAlert(AVISO_VERSAO_ANTIGA, 'warning');
+                        return;
+                    }
                     if (!ehRecusaDeNovaVersao(error) || !window.confirm(textoConfirmaNovaVersao(planToEdit.nome))) throw error;
                     const { data: novoId, error: verErr } = await supabase
                         .rpc('fn_planos_assinatura_nova_versao', { p_origem: planoId, p_dados: payload });
                     if (verErr) throw verErr;
                     planoId = novoId;
+                    versaoCriada = true;
                 }
             } else {
                 const { data: novo, error } = await supabase
@@ -643,7 +650,13 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
             onClose();
         } catch (err) {
             console.error('Erro ao salvar plano:', err);
-            showAlert('Erro ao salvar plano: ' + (err.message || 'Erro desconhecido'), 'error');
+            if (versaoCriada) {
+                // A versão já existe no banco: atualiza a lista mesmo com o erro.
+                if (onSave) onSave();
+                showAlert('A nova versão foi criada, mas houve erro ao gravar as distribuidoras: ' + (err.message || 'Erro desconhecido'), 'error');
+            } else {
+                showAlert('Erro ao salvar plano: ' + (err.message || 'Erro desconhecido'), 'error');
+            }
         } finally {
             setLoading(false);
         }
@@ -844,7 +857,7 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         padding: '0.7rem 2rem', background: '#fef3c7', color: '#92400e',
                         borderBottom: '1px solid #fcd34d', fontSize: '0.82rem', fontWeight: 600
                     }}>
-                        Esta é uma versão antiga (somente contratos). Salvar números cria uma versão nova a partir dela.
+                        {AVISO_VERSAO_ANTIGA}
                     </div>
                 )}
 

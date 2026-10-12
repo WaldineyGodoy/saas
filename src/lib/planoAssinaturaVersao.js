@@ -14,6 +14,11 @@ export const textoConfirmaNovaVersao = (nome) =>
     'Salvar cria uma NOVA VERSÃO com estes valores. As UCs e eletropostos atuais continuam no plano antigo ' +
     '(somente contratos) até um admin movê-los em lote; os novos vão para a versão nova.\n\nContinuar?';
 
+/** Versão antiga (somente contratos): não gera versão nova, só a ativa gera. */
+export const AVISO_VERSAO_ANTIGA =
+    'Esta é uma versão antiga (somente contratos), mantida para as UCs que ainda estão nela. ' +
+    'Para mudar números, edite a versão ativa.';
+
 /** Versão ativa no fim da cadeia substitui_plano_id que começa em `plano`. */
 export const versaoSucessora = (planos, plano) => {
     let atual = plano;
