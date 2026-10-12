@@ -19,6 +19,7 @@ import {
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
 import DistribuidorasDoPlano from './DistribuidorasDoPlano';
+import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao } from '../../../lib/planoAssinaturaVersao';
 
 // Formatadores numéricos padrão PT-BR
 const formatCurrencyUnit = (val, decimals = 4) => {
@@ -595,7 +596,15 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                     .update(payload)
                     .eq('id', planoId);
 
-                if (error) throw error;
+                if (error) {
+                    // Plano com UC/eletroposto: o banco recusa mudar número e
+                    // pede nova versão (20261010c). A antiga mantém as UCs.
+                    if (!ehRecusaDeNovaVersao(error) || !window.confirm(textoConfirmaNovaVersao(planToEdit.nome))) throw error;
+                    const { data: novoId, error: verErr } = await supabase
+                        .rpc('fn_planos_assinatura_nova_versao', { p_origem: planoId, p_dados: payload });
+                    if (verErr) throw verErr;
+                    planoId = novoId;
+                }
             } else {
                 const { data: novo, error } = await supabase
                     .from('planos_assinatura_energia')
@@ -624,7 +633,11 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                 if (upErr) throw upErr;
             }
 
-            showAlert(planToEdit?.id ? 'Plano de assinatura atualizado com sucesso!' : 'Plano de assinatura criado com sucesso!', 'success');
+            if (planToEdit?.id && planoId !== planToEdit.id) {
+                showAlert('Nova versão do plano criada. As UCs atuais continuam na versão antiga até serem movidas.', 'success');
+            } else {
+                showAlert(planToEdit?.id ? 'Plano de assinatura atualizado com sucesso!' : 'Plano de assinatura criado com sucesso!', 'success');
+            }
 
             if (onSave) onSave();
             onClose();
@@ -825,6 +838,15 @@ export default function PlanModal({ isOpen, onClose, onSave, planToEdit }) {
                         <X size={18} />
                     </button>
                 </div>
+
+                {planToEdit?.status === 'somente_contratos' && (
+                    <div style={{
+                        padding: '0.7rem 2rem', background: '#fef3c7', color: '#92400e',
+                        borderBottom: '1px solid #fcd34d', fontSize: '0.82rem', fontWeight: 600
+                    }}>
+                        Esta é uma versão antiga (somente contratos). Salvar números cria uma versão nova a partir dela.
+                    </div>
+                )}
 
                 {/* BODY SCROLLABLE */}
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>

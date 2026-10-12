@@ -22,6 +22,7 @@ import PlanModal from './components/PlanModal';
 import EletropostoPlanModal, { extractSubscriptionPlanLastro } from './components/EletropostoPlanModal';
 import UsinasPlanosTab from './components/UsinasPlanosTab';
 import PlanosUsinaLista from './components/PlanosUsinaLista';
+import { versaoSucessora } from '../../lib/planoAssinaturaVersao';
 
 export default function PlansServicesSettings() {
     const { showAlert } = useUI();
@@ -39,6 +40,7 @@ export default function PlansServicesSettings() {
 
     const [isEletroModalOpen, setIsEletroModalOpen] = useState(false);
     const [selectedEletroPlan, setSelectedEletroPlan] = useState(null);
+    const [movendoId, setMovendoId] = useState(null);
 
     // Carregar planos do Supabase
     const fetchPlanos = useCallback(async () => {
@@ -46,7 +48,7 @@ export default function PlansServicesSettings() {
         try {
             const { data, error } = await supabase
                 .from('planos_assinatura_energia')
-                .select('*')
+                .select('*, consumer_units!consumer_units_plano_assinatura_id_fkey(count), eletropostos!eletropostos_plano_id_fkey(count)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -178,6 +180,36 @@ export default function PlansServicesSettings() {
         }
     };
 
+    // Mover UCs e eletropostos da versão antiga para a versão ativa que a substitui.
+    // O banco também aplica à UC o desconto da versão nova (fn_planos_assinatura_mover_ucs).
+    const handleMoverUcs = async (plano, sucessor) => {
+        const nUc = usoUc(plano);
+        const nEle = usoEletroposto(plano);
+        const partes = [];
+        if (nUc) partes.push(`${nUc} UC(s)`);
+        if (nEle) partes.push(`${nEle} eletroposto(s)`);
+        const desconto = Number(sucessor.desconto_assinante);
+        const textoDesconto = Number.isFinite(desconto) ? `, inclusive o desconto de ${desconto.toFixed(2)}%` : '';
+        if (!window.confirm(
+            `Mover ${partes.join(' e ')} de "${plano.nome}" para "${sucessor.nome}"? ` +
+            `A próxima fatura paga delas já usa a versão nova${textoDesconto}.`
+        )) return;
+
+        setMovendoId(plano.id);
+        try {
+            const { data, error } = await supabase
+                .rpc('fn_planos_assinatura_mover_ucs', { p_de: plano.id, p_para: sucessor.id });
+            if (error) throw error;
+            showAlert(`Movidas: ${data ?? 0}`, 'success');
+            await fetchPlanos();
+        } catch (err) {
+            console.error('Erro ao mover UCs para a versão nova:', err);
+            showAlert('Erro ao mover para a versão nova: ' + (err.message || 'Erro desconhecido'), 'error');
+        } finally {
+            setMovendoId(null);
+        }
+    };
+
     // Filtros de pesquisa
     const planosAssinaturaFiltrados = planosAssinatura.filter(p =>
         p.nome?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -187,6 +219,45 @@ export default function PlansServicesSettings() {
         p.nome?.toLowerCase().includes(searchTermEletro.toLowerCase()) ||
         p.recorrente_config?.plano_assinatura_vinculado?.nome?.toLowerCase().includes(searchTermEletro.toLowerCase())
     );
+
+    // Contagens trazidas pelo embed da carga (FKs nomeadas para não haver ambiguidade).
+    const usoUc = (plano) => plano.consumer_units?.[0]?.count ?? 0;
+    const usoEletroposto = (plano) => plano.eletropostos?.[0]?.count ?? 0;
+
+    // Selo de versão, contagem de uso e botão de mover para a versão nova.
+    const renderVersaoInfo = (plano) => {
+        const nUc = usoUc(plano);
+        const nEle = usoEletroposto(plano);
+        const somenteContratos = plano.status === 'somente_contratos';
+        const sucessor = somenteContratos ? versaoSucessora(planos, plano) : null;
+        if (!somenteContratos && !nUc && !nEle) return null;
+        const chip = { fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.5rem', borderRadius: '20px' };
+        return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem' }}>
+                {somenteContratos && (
+                    <span style={{ ...chip, background: '#fef3c7', color: '#92400e' }}>Somente contratos</span>
+                )}
+                {nUc > 0 && (
+                    <span style={{ ...chip, background: '#e0f2fe', color: '#0369a1' }}>{nUc} UC(s)</span>
+                )}
+                {nEle > 0 && (
+                    <span style={{ ...chip, background: '#ecfdf5', color: '#047857' }}>{nEle} eletroposto(s)</span>
+                )}
+                {somenteContratos && sucessor && (nUc > 0 || nEle > 0) && (
+                    <button
+                        onClick={() => handleMoverUcs(plano, sucessor)}
+                        disabled={movendoId === plano.id}
+                        style={{
+                            ...chip, border: '1px solid #0284c7', background: 'white', color: '#0284c7',
+                            cursor: movendoId === plano.id ? 'wait' : 'pointer'
+                        }}
+                    >
+                        {movendoId === plano.id ? 'Movendo...' : 'Mover para a versão nova'}
+                    </button>
+                )}
+            </div>
+        );
+    };
 
     // Formata o resumo do modelo de recompensas
     const renderRewardBadge = (plano) => {
@@ -428,6 +499,7 @@ export default function PlansServicesSettings() {
                                                         <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '2px' }}>
                                                             Criado em {new Date(plano.created_at).toLocaleDateString('pt-BR')}
                                                         </div>
+                                                        {renderVersaoInfo(plano)}
                                                     </td>
                                                     <td style={{ padding: '1rem 1.25rem' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: '#334155', fontSize: '0.84rem' }}>
@@ -631,6 +703,7 @@ export default function PlansServicesSettings() {
                                                         <div style={{ fontSize: '0.74rem', color: '#059669', fontWeight: 600, marginTop: '2px' }}>
                                                             Isento de Fio B (deduzido na assinatura)
                                                         </div>
+                                                        {renderVersaoInfo(plano)}
                                                     </td>
                                                     <td style={{ padding: '1rem 1.25rem' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: '#1e293b', fontSize: '0.84rem' }}>

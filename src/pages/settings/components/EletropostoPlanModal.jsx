@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUI } from '../../../contexts/UIContext';
+import { ehRecusaDeNovaVersao, textoConfirmaNovaVersao } from '../../../lib/planoAssinaturaVersao';
 
 const formatCurrencyUnit = (val, decimals = 4) => {
     const num = Number(val) || 0;
@@ -546,8 +547,17 @@ export default function EletropostoPlanModal({
                     .update(payload)
                     .eq('id', planToEdit.id);
 
-                if (error) throw error;
-                showAlert('Plano de Eletroposto atualizado com sucesso!', 'success');
+                if (error) {
+                    // Plano com eletroposto/UC: o banco recusa mudar número e
+                    // pede nova versão (20261010c). O antigo mantém os eletropostos.
+                    if (!ehRecusaDeNovaVersao(error) || !window.confirm(textoConfirmaNovaVersao(planToEdit.nome))) throw error;
+                    const { error: verErr } = await supabase
+                        .rpc('fn_planos_assinatura_nova_versao', { p_origem: planToEdit.id, p_dados: payload });
+                    if (verErr) throw verErr;
+                    showAlert('Nova versão do plano de eletroposto criada. Os eletropostos atuais continuam na versão antiga até serem movidos.', 'success');
+                } else {
+                    showAlert('Plano de Eletroposto atualizado com sucesso!', 'success');
+                }
             } else {
                 const { error } = await supabase
                     .from('planos_assinatura_energia')
@@ -753,6 +763,15 @@ export default function EletropostoPlanModal({
                         <X size={18} />
                     </button>
                 </div>
+
+                {planToEdit?.status === 'somente_contratos' && (
+                    <div style={{
+                        padding: '0.7rem 2rem', background: '#fef3c7', color: '#92400e',
+                        borderBottom: '1px solid #fcd34d', fontSize: '0.82rem', fontWeight: 600
+                    }}>
+                        Esta é uma versão antiga (somente contratos). Salvar números cria uma versão nova a partir dela.
+                    </div>
+                )}
 
                 <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                     <div className="crm-scrollbar" style={{
