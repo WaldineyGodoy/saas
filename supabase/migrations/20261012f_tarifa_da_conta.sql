@@ -238,9 +238,12 @@ DECLARE
     v_sem_comp        boolean;
     v_motivo          text;
 BEGIN
+    -- Fio B da conta derivado dos DOIS unitarios, nunca da coluna gravada
+    -- fio_b_apurado: um zero gravado ali sem os unitarios inflaria a base (a
+    -- suite split_base_compensada proibe ler a coluna por isso).
     SELECT i.uc_id, COALESCE(i.consumo_compensado, 0),
            public.fn_tarifa_da_conta(i.te_apurado, i.tusd_apurado),
-           i.fio_b_apurado
+           public.fn_fio_b_apurado(i.tusd_consumo_unit, i.tusd_compensado_unit)
       INTO v_uc, v_kwh, v_tarifa_conta, v_fio_b_conta
       FROM public.invoices i
      WHERE i.id = p_invoice;
@@ -452,7 +455,7 @@ begin
            i.data_leitura, i.data_leitura_anterior,
            i.tarifa_concessionaria as snap_tarifa,
            public.fn_tarifa_da_conta(i.te_apurado, i.tusd_apurado) as conta_tarifa,
-           i.fio_b_apurado,
+           public.fn_fio_b_apurado(i.tusd_consumo_unit, i.tusd_compensado_unit) as fio_b_apurado,
            cu.numero_uc, cu.tarifa_concessionaria as uc_tarifa,
            cu.tipo_unidade::text as tipo_unidade, cu.status::text as uc_status,
            cu.address->>'cidade' as cidade, cu.data_desligamento, cu.nao_faturavel
