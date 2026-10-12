@@ -19,7 +19,7 @@ import {
  *  - 'versao' -> fn_planos_usina_nova_versao: nasce um plano novo e o antigo
  *                fica somente para contratos
  */
-export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas = 0, planosRecompensa, onClose, onSave, showAlert }) {
+export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas = 0, onClose, onSave, showAlert }) {
     const [dados, setDados] = useState(PLANO_USINA_VAZIO);
     const [bonusTexto, setBonusTexto] = useState('');
     const [salvando, setSalvando] = useState(false);
@@ -37,12 +37,6 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
 
     const travado = modo === 'editar' && usinasVinculadas > 0;
     const definir = (chave, valor) => setDados(prev => ({ ...prev, [chave]: valor }));
-
-    // O desconto do plano de usina e termo do contrato de gestao; a base do
-    // split usa o desconto do plano de recompensas. Divergir e permitido,
-    // mas a tela avisa (spec secao 3, item 5).
-    const recompensasSel = planosRecompensa.find(p => p.id === dados.plano_assinatura_id);
-    const descontoDiverge = !!recompensasSel && Number(recompensasSel.desconto_assinante) !== Number(dados.desconto_pct);
 
     const titulo = modo === 'novo' ? 'Criar Plano de Usina'
         : modo === 'versao' ? `Nova versão de "${plano?.nome}"`
@@ -105,7 +99,7 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
                     {travado && (
                         <div style={{ display: 'flex', gap: '0.5rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#92400e' }}>
                             <Lock size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-                            Este plano tem {usinasVinculadas} usina(s) vinculada(s): percentuais, valores e plano de recompensas não mudam mais. Para mudar, use "Criar nova versão".
+                            Este plano tem {usinasVinculadas} usina(s) vinculada(s): percentuais e valores não mudam mais. Para mudar, use "Criar nova versão".
                         </div>
                     )}
                     {modo === 'versao' && (
@@ -115,35 +109,10 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
                         </div>
                     )}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div>
-                            <label style={rotulo}>Nome do plano</label>
-                            <input value={dados.nome} onChange={e => definir('nome', e.target.value)} style={campo(false)} />
-                        </div>
-                        <div>
-                            <label style={rotulo}>Plano de recompensas</label>
-                            <select
-                                value={dados.plano_assinatura_id || ''}
-                                disabled={travado}
-                                onChange={e => definir('plano_assinatura_id', e.target.value || null)}
-                                style={campo(travado)}
-                            >
-                                <option value="">Sem plano de recompensas (não recebe usina)</option>
-                                {planosRecompensa.map(p => (
-                                    <option key={p.id} value={p.id} disabled={!p.ativo && p.id !== dados.plano_assinatura_id}>
-                                        {p.nome} · {p.tipo_recompensa} · desconto {Number(p.desconto_assinante)}%{p.ativo ? '' : ' (inativo)'}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                    <div>
+                        <label style={rotulo}>Nome do plano</label>
+                        <input value={dados.nome} onChange={e => definir('nome', e.target.value)} style={campo(false)} />
                     </div>
-
-                    {descontoDiverge && (
-                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#92400e' }}>
-                            O desconto ao consumidor deste plano ({Number(dados.desconto_pct)}%) é diferente do desconto do plano de recompensas "{recompensasSel.nome}" ({Number(recompensasSel.desconto_assinante)}%).
-                            O contrato de gestão sai com o deste plano; o split calcula a base com o do plano de recompensas.
-                        </div>
-                    )}
 
                     <div>
                         <label style={rotulo}>Descrição</label>
@@ -164,6 +133,11 @@ export default function PlanoUsinaModal({ isOpen, modo, plano, usinasVinculadas 
                                     onChange={e => definir(c.chave, e.target.value)}
                                     style={campo(travado)}
                                 />
+                                {c.chave === 'originador_lider_recorrente_pct' && (
+                                    <div style={{ marginTop: '0.3rem', fontSize: '0.74rem', color: '#64748b', lineHeight: 1.4 }}>
+                                        Sem Líder válido e ativo no originador do fornecedor, essa parte fica para a associação se couber no teto.
+                                    </div>
+                                )}
                             </div>
                         ))}
                         <div>

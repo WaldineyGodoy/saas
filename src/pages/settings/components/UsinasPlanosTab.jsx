@@ -7,10 +7,10 @@ import { planoAceitaUsina } from '../../../lib/planoUsina';
  * Aba Usinas de Planos e Serviços: qual plano de usina cada usina usa.
  *
  * usinas.plano_usina_id aponta para o plano de usina, de onde saem a gestão
- * B2W, o originador da usina e o plano de recompensas do split
- * (handle_invoice_paid_ledger): sem plano a fatura paga não lança gestão B2W
- * nem recompensas e o fornecedor fica com o caixa inteiro. Por isso toda troca
- * pede confirmação dizendo o efeito no razão.
+ * B2W e o originador da usina (handle_invoice_paid_ledger); as recompensas do
+ * assinante vêm do plano de cada UC. Sem plano de usina a gestão B2W sai do
+ * plano de assinatura da UC. Por isso toda troca pede confirmação dizendo o
+ * efeito no razão.
  */
 export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMudaram }) {
     const [usinas, setUsinas] = useState([]);
@@ -69,8 +69,8 @@ export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMuda
     const confirmarTroca = (qtd, planoId) => {
         const alvo = qtd === 1 ? 'desta usina' : `destas ${qtd} usinas`;
         const msg = planoId
-            ? `Vincular ao plano "${nomePlano(planoId)}"?\n\nA partir de agora, toda fatura paga das UCs ${alvo} lança gestão B2W, recompensas e repasse pelo plano. Faturas já lançadas não mudam.`
-            : `Desvincular do plano?\n\nAs próximas faturas pagas das UCs ${alvo} deixam de lançar gestão B2W e recompensas: o fornecedor fica com o caixa inteiro.`;
+            ? `Vincular ao plano "${nomePlano(planoId)}"?\n\nA partir de agora, toda fatura paga das UCs ${alvo} lança a gestão B2W e a recompensa do originador do fornecedor pelo plano de usina; as recompensas do assinante seguem o plano de cada UC. Faturas já lançadas não mudam.`
+            : `Desvincular do plano?\n\nAs próximas faturas pagas das UCs ${alvo} deixam de lançar a gestão B2W do plano de usina e a recompensa do originador do fornecedor: a gestão volta a sair do plano de cada UC.`;
         return window.confirm(msg);
     };
 
@@ -136,7 +136,7 @@ export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMuda
             {planosUsina.map(p => (
                 <option key={p.id} value={p.id} disabled={!planoAceitaUsina(p)}>
                     {p.nome}
-                    {p.status === 'somente_contratos' ? ' (somente contratos)' : !p.plano_assinatura_id ? ' (sem plano de recompensas)' : ''}
+                    {p.status === 'somente_contratos' ? ' (somente contratos)' : ''}
                 </option>
             ))}
         </>
@@ -185,7 +185,7 @@ export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMuda
 
             {contagem.sem > 0 && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '0.85rem 1.1rem', fontSize: '0.82rem', color: '#92400e' }}>
-                    Usina sem plano de usina: a gestão B2W sai do plano escolhido em cada UC, e UC sem plano não lança gestão nem recompensas — o fornecedor fica com o caixa inteiro.
+                    Usina sem plano de usina: a gestão B2W sai do plano de assinatura de cada UC.
                 </div>
             )}
 
@@ -249,7 +249,7 @@ export default function UsinasPlanosTab({ planosUsina, showAlert, onVinculosMuda
                                     <th style={{ padding: '0.85rem 1rem' }}>Usina</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Fornecedor</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Status</th>
-                                    <th style={{ padding: '0.85rem 1rem' }}>Plano de Recompensas</th>
+                                    <th style={{ padding: '0.85rem 1rem' }}>Plano de Usina</th>
                                 </tr>
                             </thead>
                             <tbody>

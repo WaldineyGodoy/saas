@@ -488,12 +488,12 @@ export default function PowerPlantModal({ usina, onClose, onSave, onDelete }) {
     }, []);
 
     // Planos de usina e originadores para a aba Financeiro (spec
-    // 2026-10-06). O plano de recompensas vem embutido pela FK.
+    // 2026-10-06). O plano de usina nao aponta para plano de assinatura.
     useEffect(() => {
         (async () => {
             const [planos, origs] = await Promise.all([
                 supabase.from('planos_usina')
-                    .select('*, planos_assinatura_energia(nome, tipo_recompensa, desconto_assinante)')
+                    .select('*')
                     .order('nome'),
                 supabase.from('originators_v2')
                     .select('id, name, cargo, ativo')
@@ -4312,14 +4312,13 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
 
                             {/* Plano de Usina: liga o split desta usina (spec 2026-10-06) */}
                             {(() => {
-                                const recompensas = planoUsinaSel?.planos_assinatura_energia;
                                 const mudouPlano = (formData.plano_usina_id || '') !== (usina?.plano_usina_id || '');
                                 const seletor = { width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #bfdbfe', background: 'white', fontWeight: 600, color: '#1e3a8a' };
                                 return (
                                     <div style={{ marginTop: '1.5rem', background: '#eff6ff', padding: '1.5rem', borderRadius: '16px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                         <div>
                                             <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e40af', fontWeight: 700 }}>Plano de Usina</h4>
-                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Gestão B2W, termos do contrato e plano de recompensas desta usina</p>
+                                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#2563eb' }}>Gestão B2W, termos do contrato e recompensa do originador do fornecedor desta usina</p>
                                         </div>
                                         <select
                                             className="crm-input"
@@ -4331,15 +4330,15 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             {planosUsina.map(pl => (
                                                 <option key={pl.id} value={pl.id} disabled={!planoAceitaUsina(pl) && pl.id !== formData.plano_usina_id}>
                                                     {pl.nome} · gestão {Number(pl.percentual_recorrente)}%
-                                                    {pl.status === 'somente_contratos' ? ' (somente contratos)' : !pl.plano_assinatura_id ? ' (sem plano de recompensas)' : ''}
+                                                    {pl.status === 'somente_contratos' ? ' (somente contratos)' : ''}
                                                 </option>
                                             ))}
                                         </select>
                                         {planoUsinaSel && (
                                             <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af', lineHeight: 1.5 }}>
                                                 Gestão B2W {Number(planoUsinaSel.percentual_recorrente)}% · administração R$ {Number(planoUsinaSel.taxa_admin_reais).toFixed(2).replace('.', ',')} por consumidor/mês · recuperação {Number(planoUsinaSel.taxa_recuperacao_pct)}%
-                                                {recompensas ? ` · recompensas: ${recompensas.nome} (${recompensas.tipo_recompensa}, desconto ${Number(recompensas.desconto_assinante)}%)` : ''}
                                                 {` · originador da usina: ${Number(planoUsinaSel.originador_recorrente_pct)}% recorrente`}
+                                                {` · Líder do originador ${Number(planoUsinaSel.originador_lider_recorrente_pct ?? 0)}%`}
                                                 {(planoUsinaSel.originador_bonus_fechamentos || []).length > 0 ? `, bônus no(s) fechamento(s) ${planoUsinaSel.originador_bonus_fechamentos.join(', ')}` : ''}.
                                                 {' '}Com plano, o razão usa a gestão do plano, não a "Taxa Percentual" acima, e o contrato de compra e venda sai com os termos do plano.
                                             </p>
@@ -4348,7 +4347,7 @@ Qualquer dúvida sobre as cláusulas, é só responder esta mensagem.`;
                                             <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
                                                 {formData.plano_usina_id
                                                     ? 'Ao salvar, toda fatura paga a partir de agora das UCs desta usina passa a lançar a gestão B2W pelo plano de usina. Faturas já lançadas não mudam.'
-                                                    : 'Ao salvar, a gestão B2W volta a sair do plano de cada UC; UC sem plano não lança gestão nem recompensas.'}
+                                                    : 'Ao salvar, a gestão B2W volta a sair do plano de assinatura de cada UC.'}
                                             </p>
                                         )}
                                         {(() => {

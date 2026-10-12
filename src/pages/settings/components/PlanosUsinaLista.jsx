@@ -8,11 +8,10 @@ import PlanoUsinaModal from './PlanoUsinaModal';
  * `planosUsina` vem com `usinas: [{ count }]` (embed do PostgREST pela FK
  * usinas.plano_usina_id).
  */
-export default function PlanosUsinaLista({ planosUsina, planosRecompensa, loading, onRefresh, showAlert }) {
+export default function PlanosUsinaLista({ planosUsina, loading, onRefresh, showAlert }) {
     const [modal, setModal] = useState(null); // { modo, plano, usinas }
 
     const nUsinas = (p) => p.usinas?.[0]?.count ?? 0;
-    const nomeRecompensas = (id) => planosRecompensa.find(p => p.id === id)?.nome;
 
     const excluir = async (plano) => {
         if (nUsinas(plano) > 0) {
@@ -39,7 +38,7 @@ export default function PlanosUsinaLista({ planosUsina, planosRecompensa, loadin
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', background: 'white', padding: '1rem 1.25rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
                 <div>
                     <div style={{ fontWeight: 800, color: '#0f172a' }}>Planos de Usina</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Gestão B2W, termos do contrato, plano de recompensas e originador da usina</div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Gestão B2W, termos do contrato e recompensa do originador do fornecedor</div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button onClick={onRefresh} title="Atualizar lista" style={{ padding: '0.6rem', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', display: 'flex' }}>
@@ -70,7 +69,6 @@ export default function PlanosUsinaLista({ planosUsina, planosRecompensa, loadin
                                     <th style={{ padding: '0.85rem 1rem' }}>Administração</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Recuperação</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Originador</th>
-                                    <th style={{ padding: '0.85rem 1rem' }}>Recompensas</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Status</th>
                                     <th style={{ padding: '0.85rem 1rem' }}>Usinas</th>
                                     <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Ações</th>
@@ -87,11 +85,8 @@ export default function PlanosUsinaLista({ planosUsina, planosRecompensa, loadin
                                         <td style={{ padding: '0.85rem 1rem' }}>R$ {Number(p.taxa_admin_reais).toFixed(2).replace('.', ',')}/consumidor</td>
                                         <td style={{ padding: '0.85rem 1rem' }}>{Number(p.taxa_recuperacao_pct)}%</td>
                                         <td style={{ padding: '0.85rem 1rem' }}>
-                                            {Number(p.originador_recorrente_pct)}%
+                                            Originador {Number(p.originador_recorrente_pct)}% · Líder {Number(p.originador_lider_recorrente_pct ?? 0)}%
                                             {(p.originador_bonus_fechamentos || []).length > 0 && ` + bônus ${p.originador_bonus_fechamentos.join(', ')}º fech.`}
-                                        </td>
-                                        <td style={{ padding: '0.85rem 1rem', color: p.plano_assinatura_id ? '#0f172a' : '#b45309' }}>
-                                            {nomeRecompensas(p.plano_assinatura_id) || 'sem plano de recompensas'}
                                         </td>
                                         <td style={{ padding: '0.85rem 1rem', color: p.status === 'ativo' ? '#16a34a' : '#64748b', fontWeight: 600 }}>
                                             {p.status === 'ativo' ? 'Ativo' : 'Somente contratos'}
@@ -125,7 +120,6 @@ export default function PlanosUsinaLista({ planosUsina, planosRecompensa, loadin
                 modo={modal?.modo}
                 plano={modal?.plano}
                 usinasVinculadas={modal?.usinas ?? 0}
-                planosRecompensa={planosRecompensa}
                 onClose={() => setModal(null)}
                 onSave={onRefresh}
                 showAlert={showAlert}

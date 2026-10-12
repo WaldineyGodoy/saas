@@ -142,19 +142,20 @@ export default function PlansServicesSettings() {
 
     // Excluir plano
     const handleDelete = async (plano) => {
-        // Plano de recompensas em uso nao pode sumir: planos de usina (FK
-        // RESTRICT) e UCs apontam para ele, e apagar desligaria o split delas.
-        const [porPlanoUsina, porUc] = await Promise.all([
-            supabase.from('planos_usina').select('id', { count: 'exact', head: true }).eq('plano_assinatura_id', plano.id),
-            supabase.from('consumer_units').select('id', { count: 'exact', head: true }).eq('plano_assinatura_id', plano.id)
+        // Plano em uso nao pode sumir: UCs e eletropostos apontam para ele, e
+        // apagar desligaria as recompensas e a gestao deles.
+        const [porUc, porEletroposto] = await Promise.all([
+            supabase.from('consumer_units').select('id', { count: 'exact', head: true }).eq('plano_assinatura_id', plano.id),
+            supabase.from('eletropostos').select('id', { count: 'exact', head: true }).eq('plano_id', plano.id)
         ]);
-        const errUso = porPlanoUsina.error || porUc.error;
+        const errUso = porUc.error || porEletroposto.error;
         if (errUso) {
             showAlert('Erro ao conferir o uso do plano: ' + errUso.message, 'error');
             return;
         }
-        if (porPlanoUsina.count > 0 || porUc.count > 0) {
-            showAlert(`O plano "${plano.nome}" está em uso por ${porPlanoUsina.count} plano(s) de usina e ${porUc.count} UC(s). Desative-o em vez de excluir.`, 'warning');
+        const emUso = (porUc.count || 0) + (porEletroposto.count || 0);
+        if (emUso > 0) {
+            showAlert(`Este plano tem ${emUso} UC(s)/eletroposto(s) vinculado(s) e não pode ser excluído.`, 'warning');
             return;
         }
 
@@ -714,7 +715,6 @@ export default function PlansServicesSettings() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
                     <PlanosUsinaLista
                         planosUsina={planosUsina}
-                        planosRecompensa={planosAssinatura}
                         loading={loadingUsina}
                         onRefresh={fetchPlanosUsina}
                         showAlert={showAlert}

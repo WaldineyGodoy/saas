@@ -6,6 +6,9 @@
  * vínculo em fn_usinas_vinculo_plano_usina). Este módulo só garante que a
  * tela de planos, o modal da usina e os dois contratos usem a mesma lista
  * de campos.
+ *
+ * Desde 10/10/2026 o plano de usina não aponta para plano de assinatura: as
+ * recompensas de quem está ligado ao assinante vêm do plano da UC.
  */
 
 // `contrato` é a chave de DEFAULTS_USINA (src/lib/contratosUsina.js) que o
@@ -25,7 +28,8 @@ export const CAMPOS_PLANO_USINA = [
     { chave: 'dia_repasse', rotulo: 'Dia do repasse', contrato: null, gestao: 'diaRepasse', min: 1, max: 31, inteiro: true },
     { chave: 'prazo_transferencia_dias', rotulo: 'Prazo de transferência (dias)', contrato: null, gestao: 'prazoTransferencia', max: null, inteiro: true },
     { chave: 'prazo_honorarios_dias', rotulo: 'Prazo de honorários (dias)', contrato: null, gestao: 'prazoHonorarios', max: null, inteiro: true },
-    { chave: 'originador_recorrente_pct', rotulo: 'Originador da usina — recorrente (%)', contrato: null, gestao: null, max: 100 }
+    { chave: 'originador_recorrente_pct', rotulo: 'Originador da usina — recorrente (%)', contrato: null, gestao: null, max: 100 },
+    { chave: 'originador_lider_recorrente_pct', rotulo: 'Líder do originador — recorrente (%)', contrato: null, gestao: null, max: 100 }
 ];
 
 export const CHAVES_CONTRATO_DO_PLANO = CAMPOS_PLANO_USINA.filter(c => c.contrato).map(c => c.contrato);
@@ -35,8 +39,7 @@ export const CHAVES_GESTAO_DO_PLANO = CAMPOS_PLANO_USINA.filter(c => c.gestao).m
 // já tem usina vinculada.
 export const CAMPOS_TRAVADOS = [
     ...CAMPOS_PLANO_USINA.map(c => c.chave),
-    'originador_bonus_fechamentos',
-    'plano_assinatura_id'
+    'originador_bonus_fechamentos'
 ];
 
 // Mesmos defaults da migração 20261006e (DEFAULTS_USINA e DEFAULTS_FORNECEDOR).
@@ -56,8 +59,8 @@ export const PLANO_USINA_VAZIO = {
     prazo_transferencia_dias: 90,
     prazo_honorarios_dias: 180,
     originador_recorrente_pct: 0,
-    originador_bonus_fechamentos: [],
-    plano_assinatura_id: null
+    originador_lider_recorrente_pct: 0,
+    originador_bonus_fechamentos: []
 };
 
 const vazio = (v) => v === null || v === undefined || v === '';
@@ -120,13 +123,11 @@ export const payloadPlanoUsina = (dados) => ({
     nome: String(dados.nome ?? '').trim(),
     descricao: String(dados.descricao ?? '').trim() || null,
     ...Object.fromEntries(CAMPOS_PLANO_USINA.map(c => [c.chave, Number(dados[c.chave])])),
-    originador_bonus_fechamentos: dados.originador_bonus_fechamentos,
-    plano_assinatura_id: dados.plano_assinatura_id || null
+    originador_bonus_fechamentos: dados.originador_bonus_fechamentos
 });
 
-/** Mesma regra de fn_usinas_vinculo_plano_usina. */
-export const planoAceitaUsina = (plano) =>
-    !!plano && plano.status === 'ativo' && !!plano.plano_assinatura_id;
+/** Mesma regra de fn_usinas_vinculo_plano_usina (20261010a): basta estar ativo. */
+export const planoAceitaUsina = (plano) => !!plano && plano.status === 'ativo';
 
 /**
  * Valores iniciais do Contrato de Gestão de Créditos (spec, decisão 10).

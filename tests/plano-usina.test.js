@@ -21,7 +21,7 @@ const PLANO = {
     retencao_rescisao_pct: 11, multa_atraso_mes_pct: 0.4, multa_atraso_teto_pct: 9,
     garantia_instalacao_meses: 24,
     desconto_pct: 18, dia_corte: 6, dia_repasse: 16, prazo_transferencia_dias: 60, prazo_honorarios_dias: 150,
-    originador_recorrente_pct: 3, originador_bonus_fechamentos: [2], plano_assinatura_id: 'rec1'
+    originador_recorrente_pct: 3, originador_bonus_fechamentos: [2], originador_lider_recorrente_pct: 1
 };
 
 describe('campos do plano de usina', () => {
@@ -44,7 +44,7 @@ describe('campos do plano de usina', () => {
             'percentual_recorrente', 'taxa_admin_reais', 'taxa_recuperacao_pct', 'retencao_rescisao_pct',
             'multa_atraso_mes_pct', 'multa_atraso_teto_pct', 'garantia_instalacao_meses',
             'desconto_pct', 'dia_corte', 'dia_repasse', 'prazo_transferencia_dias', 'prazo_honorarios_dias',
-            'originador_recorrente_pct', 'originador_bonus_fechamentos', 'plano_assinatura_id'
+            'originador_recorrente_pct', 'originador_lider_recorrente_pct', 'originador_bonus_fechamentos'
         ]);
     });
 
@@ -54,7 +54,7 @@ describe('campos do plano de usina', () => {
             retencao_rescisao_pct: 10, multa_atraso_mes_pct: 0.5, multa_atraso_teto_pct: 10,
             garantia_instalacao_meses: 12,
             desconto_pct: 20, dia_corte: 5, dia_repasse: 15, prazo_transferencia_dias: 90, prazo_honorarios_dias: 180,
-            originador_recorrente_pct: 0, originador_bonus_fechamentos: [], plano_assinatura_id: null
+            originador_recorrente_pct: 0, originador_lider_recorrente_pct: 0, originador_bonus_fechamentos: []
         });
         expect(CAMPOS_PLANO_USINA.every(c => c.chave in PLANO_USINA_VAZIO)).toBe(true);
     });
@@ -126,27 +126,34 @@ describe('versao e gravacao', () => {
         expect(r.nome).toBe('Plano A (nova versão)');
         expect(r.percentual_recorrente).toBe(12);
         expect(r.dia_repasse).toBe(16);
-        expect(r.plano_assinatura_id).toBe('rec1');
         expect(r).not.toHaveProperty('id');
         expect(r).not.toHaveProperty('status');
     });
 
     test('payload converte numeros e manda null no lugar de string vazia', () => {
-        const p = payloadPlanoUsina({ ...PLANO, nome: ' X ', descricao: '', percentual_recorrente: '12', dia_corte: '7', plano_assinatura_id: '' });
+        const p = payloadPlanoUsina({ ...PLANO, nome: ' X ', descricao: '', percentual_recorrente: '12', dia_corte: '7' });
         expect(p.nome).toBe('X');
         expect(p.descricao).toBeNull();
         expect(p.percentual_recorrente).toBe(12);
         expect(p.dia_corte).toBe(7);
-        expect(p.plano_assinatura_id).toBeNull();
+        expect(p).not.toHaveProperty('plano_assinatura_id');
+        expect(p.originador_lider_recorrente_pct).toBe(1);
         expect(p).not.toHaveProperty('id');
         expect(p).not.toHaveProperty('status');
     });
 
-    test('so plano ativo com plano de recompensas aceita usina', () => {
+    test('plano de usina ativo aceita usina, com ou sem regra de originador', () => {
         expect(planoAceitaUsina(PLANO)).toBe(true);
         expect(planoAceitaUsina({ ...PLANO, status: 'somente_contratos' })).toBe(false);
-        expect(planoAceitaUsina({ ...PLANO, plano_assinatura_id: null })).toBe(false);
+        expect(planoAceitaUsina({ ...PLANO, originador_recorrente_pct: 0 })).toBe(true);
         expect(planoAceitaUsina(null)).toBe(false);
+    });
+
+    test('o % do Lider do originador e campo do plano, travado e validado', () => {
+        const campo = CAMPOS_PLANO_USINA.find(c => c.chave === 'originador_lider_recorrente_pct');
+        expect(campo).toMatchObject({ contrato: null, gestao: null, max: 100 });
+        expect(CAMPOS_TRAVADOS).toContain('originador_lider_recorrente_pct');
+        expect(validarPlanoUsina({ ...PLANO, originador_lider_recorrente_pct: 101 }).join(' ')).toMatch(/Líder do originador/);
     });
 });
 
