@@ -837,6 +837,59 @@ BEGIN
         END IF;
     END;
 
+    -- ==================================================================
+    -- F4-F6 -- originador do fornecedor (20261012c): a copia so vale no INSERT;
+    -- nao admin nao limpa nem troca via lead_id; retirada por admin nao volta.
+    -- ==================================================================
+    DECLARE
+        v_mgr   uuid := gen_random_uuid();
+        v_lead  uuid;
+        v_orig1 uuid;
+        v_orig2 uuid;
+        v_forn  uuid;
+    BEGIN
+        INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role)
+        VALUES (v_mgr, 'mgr.pu.lead2@teste.invalid', '{"name":"Mgr2"}', 'authenticated', 'authenticated');
+        UPDATE public.profiles SET role = 'manager' WHERE id = v_mgr;
+        INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SANDBOX PU F4 orig1', 'ppf', true) RETURNING id INTO v_orig1;
+        INSERT INTO public.originators_v2 (name, cargo, ativo) VALUES ('SANDBOX PU F4 orig2', 'ppf', true) RETURNING id INTO v_orig2;
+        INSERT INTO public.leads (name, originator_id) VALUES ('SANDBOX PU F4 lead', v_orig1) RETURNING id INTO v_lead;
+
+        -- F4 -- nao admin limpando o originador de fornecedor sem lead: recusado
+        INSERT INTO public.suppliers (name, originator_id) VALUES ('SANDBOX PU F4 forn', v_orig2) RETURNING id INTO v_forn;
+        PERFORM set_config('request.jwt.claims', json_build_object('sub', v_mgr, 'role', 'authenticated')::text, true);
+        v_pegou := false;
+        BEGIN
+            UPDATE public.suppliers SET originator_id = NULL WHERE id = v_forn;
+        EXCEPTION WHEN insufficient_privilege THEN v_pegou := true;
+        END;
+        IF NOT v_pegou THEN
+            RAISE EXCEPTION 'FALHA F4: nao admin limpou o originador do fornecedor';
+        END IF;
+
+        -- F5 -- nao admin apontando lead_id para o lead de X e originador X: recusado
+        PERFORM set_config('request.jwt.claims', '', true);
+        INSERT INTO public.suppliers (name) VALUES ('SANDBOX PU F5 forn') RETURNING id INTO v_forn;
+        PERFORM set_config('request.jwt.claims', json_build_object('sub', v_mgr, 'role', 'authenticated')::text, true);
+        v_pegou := false;
+        BEGIN
+            UPDATE public.suppliers SET lead_id = v_lead, originator_id = v_orig1 WHERE id = v_forn;
+        EXCEPTION WHEN insufficient_privilege THEN v_pegou := true;
+        END;
+        PERFORM set_config('request.jwt.claims', '', true);
+        IF NOT v_pegou THEN
+            RAISE EXCEPTION 'FALHA F5: nao admin atribuiu originador trocando o lead_id';
+        END IF;
+
+        -- F6 -- admin retira o originador; o proximo salvar (com o mesmo lead_id) nao copia de volta
+        INSERT INTO public.suppliers (name, lead_id) VALUES ('SANDBOX PU F6 forn', v_lead) RETURNING id INTO v_forn;
+        UPDATE public.suppliers SET originator_id = NULL WHERE id = v_forn;
+        UPDATE public.suppliers SET name = 'SANDBOX PU F6 forn 2', lead_id = v_lead WHERE id = v_forn;
+        IF (SELECT originator_id FROM public.suppliers WHERE id = v_forn) IS NOT NULL THEN
+            RAISE EXCEPTION 'FALHA F6: originador retirado voltou no proximo salvar';
+        END IF;
+    END;
+
     -- >>> casos novos entram acima desta linha <<<
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;

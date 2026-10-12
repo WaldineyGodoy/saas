@@ -355,5 +355,39 @@ BEGIN
         RAISE EXCEPTION 'FALHA V19: fn_start_regra_valor devolveu valor inesperado';
     END IF;
 
+    -- V20 -- mover UCs so para a versao vigente que sucede a origem (20261012c)
+    v_pegou := false;
+    BEGIN
+        PERFORM public.fn_planos_assinatura_mover_ucs(v_livre, v_p13b);
+    EXCEPTION WHEN check_violation THEN v_pegou := true; v_msg := SQLERRM;
+    END;
+    IF NOT v_pegou OR v_msg NOT LIKE '%versao vigente%' THEN
+        RAISE EXCEPTION 'FALHA V20: mover UCs para plano fora da linhagem devia ser recusado (pegou=%, msg=%)', v_pegou, v_msg;
+    END IF;
+
+    -- V21 -- excluir a versao nova (sem UC) devolve a anterior para ativo
+    INSERT INTO public.planos_assinatura_energia (nome, tipo_recompensa, gestao_percentual, piso_fornecedor_pct, desconto_assinante, recorrente_config)
+    VALUES ('SANDBOX PV21', 'recorrente', 10, 50, 20, jsonb_build_object('regras_multinivel', c_matriz))
+    RETURNING id INTO v_p8;
+    v_v3 := public.fn_planos_assinatura_nova_versao(v_p8, jsonb_build_object('desconto_assinante', 19));
+    DELETE FROM public.planos_assinatura_energia WHERE id = v_v3;
+    IF (SELECT status FROM public.planos_assinatura_energia WHERE id = v_p8) <> 'ativo' THEN
+        RAISE EXCEPTION 'FALHA V21: excluir a versao nova devia reativar a anterior';
+    END IF;
+
+    -- V22 -- plano com UC nao se exclui
+    v_pegou := false;
+    BEGIN
+        DELETE FROM public.planos_assinatura_energia WHERE id = v_p13b;
+    EXCEPTION WHEN check_violation THEN v_pegou := true;
+    END;
+    IF NOT v_pegou THEN RAISE EXCEPTION 'FALHA V22: plano com UC foi excluido'; END IF;
+
+    -- V23 -- adesao publica: plano antigo sem versao vigente nao passa do filtro
+    IF pg_get_functiondef('public.fn_criar_assinante_publico(text, text, text, text, text, text, text, text, text, text, text, text, text, uuid, jsonb, integer, text, text, text, text)'::regprocedure)
+       NOT LIKE '%AND p.ativo AND p.status = ''ativo''%' THEN
+        RAISE EXCEPTION 'FALHA V23: fn_criar_assinante_publico nao filtra status ativo';
+    END IF;
+
     RAISE EXCEPTION 'SANDBOX_OK';
 END $$;

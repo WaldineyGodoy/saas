@@ -161,7 +161,10 @@ export default function PlansServicesSettings() {
             return;
         }
 
-        if (!window.confirm(`Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita.`)) {
+        // Excluir uma versao nova devolve a anterior para ativo (gatilho no banco).
+        const voltaAnterior = plano.status === 'ativo' && plano.substitui_plano_id
+            ? ' A versão anterior volta a ficar ativa.' : '';
+        if (!window.confirm(`Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita.${voltaAnterior}`)) {
             return;
         }
 
@@ -172,7 +175,8 @@ export default function PlansServicesSettings() {
                 .eq('id', plano.id);
 
             if (error) throw error;
-            setPlanos(prev => prev.filter(p => p.id !== plano.id));
+            if (voltaAnterior) fetchPlanos();
+            else setPlanos(prev => prev.filter(p => p.id !== plano.id));
             showAlert(`Plano "${plano.nome}" excluído com sucesso!`, 'success');
         } catch (err) {
             console.error('Erro ao excluir plano:', err);
