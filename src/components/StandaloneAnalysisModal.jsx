@@ -199,6 +199,8 @@ export default function StandaloneAnalysisModal({ isOpen, ucs, onClose, onSave, 
                 return { label: 'Ativo', bg: '#ecfdf5', color: '#059669' };
             case 'desconectado':
                 return { label: 'Desconectado', bg: '#fef3c7', color: '#d97706' };
+            case 'desligado_por_tt':
+                return { label: 'Desligado por TT', bg: '#ede9fe', color: '#5b21b6' };
             case 'cancelado':
                 return { label: 'Cancelado', bg: '#fef2f2', color: '#dc2626' };
             default:

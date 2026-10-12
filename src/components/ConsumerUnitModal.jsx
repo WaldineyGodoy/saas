@@ -25,6 +25,7 @@ import { dividirEmPaginasTransferencia, gerarPdfTransferenciaBase64, montarTermo
 import SubscriberModal from './SubscriberModal';
 import PowerPlantModal from './PowerPlantModal';
 import InvoiceSummaryModal from './InvoiceSummaryModal';
+import TrocaTitularidadePanel from './TrocaTitularidadePanel';
 
 export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDelete, defaultSection = 'geral' }) {
     // Ao encerrar uma UC, o robo para de buscar conta dela -- mas a
@@ -246,7 +247,7 @@ export default function ConsumerUnitModal({ consumerUnit, onClose, onSave, onDel
     // Dispara o pedido de prazo quando o status MUDA para encerrado. Comparar
     // com o valor anterior evita abrir o modal so por abrir uma UC ja encerrada.
     useEffect(() => {
-        const ENCERRADOS = ['desconectado', 'cancelado', 'cancelado_inadimplente'];
+        const ENCERRADOS = ['desconectado', 'desligado_por_tt', 'cancelado', 'cancelado_inadimplente'];
         const antes = statusAnterior.current;
         statusAnterior.current = formData.status;
         if (antes === null || antes === formData.status) return;
@@ -626,6 +627,24 @@ Qualquer dúvida, é só responder esta mensagem.`;
         } finally {
             setIsSendingManualWA(false);
         }
+    };
+
+    // A TT muda a UC no banco (status, titular, número, usina). Sem espelhar
+    // aqui, o próximo "Salvar" do modal regravaria os valores de antes dela.
+    const aplicarUcAtualizadaPelaTT = (uc) => {
+        statusAnterior.current = uc.status;
+        setFormData(prev => ({
+            ...prev,
+            status: uc.status || prev.status,
+            usina_id: uc.usina_id || '',
+            numero_uc: uc.numero_uc || '',
+            titular_conta: uc.titular_conta || '',
+            titular_fatura_id: uc.titular_fatura_id || '',
+            cpf_cnpj_fatura: uc.cpf_cnpj_fatura || '',
+            numero_uc_anterior: uc.numero_uc_anterior || '',
+            titular_anterior_id: uc.titular_anterior_id || '',
+            data_troca_titularidade: uc.data_troca_titularidade || ''
+        }));
     };
 
     useEffect(() => {
@@ -1124,6 +1143,7 @@ Qualquer dúvida, é só responder esta mensagem.`;
             'atrasado': { color: '#991b1b', bg: '#fee2e2', label: 'Atrasado', icon: AlertCircle },
             'em_transf_titularidade': { color: '#5b21b6', bg: '#f5f3ff', label: 'Em Transf. de Titularidade', icon: Clock },
             'desconectado': { color: '#be123c', bg: '#fff1f2', label: 'Desconectado', icon: X },
+            'desligado_por_tt': { color: '#5b21b6', bg: '#f5f3ff', label: 'Desligado por TT', icon: X },
             'ag_emissao_boleto': { color: '#1e40af', bg: '#eff6ff', label: 'Sem Faturamento', icon: FileText },
             'cancelado': { color: '#475569', bg: '#f1f5f9', label: 'Cancelado', icon: X },
         };
@@ -2380,6 +2400,20 @@ Qualquer dúvida, é só responder esta mensagem.`;
                                                         </div>
                                                     );
                                                 })()}
+
+                                                {/* TT: a UC só ganha usina quando a troca de titularidade conclui. */}
+                                                <TrocaTitularidadePanel
+                                                    uc={consumerUnit && {
+                                                        id: consumerUnit.id,
+                                                        numero_uc: formData.numero_uc,
+                                                        usina_id: formData.usina_id,
+                                                        titular_fatura_id: formData.titular_fatura_id,
+                                                        tipo_unidade: formData.tipo_unidade
+                                                    }}
+                                                    usinas={usinas}
+                                                    subscribers={subscribers}
+                                                    onUcAtualizada={aplicarUcAtualizadaPelaTT}
+                                                />
                                             </div>
                                         </div>
                                     </div>

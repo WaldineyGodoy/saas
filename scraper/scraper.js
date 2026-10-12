@@ -190,7 +190,7 @@ async function run() {
     // O prazo e explicito por UC em acompanhar_conta_ate (padrao 90 dias, ~3
     // ciclos, a partir do desligamento ou da descoberta). Vencido, a UC sai
     // sozinha -- se ainda vier conta, o caso e juridico e nao de robo.
-    const STATUS_ENCERRADOS = ['cancelado', 'cancelado_inadimplente', 'desconectado'];
+    const STATUS_ENCERRADOS = ['cancelado', 'cancelado_inadimplente', 'desconectado', 'desligado_por_tt'];
     const hojeISO = hojeUTC.toISOString().slice(0, 10);
     query = query.or(
         `status.not.in.(${STATUS_ENCERRADOS.join(',')}),acompanhar_conta_ate.gte.${hojeISO}`

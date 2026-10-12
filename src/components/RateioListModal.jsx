@@ -83,6 +83,7 @@ function getUCStatusBadge(status) {
         vinculado: { bg: '#ede9fe', color: '#6d28d9', label: 'Vinculado' },
         aguardando_conexao: { bg: '#fef9c3', color: '#92400e', label: 'Ag. Conexão' },
         desconectado: { bg: '#fee2e2', color: '#991b1b', label: 'Desconectado' },
+        desligado_por_tt: { bg: '#ede9fe', color: '#5b21b6', label: 'Desligado por TT' },
         cancelado: { bg: '#f1f5f9', color: '#64748b', label: 'Cancelado' },
         cancelado_inadimplente: { bg: '#fee2e2', color: '#991b1b', label: 'Canc. Inadim.' },
     };

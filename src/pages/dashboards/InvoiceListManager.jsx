@@ -688,7 +688,7 @@ export default function InvoiceListManager({ initialTab = 'faturas', hideTabs = 
                 subscribers!consumer_units_subscriber_id_fkey(name, cpf_cnpj),
                 titular_fatura:subscribers!consumer_units_titular_fatura_id_fkey(name, cpf_cnpj)
             `)
-            .in('status', ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado'])
+            .in('status', ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado', 'desligado_por_tt'])
             .order('titular_conta');
         if (!error) setUcs(data || []);
     };
@@ -2958,7 +2958,7 @@ function CalendarView({ units, invoices, monthFilter, searchTerm, readingStatusF
     const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
     // 1. Filtrar UCs a partir de Aguardando Conexão, exceto cancelados
-    const calendarUnits = units.filter(u => ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado'].includes(u.status));
+    const calendarUnits = units.filter(u => ['aguardando_conexao', 'ativo', 'sem_geracao', 'em_atraso', 'desconectado', 'desligado_por_tt'].includes(u.status));
 
     // 2. Agrupar e Calcular Status
     const groupedUnits = calendarUnits.reduce((acc, unit) => {
