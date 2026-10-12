@@ -223,6 +223,12 @@ export default function ManualInvoiceUploadModal({ uc, onClose, onSuccess, initi
                 concessionaria_pdf_url: storagePath,
                 linha_digitavel: extractedData.linhaDigitavel || null,
                 pix_string: extractedData.pixString || null,
+                // Tarifa impressa na conta: é ela que a fn_calcular_fatura e o
+                // razão usam. Ausente fica nulo e a auditoria barra a emissão.
+                te_apurado: extractedData.teApurado || null,
+                tusd_apurado: extractedData.tusdApurado || null,
+                tusd_consumo_unit: extractedData.tusdApurado || null,
+                tusd_compensado_unit: extractedData.tusdCompensadoUnit || null,
                 reading_status: 'success',
                 reading_checked_at: new Date().toISOString(),
                 is_placeholder: false
